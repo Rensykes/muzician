@@ -71,4 +71,3 @@ flutter run -d <id>
 - Pinch-to-zoom on the piano roll is tracked via a `Map<int, Offset>` keyed by pointer ID, updating `_cellW` / `_rowH` in `setState` on every move.
 - State is never mutated — all store methods return a new `copyWith` state.
 
-# muzician

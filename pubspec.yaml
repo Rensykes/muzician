@@ -1,0 +1,24 @@
+name: muzician
+description: "Premium music theory app – Flutter edition"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  music_notes: ^0.11.0
+  shared_preferences: ^2.3.4
+  uuid: ^4.5.1
+  go_router: ^14.8.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

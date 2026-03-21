@@ -1,0 +1,167 @@
+# Fretboard
+
+An interactive guitar fretboard rendered entirely with `CustomPainter`. Supports multiple tunings, capo, chord voicing loading, scale highlighting, and a landscape modal view.
+
+---
+
+## Architecture
+
+```
+lib/
+  models/fretboard.dart               ← data types
+  schema/rules/fretboard_rules.dart   ← tunings, pitch helpers, validation
+  store/fretboard_store.dart          ← Riverpod NotifierProvider
+  features/fretboard/
+    fretboard.dart                    ← CustomPainter grid (GuitarFretboard)
+    capo_control.dart                 ← capo position stepper
+    chord_diagram.dart                ← chord shape mini-diagram
+    chord_voicing_picker.dart         ← chord root + quality → load to fretboard
+    note_detection_panel.dart         ← detect chord/scale from selected cells
+    scale_picker.dart                 ← scale root + type → highlight fretboard
+    tuning_selector.dart              ← preset tuning picker
+    landscape_fretboard_modal.dart    ← full-screen landscape view
+```
+
+---
+
+## Data Model (`lib/models/fretboard.dart`)
+
+| Type | Description |
+|---|---|
+| `TuningName` | Enum — 10 presets (standard, dropD, openG, openD, openE, DADGAD, halfStepDown, fullStepDown, openA, openC) |
+| `TuningCategory` | Enum — standard / drop / open |
+| `StringTuning` | MIDI note number for one string's open pitch |
+| `Tuning` | Named tuple: `name`, `category`, `strings` (6 × `StringTuning`), `displayName` |
+| `FretCell` | A cell on the grid: `stringIndex`, `fret`, `noteName`, `isSelected`, `isHighlighted`, `isRoot` |
+| `FretCoordinate` | A selected position: `stringIndex`, `fret`, `noteName` |
+| `ChordVoicing` | A named chord shape: `name`, list of `FretCoordinate` |
+| `FretboardState` | Full state: `tuning`, `numFrets`, `capo`, `viewMode`, `selectedCells`, `highlightedCells`, `rootNote` |
+| `FretboardViewMode` | Enum — standard / chords / scales / intervals |
+
+---
+
+## Schema / Rules (`lib/schema/rules/fretboard_rules.dart`)
+
+| Export | Description |
+|---|---|
+| `tunings` | `Map<TuningName, Tuning>` — all 10 preset tunings |
+| `chromaticSharp` / `chromaticFlat` | Chromatic note arrays |
+| `positionMarkerFrets` | `{3, 5, 7, 9, 12, 15, 17, 19, 21}` — dot marker positions |
+| `getPitchClassAtFret(tuning, string, fret)` | Returns pitch class string (e.g. `"C#"`) |
+| `getNoteWithOctaveAtFret(tuning, string, fret)` | Returns note + octave (e.g. `"C#4"`) |
+| `isNaturalNote(pitchClass)` | True for A B C D E F G |
+| `isValidPitchClass(pc)` | Validates against chromatic arrays |
+| `validateTuning(tuning)` | Returns `({bool valid, List<String> errors})` |
+| `getDefaultFretboardState()` | Returns standard-tuned, 15-fret, no-capo state |
+
+---
+
+## Store (`lib/store/fretboard_store.dart`)
+
+Provider: `fretboardProvider` (Riverpod `NotifierProvider<FretboardNotifier, FretboardState>`)
+
+Auxiliary providers:
+- `pendingChordProvider` — `StateProvider<({String root, String quality})?>` 
+- `pendingScaleProvider` — `StateProvider<({String root, String scaleName})?>` 
+
+### Key actions
+
+| Method | Description |
+|---|---|
+| `toggleCell(stringIndex, fret)` | Select / deselect a fret cell |
+| `setTuning(tuningName)` | Switch tuning preset, rebuild cells |
+| `setNumFrets(n)` | Change visible fret count (1–24) |
+| `setCapo(fret)` | Set capo position |
+| `setFretboardViewMode(mode)` | Switch display mode |
+| `setFretboardFavouriteViewMode(mode)` | Persist favourite view mode to settings |
+| `loadVoicing(voicing)` | Apply a `ChordVoicing` as selected cells |
+| `clearSelectedNotes()` | Clear all cell selection |
+| `reset()` | Restore defaults |
+| `getCurrentTuning()` | Returns active `Tuning` |
+| `getFretCells()` | Returns computed `List<FretCell>` grid |
+
+---
+
+## Widgets
+
+### `GuitarFretboard`
+The main fretboard widget. Rendered entirely with `CustomPainter` + `RepaintBoundary`.
+
+**Painter logic:**
+- String lines spaced vertically, fret lines spaced horizontally
+- Nut drawn as thick line at fret 0
+- Position dot markers at standard fret positions (3, 5, 7, 9, 12…)
+- Capo shown as a coloured bar across all strings
+- Selected cells drawn as filled circles with note name label
+- Highlighted (scale) cells drawn as outlined circles
+- Root note cells use accent colour (`sky`)
+
+**Interaction:**
+- `GestureDetector.onTapUp` → `toggleCell(string, fret)` with `lightImpact` haptic
+
+**Layout:**
+- `LayoutBuilder` ensures the fretboard fills available width
+- `RepaintBoundary` isolates paint from surrounding rebuilds
+
+---
+
+### `CapoControl`
+A row with `−` / `+` buttons to step the capo position between 0 and 11. Calls `fretboardProvider.notifier.setCapo()`. Shows `"No capo"` at 0.
+
+---
+
+### `TuningSelector`
+A horizontal `Wrap` of pill buttons, one per `TuningName`. Active tuning is highlighted. Tapping calls `setTuning()` with `lightImpact`. Groups displayed by `TuningCategory` via a section label above each group.
+
+---
+
+### `ChordVoicingPicker`
+Lets the user pick a chord root (12 chromatic notes) and quality (major, minor, 7, maj7, m7, dim, aug, sus2, sus4). Tapping "Load" calls `fretboardProvider.notifier.loadVoicing(voicing)`, which places the chord shape directly on the fretboard.
+
+Chord tones are computed from a semitone-interval map (`_chordIntervals`) rather than the `music_notes` package, to ensure correct cross-string placement.
+
+---
+
+### `NoteDetectionPanel`
+Reads `pendingChordProvider` and `pendingScaleProvider`. Displays:
+- The detected chord name (e.g. `"Cmaj7"`)
+- The detected scale name (e.g. `"C major"`)
+- A "Clear" button that resets both providers
+
+Chord/scale detection is triggered by the fretboard store whenever `selectedCells` changes, writing results into the pending providers.
+
+---
+
+### `ScalePicker`
+Root + scale type selector (major, natural minor, major pentatonic, minor pentatonic, dorian, mixolydian, etc.). Tapping "Highlight" writes `pendingScaleProvider` and calls the store to populate `highlightedCells` and mark the `rootNote`.
+
+---
+
+### `ChordDiagram`
+A compact `CustomPainter` rendering of a 5-fret chord box diagram. Draws:
+- 6 vertical string lines
+- 5 horizontal fret lines
+- Filled dots for each fret position in the voicing
+- Open / muted string indicators at the top
+- Fret number label if the diagram doesn't start at fret 1
+
+Used as a preview inside `ChordVoicingPicker`.
+
+---
+
+### `LandscapeFretboardModal`
+A full-screen modal (pushed via `Navigator.push`) that renders `GuitarFretboard` in landscape orientation using `SystemChrome.setPreferredOrientations`. Includes a close button that restores the original orientation on pop.
+
+---
+
+## State Flow
+
+```
+TuningSelector → fretboardProvider.setTuning()
+                          │
+                 GuitarFretboard repaints
+                          │
+              User taps cell → toggleCell()
+                          │
+        NoteDetectionPanel reads pendingChordProvider
+```
