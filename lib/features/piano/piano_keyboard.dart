@@ -3,6 +3,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano.dart';
 import '../../store/piano_store.dart';
@@ -37,23 +38,32 @@ class PianoKeyboard extends ConsumerWidget {
 
     final totalWidth = whiteIndex * _whiteKeyW;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: SizedBox(
-        width: totalWidth,
-        height: _whiteKeyH,
-        child: Stack(
-          children: [
-            // White keys first
-            ...positioned.where((pk) => !pk.key.isBlack).map((pk) =>
-                _buildKey(pk, state, notifier)),
-            // Black keys on top
-            ...positioned.where((pk) => pk.key.isBlack).map((pk) =>
-                _buildKey(pk, state, notifier)),
-          ],
+    return Column(
+      children: [
+        _ViewModeBar(
+          current: state.viewMode,
+          onSelect: notifier.setViewMode,
         ),
-      ),
+        const SizedBox(height: 4),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: SizedBox(
+            width: totalWidth,
+            height: _whiteKeyH,
+            child: Stack(
+              children: [
+                // White keys first
+                ...positioned.where((pk) => !pk.key.isBlack).map((pk) =>
+                    _buildKey(pk, state, notifier)),
+                // Black keys on top
+                ...positioned.where((pk) => pk.key.isBlack).map((pk) =>
+                    _buildKey(pk, state, notifier)),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -141,4 +151,82 @@ class _PosKey {
   final PianoKeyCell key;
   final double x;
   const _PosKey({required this.key, required this.x});
+}
+
+// ─── View Mode Bar ─────────────────────────────────────────────────────────────
+
+class _ViewModeBar extends StatelessWidget {
+  final PianoViewMode current;
+  final void Function(PianoViewMode) onSelect;
+
+  const _ViewModeBar({required this.current, required this.onSelect});
+
+  static const _modes = [
+    (PianoViewMode.pitchClass, 'All', 'All occurrences'),
+    (PianoViewMode.exact, 'Exact', 'Tapped positions only'),
+    (PianoViewMode.focus, 'Focus', 'Hide unselected'),
+    (PianoViewMode.exactFocus, 'Solo', 'Exact positions only'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: _modes.map((m) {
+          final active = current == m.$1;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                onSelect(m.$1);
+                HapticFeedback.lightImpact();
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: active
+                      ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.03),
+                  border: Border.all(
+                    color: active
+                        ? MuzicianTheme.sky.withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.08),
+                    width: 0.5,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      m.$2,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky
+                            : MuzicianTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      m.$3,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky.withValues(alpha: 0.6)
+                            : MuzicianTheme.textMuted,
+                        fontSize: 8,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 }

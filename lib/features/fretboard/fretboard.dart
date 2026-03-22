@@ -4,10 +4,12 @@ library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
+import '../../theme/muzician_theme.dart';
 
 // ─── Layout Constants ──────────────────────────────────────────────────────────
 
@@ -46,27 +48,36 @@ class GuitarFretboard extends ConsumerWidget {
     final svgWidth = _labelW + _openColW + _nutW + numFrets * _fretW + 12;
     final svgHeight = _headerH + _numStrings * _stringH + _vPad;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: GestureDetector(
-        onTapDown: (details) {
-          _handleTap(details.localPosition, cells, numFrets, capo, notifier);
-        },
-        child: CustomPaint(
-          size: Size(svgWidth, svgHeight),
-          painter: _FretboardPainter(
-            tuning: tuning,
-            cells: cells,
-            numFrets: numFrets,
-            capo: capo,
-            highlightedNotes: state.highlightedNotes,
-            selectedNotes: state.selectedNotes,
-            selectedCells: state.selectedCells,
-            viewMode: state.viewMode,
+    return Column(
+      children: [
+        _ViewModeBar(
+          current: state.viewMode,
+          onSelect: notifier.setViewMode,
+        ),
+        const SizedBox(height: 4),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: GestureDetector(
+            onTapDown: (details) {
+              _handleTap(details.localPosition, cells, numFrets, capo, notifier);
+            },
+            child: CustomPaint(
+              size: Size(svgWidth, svgHeight),
+              painter: _FretboardPainter(
+                tuning: tuning,
+                cells: cells,
+                numFrets: numFrets,
+                capo: capo,
+                highlightedNotes: state.highlightedNotes,
+                selectedNotes: state.selectedNotes,
+                selectedCells: state.selectedCells,
+                viewMode: state.viewMode,
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -91,6 +102,84 @@ class GuitarFretboard extends ConsumerWidget {
         }
       }
     }
+  }
+}
+
+// ─── View Mode Bar ─────────────────────────────────────────────────────────────
+
+class _ViewModeBar extends StatelessWidget {
+  final FretboardViewMode current;
+  final void Function(FretboardViewMode) onSelect;
+
+  const _ViewModeBar({required this.current, required this.onSelect});
+
+  static const _modes = [
+    (FretboardViewMode.pitchClass, 'All', 'All occurrences'),
+    (FretboardViewMode.exact, 'Exact', 'Tapped positions only'),
+    (FretboardViewMode.focus, 'Focus', 'Hide unselected'),
+    (FretboardViewMode.exactFocus, 'Solo', 'Exact positions only'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: _modes.map((m) {
+          final active = current == m.$1;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                onSelect(m.$1);
+                HapticFeedback.lightImpact();
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: active
+                      ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.03),
+                  border: Border.all(
+                    color: active
+                        ? MuzicianTheme.sky.withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.08),
+                    width: 0.5,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      m.$2,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky
+                            : MuzicianTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      m.$3,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky.withValues(alpha: 0.6)
+                            : MuzicianTheme.textMuted,
+                        fontSize: 8,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 }
 
