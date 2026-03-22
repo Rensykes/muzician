@@ -34,6 +34,13 @@ double _fretWireX(int fretIndex) {
   return _labelW + _openColW + _nutW + fretIndex * _fretW;
 }
 
+/// Returns the horizontal scroll offset that places [fret] at ~8 px from the
+/// left viewport edge (accounting for the 16 px content padding).
+double _scrollOffsetForFret(int fret) {
+  if (fret <= 0) return 0;
+  return _fretWireX(fret - 1) + 8.0;
+}
+
 class GuitarFretboard extends ConsumerStatefulWidget {
   const GuitarFretboard({super.key});
 
@@ -46,6 +53,26 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
   Offset? _pointerDownLocal;
   static const _scrollThreshold = 6.0;
 
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _animateToFret(int fret) {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      _scrollOffsetForFret(fret).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      ),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
@@ -54,6 +81,16 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
     final cells = notifier.getFretCells();
     final numFrets = state.numFrets;
     final capo = state.capo;
+
+    ref.listen(fretboardProvider.select((s) => s.capo), (_, next) {
+      _animateToFret(next);
+    });
+
+    ref.listen(scrollToFretProvider, (_, next) {
+      if (next == null) return;
+      _animateToFret(next);
+      ref.read(scrollToFretProvider.notifier).state = null;
+    });
 
     final svgWidth = _labelW + _openColW + _nutW + numFrets * _fretW + 12;
     final svgHeight = _headerH + _numStrings * _stringH + _vPad;
@@ -66,6 +103,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
         ),
         const SizedBox(height: 4),
         SingleChildScrollView(
+          controller: _scrollController,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Listener(
