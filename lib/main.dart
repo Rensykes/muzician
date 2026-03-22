@@ -54,10 +54,17 @@ class _AppShellState extends ConsumerState<_AppShell> {
   @override
   void initState() {
     super.initState();
-    // Hydrate persisted state on startup
-    Future.microtask(() {
-      ref.read(saveSystemProvider.notifier).hydrate();
-      ref.read(settingsProvider.notifier).hydrate();
+    // Hydrate persisted state on startup, then apply the favourite view modes.
+    Future.microtask(() async {
+      await ref.read(saveSystemProvider.notifier).hydrate();
+      await ref.read(settingsProvider.notifier).hydrate();
+      final settings = ref.read(settingsProvider);
+      ref
+          .read(fretboardProvider.notifier)
+          .setViewMode(settings.fretboardFavouriteViewMode);
+      ref
+          .read(pianoProvider.notifier)
+          .setViewMode(settings.pianoFavouriteViewMode);
     });
   }
 
@@ -232,7 +239,7 @@ class _GradientScaffold extends StatelessWidget {
 class _Card extends StatelessWidget {
   final Widget child;
 
-  const _Card({required this.child});
+  const _Card({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -269,9 +276,9 @@ class _FretboardScreen extends ConsumerWidget {
         _Card(child: CapoControl()),
         _Card(child: GuitarFretboard()),
         if (state.selectedNotes.isNotEmpty)
-          _Card(child: NoteDetectionPanel()),
-        _Card(child: ChordVoicingPicker()),
-        _Card(child: ScalePicker()),
+          _Card(key: const ValueKey('fret-detect'), child: NoteDetectionPanel()),
+        _Card(key: const ValueKey('fret-chord'), child: ChordVoicingPicker()),
+        _Card(key: const ValueKey('fret-scale'), child: ScalePicker()),
       ],
     );
   }
@@ -295,9 +302,9 @@ class _PianoScreen extends ConsumerWidget {
         _Card(child: PianoRangeSelector()),
         _Card(child: PianoKeyboard()),
         if (state.selectedNotes.isNotEmpty)
-          _Card(child: PianoNoteDetectionPanel()),
-        _Card(child: PianoChordPicker()),
-        _Card(child: PianoScalePicker()),
+          _Card(key: const ValueKey('piano-detect'), child: PianoNoteDetectionPanel()),
+        _Card(key: const ValueKey('piano-chord'), child: PianoChordPicker()),
+        _Card(key: const ValueKey('piano-scale'), child: PianoScalePicker()),
       ],
     );
   }
@@ -421,6 +428,70 @@ class _SettingsScreen extends ConsumerWidget {
                 onSelect: (mode) => notifier.setPianoFavouriteViewMode(
                     PianoViewMode.values.firstWhere((v) => v.name == mode,
                         orElse: () => PianoViewMode.pitchClass)),
+              ),
+            ],
+          ),
+        ),
+        _Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Text('🎵', style: TextStyle(fontSize: 18)),
+                  SizedBox(width: 8),
+                  Text('Scale Highlight',
+                      style: TextStyle(
+                          color: MuzicianTheme.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () => notifier.setSuppressOutOfKeyAlert(
+                    !settings.suppressOutOfKeyAlert),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        color: settings.suppressOutOfKeyAlert
+                            ? MuzicianTheme.sky.withValues(alpha: 0.2)
+                            : Colors.white.withValues(alpha: 0.04),
+                        border: Border.all(
+                          color: settings.suppressOutOfKeyAlert
+                              ? MuzicianTheme.sky
+                              : Colors.white.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: settings.suppressOutOfKeyAlert
+                          ? const Icon(Icons.check,
+                              size: 12, color: MuzicianTheme.sky)
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Skip out-of-key warning',
+                        style: TextStyle(
+                            color: MuzicianTheme.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'When enabled, adding a note outside the highlighted scale clears the highlight silently.',
+                style: TextStyle(
+                    color: MuzicianTheme.textMuted,
+                    fontSize: 11),
               ),
             ],
           ),

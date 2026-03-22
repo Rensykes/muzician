@@ -84,8 +84,15 @@ class FretboardNotifier extends Notifier<FretboardState> {
   void clearSelectedNotes() => state = state.copyWith(
         selectedNotes: [],
         selectedCells: [],
-        viewMode: FretboardViewMode.pitchClass,
       );
+
+  void removeNotesByPitchClass(List<String> noteNames) {
+    final bad = Set<String>.from(noteNames);
+    final newCells =
+        state.selectedCells.where((c) => !bad.contains(c.noteName)).toList();
+    final newNotes = newCells.map((c) => c.noteName).toSet().toList();
+    state = state.copyWith(selectedCells: newCells, selectedNotes: newNotes);
+  }
 
   void setViewMode(FretboardViewMode mode) =>
       state = state.copyWith(viewMode: mode);
@@ -103,8 +110,7 @@ class FretboardNotifier extends Notifier<FretboardState> {
     final notes = cells.map((c) => c.noteName).toSet().toList();
     state = state.copyWith(
         selectedCells: cells,
-        selectedNotes: notes,
-        viewMode: FretboardViewMode.exact);
+        selectedNotes: notes);
   }
 
   void reset() => state = getDefaultFretboardState();

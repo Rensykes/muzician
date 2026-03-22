@@ -428,26 +428,32 @@ class SaveSystemState {
 class AppSettings {
   final FretboardViewMode fretboardFavouriteViewMode;
   final PianoViewMode pianoFavouriteViewMode;
+  final bool suppressOutOfKeyAlert;
 
   const AppSettings({
     this.fretboardFavouriteViewMode = FretboardViewMode.pitchClass,
     this.pianoFavouriteViewMode = PianoViewMode.pitchClass,
+    this.suppressOutOfKeyAlert = false,
   });
 
   AppSettings copyWith({
     FretboardViewMode? fretboardFavouriteViewMode,
     PianoViewMode? pianoFavouriteViewMode,
+    bool? suppressOutOfKeyAlert,
   }) =>
       AppSettings(
         fretboardFavouriteViewMode:
             fretboardFavouriteViewMode ?? this.fretboardFavouriteViewMode,
         pianoFavouriteViewMode:
             pianoFavouriteViewMode ?? this.pianoFavouriteViewMode,
+        suppressOutOfKeyAlert:
+            suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
       );
 
   Map<String, dynamic> toJson() => {
         'fretboardFavouriteViewMode': fretboardFavouriteViewMode.name,
         'pianoFavouriteViewMode': pianoFavouriteViewMode.name,
+        'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -459,5 +465,7 @@ class AppSettings {
           (v) => v.name == json['pianoFavouriteViewMode'],
           orElse: () => PianoViewMode.pitchClass,
         ),
+        suppressOutOfKeyAlert:
+            json['suppressOutOfKeyAlert'] as bool? ?? false,
       );
 }

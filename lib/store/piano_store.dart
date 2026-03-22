@@ -51,8 +51,15 @@ class PianoNotifier extends Notifier<PianoState> {
   void clearSelectedNotes() => state = state.copyWith(
         selectedNotes: [],
         selectedKeys: [],
-        viewMode: PianoViewMode.pitchClass,
       );
+
+  void removeNotesByPitchClass(List<String> noteNames) {
+    final bad = Set<String>.from(noteNames);
+    final newKeys =
+        state.selectedKeys.where((k) => !bad.contains(k.noteName)).toList();
+    final newNotes = newKeys.map((k) => k.noteName).toSet().toList();
+    state = state.copyWith(selectedKeys: newKeys, selectedNotes: newNotes);
+  }
 
   void setViewMode(PianoViewMode mode) =>
       state = state.copyWith(viewMode: mode);
@@ -74,8 +81,7 @@ class PianoNotifier extends Notifier<PianoState> {
         selectedKeys.map((k) => k.noteName).toSet().toList();
     state = state.copyWith(
         selectedKeys: selectedKeys,
-        selectedNotes: selectedNotes,
-        viewMode: PianoViewMode.exact);
+        selectedNotes: selectedNotes);
   }
 
   void reset() => state = getDefaultPianoState();
