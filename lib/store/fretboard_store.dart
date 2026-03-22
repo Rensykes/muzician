@@ -1,5 +1,6 @@
 /// Fretboard Riverpod Store
 /// Equivalent of the Zustand fretboard-store.
+library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/fretboard.dart';

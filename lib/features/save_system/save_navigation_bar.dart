@@ -1,5 +1,6 @@
 /// SaveNavigationBar – shown when a save session is active.
 /// Displays breadcrumb, save name, prev/next arrows, and exit button.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

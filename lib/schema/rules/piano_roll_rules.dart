@@ -1,5 +1,6 @@
 /// Piano Roll Schema Rules
 /// Timeline helpers, validation, and defaults.
+library;
 
 import '../../models/piano_roll.dart';
 

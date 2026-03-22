@@ -1,5 +1,6 @@
 /// LandscapeFretboardModal – renders the fretboard full-screen in simulated
 /// landscape by rotating the content 90°.
+library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';

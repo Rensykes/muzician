@@ -1,4 +1,5 @@
 /// PianoRollStackSelector – chord root/quality/duration picker to add stacks.
+library;
 
 import 'dart:math';
 import 'package:flutter/material.dart';

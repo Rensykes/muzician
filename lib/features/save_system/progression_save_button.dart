@@ -1,4 +1,5 @@
 /// ProgressionSaveButton – saves current progression into the save tree.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

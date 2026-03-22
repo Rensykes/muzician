@@ -1,5 +1,6 @@
 /// Piano Roll Type Definitions
 /// Data structures for timeline-based note placement and stack detection.
+library;
 
 class PianoRollNote {
   final String id;

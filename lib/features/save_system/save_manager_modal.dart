@@ -1,5 +1,6 @@
 /// SaveManagerModal – full-screen bottom-sheet for browsing, creating,
 /// loading, and organising saves in a nested folder tree.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

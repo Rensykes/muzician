@@ -1,4 +1,5 @@
 /// PianoNoteDetectionPanel – detects chords/scales from selected piano keys.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

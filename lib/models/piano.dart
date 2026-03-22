@@ -1,5 +1,6 @@
 /// Piano Type Definitions
 /// Data structures for the interactive piano keyboard feature.
+library;
 
 /// Supported keyboard ranges.
 enum PianoRangeName { key88, key61, key49 }

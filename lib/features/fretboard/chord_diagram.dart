@@ -1,4 +1,5 @@
 /// ChordDiagram – compact CustomPainter chord diagram showing 6 strings × 4 frets.
+library;
 
 import 'package:flutter/material.dart';
 import '../../models/fretboard.dart';

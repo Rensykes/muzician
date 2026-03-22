@@ -1,4 +1,5 @@
 /// PianoChordPicker – root/quality picker with simple piano voicings.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -68,7 +69,9 @@ List<int> _buildVoicingMidis(List<String> notes, int inversion) {
     if (pc == null) continue;
     int midi = 60 + pc;
     if (idx > 0) {
-      while (midi <= prev) midi += 12;
+      while (midi <= prev) {
+        midi += 12;
+      }
     }
     midis.add(midi);
     prev = midi;
@@ -129,7 +132,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _rootNotes.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final root = _rootNotes[i];
                 final active = _selectedRoot == root;
@@ -175,7 +178,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _qualities.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final (symbol, label) = _qualities[i];
                 final active = _selectedQuality == symbol;
@@ -220,7 +223,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: voicings.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
                   final v = voicings[i];
                   return GestureDetector(

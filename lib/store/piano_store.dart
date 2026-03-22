@@ -1,4 +1,5 @@
 /// Piano Riverpod Store
+library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/piano.dart';

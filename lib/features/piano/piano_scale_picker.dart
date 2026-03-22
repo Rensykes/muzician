@@ -1,4 +1,5 @@
 /// PianoScalePicker – root + scale type selector for piano highlighting.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -140,7 +141,7 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _rootNotes.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final note = _rootNotes[i];
                 final active = note == _selectedRoot;
@@ -226,7 +227,7 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: (_scaleGroups[_activeCategory] ?? []).length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final scales = _scaleGroups[_activeCategory]!;
                 final (name, label) = scales[i];

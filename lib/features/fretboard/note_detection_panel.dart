@@ -1,5 +1,6 @@
 /// NoteDetectionPanel – displays tapped pitch classes and detects matching
 /// chords and scales using music_notes. Includes a "Clear" action.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

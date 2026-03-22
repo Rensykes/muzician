@@ -1,5 +1,6 @@
 /// Save System Type Definitions
 /// Nested folder tree mirroring Song > Part > State with progression metadata.
+library;
 
 import 'fretboard.dart';
 import 'piano.dart';

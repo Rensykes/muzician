@@ -1,4 +1,5 @@
 /// LoadFeedbackToast – animated overlay for success/warning feedback.
+library;
 
 import 'package:flutter/material.dart';
 

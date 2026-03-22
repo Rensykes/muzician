@@ -1,4 +1,5 @@
 /// PianoRollToolbar – tempo, measures, time signature, key, pitch window controls.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

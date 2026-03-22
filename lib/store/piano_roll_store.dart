@@ -1,4 +1,5 @@
 /// Piano Roll Riverpod Store
+library;
 
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

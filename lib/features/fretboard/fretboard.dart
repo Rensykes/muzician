@@ -1,5 +1,6 @@
 /// GuitarFretboard – CustomPainter-driven fretboard rendering all note names
 /// across 6 strings and up to 12 frets. Dimensions calculated mathematically.
+library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';

@@ -1,4 +1,5 @@
 /// TuningSelector – category tabs + horizontal tuning pill selector.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -108,7 +109,7 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: visibleTunings.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final t = visibleTunings[i];
               final isActive = t.name == state.currentTuning;

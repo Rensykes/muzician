@@ -1,5 +1,6 @@
 /// PianoRollSaveStackLoader – folder browser that loads saved instrument
 /// snapshots as note stacks into the piano roll (exact or pitch-class mode).
+library;
 
 import 'dart:math';
 import 'package:flutter/material.dart';

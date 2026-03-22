@@ -1,4 +1,5 @@
 /// PianoRollDetectionPanel – shows detected chords/scales at selected column tick.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

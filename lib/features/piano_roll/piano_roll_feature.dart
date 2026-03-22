@@ -1,4 +1,5 @@
 /// Piano Roll feature barrel export.
+library;
 
 export 'piano_roll_detection_panel.dart';
 export 'piano_roll_grid.dart';

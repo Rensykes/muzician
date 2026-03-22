@@ -1,4 +1,5 @@
 /// CapoControl – compact stepper for setting a capo position (0–11).
+library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';

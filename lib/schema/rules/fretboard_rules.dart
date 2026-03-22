@@ -1,5 +1,6 @@
 /// Fretboard Schema Rules
 /// Validation logic, tuning presets, and note calculation helpers.
+library;
 
 import '../../models/fretboard.dart';
 

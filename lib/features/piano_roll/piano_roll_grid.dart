@@ -1,5 +1,6 @@
 /// PianoRollGrid – CustomPainter-based grid with synchronized scrolling,
 /// tap-to-toggle, drag-to-move, and edge-to-resize.
+library;
 
 import 'dart:async';
 import 'dart:math';
@@ -369,7 +370,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   PianoRollNote? _hitTestNote(Offset pos, PianoRollState state) {
     for (final note in state.notes.reversed) {
       if (note.midiNote < state.pitchRangeStart ||
-          note.midiNote > state.pitchRangeEnd) continue;
+          note.midiNote > state.pitchRangeEnd) {
+        continue;
+      }
       final rowIdx = state.pitchRangeEnd - note.midiNote;
       final x = note.startTick * _cellW;
       final y = rowIdx * _rowH;

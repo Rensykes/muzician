@@ -1,5 +1,6 @@
 /// Fretboard Type Definitions
 /// Data structures for the interactive guitar fretboard component.
+library;
 
 /// Supported guitar tuning presets.
 enum TuningName {

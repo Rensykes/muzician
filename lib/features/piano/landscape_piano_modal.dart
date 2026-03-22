@@ -1,4 +1,5 @@
 /// LandscapePianoModal – full-screen landscape presentation for the piano.
+library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';

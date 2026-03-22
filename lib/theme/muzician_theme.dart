@@ -1,4 +1,5 @@
 /// Glassmorphism theme constants for the Muzician app.
+library;
 
 import 'package:flutter/material.dart';
 

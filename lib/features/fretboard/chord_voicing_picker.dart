@@ -1,5 +1,6 @@
 /// ChordVoicingPicker – two-level chord selector (root → quality) that generates
 /// guitar voicings and displays mini chord diagrams in a horizontal scroll.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -237,7 +238,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _rootNotes.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (_, i) {
               final root = _rootNotes[i];
               final active = _selectedRoot == root;
@@ -286,7 +287,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: _qualities.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
               itemBuilder: (_, i) {
                 final (symbol, label) = _qualities[i];
                 final active = _selectedQuality == symbol;

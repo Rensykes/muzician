@@ -1,5 +1,6 @@
 /// Save System Schema Rules
 /// Validation, defaults, factory helpers, and tree traversal.
+library;
 
 import 'dart:convert';
 import 'package:uuid/uuid.dart';

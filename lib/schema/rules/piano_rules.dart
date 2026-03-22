@@ -1,5 +1,6 @@
 /// Piano Schema Rules
 /// Keyboard presets, note helpers, and validation.
+library;
 
 import '../../models/piano.dart';
 
