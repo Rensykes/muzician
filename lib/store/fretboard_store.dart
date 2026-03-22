@@ -126,3 +126,6 @@ final pendingChordProvider =
 /// Pending scale (set by detection panel, consumed by pickers).
 final pendingScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
+
+/// Fret position to scroll to (set by capo/chord actions, consumed by fretboard).
+final scrollToFretProvider = StateProvider<int?>((_) => null);

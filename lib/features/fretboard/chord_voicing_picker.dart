@@ -358,6 +358,10 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                   HapticFeedback.mediumImpact();
                   setState(() => _selectedVoicingIdx = i);
                   notifier.loadVoicing(voicings[i]);
+                  final baseFret = voicings[i].baseFret;
+                  if (baseFret > 0) {
+                    ref.read(scrollToFretProvider.notifier).state = baseFret;
+                  }
                 },
               ),
             ),
