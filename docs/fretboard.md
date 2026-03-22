@@ -165,3 +165,14 @@ TuningSelector → fretboardProvider.setTuning()
                           │
         NoteDetectionPanel reads pendingChordProvider
 ```
+
+## Behaviour Notes
+
+- Out-of-key confirmation: If a scale highlight is active and the user attempts to add a note outside that scale, the app shows an out-of-key confirmation dialog. The dialog offers a "Don't show again" option which persists to settings. See implementation: [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
+
+- View-mode initialization & local override: The fretboard initializes its view mode from app settings but exposes a small view-mode control on the page allowing a local override. Tools such as chord/scale pickers do not force the view mode. Relevant code: [lib/main.dart](lib/main.dart) and [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
+
+- Scroll guard: To prevent accidental note insertion while scrolling horizontally, the fretboard uses a pointer-down/ up movement threshold and ignores taps that exceed the threshold distance. See: [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
+
+- Scale highlight & conflicts: Applying a scale highlights pitch classes across the board and will warn if the selected scale conflicts with already-selected notes (offers to remove conflicting notes). See: [lib/features/fretboard/scale_picker.dart](lib/features/fretboard/scale_picker.dart).
+

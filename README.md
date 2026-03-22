@@ -46,6 +46,13 @@ docs/
   save_system.md
 ```
 
+## Notes (Fretboard & Piano)
+
+- **Out-of-key confirmation:** When a scale highlight is active and the user tries to add a note that falls outside the highlighted scale, the app shows an "out-of-key" confirmation dialog (with a "Don't show again" option). See the implementation in [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
+
+- **View-mode initialization & local override:** Fretboard and Piano pages initialize their view mode from app settings but allow a local override via the in-page view-mode control. The view mode is not forced by chord/scale tools. Relevant code: [lib/main.dart](lib/main.dart), [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart), [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
+
+
 ## Running the App
 
 ```bash

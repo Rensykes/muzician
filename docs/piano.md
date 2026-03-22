@@ -132,3 +132,12 @@ PianoRangeSelector → pianoProvider.setRange()
                             │
     PianoNoteDetectionPanel reads pianoPendingChordProvider
 ```
+
+## Behaviour Notes
+
+- Out-of-key confirmation: When a scale highlight is active and the user tries to add a key outside that scale, the app shows an out-of-key confirmation dialog with a "Don't show again" option persisted to settings. See implementation: [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
+
+- View-mode initialization & local override: The piano initializes its view mode from app settings and provides an in-page view-mode control for local overrides; chord/scale tools do not force the view mode. Relevant files: [lib/main.dart](lib/main.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
+
+- Scale highlight & conflicts: Applying a scale highlights pitch classes and will prompt to remove conflicting selected keys if necessary. See: [lib/features/piano/piano_scale_picker.dart](lib/features/piano/piano_scale_picker.dart).
+
