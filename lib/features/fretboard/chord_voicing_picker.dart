@@ -2,6 +2,7 @@
 /// guitar voicings and displays mini chord diagrams in a horizontal scroll.
 library;
 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,14 +43,18 @@ String _toSharp(String note) => _flatToSharp[note] ?? note;
 List<ChordVoicing> _generateVoicings(
   List<String> chordNotes,
   List<int> stringMidis, {
+  int capo = 0,
   int limit = 24,
 }) {
   final noteSet = chordNotes.toSet();
   if (noteSet.isEmpty) return [];
 
+  // Build per-string option lists using PHYSICAL fret numbers starting from capo.
   final stringOptions = stringMidis.map((openMidi) {
     final opts = <int>[];
-    for (int f = 0; f <= 14; f++) {
+    // fret 0 (true open nut) is only valid when there is no capo.
+    // The capo position itself acts as the new "open" and is a valid option.
+    for (int f = capo; f <= 14; f++) {
       if (noteSet.contains(getPitchClassAtFret(openMidi, f))) opts.add(f);
     }
     return opts;
@@ -58,14 +63,19 @@ List<ChordVoicing> _generateVoicings(
   final voicings = <ChordVoicing>[];
   final seen = <String>{};
 
-  for (int base = 1; base <= 12; base++) {
+  // Search windows across physical fret positions, starting from capo.
+  for (int base = math.max(1, capo); base <= capo + 12; base++) {
     final windowEnd = base + 3;
     final choices = stringOptions.map((opts) {
       final windowFrets = opts.where((f) => f >= base && f <= windowEnd).toList();
-      final hasOpen = opts.contains(0);
+      // "Open" means: true open (fret 0) when no capo, or capo position (fret == capo)
+      // when a capo is present. In both cases it is already in opts if the note matches.
+      final hasOpen = capo == 0 && opts.contains(0);
+      final hasCapoOpen = capo > 0 && opts.contains(capo);
       final result = <int?>[null];
       if (hasOpen) result.add(0);
-      result.addAll(windowFrets);
+      if (hasCapoOpen) result.add(capo);
+      result.addAll(windowFrets.where((f) => f > capo));
       return result;
     }).toList();
 
@@ -147,6 +157,23 @@ List<String> _getChordNotes(String root, String quality) {
   return intervals.map((i) => _rootNotes[(rootIdx + i) % 12]).toList();
 }
 
+/// Returns the first chord matching [notes] exactly, or null if none found.
+({String root, String quality})? _detectFirstChord(List<String> notes) {
+  if (notes.length < 2) return null;
+  final noteSet = notes.toSet();
+  for (final root in _rootNotes) {
+    for (final (symbol, _) in _qualities) {
+      final chordTones = _getChordNotes(root, symbol).toSet();
+      if (chordTones.length < 2) continue;
+      if (noteSet.every(chordTones.contains) &&
+          chordTones.every(noteSet.contains)) {
+        return (root: root, quality: symbol);
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 class ChordVoicingPicker extends ConsumerStatefulWidget {
@@ -161,17 +188,71 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
   String _selectedQuality = '';
   int? _selectedVoicingIdx;
 
+  /// True once the user has explicitly tapped a voicing card.
+  /// When false, the picker mirrors the first detected chord automatically.
+  bool _voicingCommitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed from detection so the picker is populated on first render.
+    final notes = ref.read(fretboardProvider).selectedNotes;
+    final detected = _detectFirstChord(notes);
+    _selectedRoot = detected?.root;
+    _selectedQuality = detected?.quality ?? '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
-    final tuning = tunings[state.currentTuning]!;
-    final pendingChord = ref.watch(pendingChordProvider);
 
-    // Sync from detection panel
+    // Live-sync root/quality to first detected chord while not committed.
+    ref.listen(fretboardProvider.select((s) => s.selectedNotes), (_, notes) {
+      if (_voicingCommitted) return;
+      final detected = _detectFirstChord(notes);
+      setState(() {
+        _selectedRoot = detected?.root;
+        _selectedQuality = detected?.quality ?? '';
+        _selectedVoicingIdx = null;
+      });
+    });
+
+    // When the user manually taps a fretboard note, drop the commit and
+    // revert to whatever detection now says.
+    ref.listen(fretboardManualEditProvider, (_, __) {
+      final detected = _detectFirstChord(
+        ref.read(fretboardProvider).selectedNotes,
+      );
+      setState(() {
+        _voicingCommitted = false;
+        _selectedRoot = detected?.root;
+        _selectedQuality = detected?.quality ?? '';
+        _selectedVoicingIdx = null;
+      });
+    });
+
+    // When the capo moves, transpose the committed chord root by the same
+    // delta. When not committed, detection re-runs via selectedNotes listener.
+    ref.listen(fretboardProvider.select((s) => s.capo), (prev, next) {
+      if (!_voicingCommitted || _selectedRoot == null) return;
+      final delta = next - (prev ?? next);
+      if (delta == 0) return;
+      final idx = _rootNotes.indexOf(_selectedRoot!);
+      if (idx < 0) return;
+      setState(() {
+        _selectedRoot = _rootNotes[(idx + delta + 12 * 12) % 12];
+        _selectedVoicingIdx = null;
+      });
+    });
+    // Sync when the user explicitly taps a chord chip in the detection panel.
+    // This counts as a manual override (commits the selection).
+    final pendingChord = ref.watch(pendingChordProvider);
     if (pendingChord != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         setState(() {
+          _voicingCommitted = true;
           _selectedRoot = pendingChord.root;
           _selectedQuality = pendingChord.quality;
           _selectedVoicingIdx = null;
@@ -180,8 +261,8 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
       });
     }
 
-    final stringMidis =
-        tuning.strings.map((s) => s.midiNote + state.capo).toList();
+    final tuning = tunings[state.currentTuning]!;
+    final stringMidis = tuning.strings.map((s) => s.midiNote).toList();
     final openNotes =
         stringMidis.map((midi) => getPitchClassAtFret(midi, 0)).toList();
     final chordName =
@@ -190,7 +271,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
         ? _getChordNotes(_selectedRoot!, _selectedQuality)
         : <String>[];
     final voicings = chordNotes.isNotEmpty
-        ? _generateVoicings(chordNotes, stringMidis)
+        ? _generateVoicings(chordNotes, stringMidis, capo: state.capo)
         : <ChordVoicing>[];
 
     return Column(
@@ -356,7 +437,10 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                 isSelected: _selectedVoicingIdx == i,
                 onPress: () {
                   HapticFeedback.mediumImpact();
-                  setState(() => _selectedVoicingIdx = i);
+                  setState(() {
+                    _voicingCommitted = true;
+                    _selectedVoicingIdx = i;
+                  });
                   notifier.loadVoicing(voicings[i]);
                   final baseFret = voicings[i].baseFret;
                   if (baseFret > 0) {
