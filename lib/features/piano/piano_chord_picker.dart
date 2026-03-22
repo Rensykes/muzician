@@ -230,7 +230,6 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                     onTap: () {
                       HapticFeedback.mediumImpact();
                       notifier.loadExactMidis(v.midis);
-                      notifier.setHighlightedNotes([]);
                     },
                     child: Container(
                       constraints: const BoxConstraints(minWidth: 110),

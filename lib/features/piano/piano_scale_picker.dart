@@ -85,6 +85,18 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
   Widget build(BuildContext context) {
     final notifier = ref.read(pianoProvider.notifier);
     final state = ref.watch(pianoProvider);
+    // Reset pills if highlight was cleared from outside (e.g. out-of-key guard).
+    ref.listen(
+      pianoProvider.select((s) => s.highlightedNotes),
+      (prev, next) {
+        if (next.isEmpty && (prev?.isNotEmpty ?? false)) {
+          setState(() {
+            _selectedRoot = null;
+            _selectedScale = null;
+          });
+        }
+      },
+    );
     final isActive = state.highlightedNotes.isNotEmpty &&
         _selectedRoot != null &&
         _selectedScale != null;
@@ -149,12 +161,13 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                   onTap: () {
                     HapticFeedback.lightImpact();
                     final newRoot = note == _selectedRoot ? null : note;
-                    setState(() => _selectedRoot = newRoot);
-                    if (newRoot != null && _selectedScale != null) {
-                      final notes = _getScaleNotes(newRoot, _selectedScale!);
-                      if (notes.isNotEmpty) notifier.setHighlightedNotes(notes);
-                    } else {
+                    if (newRoot == null) {
+                      setState(() => _selectedRoot = null);
                       notifier.setHighlightedNotes([]);
+                    } else if (_selectedScale != null) {
+                      _tryApplyScale(newRoot, _selectedScale!);
+                    } else {
+                      setState(() => _selectedRoot = newRoot);
                     }
                   },
                   child: Container(
@@ -236,12 +249,13 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                   onTap: () {
                     HapticFeedback.lightImpact();
                     final newScale = name == _selectedScale ? null : name;
-                    setState(() => _selectedScale = newScale);
-                    if (_selectedRoot != null && newScale != null) {
-                      final notes = _getScaleNotes(_selectedRoot!, newScale);
-                      if (notes.isNotEmpty) notifier.setHighlightedNotes(notes);
-                    } else {
+                    if (newScale == null) {
+                      setState(() => _selectedScale = null);
                       notifier.setHighlightedNotes([]);
+                    } else if (_selectedRoot != null) {
+                      _tryApplyScale(_selectedRoot!, newScale);
+                    } else {
+                      setState(() => _selectedScale = newScale);
                     }
                   },
                   child: Container(
@@ -275,6 +289,81 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
           const SizedBox(height: 4),
         ],
       ),
+    );
+  }
+
+  Future<void> _tryApplyScale(String root, String scaleName) async {
+    final scaleNotes = _getScaleNotes(root, scaleName);
+    if (scaleNotes.isEmpty) return;
+    final currentSelected = ref.read(pianoProvider).selectedNotes;
+    final conflicts =
+        currentSelected.where((n) => !scaleNotes.contains(n)).toList();
+    if (conflicts.isEmpty) {
+      setState(() {
+        _selectedRoot = root;
+        _selectedScale = scaleName;
+      });
+      ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _ScaleConflictDialog(conflictingNotes: conflicts),
+    );
+    if (confirmed == true) {
+      ref.read(pianoProvider.notifier).removeNotesByPitchClass(conflicts);
+      setState(() {
+        _selectedRoot = root;
+        _selectedScale = scaleName;
+      });
+      ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
+    }
+  }
+}
+
+// ─── Scale Conflict Dialog ─────────────────────────────────────────────────────
+
+class _ScaleConflictDialog extends StatelessWidget {
+  final List<String> conflictingNotes;
+  const _ScaleConflictDialog({required this.conflictingNotes});
+
+  @override
+  Widget build(BuildContext context) {
+    final noteStr = conflictingNotes.join(', ');
+    final isPlural = conflictingNotes.length > 1;
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text(
+        'Notes outside the key',
+        style: TextStyle(
+          color: Color(0xFFE2E8F0),
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: Text(
+        '${isPlural ? 'Notes' : 'Note'} $noteStr '
+        '${isPlural ? 'are' : 'is'} outside this scale. '
+        'Remove ${isPlural ? 'them' : 'it'} to apply the scale highlight?',
+        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Remove & Apply',
+              style: TextStyle(
+                  color: MuzicianTheme.sky,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700)),
+        ),
+      ],
     );
   }
 }

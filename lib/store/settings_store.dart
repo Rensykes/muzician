@@ -39,6 +39,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(pianoFavouriteViewMode: mode);
     await _persist();
   }
+
+  Future<void> setSuppressOutOfKeyAlert(bool suppress) async {
+    state = state.copyWith(suppressOutOfKeyAlert: suppress);
+    await _persist();
+  }
 }
 
 final settingsProvider =

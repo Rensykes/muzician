@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 
 // ─── Layout Constants ──────────────────────────────────────────────────────────
@@ -33,11 +34,20 @@ double _fretWireX(int fretIndex) {
   return _labelW + _openColW + _nutW + fretIndex * _fretW;
 }
 
-class GuitarFretboard extends ConsumerWidget {
+class GuitarFretboard extends ConsumerStatefulWidget {
   const GuitarFretboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GuitarFretboard> createState() => _GuitarFretboardState();
+}
+
+class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
+  // Track pointer movement to distinguish tap from scroll-drag.
+  Offset? _pointerDownLocal;
+  static const _scrollThreshold = 6.0;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
     final tuning = tunings[state.currentTuning]!;
@@ -58,10 +68,16 @@ class GuitarFretboard extends ConsumerWidget {
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: GestureDetector(
-            onTapDown: (details) {
-              _handleTap(details.localPosition, cells, numFrets, capo, notifier);
+          child: Listener(
+            onPointerDown: (e) => _pointerDownLocal = e.localPosition,
+            onPointerUp: (e) {
+              final down = _pointerDownLocal;
+              if (down == null) return;
+              final delta = (e.localPosition - down).distance;
+              if (delta >= _scrollThreshold) return;
+              _handleTap(e.localPosition, cells, numFrets, capo, notifier);
             },
+            onPointerCancel: (_) => _pointerDownLocal = null,
             child: CustomPaint(
               size: Size(svgWidth, svgHeight),
               painter: _FretboardPainter(
@@ -97,11 +113,139 @@ class GuitarFretboard extends ConsumerWidget {
         final dx = pos.dx - cx;
         final dy = pos.dy - cy;
         if (math.sqrt(dx * dx + dy * dy) <= hitRadius) {
-          notifier.toggleCell(cell.stringIndex, cell.fret, cell.noteName);
+          _guardOutOfKey(
+            noteName: cell.noteName,
+            onConfirmed: () =>
+                notifier.toggleCell(cell.stringIndex, cell.fret, cell.noteName),
+            notifier: notifier,
+          );
           return;
         }
       }
     }
+  }
+
+  Future<void> _guardOutOfKey({
+    required String noteName,
+    required VoidCallback onConfirmed,
+    required FretboardNotifier notifier,
+  }) async {
+    final highlighted = ref.read(fretboardProvider).highlightedNotes;
+    if (highlighted.isEmpty || highlighted.contains(noteName)) {
+      onConfirmed();
+      return;
+    }
+
+    final suppress = ref.read(settingsProvider).suppressOutOfKeyAlert;
+    if (suppress) {
+      notifier.setHighlightedNotes([]);
+      onConfirmed();
+      return;
+    }
+
+    if (!mounted) return;
+    final result = await showDialog<_OutOfKeyResult>(
+      context: context,
+      builder: (ctx) => const _OutOfKeyDialog(),
+    );
+    if (result == null) return; // user dismissed
+    if (result.suppress) {
+      await ref.read(settingsProvider.notifier).setSuppressOutOfKeyAlert(true);
+    }
+    notifier.setHighlightedNotes([]);
+    onConfirmed();
+  }
+}
+
+// ─── Out-of-Key Dialog ────────────────────────────────────────────────────────
+
+class _OutOfKeyResult {
+  final bool suppress;
+  const _OutOfKeyResult({required this.suppress});
+}
+
+class _OutOfKeyDialog extends StatefulWidget {
+  const _OutOfKeyDialog();
+
+  @override
+  State<_OutOfKeyDialog> createState() => _OutOfKeyDialogState();
+}
+
+class _OutOfKeyDialogState extends State<_OutOfKeyDialog> {
+  bool _suppress = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text(
+        'Outside the key',
+        style: TextStyle(
+          color: Color(0xFFE2E8F0),
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This note is outside the highlighted scale. Adding it will clear the scale highlight.',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () => setState(() => _suppress = !_suppress),
+            child: Row(
+              children: [
+                Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    color: _suppress
+                        ? MuzicianTheme.sky.withValues(alpha: 0.2)
+                        : Colors.white.withValues(alpha: 0.04),
+                    border: Border.all(
+                      color: _suppress
+                          ? MuzicianTheme.sky
+                          : Colors.white.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: _suppress
+                      ? const Icon(Icons.check, size: 12, color: MuzicianTheme.sky)
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  "Don't show this again",
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+        ),
+        TextButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_OutOfKeyResult(suppress: _suppress)),
+          child: const Text('Continue',
+              style: TextStyle(
+                  color: MuzicianTheme.sky,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700)),
+        ),
+      ],
+    );
   }
 }
 
@@ -402,13 +546,15 @@ class _FretboardPainter extends CustomPainter {
             : (cell.fret == 0 ? const Color(0x40FFFFFF) : Colors.transparent);
         final strokeWidth = isSelected ? 2.5 : (cell.fret == 0 ? 1.0 : 0.0);
         final textColor = isSelected ? baseColor : Colors.white;
+        final inFocusOrSolo = viewMode == FretboardViewMode.focus ||
+            viewMode == FretboardViewMode.exactFocus;
         final opacity = behindCapo
             ? 0.18
             : isSelected
                 ? 1.0
-                : highlightedNotes.isNotEmpty
-                    ? (isHighlighted ? 1.0 : 0.25)
-                    : 0.88;
+                : (inFocusOrSolo || highlightedNotes.isEmpty)
+                    ? 0.88
+                    : (isHighlighted ? 1.0 : 0.25);
 
         // Draw circle
         final fillPaint = Paint()
