@@ -19,7 +19,7 @@ class FretboardNotifier extends Notifier<FretboardState> {
       final stringTuning = entry.value;
       final cells = <FretCell>[];
       for (var fret = 0; fret <= state.numFrets; fret++) {
-        final effectiveMidi = stringTuning.midiNote + state.capo;
+        final effectiveMidi = stringTuning.midiNote;
         final noteName = getPitchClassAtFret(effectiveMidi, fret);
         final noteWithOctave = getNoteWithOctaveAtFret(effectiveMidi, fret);
         cells.add(FretCell(
@@ -45,7 +45,39 @@ class FretboardNotifier extends Notifier<FretboardState> {
 
   void setCapo(int capo) {
     if (capo < 0 || capo > 11) return;
-    state = state.copyWith(capo: capo);
+    final delta = capo - state.capo;
+    if (delta == 0) return;
+
+    // Transpose every selected cell by the capo delta so the chord shape moves
+    // with the capo. Cells that fall outside the playable range are dropped.
+    final List<FretCoordinate> newCells;
+    if (state.selectedCells.isEmpty) {
+      newCells = [];
+    } else {
+      final tuning = getCurrentTuning();
+      newCells = [];
+      for (final cell in state.selectedCells) {
+        final newFret = cell.fret + delta;
+        if (newFret < capo || newFret > state.numFrets || newFret < 0) continue;
+        final noteName = getPitchClassAtFret(
+          tuning.strings[cell.stringIndex].midiNote,
+          newFret,
+        );
+        newCells.add(
+          FretCoordinate(
+            stringIndex: cell.stringIndex,
+            fret: newFret,
+            noteName: noteName,
+          ),
+        );
+      }
+    }
+    final newNotes = newCells.map((c) => c.noteName).toSet().toList();
+    state = state.copyWith(
+      capo: capo,
+      selectedCells: newCells,
+      selectedNotes: newNotes,
+    );
   }
 
   void setHighlightedNotes(List<String> notes) =>
@@ -79,6 +111,7 @@ class FretboardNotifier extends Notifier<FretboardState> {
     }
     final newNotes = newCells.map((c) => c.noteName).toSet().toList();
     state = state.copyWith(selectedCells: newCells, selectedNotes: newNotes);
+    ref.read(fretboardManualEditProvider.notifier).state++;
   }
 
   void clearSelectedNotes() => state = state.copyWith(
@@ -103,8 +136,8 @@ class FretboardNotifier extends Notifier<FretboardState> {
     for (var i = 0; i < voicing.positions.length; i++) {
       final fret = voicing.positions[i];
       if (fret == null) continue;
-      final effectiveMidi = tuning.strings[i].midiNote + state.capo;
-      final noteName = getPitchClassAtFret(effectiveMidi, fret);
+      // Voicing positions are physical fret numbers (generated from capo onwards).
+      final noteName = getPitchClassAtFret(tuning.strings[i].midiNote, fret);
       cells.add(FretCoordinate(stringIndex: i, fret: fret, noteName: noteName));
     }
     final notes = cells.map((c) => c.noteName).toSet().toList();
@@ -129,3 +162,7 @@ final pendingScaleProvider =
 
 /// Fret position to scroll to (set by capo/chord actions, consumed by fretboard).
 final scrollToFretProvider = StateProvider<int?>((_) => null);
+
+/// Incremented each time the user manually taps a note on the fretboard.
+/// Consumers (e.g. ChordVoicingPicker) listen to this to clear their selection.
+final fretboardManualEditProvider = StateProvider<int>((_) => 0);
