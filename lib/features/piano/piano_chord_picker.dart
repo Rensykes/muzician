@@ -1,6 +1,7 @@
 /// PianoChordPicker – root/quality picker with simple piano voicings.
 library;
 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,19 +87,23 @@ List<String> _getChordNotes(String root, String quality) {
   return intervals.map((i) => chromatic[(rootIdx + i) % 12]).toList();
 }
 
-List<int> _buildVoicingMidis(List<String> notes, int inversion) {
-  const rootBase = 60;
+List<int> _buildVoicingMidis(
+  List<String> notes,
+  int inversion,
+  int octaveOffset,
+) {
+  final rootBase = 60 + octaveOffset * 12;
   final rotated = [...notes.sublist(inversion), ...notes.sublist(0, inversion)];
   final midis = <int>[];
   int prev = rootBase - 1;
   for (int idx = 0; idx < rotated.length; idx++) {
     final pc = _noteToPc[rotated[idx]];
     if (pc == null) continue;
-    int midi = 60 + pc;
-    if (idx > 0) {
-      while (midi <= prev) {
-        midi += 12;
-      }
+    // Start one octave below rootBase so the while-loop lands in the right
+    // octave for both positive and negative octave offsets.
+    int midi = rootBase - 12 + pc;
+    while (midi <= prev) {
+      midi += 12;
     }
     midis.add(midi);
     prev = midi;
@@ -116,6 +121,10 @@ class PianoChordPicker extends ConsumerStatefulWidget {
 class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
   String? _selectedRoot;
   String _selectedQuality = '';
+  int _octaveOffset = 0;
+
+  static const _minOctaveOffset = -3;
+  static const _maxOctaveOffset = 3;
 
   @override
   Widget build(BuildContext context) {
@@ -130,15 +139,16 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
     final voicings = <({String label, List<int> midis})>[];
     if (chordNotes.isNotEmpty) {
       for (int inv = 0; inv < 3 && inv < chordNotes.length; inv++) {
-        final midis = _buildVoicingMidis(
-          chordNotes,
-          inv,
-        ).where((m) => keyMidis.contains(m)).toList();
+        final midis = _buildVoicingMidis(chordNotes, inv, _octaveOffset)
+            .where((m) => keyMidis.contains(m))
+            .toList();
         if (midis.length >= 3) {
           voicings.add((label: inv == 0 ? 'Root' : '$inv inv', midis: midis));
         }
       }
     }
+
+    final octaveLabel = (4 + _octaveOffset).toString();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -160,7 +170,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _rootNotes.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              separatorBuilder: (_, i) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final root = _rootNotes[i];
                 final active = _selectedRoot == root;
@@ -210,7 +220,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _qualities.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              separatorBuilder: (_, i) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final (symbol, label) = _qualities[i];
                 final active = _selectedQuality == symbol;
@@ -251,6 +261,46 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
               },
             ),
           ),
+          const SizedBox(height: 10),
+          // Octave selector
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Octave',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+              ),
+              const SizedBox(width: 10),
+              _OctaveButton(
+                icon: Icons.remove,
+                enabled: _octaveOffset > _minOctaveOffset,
+                onTap: () => setState(
+                  () => _octaveOffset =
+                      math.max(_minOctaveOffset, _octaveOffset - 1),
+                ),
+              ),
+              SizedBox(
+                width: 28,
+                child: Text(
+                  octaveLabel,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFE2E8F0),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              _OctaveButton(
+                icon: Icons.add,
+                enabled: _octaveOffset < _maxOctaveOffset,
+                onTap: () => setState(
+                  () => _octaveOffset =
+                      math.min(_maxOctaveOffset, _octaveOffset + 1),
+                ),
+              ),
+            ],
+          ),
           // Voicings
           if (voicings.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -259,13 +309,17 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: voicings.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                separatorBuilder: (_, i) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
                   final v = voicings[i];
                   return GestureDetector(
                     onTap: () {
                       HapticFeedback.mediumImpact();
                       notifier.loadExactMidis(v.midis);
+                      if (v.midis.isNotEmpty) {
+                        ref.read(pianoScrollToMidiProvider.notifier).state =
+                            v.midis.reduce(math.min);
+                      }
                     },
                     child: Container(
                       constraints: const BoxConstraints(minWidth: 110),
@@ -310,6 +364,55 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
           ],
           const SizedBox(height: 4),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Octave Button ────────────────────────────────────────────────────────────
+
+class _OctaveButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _OctaveButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled
+          ? () {
+              HapticFeedback.lightImpact();
+              onTap();
+            }
+          : null,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: enabled
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.white.withValues(alpha: 0.02),
+          border: Border.all(
+            color: enabled
+                ? Colors.white.withValues(alpha: 0.16)
+                : Colors.white.withValues(alpha: 0.06),
+            width: 0.5,
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 14,
+          color: enabled
+              ? const Color(0xFFE2E8F0)
+              : const Color(0xFF475569),
+        ),
       ),
     );
   }
