@@ -235,7 +235,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
 
     // When the user manually taps a fretboard note, drop the commit and
     // revert to whatever detection now says.
-    ref.listen(fretboardManualEditProvider, (prev, next) {
+    ref.listen(fretboardManualEditProvider, (_, _) {
       final detected = _detectFirstChord(
         ref.read(fretboardProvider).selectedNotes,
       );
@@ -338,7 +338,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _rootNotes.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 6),
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (_, i) {
               final root = _rootNotes[i];
               final active = _selectedRoot == root;
@@ -391,7 +391,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: _qualities.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 6),
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
               itemBuilder: (_, i) {
                 final (symbol, label) = _qualities[i];
                 final active = _selectedQuality == symbol;
