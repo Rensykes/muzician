@@ -106,3 +106,6 @@ final pianoPendingChordProvider =
 
 final pianoPendingScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
+
+/// MIDI note the keyboard should animate to (one-shot, cleared after use).
+final pianoScrollToMidiProvider = StateProvider<int?>((_) => null);

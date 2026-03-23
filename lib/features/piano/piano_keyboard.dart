@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano.dart';
+import '../../schema/rules/piano_rules.dart';
 import '../../store/piano_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
@@ -15,6 +16,16 @@ const double _blackKeyW = 26;
 const double _whiteKeyH = 210;
 const double _blackKeyH = 130;
 
+/// Returns the horizontal scroll offset that places [midi] near the left edge.
+double _scrollOffsetForMidi(int midi, PianoRangeName range) {
+  final startMidi = pianoRanges[range]!.startMidi;
+  var whiteCount = 0;
+  for (var m = startMidi; m < midi; m++) {
+    if (!isBlackMidiKey(m)) whiteCount++;
+  }
+  return (whiteCount * _whiteKeyW - 32.0).clamp(0.0, double.maxFinite);
+}
+
 class PianoKeyboard extends ConsumerStatefulWidget {
   const PianoKeyboard({super.key});
 
@@ -23,11 +34,38 @@ class PianoKeyboard extends ConsumerStatefulWidget {
 }
 
 class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _animateToMidi(int midi) {
+    if (!_scrollController.hasClients) return;
+    final range = ref.read(pianoProvider).currentRange;
+    _scrollController.animateTo(
+      _scrollOffsetForMidi(midi, range).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      ),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoProvider);
     final notifier = ref.read(pianoProvider.notifier);
     final keys = notifier.getKeys();
+
+    ref.listen(pianoScrollToMidiProvider, (_, next) {
+      if (next == null) return;
+      _animateToMidi(next);
+      ref.read(pianoScrollToMidiProvider.notifier).state = null;
+    });
 
     // Position keys
     final positioned = <_PosKey>[];
@@ -50,6 +88,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
         const SizedBox(height: 4),
         SingleChildScrollView(
+          controller: _scrollController,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: SizedBox(
