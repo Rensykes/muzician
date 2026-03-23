@@ -20,7 +20,7 @@ class SaveManagerModal extends ConsumerStatefulWidget {
   final InstrumentSnapshot Function()? captureSnapshot;
   final void Function(InstrumentSnapshot)? applySnapshot;
   final void Function({required String type, required String message})?
-      onLoadFeedback;
+  onLoadFeedback;
 
   const SaveManagerModal({
     super.key,
@@ -43,7 +43,6 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
   bool _showNewFolderForm = false;
   final _saveNameCtrl = TextEditingController();
   final _folderNameCtrl = TextEditingController();
-  ({String type, String id, String name})? _renaming;
 
   @override
   void dispose() {
@@ -58,16 +57,18 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
     final notifier = ref.read(saveSystemProvider.notifier);
     final subFolders = getChildFolders(sState.folders, _currentFolderId);
     final savesHere = _currentFolderId != null
-        ? getSavesInFolder(sState.saves, _currentFolderId!)
-            .where((e) => e.snapshot.instrument == widget.instrument)
-            .toList()
+        ? getSavesInFolder(
+            sState.saves,
+            _currentFolderId!,
+          ).where((e) => e.snapshot.instrument == widget.instrument).toList()
         : <SaveEntry>[];
     final breadcrumb = _currentFolderId != null
         ? buildFolderBreadcrumb(sState.folders, _currentFolderId!)
         : <({String id, String name})>[];
 
-    final visibleSaves =
-        widget.mode == SaveManagerMode.progressionLoader ? <SaveEntry>[] : savesHere;
+    final visibleSaves = widget.mode == SaveManagerMode.progressionLoader
+        ? <SaveEntry>[]
+        : savesHere;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.82,
@@ -78,7 +79,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
           color: MuzicianTheme.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: 0.12), width: 0.5),
+            top: BorderSide(
+              color: Colors.white.withValues(alpha: 0.12),
+              width: 0.5,
+            ),
           ),
         ),
         child: Column(
@@ -120,9 +124,13 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
                         color: Colors.white.withValues(alpha: 0.07),
                       ),
                       child: const Center(
-                        child: Text('✕',
-                            style: TextStyle(
-                                color: Color(0xFF64748B), fontSize: 13)),
+                        child: Text(
+                          '✕',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -141,27 +149,32 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
             // Hint
             if (_currentFolderId == null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 4,
+                ),
                 child: Text(
                   widget.mode == SaveManagerMode.progressionLoader
                       ? 'Tap a 🎼 folder to load that progression.'
                       : 'Create folders to organise saves by song › part › chord.',
-                  style: TextStyle(
-                      color: MuzicianTheme.textDim, fontSize: 12),
+                  style: TextStyle(color: MuzicianTheme.textDim, fontSize: 12),
                 ),
               ),
             // List
             Expanded(
               child: ListView.builder(
                 controller: scrollController,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 itemCount: _currentFolderId != null
-                    ? subFolders.length + visibleSaves.length +
-                        (subFolders.isEmpty && visibleSaves.isEmpty ? 1 : 0)
+                    ? subFolders.length +
+                          visibleSaves.length +
+                          (subFolders.isEmpty && visibleSaves.isEmpty ? 1 : 0)
                     : subFolders.isEmpty
-                        ? 1
-                        : subFolders.length,
+                    ? 1
+                    : subFolders.length,
                 itemBuilder: (context, index) {
                   if (_currentFolderId == null) {
                     if (subFolders.isEmpty) return _emptyItem();
@@ -193,7 +206,9 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-              color: Colors.white.withValues(alpha: 0.05), width: 0.5),
+            color: Colors.white.withValues(alpha: 0.05),
+            width: 0.5,
+          ),
         ),
       ),
       child: Row(
@@ -208,32 +223,38 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
                 color: Colors.white.withValues(alpha: 0.05),
               ),
               child: const Center(
-                child: Text('⌂',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                child: Text(
+                  '⌂',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                ),
               ),
             ),
           ),
-          ...crumbs.expand((c) => [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: Text('›',
-                      style: TextStyle(color: Color(0xFF334155), fontSize: 14)),
+          ...crumbs.expand(
+            (c) => [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  '›',
+                  style: TextStyle(color: Color(0xFF334155), fontSize: 14),
                 ),
-                GestureDetector(
-                  onTap: () => setState(() => _currentFolderId = c.id),
-                  child: Text(
-                    c.name,
-                    style: TextStyle(
-                      color: c.id == _currentFolderId
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF64748B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _currentFolderId = c.id),
+                child: Text(
+                  c.name,
+                  style: TextStyle(
+                    color: c.id == _currentFolderId
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ]),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -247,8 +268,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
           if (_currentFolderId != null)
             _toolbarBtn('← Back', () {
               final sState = ref.read(saveSystemProvider);
-              final breadcrumb =
-                  buildFolderBreadcrumb(sState.folders, _currentFolderId!);
+              final breadcrumb = buildFolderBreadcrumb(
+                sState.folders,
+                _currentFolderId!,
+              );
               setState(() {
                 _currentFolderId = breadcrumb.length > 1
                     ? breadcrumb[breadcrumb.length - 2].id
@@ -285,8 +308,12 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
     );
   }
 
-  Widget _toolbarBtn(String label, VoidCallback onTap,
-      {bool primary = false, bool accent = false}) {
+  Widget _toolbarBtn(
+    String label,
+    VoidCallback onTap, {
+    bool primary = false,
+    bool accent = false,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -296,14 +323,14 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
           color: accent
               ? MuzicianTheme.teal.withValues(alpha: 0.14)
               : primary
-                  ? MuzicianTheme.sky.withValues(alpha: 0.12)
-                  : Colors.white.withValues(alpha: 0.06),
+              ? MuzicianTheme.sky.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.06),
           border: Border.all(
             color: accent
                 ? MuzicianTheme.teal.withValues(alpha: 0.35)
                 : primary
-                    ? MuzicianTheme.sky.withValues(alpha: 0.3)
-                    : Colors.white.withValues(alpha: 0.10),
+                ? MuzicianTheme.sky.withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.10),
             width: 0.5,
           ),
         ),
@@ -313,8 +340,8 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
             color: accent
                 ? MuzicianTheme.teal
                 : primary
-                    ? MuzicianTheme.sky
-                    : const Color(0xFF94A3B8),
+                ? MuzicianTheme.sky
+                : const Color(0xFF94A3B8),
             fontSize: 13,
             fontWeight: primary || accent ? FontWeight.w700 : FontWeight.w600,
           ),
@@ -331,7 +358,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: Colors.white.withValues(alpha: 0.04),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.5),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.10),
+            width: 0.5,
+          ),
         ),
         child: Row(
           children: [
@@ -366,7 +396,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: Colors.white.withValues(alpha: 0.04),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.5),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.10),
+            width: 0.5,
+          ),
         ),
         child: Row(
           children: [
@@ -435,7 +468,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
   }
 
   Widget _folderRow(
-      SaveFolder folder, SaveSystemNotifier notifier, SaveSystemState sState) {
+    SaveFolder folder,
+    SaveSystemNotifier notifier,
+    SaveSystemState sState,
+  ) {
     final isProgression = folder.progressionMeta != null;
     return GestureDetector(
       onTap: () {
@@ -464,8 +500,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
         ),
         child: Row(
           children: [
-            Text(isProgression ? '🎼' : '📁',
-                style: const TextStyle(fontSize: 18)),
+            Text(
+              isProgression ? '🎼' : '📁',
+              style: const TextStyle(fontSize: 18),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -492,8 +530,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
                 isProgression))
               const Padding(
                 padding: EdgeInsets.only(left: 2),
-                child: Text('›',
-                    style: TextStyle(color: Color(0xFF334155), fontSize: 20)),
+                child: Text(
+                  '›',
+                  style: TextStyle(color: Color(0xFF334155), fontSize: 20),
+                ),
               ),
           ],
         ),
@@ -502,7 +542,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
   }
 
   Widget _saveRow(
-      SaveEntry save, SaveSystemNotifier notifier, SaveSystemState sState) {
+    SaveEntry save,
+    SaveSystemNotifier notifier,
+    SaveSystemState sState,
+  ) {
     final isActive = sState.activeSession?.saveId == save.id;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
@@ -521,8 +564,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
       ),
       child: Row(
         children: [
-          Text(save.progressionMeta != null ? '🎵' : '🌸',
-              style: const TextStyle(fontSize: 18)),
+          Text(
+            save.progressionMeta != null ? '🎵' : '🌸',
+            style: const TextStyle(fontSize: 18),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -531,7 +576,9 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
                 Text(
                   save.name,
                   style: TextStyle(
-                    color: isActive ? MuzicianTheme.sky : const Color(0xFFCBD5E1),
+                    color: isActive
+                        ? MuzicianTheme.sky
+                        : const Color(0xFFCBD5E1),
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -544,12 +591,16 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
                           ? save.progressionMeta!.chordNotes.join(', ')
                           : _formatDate(save.updatedAt),
                       style: const TextStyle(
-                          color: Color(0xFF334155), fontSize: 10),
+                        color: Color(0xFF334155),
+                        fontSize: 10,
+                      ),
                     ),
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 2),
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(4),
                         color: save.snapshot.instrument == 'piano'
@@ -578,8 +629,10 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
                 notifier.loadSave(save.id, widget.applySnapshot!);
                 Navigator.of(context).pop();
                 HapticFeedback.heavyImpact();
-                widget.onLoadFeedback
-                    ?.call(type: 'success', message: 'Save loaded.');
+                widget.onLoadFeedback?.call(
+                  type: 'success',
+                  message: 'Save loaded.',
+                );
               }
             }),
             const SizedBox(width: 4),
@@ -601,11 +654,19 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(7),
           color: Colors.white.withValues(alpha: 0.04),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 0.5,
+          ),
         ),
-        child: Text(label,
-            style: TextStyle(
-                color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }
@@ -613,8 +674,18 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
   String _formatDate(int millis) {
     final d = DateTime.fromMillisecondsSinceEpoch(millis);
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}';
   }

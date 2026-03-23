@@ -25,15 +25,14 @@ class PianoRollNote {
     String? noteWithOctave,
     int? startTick,
     int? durationTicks,
-  }) =>
-      PianoRollNote(
-        id: id,
-        midiNote: midiNote ?? this.midiNote,
-        pitchClass: pitchClass ?? this.pitchClass,
-        noteWithOctave: noteWithOctave ?? this.noteWithOctave,
-        startTick: startTick ?? this.startTick,
-        durationTicks: durationTicks ?? this.durationTicks,
-      );
+  }) => PianoRollNote(
+    id: id,
+    midiNote: midiNote ?? this.midiNote,
+    pitchClass: pitchClass ?? this.pitchClass,
+    noteWithOctave: noteWithOctave ?? this.noteWithOctave,
+    startTick: startTick ?? this.startTick,
+    durationTicks: durationTicks ?? this.durationTicks,
+  );
 }
 
 class TimeSignature {
@@ -43,14 +42,14 @@ class TimeSignature {
   const TimeSignature({required this.beatsPerMeasure, required this.beatUnit});
 
   Map<String, dynamic> toJson() => {
-        'beatsPerMeasure': beatsPerMeasure,
-        'beatUnit': beatUnit,
-      };
+    'beatsPerMeasure': beatsPerMeasure,
+    'beatUnit': beatUnit,
+  };
 
   factory TimeSignature.fromJson(Map<String, dynamic> json) => TimeSignature(
-        beatsPerMeasure: json['beatsPerMeasure'] as int,
-        beatUnit: json['beatUnit'] as int,
-      );
+    beatsPerMeasure: json['beatsPerMeasure'] as int,
+    beatUnit: json['beatUnit'] as int,
+  );
 }
 
 class PianoRollConfig {
@@ -71,13 +70,12 @@ class PianoRollConfig {
     String? key,
     TimeSignature? timeSignature,
     int? totalMeasures,
-  }) =>
-      PianoRollConfig(
-        tempo: tempo ?? this.tempo,
-        key: key ?? this.key,
-        timeSignature: timeSignature ?? this.timeSignature,
-        totalMeasures: totalMeasures ?? this.totalMeasures,
-      );
+  }) => PianoRollConfig(
+    tempo: tempo ?? this.tempo,
+    key: key ?? this.key,
+    timeSignature: timeSignature ?? this.timeSignature,
+    totalMeasures: totalMeasures ?? this.totalMeasures,
+  );
 }
 
 class PianoRollState {
@@ -104,17 +102,16 @@ class PianoRollState {
     int? pitchRangeEnd,
     int? Function()? selectedColumnTick,
     String? Function()? selectedNoteId,
-  }) =>
-      PianoRollState(
-        config: config ?? this.config,
-        notes: notes ?? this.notes,
-        pitchRangeStart: pitchRangeStart ?? this.pitchRangeStart,
-        pitchRangeEnd: pitchRangeEnd ?? this.pitchRangeEnd,
-        selectedColumnTick: selectedColumnTick != null
-            ? selectedColumnTick()
-            : this.selectedColumnTick,
-        selectedNoteId: selectedNoteId != null
-            ? selectedNoteId()
-            : this.selectedNoteId,
-      );
+  }) => PianoRollState(
+    config: config ?? this.config,
+    notes: notes ?? this.notes,
+    pitchRangeStart: pitchRangeStart ?? this.pitchRangeStart,
+    pitchRangeEnd: pitchRangeEnd ?? this.pitchRangeEnd,
+    selectedColumnTick: selectedColumnTick != null
+        ? selectedColumnTick()
+        : this.selectedColumnTick,
+    selectedNoteId: selectedNoteId != null
+        ? selectedNoteId()
+        : this.selectedNoteId,
+  );
 }

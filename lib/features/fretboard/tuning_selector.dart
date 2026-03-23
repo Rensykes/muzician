@@ -8,7 +8,11 @@ import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
 
-const _categories = [TuningCategory.standard, TuningCategory.metal, TuningCategory.midwestEmo];
+const _categories = [
+  TuningCategory.standard,
+  TuningCategory.metal,
+  TuningCategory.midwestEmo,
+];
 
 const _catColor = {
   TuningCategory.standard: MuzicianTheme.sky,
@@ -54,8 +58,9 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
     final bg = _catBg[_activeCategory]!;
 
     final allTunings = tunings.values.toList();
-    final visibleTunings =
-        allTunings.where((t) => t.category == _activeCategory).toList();
+    final visibleTunings = allTunings
+        .where((t) => t.category == _activeCategory)
+        .toList();
 
     return Column(
       children: [
@@ -64,7 +69,9 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.08), width: 0.5),
+                color: Colors.white.withValues(alpha: 0.08),
+                width: 0.5,
+              ),
             ),
           ),
           child: Row(
@@ -109,15 +116,17 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: visibleTunings.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            separatorBuilder: (context, index) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final t = visibleTunings[i];
               final isActive = t.name == state.currentTuning;
               return GestureDetector(
                 onTap: () => notifier.setTuning(t.name),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     color: isActive ? bg : Colors.white.withValues(alpha: 0.04),

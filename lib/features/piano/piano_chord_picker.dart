@@ -8,7 +8,18 @@ import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
 
 const _rootNotes = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
 ];
 
 const _qualities = [
@@ -24,15 +35,21 @@ const _qualities = [
 ];
 
 const _noteToPc = {
-  'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5,
-  'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11,
+  'C': 0,
+  'C#': 1,
+  'D': 2,
+  'D#': 3,
+  'E': 4,
+  'F': 5,
+  'F#': 6,
+  'G': 7,
+  'G#': 8,
+  'A': 9,
+  'A#': 10,
+  'B': 11,
 };
 
-const _flatToSharp = {
-  'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
-};
-
-String _toSharp(String n) => _flatToSharp[n] ?? n;
+// note normalization provided by lib/utils/note_utils.dart
 
 // Chord intervals in semitones
 const _chordIntervals = <String, List<int>>{
@@ -52,16 +69,26 @@ List<String> _getChordNotes(String root, String quality) {
   if (rootIdx == null) return [];
   final intervals = _chordIntervals[quality];
   if (intervals == null) return [];
-  final chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  final chromatic = [
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
+  ];
   return intervals.map((i) => chromatic[(rootIdx + i) % 12]).toList();
 }
 
 List<int> _buildVoicingMidis(List<String> notes, int inversion) {
   const rootBase = 60;
-  final rotated = [
-    ...notes.sublist(inversion),
-    ...notes.sublist(0, inversion),
-  ];
+  final rotated = [...notes.sublist(inversion), ...notes.sublist(0, inversion)];
   final midis = <int>[];
   int prev = rootBase - 1;
   for (int idx = 0; idx < rotated.length; idx++) {
@@ -103,14 +130,12 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
     final voicings = <({String label, List<int> midis})>[];
     if (chordNotes.isNotEmpty) {
       for (int inv = 0; inv < 3 && inv < chordNotes.length; inv++) {
-        final midis = _buildVoicingMidis(chordNotes, inv)
-            .where((m) => keyMidis.contains(m))
-            .toList();
+        final midis = _buildVoicingMidis(
+          chordNotes,
+          inv,
+        ).where((m) => keyMidis.contains(m)).toList();
         if (midis.length >= 3) {
-          voicings.add((
-            label: inv == 0 ? 'Root' : '$inv inv',
-            midis: midis,
-          ));
+          voicings.add((label: inv == 0 ? 'Root' : '$inv inv', midis: midis));
         }
       }
     }
@@ -120,11 +145,14 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Chord Voicings',
-              style: TextStyle(
-                  color: Color(0xFFCBD5E1),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700)),
+          const Text(
+            'Chord Voicings',
+            style: TextStyle(
+              color: Color(0xFFCBD5E1),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 10),
           // Root pills
           SizedBox(
@@ -132,7 +160,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _rootNotes.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final root = _rootNotes[i];
                 final active = _selectedRoot == root;
@@ -145,7 +173,9 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       color: active
@@ -158,14 +188,16 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                         width: 0.5,
                       ),
                     ),
-                    child: Text(root,
-                        style: TextStyle(
-                          color: active
-                              ? MuzicianTheme.emerald
-                              : const Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        )),
+                    child: Text(
+                      root,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.emerald
+                            : const Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 );
               },
@@ -178,7 +210,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _qualities.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final (symbol, label) = _qualities[i];
                 final active = _selectedQuality == symbol;
@@ -189,7 +221,9 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       color: active
@@ -202,14 +236,16 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                         width: 0.5,
                       ),
                     ),
-                    child: Text(label,
-                        style: TextStyle(
-                          color: active
-                              ? MuzicianTheme.emerald
-                              : const Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        )),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.emerald
+                            : const Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 );
               },
@@ -223,7 +259,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: voicings.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
                   final v = voicings[i];
                   return GestureDetector(
@@ -234,7 +270,9 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                     child: Container(
                       constraints: const BoxConstraints(minWidth: 110),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         color: Colors.white.withValues(alpha: 0.05),
@@ -246,16 +284,22 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(v.label,
-                              style: const TextStyle(
-                                  color: Color(0xFFE2E8F0),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700)),
+                          Text(
+                            v.label,
+                            style: const TextStyle(
+                              color: Color(0xFFE2E8F0),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           const SizedBox(height: 4),
-                          Text(chordNotes.join(' '),
-                              style: const TextStyle(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 11)),
+                          Text(
+                            chordNotes.join(' '),
+                            style: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
                     ),

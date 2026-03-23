@@ -22,14 +22,16 @@ class FretboardNotifier extends Notifier<FretboardState> {
         final effectiveMidi = stringTuning.midiNote;
         final noteName = getPitchClassAtFret(effectiveMidi, fret);
         final noteWithOctave = getNoteWithOctaveAtFret(effectiveMidi, fret);
-        cells.add(FretCell(
-          stringIndex: stringIndex,
-          fret: fret,
-          noteName: noteName,
-          noteWithOctave: noteWithOctave,
-          isNatural: isNaturalNote(noteName),
-          midiNote: effectiveMidi + fret,
-        ));
+        cells.add(
+          FretCell(
+            stringIndex: stringIndex,
+            fret: fret,
+            noteName: noteName,
+            noteWithOctave: noteWithOctave,
+            isNatural: isNaturalNote(noteName),
+            midiNote: effectiveMidi + fret,
+          ),
+        );
       }
       return cells;
     }).toList();
@@ -89,14 +91,18 @@ class FretboardNotifier extends Notifier<FretboardState> {
     if (state.viewMode == FretboardViewMode.exact ||
         state.viewMode == FretboardViewMode.exactFocus) {
       final idx = cells.indexWhere(
-          (c) => c.stringIndex == stringIndex && c.fret == fret);
+        (c) => c.stringIndex == stringIndex && c.fret == fret,
+      );
       if (idx >= 0) {
         newCells = List.of(cells)..removeAt(idx);
       } else {
         newCells = [
           ...cells,
           FretCoordinate(
-              stringIndex: stringIndex, fret: fret, noteName: noteName)
+            stringIndex: stringIndex,
+            fret: fret,
+            noteName: noteName,
+          ),
         ];
       }
     } else {
@@ -106,7 +112,10 @@ class FretboardNotifier extends Notifier<FretboardState> {
           : [
               ...cells,
               FretCoordinate(
-                  stringIndex: stringIndex, fret: fret, noteName: noteName)
+                stringIndex: stringIndex,
+                fret: fret,
+                noteName: noteName,
+              ),
             ];
     }
     final newNotes = newCells.map((c) => c.noteName).toSet().toList();
@@ -114,15 +123,14 @@ class FretboardNotifier extends Notifier<FretboardState> {
     ref.read(fretboardManualEditProvider.notifier).state++;
   }
 
-  void clearSelectedNotes() => state = state.copyWith(
-        selectedNotes: [],
-        selectedCells: [],
-      );
+  void clearSelectedNotes() =>
+      state = state.copyWith(selectedNotes: [], selectedCells: []);
 
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);
-    final newCells =
-        state.selectedCells.where((c) => !bad.contains(c.noteName)).toList();
+    final newCells = state.selectedCells
+        .where((c) => !bad.contains(c.noteName))
+        .toList();
     final newNotes = newCells.map((c) => c.noteName).toSet().toList();
     state = state.copyWith(selectedCells: newCells, selectedNotes: newNotes);
   }
@@ -141,24 +149,25 @@ class FretboardNotifier extends Notifier<FretboardState> {
       cells.add(FretCoordinate(stringIndex: i, fret: fret, noteName: noteName));
     }
     final notes = cells.map((c) => c.noteName).toSet().toList();
-    state = state.copyWith(
-        selectedCells: cells,
-        selectedNotes: notes);
+    state = state.copyWith(selectedCells: cells, selectedNotes: notes);
   }
 
   void reset() => state = getDefaultFretboardState();
 }
 
-final fretboardProvider =
-    NotifierProvider<FretboardNotifier, FretboardState>(FretboardNotifier.new);
+final fretboardProvider = NotifierProvider<FretboardNotifier, FretboardState>(
+  FretboardNotifier.new,
+);
 
 /// Pending chord (set by detection panel, consumed by pickers).
-final pendingChordProvider =
-    StateProvider<({String root, String quality})?>((_) => null);
+final pendingChordProvider = StateProvider<({String root, String quality})?>(
+  (_) => null,
+);
 
 /// Pending scale (set by detection panel, consumed by pickers).
-final pendingScaleProvider =
-    StateProvider<({String root, String scaleName})?>((_) => null);
+final pendingScaleProvider = StateProvider<({String root, String scaleName})?>(
+  (_) => null,
+);
 
 /// Fret position to scroll to (set by capo/chord actions, consumed by fretboard).
 final scrollToFretProvider = StateProvider<int?>((_) => null);

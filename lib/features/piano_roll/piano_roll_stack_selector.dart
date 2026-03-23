@@ -9,7 +9,20 @@ import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../theme/muzician_theme.dart';
 
-const _roots = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const _roots = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
 
 const _qualities = <(String symbol, String label)>[
   ('', 'maj'),
@@ -31,13 +44,21 @@ const _durationOptions = <(String label, int ticks)>[
   ('1/1', 16),
 ];
 
-const _flatToSharp = <String, String>{
-  'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
-};
+// note normalization provided by lib/utils/note_utils.dart
 
 const _noteToPC = <String, int>{
-  'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5,
-  'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11,
+  'C': 0,
+  'C#': 1,
+  'D': 2,
+  'D#': 3,
+  'E': 4,
+  'F': 5,
+  'F#': 6,
+  'G': 7,
+  'G#': 8,
+  'A': 9,
+  'A#': 10,
+  'B': 11,
 };
 
 // Chord intervals for each quality
@@ -53,7 +74,7 @@ const _chordIntervals = <String, List<int>>{
   'aug': [0, 4, 8],
 };
 
-String _toSharp(String note) => _flatToSharp[note] ?? note;
+// use toSharp from utils
 
 List<String> _chordNotes(String root, String quality) {
   final intervals = _chordIntervals[quality];
@@ -66,7 +87,12 @@ List<String> _chordNotes(String root, String quality) {
   }).toList();
 }
 
-int? _bestMidiInRange(String pitchClass, int rangeStart, int rangeEnd, int anchor) {
+int? _bestMidiInRange(
+  String pitchClass,
+  int rangeStart,
+  int rangeEnd,
+  int anchor,
+) {
   final pc = _noteToPC[pitchClass];
   if (pc == null) return null;
   int? best;
@@ -107,17 +133,28 @@ class _PianoRollStackSelectorState
     void handleAddStack() {
       if (notes.isEmpty) return;
       final maxTicks = rules.totalTicks(
-          state.config.timeSignature, state.config.totalMeasures);
+        state.config.timeSignature,
+        state.config.totalMeasures,
+      );
       final fallbackStart = min(
         maxTicks - 1,
         state.notes.fold<int>(
-            0, (acc, n) => max(acc, n.startTick + n.durationTicks)),
+          0,
+          (acc, n) => max(acc, n.startTick + n.durationTicks),
+        ),
       ).clamp(0, maxTicks - 1);
       final startTick = state.selectedColumnTick ?? fallbackStart;
-      final anchor = ((state.pitchRangeStart + state.pitchRangeEnd) / 2).round();
+      final anchor = ((state.pitchRangeStart + state.pitchRangeEnd) / 2)
+          .round();
       final midiStack = notes
-          .map((pc) => _bestMidiInRange(
-              pc, state.pitchRangeStart, state.pitchRangeEnd, anchor))
+          .map(
+            (pc) => _bestMidiInRange(
+              pc,
+              state.pitchRangeStart,
+              state.pitchRangeEnd,
+              anchor,
+            ),
+          )
           .whereType<int>()
           .toList();
       if (midiStack.isEmpty) return;
@@ -137,20 +174,26 @@ class _PianoRollStackSelectorState
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Stack Selector',
-              style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700)),
+          const Text(
+            'Stack Selector',
+            style: TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
 
           const SizedBox(height: 10),
 
           // Root
-          const Text('Root',
-              style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+          const Text(
+            'Root',
+            style: TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -172,11 +215,14 @@ class _PianoRollStackSelectorState
           const SizedBox(height: 10),
 
           // Quality
-          const Text('Quality',
-              style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+          const Text(
+            'Quality',
+            style: TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -198,11 +244,14 @@ class _PianoRollStackSelectorState
           const SizedBox(height: 10),
 
           // Duration
-          const Text('Duration',
-              style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+          const Text(
+            'Duration',
+            style: TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           Row(
             children: _durationOptions.map((d) {
@@ -227,27 +276,34 @@ class _PianoRollStackSelectorState
               Text(
                 '$chordSymbol: ${notes.join(' ').isEmpty ? 'no notes' : notes.join(' ')}',
                 style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600),
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               GestureDetector(
                 onTap: handleAddStack,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: MuzicianTheme.emerald.withValues(alpha: 0.18),
                     border: Border.all(
-                        color: MuzicianTheme.emerald.withValues(alpha: 0.45),
-                        width: 0.5),
+                      color: MuzicianTheme.emerald.withValues(alpha: 0.45),
+                      width: 0.5,
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text('Add Stack',
-                      style: TextStyle(
-                          color: MuzicianTheme.emerald,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800)),
+                  child: const Text(
+                    'Add Stack',
+                    style: TextStyle(
+                      color: MuzicianTheme.emerald,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -263,11 +319,7 @@ class _Pill extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _Pill({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
+  const _Pill({required this.label, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -290,8 +342,7 @@ class _Pill extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color:
-                active ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+            color: active ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),

@@ -13,7 +13,18 @@ import '../../theme/muzician_theme.dart';
 import 'chord_diagram.dart';
 
 const _rootNotes = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
 ];
 
 const _qualities = [
@@ -32,11 +43,7 @@ const _qualities = [
   ('maj9', 'maj9'),
 ];
 
-const _flatToSharp = {
-  'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
-};
-
-String _toSharp(String note) => _flatToSharp[note] ?? note;
+// note normalization provided by lib/utils/note_utils.dart
 
 // ─── Voicing generation ──────────────────────────────────────────────────────
 
@@ -67,7 +74,9 @@ List<ChordVoicing> _generateVoicings(
   for (int base = math.max(1, capo); base <= capo + 12; base++) {
     final windowEnd = base + 3;
     final choices = stringOptions.map((opts) {
-      final windowFrets = opts.where((f) => f >= base && f <= windowEnd).toList();
+      final windowFrets = opts
+          .where((f) => f >= base && f <= windowEnd)
+          .toList();
       // "Open" means: true open (fret 0) when no capo, or capo position (fret == capo)
       // when a capo is present. In both cases it is already in opts if the note matches.
       final hasOpen = capo == 0 && opts.contains(0);
@@ -94,14 +103,17 @@ List<ChordVoicing> _generateVoicings(
 
         final fretted = played.where((f) => f > 0).toList();
         if (fretted.isNotEmpty) {
-          final span = fretted.reduce((a, b) => a > b ? a : b) -
+          final span =
+              fretted.reduce((a, b) => a > b ? a : b) -
               fretted.reduce((a, b) => a < b ? a : b);
           if (span > 3) return;
         }
 
         final firstPlayed = current.indexWhere((f) => f != null);
         final lastPlayed =
-            current.length - 1 - current.reversed.toList().indexWhere((f) => f != null);
+            current.length -
+            1 -
+            current.reversed.toList().indexWhere((f) => f != null);
         for (int i = firstPlayed + 1; i < lastPlayed; i++) {
           if (current[i] == null) return;
         }
@@ -111,10 +123,13 @@ List<ChordVoicing> _generateVoicings(
         seen.add(key);
 
         final frettedArr = played.where((f) => f > 0).toList();
-        final baseFret =
-            frettedArr.isNotEmpty ? frettedArr.reduce((a, b) => a < b ? a : b) : 0;
+        final baseFret = frettedArr.isNotEmpty
+            ? frettedArr.reduce((a, b) => a < b ? a : b)
+            : 0;
 
-        voicings.add(ChordVoicing(positions: List.from(current), baseFret: baseFret));
+        voicings.add(
+          ChordVoicing(positions: List.from(current), baseFret: baseFret),
+        );
         return;
       }
       for (final opt in choices[si]) {
@@ -220,7 +235,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
 
     // When the user manually taps a fretboard note, drop the commit and
     // revert to whatever detection now says.
-    ref.listen(fretboardManualEditProvider, (_, __) {
+    ref.listen(fretboardManualEditProvider, (prev, next) {
       final detected = _detectFirstChord(
         ref.read(fretboardProvider).selectedNotes,
       );
@@ -263,10 +278,12 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
 
     final tuning = tunings[state.currentTuning]!;
     final stringMidis = tuning.strings.map((s) => s.midiNote).toList();
-    final openNotes =
-        stringMidis.map((midi) => getPitchClassAtFret(midi, 0)).toList();
-    final chordName =
-        _selectedRoot != null ? '$_selectedRoot$_selectedQuality' : null;
+    final openNotes = stringMidis
+        .map((midi) => getPitchClassAtFret(midi, 0))
+        .toList();
+    final chordName = _selectedRoot != null
+        ? '$_selectedRoot$_selectedQuality'
+        : null;
     final chordNotes = _selectedRoot != null
         ? _getChordNotes(_selectedRoot!, _selectedQuality)
         : <String>[];
@@ -294,8 +311,10 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
               const Spacer(),
               if (chordName != null && chordNotes.isNotEmpty)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: MuzicianTheme.sky.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
@@ -319,7 +338,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _rootNotes.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 6),
+            separatorBuilder: (context, index) => const SizedBox(width: 6),
             itemBuilder: (_, i) {
               final root = _rootNotes[i];
               final active = _selectedRoot == root;
@@ -332,8 +351,10 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                   });
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     color: active
@@ -349,7 +370,9 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                   child: Text(
                     root,
                     style: TextStyle(
-                      color: active ? MuzicianTheme.sky : const Color(0xFF64748B),
+                      color: active
+                          ? MuzicianTheme.sky
+                          : const Color(0xFF64748B),
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -368,7 +391,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: _qualities.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              separatorBuilder: (context, index) => const SizedBox(width: 6),
               itemBuilder: (_, i) {
                 final (symbol, label) = _qualities[i];
                 final active = _selectedQuality == symbol;
@@ -381,8 +404,10 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                     });
                   },
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       color: active

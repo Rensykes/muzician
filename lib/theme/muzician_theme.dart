@@ -35,21 +35,21 @@ abstract final class MuzicianTheme {
 
   // ── Build Theme ─────────────────────────────────────────────────────────
   static ThemeData dark() => ThemeData.dark(useMaterial3: true).copyWith(
-        scaffoldBackgroundColor: scaffoldBg,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: sky,
-          brightness: Brightness.dark,
-          surface: surface,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          titleTextStyle: TextStyle(
-            color: textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
+    scaffoldBackgroundColor: scaffoldBg,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: sky,
+      brightness: Brightness.dark,
+      surface: surface,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+      titleTextStyle: TextStyle(
+        color: textPrimary,
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }

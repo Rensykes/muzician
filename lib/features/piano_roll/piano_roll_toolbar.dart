@@ -17,7 +17,20 @@ const _timeSigOptions = <(int beats, int unit, String label)>[
   (6, 8, '6/8'),
 ];
 
-const _roots = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const _roots = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
 
 class PianoRollToolbar extends ConsumerStatefulWidget {
   const PianoRollToolbar({super.key});
@@ -35,14 +48,17 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
     final notifier = ref.read(pianoRollProvider.notifier);
 
     final ts = state.config.timeSignature;
-    final activeTimeSig = _timeSigOptions
+    final activeTimeSig =
+        _timeSigOptions
             .where((o) => o.$1 == ts.beatsPerMeasure && o.$2 == ts.beatUnit)
             .firstOrNull
             ?.$3 ??
         '${ts.beatsPerMeasure}/${ts.beatUnit}';
 
-    final totalRollTicks =
-        rules.totalTicks(state.config.timeSignature, state.config.totalMeasures);
+    final totalRollTicks = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
 
     void pickKey(String root) {
       final value = '$root $_keyMode';
@@ -67,21 +83,27 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text('Tempo',
-                  style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                'Tempo',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               _Stepper(
                 value: '${state.config.tempo} BPM',
                 onDecrement: () => notifier.setTempo(state.config.tempo - 1),
                 onIncrement: () => notifier.setTempo(state.config.tempo + 1),
               ),
-              const Text('Measures',
-                  style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                'Measures',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               _Stepper(
                 value: '${state.config.totalMeasures}',
                 onDecrement: () =>
@@ -98,27 +120,44 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
           Wrap(
             spacing: 12,
             children: [
-              Text('Tick Grid: 1/16',
-                  style: TextStyle(
-                      color: MuzicianTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
-              Text('Timeline: $totalRollTicks ticks',
-                  style: TextStyle(
-                      color: MuzicianTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
               Text(
-                  'Range: ${state.pitchRangeStart} to ${state.pitchRangeEnd}',
-                  style: TextStyle(
-                      color: MuzicianTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                'Tick Grid: 1/16',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                'Timeline: $totalRollTicks ticks',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                'Range: ${state.pitchRangeStart} to ${state.pitchRangeEnd}',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
 
           const SizedBox(height: 10),
 
           // ── Time Signature ──
-          const Text('Time Signature',
-              style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
+          const Text(
+            'Time Signature',
+            style: TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
@@ -129,7 +168,8 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
                 label: o.$3,
                 active: active,
                 onTap: () => notifier.setTimeSignature(
-                    TimeSignature(beatsPerMeasure: o.$1, beatUnit: o.$2)),
+                  TimeSignature(beatsPerMeasure: o.$1, beatUnit: o.$2),
+                ),
               );
             }).toList(),
           ),
@@ -139,11 +179,14 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
           // ── Key ──
           Row(
             children: [
-              const Text('Key (Optional)',
-                  style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                'Key (Optional)',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const Spacer(),
               _ModeBtn(
                 label: 'Major',
@@ -186,11 +229,14 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text('Pitch Window',
-                  style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                'Pitch Window',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               _StepButton(
                 label: '-1 Oct',
                 onTap: () => notifier.shiftPitchRange(-12),
@@ -211,9 +257,10 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
           Text(
             'Tempo range: ${rules.minTempo}-${rules.maxTempo} BPM',
             style: const TextStyle(
-                color: MuzicianTheme.textMuted,
-                fontSize: 10,
-                fontWeight: FontWeight.w600),
+              color: MuzicianTheme.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -236,24 +283,27 @@ class _Stepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _StepButton(label: '-', onTap: onDecrement),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 66),
-              child: Text(value,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: MuzicianTheme.sky,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      _StepButton(label: '-', onTap: onDecrement),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 66),
+          child: Text(
+            value,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: MuzicianTheme.sky,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          _StepButton(label: '+', onTap: onIncrement),
-        ],
-      );
+        ),
+      ),
+      _StepButton(label: '+', onTap: onIncrement),
+    ],
+  );
 }
 
 class _StepButton extends StatelessWidget {
@@ -269,28 +319,31 @@ class _StepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: danger
-                ? MuzicianTheme.red.withValues(alpha: 0.18)
-                : Colors.white.withValues(alpha: 0.06),
-            border: Border.all(
-              color: danger
-                  ? MuzicianTheme.red.withValues(alpha: 0.35)
-                  : Colors.white.withValues(alpha: 0.16),
-              width: 0.5,
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(label,
-              style: const TextStyle(
-                  color: MuzicianTheme.textPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: danger
+            ? MuzicianTheme.red.withValues(alpha: 0.18)
+            : Colors.white.withValues(alpha: 0.06),
+        border: Border.all(
+          color: danger
+              ? MuzicianTheme.red.withValues(alpha: 0.35)
+              : Colors.white.withValues(alpha: 0.16),
+          width: 0.5,
         ),
-      );
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: MuzicianTheme.textPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+  );
 }
 
 class _Pill extends StatelessWidget {
@@ -298,38 +351,35 @@ class _Pill extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _Pill({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
+  const _Pill({required this.label, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: active
-                ? MuzicianTheme.sky.withValues(alpha: 0.18)
-                : Colors.white.withValues(alpha: 0.06),
-            border: Border.all(
-              color: active
-                  ? MuzicianTheme.sky.withValues(alpha: 0.5)
-                  : Colors.white.withValues(alpha: 0.18),
-              width: 0.5,
-            ),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  color: active
-                      ? MuzicianTheme.sky
-                      : MuzicianTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: active
+            ? MuzicianTheme.sky.withValues(alpha: 0.18)
+            : Colors.white.withValues(alpha: 0.06),
+        border: Border.all(
+          color: active
+              ? MuzicianTheme.sky.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.18),
+          width: 0.5,
         ),
-      );
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: active ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+  );
 }
 
 class _ModeBtn extends StatelessWidget {
@@ -345,26 +395,29 @@ class _ModeBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: active
-                ? MuzicianTheme.emerald.withValues(alpha: 0.15)
-                : Colors.white.withValues(alpha: 0.04),
-            border: Border.all(
-              color: active
-                  ? MuzicianTheme.emerald.withValues(alpha: 0.45)
-                  : Colors.white.withValues(alpha: 0.16),
-              width: 0.5,
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(label,
-              style: const TextStyle(
-                  color: Color(0xFFDBEAFE),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: active
+            ? MuzicianTheme.emerald.withValues(alpha: 0.15)
+            : Colors.white.withValues(alpha: 0.04),
+        border: Border.all(
+          color: active
+              ? MuzicianTheme.emerald.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: 0.16),
+          width: 0.5,
         ),
-      );
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFFDBEAFE),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+  );
 }

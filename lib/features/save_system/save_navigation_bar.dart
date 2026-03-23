@@ -38,8 +38,10 @@ class SaveNavigationBar extends ConsumerWidget {
     if (activeSave == null) return const SizedBox.shrink();
 
     final adj = getAdjacentSaves(sState.saves, activeSession);
-    final breadcrumb =
-        buildFolderBreadcrumb(sState.folders, activeSession.folderId);
+    final breadcrumb = buildFolderBreadcrumb(
+      sState.folders,
+      activeSession.folderId,
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -75,9 +77,10 @@ class SaveNavigationBar extends ConsumerWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: Color(0xFF475569),
-                          fontSize: 10,
-                          letterSpacing: 0.3),
+                        color: Color(0xFF475569),
+                        fontSize: 10,
+                        letterSpacing: 0.3,
+                      ),
                     ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -114,11 +117,14 @@ class SaveNavigationBar extends ConsumerWidget {
                             ),
                           ),
                           child: const Center(
-                            child: Text('✕',
-                                style: TextStyle(
-                                    color: MuzicianTheme.red,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800)),
+                            child: Text(
+                              '✕',
+                              style: TextStyle(
+                                color: MuzicianTheme.red,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                         ),
                       ),

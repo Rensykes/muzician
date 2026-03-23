@@ -82,16 +82,16 @@ class FretCoordinate {
   });
 
   Map<String, dynamic> toJson() => {
-        'stringIndex': stringIndex,
-        'fret': fret,
-        'noteName': noteName,
-      };
+    'stringIndex': stringIndex,
+    'fret': fret,
+    'noteName': noteName,
+  };
 
   factory FretCoordinate.fromJson(Map<String, dynamic> json) => FretCoordinate(
-        stringIndex: json['stringIndex'] as int,
-        fret: json['fret'] as int,
-        noteName: json['noteName'] as String,
-      );
+    stringIndex: json['stringIndex'] as int,
+    fret: json['fret'] as int,
+    noteName: json['noteName'] as String,
+  );
 }
 
 /// A single chord voicing: one fret position per string.
@@ -134,14 +134,13 @@ class FretboardState {
     List<String>? selectedNotes,
     List<FretCoordinate>? selectedCells,
     FretboardViewMode? viewMode,
-  }) =>
-      FretboardState(
-        currentTuning: currentTuning ?? this.currentTuning,
-        numFrets: numFrets ?? this.numFrets,
-        capo: capo ?? this.capo,
-        highlightedNotes: highlightedNotes ?? this.highlightedNotes,
-        selectedNotes: selectedNotes ?? this.selectedNotes,
-        selectedCells: selectedCells ?? this.selectedCells,
-        viewMode: viewMode ?? this.viewMode,
-      );
+  }) => FretboardState(
+    currentTuning: currentTuning ?? this.currentTuning,
+    numFrets: numFrets ?? this.numFrets,
+    capo: capo ?? this.capo,
+    highlightedNotes: highlightedNotes ?? this.highlightedNotes,
+    selectedNotes: selectedNotes ?? this.selectedNotes,
+    selectedCells: selectedCells ?? this.selectedCells,
+    viewMode: viewMode ?? this.viewMode,
+  );
 }

@@ -8,9 +8,24 @@ import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../theme/muzician_theme.dart';
 
-const _chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const _chromatic = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
 
-({List<String> chords, List<String> scales}) _detect(List<String> pitchClasses) {
+({List<String> chords, List<String> scales}) _detect(
+  List<String> pitchClasses,
+) {
   if (pitchClasses.length < 2) return (chords: <String>[], scales: <String>[]);
   final noteSet = pitchClasses.toSet();
 
@@ -29,8 +44,9 @@ const _chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
   for (final root in _chromatic) {
     final rootIdx = _chromatic.indexOf(root);
     for (final (symbol, intervals) in qualities) {
-      final chordTones =
-          intervals.map((i) => _chromatic[(rootIdx + i) % 12]).toSet();
+      final chordTones = intervals
+          .map((i) => _chromatic[(rootIdx + i) % 12])
+          .toSet();
       if (noteSet.every(chordTones.contains) &&
           chordTones.every(noteSet.contains)) {
         chords.add('$root${symbol.isEmpty ? '' : symbol}');
@@ -48,8 +64,9 @@ const _chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
   for (final root in _chromatic) {
     final rootIdx = _chromatic.indexOf(root);
     for (final (name, intervals) in scaleTypes) {
-      final scaleTones =
-          intervals.map((i) => _chromatic[(rootIdx + i) % 12]).toSet();
+      final scaleTones = intervals
+          .map((i) => _chromatic[(rootIdx + i) % 12])
+          .toSet();
       if (noteSet.every(scaleTones.contains)) {
         scales.add('$root $name');
       }
@@ -68,8 +85,10 @@ class PianoRollDetectionPanel extends ConsumerWidget {
 
     if (state.selectedColumnTick == null) return const SizedBox.shrink();
 
-    final notesAtTick =
-        rules.getNotesAtTick(state.notes, state.selectedColumnTick!);
+    final notesAtTick = rules.getNotesAtTick(
+      state.notes,
+      state.selectedColumnTick!,
+    );
     if (notesAtTick.isEmpty) return const SizedBox.shrink();
 
     final uniquePCs = notesAtTick.map((n) => n.pitchClass).toSet().toList();
@@ -121,8 +140,12 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                   HapticFeedback.selectionClick();
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.only(left: 8, top: 3, bottom: 3, right: 4),
+                  padding: const EdgeInsets.only(
+                    left: 8,
+                    top: 3,
+                    bottom: 3,
+                    right: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? MuzicianTheme.sky.withValues(alpha: 0.25)
@@ -186,8 +209,10 @@ class PianoRollDetectionPanel extends ConsumerWidget {
               runSpacing: 4,
               children: detection.chords.map((chord) {
                 return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: MuzicianTheme.emerald.withValues(alpha: 0.15),
                     border: Border.all(
@@ -226,8 +251,10 @@ class PianoRollDetectionPanel extends ConsumerWidget {
               runSpacing: 4,
               children: detection.scales.map((scale) {
                 return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: MuzicianTheme.violet.withValues(alpha: 0.15),
                     border: Border.all(

@@ -176,3 +176,15 @@ TuningSelector → fretboardProvider.setTuning()
 
 - Scale highlight & conflicts: Applying a scale highlights pitch classes across the board and will warn if the selected scale conflicts with already-selected notes (offers to remove conflicting notes). See: [lib/features/fretboard/scale_picker.dart](lib/features/fretboard/scale_picker.dart).
 
+---
+
+## Recent Changes — 2026-03-23
+
+- **Capo behavior:** Setting the capo now animates the fretboard to the capo position and transposes currently selected notes by the capo delta so their pitches remain correct.
+- **Chord picker / voicings:** Selecting a chord voicing animates the fretboard to the voicing's base fret (the nearest physical occurrence) and loads the voicing as selected cells.
+- **Detection vs committed voicing:** The picker shows detected chords by default. When a user explicitly commits a voicing (taps to load), it overrides detection until the user makes a manual fretboard edit; unfocusing without selection reverts to detection.
+- **Manual-edit signal:** Manual fretboard edits now clear any committed voicing so detection regains control.
+- **Implementation notes:** Added two inter-widget signals in the store — `scrollToFretProvider` (one-shot int?) and `fretboardManualEditProvider` (counter). Voicing generation and `loadVoicing()` were adjusted to operate on physical frets (capo handled separately) to avoid double-applying the capo offset.
+- **Bugfixes & diagnostics:** Fixed a bug where the capo was being applied twice in pitch calculations. Static checks ran locally; modified files compile cleanly. One minor unused helper (`_toSharp`) remains for cleanup.
+- **Next steps:** Remove the unused helper or integrate it into parsing, and verify the piano page for analogous capo/selection issues.
+

@@ -27,14 +27,15 @@ class _ProgressionSaveButtonState extends State<ProgressionSaveButton> {
   bool _showForm = false;
   final _controller = TextEditingController();
 
-  bool get _isSaved =>
-      widget.savedPath != null && widget.savedPath!.isNotEmpty;
+  bool get _isSaved => widget.savedPath != null && widget.savedPath!.isNotEmpty;
 
   void _handleSave() {
     final trimmed = _controller.text.trim();
     if (trimmed.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a name for the progression.')),
+        const SnackBar(
+          content: Text('Please enter a name for the progression.'),
+        ),
       );
       return;
     }
@@ -72,7 +73,9 @@ class _ProgressionSaveButtonState extends State<ProgressionSaveButton> {
               borderRadius: BorderRadius.circular(12),
               color: MuzicianTheme.teal.withValues(alpha: 0.06),
               border: Border.all(
-                  color: MuzicianTheme.teal.withValues(alpha: 0.2), width: 0.5),
+                color: MuzicianTheme.teal.withValues(alpha: 0.2),
+                width: 0.5,
+              ),
             ),
             child: Row(
               children: [
@@ -123,7 +126,9 @@ class _ProgressionSaveButtonState extends State<ProgressionSaveButton> {
         borderRadius: BorderRadius.circular(14),
         color: const Color(0xFF1A1A2E).withValues(alpha: 0.8),
         border: Border.all(
-            color: MuzicianTheme.teal.withValues(alpha: 0.2), width: 0.5),
+          color: MuzicianTheme.teal.withValues(alpha: 0.2),
+          width: 0.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +150,10 @@ class _ProgressionSaveButtonState extends State<ProgressionSaveButton> {
                   controller: _controller,
                   autofocus: true,
                   maxLength: 60,
-                  style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 15),
+                  style: const TextStyle(
+                    color: Color(0xFFE2E8F0),
+                    fontSize: 15,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'e.g. Rainy Day Outro',
                     hintStyle: TextStyle(color: MuzicianTheme.textMuted),
@@ -153,7 +161,8 @@ class _ProgressionSaveButtonState extends State<ProgressionSaveButton> {
                     isDense: true,
                     border: UnderlineInputBorder(
                       borderSide: BorderSide(
-                          color: MuzicianTheme.teal.withValues(alpha: 0.4)),
+                        color: MuzicianTheme.teal.withValues(alpha: 0.4),
+                      ),
                     ),
                   ),
                   onSubmitted: (_) => _handleSave(),
@@ -163,7 +172,11 @@ class _ProgressionSaveButtonState extends State<ProgressionSaveButton> {
               _ActionButton(label: 'Save', enabled: true, onTap: _handleSave),
               const SizedBox(width: 4),
               IconButton(
-                icon: const Icon(Icons.close, size: 14, color: Color(0xFF64748B)),
+                icon: const Icon(
+                  Icons.close,
+                  size: 14,
+                  color: Color(0xFF64748B),
+                ),
                 onPressed: () => setState(() {
                   _showForm = false;
                   _controller.clear();

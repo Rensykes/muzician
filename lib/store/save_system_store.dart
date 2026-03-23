@@ -59,11 +59,14 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   void deleteFolder(String id) {
     final descendantIds = getDescendantFolderIds(state.folders, id);
     final allDeletedIds = [id, ...descendantIds];
-    final nextFolders =
-        state.folders.where((f) => !allDeletedIds.contains(f.id)).toList();
-    final nextSaves =
-        state.saves.where((s) => !allDeletedIds.contains(s.folderId)).toList();
-    final nextSession = state.activeSession != null &&
+    final nextFolders = state.folders
+        .where((f) => !allDeletedIds.contains(f.id))
+        .toList();
+    final nextSaves = state.saves
+        .where((s) => !allDeletedIds.contains(s.folderId))
+        .toList();
+    final nextSession =
+        state.activeSession != null &&
             allDeletedIds.contains(state.activeSession!.folderId)
         ? null
         : state.activeSession;
@@ -78,7 +81,10 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   // ── Save Management ───────────────────────────────────────────────────────
 
   String? saveSnapshot(
-      String name, String folderId, InstrumentSnapshot snapshot) {
+    String name,
+    String folderId,
+    InstrumentSnapshot snapshot,
+  ) {
     if (!isValidSaveName(name)) return null;
     final siblings = getSavesInFolder(state.saves, folderId);
     final entry = createSaveEntry(name, folderId, snapshot, siblings.length);
@@ -90,11 +96,14 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   void updateSnapshot(String id, InstrumentSnapshot snapshot) {
     state = state.copyWith(
       saves: state.saves
-          .map((s) => s.id == id
-              ? s.copyWith(
-                  snapshot: snapshot,
-                  updatedAt: DateTime.now().millisecondsSinceEpoch)
-              : s)
+          .map(
+            (s) => s.id == id
+                ? s.copyWith(
+                    snapshot: snapshot,
+                    updatedAt: DateTime.now().millisecondsSinceEpoch,
+                  )
+                : s,
+          )
           .toList(),
     );
     _persist();
@@ -104,11 +113,14 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     if (!isValidSaveName(name)) return;
     state = state.copyWith(
       saves: state.saves
-          .map((s) => s.id == id
-              ? s.copyWith(
-                  name: name.trim(),
-                  updatedAt: DateTime.now().millisecondsSinceEpoch)
-              : s)
+          .map(
+            (s) => s.id == id
+                ? s.copyWith(
+                    name: name.trim(),
+                    updatedAt: DateTime.now().millisecondsSinceEpoch,
+                  )
+                : s,
+          )
           .toList(),
     );
     _persist();
@@ -116,12 +128,10 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
 
   void deleteSave(String id) {
     final nextSaves = state.saves.where((s) => s.id != id).toList();
-    final nextSession =
-        state.activeSession?.saveId == id ? null : state.activeSession;
-    state = state.copyWith(
-      saves: nextSaves,
-      activeSession: () => nextSession,
-    );
+    final nextSession = state.activeSession?.saveId == id
+        ? null
+        : state.activeSession;
+    state = state.copyWith(saves: nextSaves, activeSession: () => nextSession);
     _persist();
   }
 
@@ -136,8 +146,9 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     if (entry == null) return;
     apply(entry.snapshot);
     state = state.copyWith(
-        activeSession: () =>
-            ActiveSession(saveId: saveId, folderId: entry.folderId));
+      activeSession: () =>
+          ActiveSession(saveId: saveId, folderId: entry.folderId),
+    );
   }
 
   void navigatePrev(void Function(InstrumentSnapshot) apply) {
@@ -153,4 +164,5 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
 
 final saveSystemProvider =
     NotifierProvider<SaveSystemNotifier, SaveSystemState>(
-        SaveSystemNotifier.new);
+      SaveSystemNotifier.new,
+    );

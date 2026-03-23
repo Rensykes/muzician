@@ -29,8 +29,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
     await prefs.setString(_settingsKey, jsonEncode(state.toJson()));
   }
 
-  Future<void> setFretboardFavouriteViewMode(
-      FretboardViewMode mode) async {
+  Future<void> setFretboardFavouriteViewMode(FretboardViewMode mode) async {
     state = state.copyWith(fretboardFavouriteViewMode: mode);
     await _persist();
   }
@@ -46,5 +45,6 @@ class SettingsNotifier extends Notifier<AppSettings> {
   }
 }
 
-final settingsProvider =
-    NotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);
+final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
+  SettingsNotifier.new,
+);

@@ -19,16 +19,16 @@ class PendingChord {
   });
 
   Map<String, dynamic> toJson() => {
-        'root': root,
-        'quality': quality,
-        'symbol': symbol,
-      };
+    'root': root,
+    'quality': quality,
+    'symbol': symbol,
+  };
 
   factory PendingChord.fromJson(Map<String, dynamic> json) => PendingChord(
-        root: json['root'] as String,
-        quality: json['quality'] as String,
-        symbol: json['symbol'] as String,
-      );
+    root: json['root'] as String,
+    quality: json['quality'] as String,
+    symbol: json['symbol'] as String,
+  );
 }
 
 class PendingScale {
@@ -37,15 +37,12 @@ class PendingScale {
 
   const PendingScale({required this.root, required this.scaleName});
 
-  Map<String, dynamic> toJson() => {
-        'root': root,
-        'scaleName': scaleName,
-      };
+  Map<String, dynamic> toJson() => {'root': root, 'scaleName': scaleName};
 
   factory PendingScale.fromJson(Map<String, dynamic> json) => PendingScale(
-        root: json['root'] as String,
-        scaleName: json['scaleName'] as String,
-      );
+    root: json['root'] as String,
+    scaleName: json['scaleName'] as String,
+  );
 }
 
 // ─── Snapshots ────────────────────────────────────────────────────────────────
@@ -96,16 +93,16 @@ class FretboardSnapshot extends InstrumentSnapshot {
 
   @override
   Map<String, dynamic> toJson() => {
-        'instrument': 'fretboard',
-        'tuning': tuning.name,
-        'numFrets': numFrets,
-        'capo': capo,
-        'selectedCells': selectedCells.map((c) => c.toJson()).toList(),
-        'selectedNotes': selectedNotes,
-        'viewMode': viewMode.name,
-        'pendingChord': pendingChord?.toJson(),
-        'pendingScale': pendingScale?.toJson(),
-      };
+    'instrument': 'fretboard',
+    'tuning': tuning.name,
+    'numFrets': numFrets,
+    'capo': capo,
+    'selectedCells': selectedCells.map((c) => c.toJson()).toList(),
+    'selectedNotes': selectedNotes,
+    'viewMode': viewMode.name,
+    'pendingChord': pendingChord?.toJson(),
+    'pendingScale': pendingScale?.toJson(),
+  };
 
   factory FretboardSnapshot.fromJson(Map<String, dynamic> json) {
     return FretboardSnapshot(
@@ -115,14 +112,13 @@ class FretboardSnapshot extends InstrumentSnapshot {
       ),
       numFrets: json['numFrets'] as int? ?? 12,
       capo: json['capo'] as int? ?? 0,
-      selectedCells: (json['selectedCells'] as List?)
-              ?.map(
-                  (c) => FretCoordinate.fromJson(c as Map<String, dynamic>))
+      selectedCells:
+          (json['selectedCells'] as List?)
+              ?.map((c) => FretCoordinate.fromJson(c as Map<String, dynamic>))
               .toList() ??
           [],
-      selectedNotes: (json['selectedNotes'] as List?)
-              ?.map((n) => n as String)
-              .toList() ??
+      selectedNotes:
+          (json['selectedNotes'] as List?)?.map((n) => n as String).toList() ??
           [],
       viewMode: FretboardViewMode.values.firstWhere(
         (v) => v.name == json['viewMode'],
@@ -163,14 +159,14 @@ class PianoSnapshot extends InstrumentSnapshot {
 
   @override
   Map<String, dynamic> toJson() => {
-        'instrument': 'piano',
-        'currentRange': currentRange.name,
-        'selectedKeys': selectedKeys.map((k) => k.toJson()).toList(),
-        'selectedNotes': selectedNotes,
-        'viewMode': viewMode.name,
-        'pendingChord': pendingChord?.toJson(),
-        'pendingScale': pendingScale?.toJson(),
-      };
+    'instrument': 'piano',
+    'currentRange': currentRange.name,
+    'selectedKeys': selectedKeys.map((k) => k.toJson()).toList(),
+    'selectedNotes': selectedNotes,
+    'viewMode': viewMode.name,
+    'pendingChord': pendingChord?.toJson(),
+    'pendingScale': pendingScale?.toJson(),
+  };
 
   factory PianoSnapshot.fromJson(Map<String, dynamic> json) {
     return PianoSnapshot(
@@ -178,14 +174,13 @@ class PianoSnapshot extends InstrumentSnapshot {
         (r) => r.name == json['currentRange'],
         orElse: () => PianoRangeName.key61,
       ),
-      selectedKeys: (json['selectedKeys'] as List?)
-              ?.map(
-                  (k) => PianoCoordinate.fromJson(k as Map<String, dynamic>))
+      selectedKeys:
+          (json['selectedKeys'] as List?)
+              ?.map((k) => PianoCoordinate.fromJson(k as Map<String, dynamic>))
               .toList() ??
           [],
-      selectedNotes: (json['selectedNotes'] as List?)
-              ?.map((n) => n as String)
-              .toList() ??
+      selectedNotes:
+          (json['selectedNotes'] as List?)?.map((n) => n as String).toList() ??
           [],
       viewMode: PianoViewMode.values.firstWhere(
         (v) => v.name == json['viewMode'],
@@ -215,10 +210,10 @@ class ProgressionFolderMeta {
   });
 
   Map<String, dynamic> toJson() => {
-        'sourceType': sourceType,
-        'progressionId': progressionId,
-        'key': key,
-      };
+    'sourceType': sourceType,
+    'progressionId': progressionId,
+    'key': key,
+  };
 
   factory ProgressionFolderMeta.fromJson(Map<String, dynamic> json) =>
       ProgressionFolderMeta(
@@ -246,13 +241,13 @@ class ProgressionChordMeta {
   });
 
   Map<String, dynamic> toJson() => {
-        'sourceType': sourceType,
-        'chordSymbol': chordSymbol,
-        'rootNote': rootNote,
-        'romanNumeral': romanNumeral,
-        'progressionKey': progressionKey,
-        'chordNotes': chordNotes,
-      };
+    'sourceType': sourceType,
+    'chordSymbol': chordSymbol,
+    'rootNote': rootNote,
+    'romanNumeral': romanNumeral,
+    'progressionKey': progressionKey,
+    'chordNotes': chordNotes,
+  };
 
   factory ProgressionChordMeta.fromJson(Map<String, dynamic> json) =>
       ProgressionChordMeta(
@@ -261,9 +256,8 @@ class ProgressionChordMeta {
         rootNote: json['rootNote'] as String,
         romanNumeral: json['romanNumeral'] as String?,
         progressionKey: json['progressionKey'] as String?,
-        chordNotes: (json['chordNotes'] as List?)
-                ?.map((n) => n as String)
-                .toList() ??
+        chordNotes:
+            (json['chordNotes'] as List?)?.map((n) => n as String).toList() ??
             [],
       );
 }
@@ -288,34 +282,35 @@ class SaveFolder {
   });
 
   SaveFolder copyWith({String? name}) => SaveFolder(
-        id: id,
-        name: name ?? this.name,
-        parentId: parentId,
-        createdAt: createdAt,
-        order: order,
-        progressionMeta: progressionMeta,
-      );
+    id: id,
+    name: name ?? this.name,
+    parentId: parentId,
+    createdAt: createdAt,
+    order: order,
+    progressionMeta: progressionMeta,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'parentId': parentId,
-        'createdAt': createdAt,
-        'order': order,
-        'progressionMeta': progressionMeta?.toJson(),
-      };
+    'id': id,
+    'name': name,
+    'parentId': parentId,
+    'createdAt': createdAt,
+    'order': order,
+    'progressionMeta': progressionMeta?.toJson(),
+  };
 
   factory SaveFolder.fromJson(Map<String, dynamic> json) => SaveFolder(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        parentId: json['parentId'] as String?,
-        createdAt: json['createdAt'] as int,
-        order: json['order'] as int? ?? 0,
-        progressionMeta: json['progressionMeta'] != null
-            ? ProgressionFolderMeta.fromJson(
-                json['progressionMeta'] as Map<String, dynamic>)
-            : null,
-      );
+    id: json['id'] as String,
+    name: json['name'] as String,
+    parentId: json['parentId'] as String?,
+    createdAt: json['createdAt'] as int,
+    order: json['order'] as int? ?? 0,
+    progressionMeta: json['progressionMeta'] != null
+        ? ProgressionFolderMeta.fromJson(
+            json['progressionMeta'] as Map<String, dynamic>,
+          )
+        : null,
+  );
 }
 
 class SaveEntry {
@@ -344,43 +339,44 @@ class SaveEntry {
     InstrumentSnapshot? snapshot,
     int? updatedAt,
     int? order,
-  }) =>
-      SaveEntry(
-        id: id,
-        name: name ?? this.name,
-        folderId: folderId,
-        snapshot: snapshot ?? this.snapshot,
-        createdAt: createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-        order: order ?? this.order,
-        progressionMeta: progressionMeta,
-      );
+  }) => SaveEntry(
+    id: id,
+    name: name ?? this.name,
+    folderId: folderId,
+    snapshot: snapshot ?? this.snapshot,
+    createdAt: createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    order: order ?? this.order,
+    progressionMeta: progressionMeta,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'folderId': folderId,
-        'snapshot': snapshot.toJson(),
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        'order': order,
-        'progressionMeta': progressionMeta?.toJson(),
-      };
+    'id': id,
+    'name': name,
+    'folderId': folderId,
+    'snapshot': snapshot.toJson(),
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'order': order,
+    'progressionMeta': progressionMeta?.toJson(),
+  };
 
   factory SaveEntry.fromJson(Map<String, dynamic> json) => SaveEntry(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        folderId: json['folderId'] as String,
-        snapshot: InstrumentSnapshot.fromJson(
-            json['snapshot'] as Map<String, dynamic>),
-        createdAt: json['createdAt'] as int,
-        updatedAt: json['updatedAt'] as int,
-        order: json['order'] as int? ?? 0,
-        progressionMeta: json['progressionMeta'] != null
-            ? ProgressionChordMeta.fromJson(
-                json['progressionMeta'] as Map<String, dynamic>)
-            : null,
-      );
+    id: json['id'] as String,
+    name: json['name'] as String,
+    folderId: json['folderId'] as String,
+    snapshot: InstrumentSnapshot.fromJson(
+      json['snapshot'] as Map<String, dynamic>,
+    ),
+    createdAt: json['createdAt'] as int,
+    updatedAt: json['updatedAt'] as int,
+    order: json['order'] as int? ?? 0,
+    progressionMeta: json['progressionMeta'] != null
+        ? ProgressionChordMeta.fromJson(
+            json['progressionMeta'] as Map<String, dynamic>,
+          )
+        : null,
+  );
 }
 
 // ─── Active Session ───────────────────────────────────────────────────────────
@@ -412,15 +408,12 @@ class SaveSystemState {
     List<SaveEntry>? saves,
     ActiveSession? Function()? activeSession,
     bool? hydrated,
-  }) =>
-      SaveSystemState(
-        folders: folders ?? this.folders,
-        saves: saves ?? this.saves,
-        activeSession: activeSession != null
-            ? activeSession()
-            : this.activeSession,
-        hydrated: hydrated ?? this.hydrated,
-      );
+  }) => SaveSystemState(
+    folders: folders ?? this.folders,
+    saves: saves ?? this.saves,
+    activeSession: activeSession != null ? activeSession() : this.activeSession,
+    hydrated: hydrated ?? this.hydrated,
+  );
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -440,32 +433,29 @@ class AppSettings {
     FretboardViewMode? fretboardFavouriteViewMode,
     PianoViewMode? pianoFavouriteViewMode,
     bool? suppressOutOfKeyAlert,
-  }) =>
-      AppSettings(
-        fretboardFavouriteViewMode:
-            fretboardFavouriteViewMode ?? this.fretboardFavouriteViewMode,
-        pianoFavouriteViewMode:
-            pianoFavouriteViewMode ?? this.pianoFavouriteViewMode,
-        suppressOutOfKeyAlert:
-            suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
-      );
+  }) => AppSettings(
+    fretboardFavouriteViewMode:
+        fretboardFavouriteViewMode ?? this.fretboardFavouriteViewMode,
+    pianoFavouriteViewMode:
+        pianoFavouriteViewMode ?? this.pianoFavouriteViewMode,
+    suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
+  );
 
   Map<String, dynamic> toJson() => {
-        'fretboardFavouriteViewMode': fretboardFavouriteViewMode.name,
-        'pianoFavouriteViewMode': pianoFavouriteViewMode.name,
-        'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
-      };
+    'fretboardFavouriteViewMode': fretboardFavouriteViewMode.name,
+    'pianoFavouriteViewMode': pianoFavouriteViewMode.name,
+    'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
+  };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
-        fretboardFavouriteViewMode: FretboardViewMode.values.firstWhere(
-          (v) => v.name == json['fretboardFavouriteViewMode'],
-          orElse: () => FretboardViewMode.pitchClass,
-        ),
-        pianoFavouriteViewMode: PianoViewMode.values.firstWhere(
-          (v) => v.name == json['pianoFavouriteViewMode'],
-          orElse: () => PianoViewMode.pitchClass,
-        ),
-        suppressOutOfKeyAlert:
-            json['suppressOutOfKeyAlert'] as bool? ?? false,
-      );
+    fretboardFavouriteViewMode: FretboardViewMode.values.firstWhere(
+      (v) => v.name == json['fretboardFavouriteViewMode'],
+      orElse: () => FretboardViewMode.pitchClass,
+    ),
+    pianoFavouriteViewMode: PianoViewMode.values.firstWhere(
+      (v) => v.name == json['pianoFavouriteViewMode'],
+      orElse: () => PianoViewMode.pitchClass,
+    ),
+    suppressOutOfKeyAlert: json['suppressOutOfKeyAlert'] as bool? ?? false,
+  );
 }
