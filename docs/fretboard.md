@@ -35,8 +35,9 @@ lib/
 | `FretCell` | A cell on the grid: `stringIndex`, `fret`, `noteName`, `isSelected`, `isHighlighted`, `isRoot` |
 | `FretCoordinate` | A selected position: `stringIndex`, `fret`, `noteName` |
 | `ChordVoicing` | A named chord shape: `name`, list of `FretCoordinate` |
-| `FretboardState` | Full state: `tuning`, `numFrets`, `capo`, `viewMode`, `selectedCells`, `highlightedCells`, `rootNote` |
-| `FretboardViewMode` | Enum — standard / chords / scales / intervals |
+| `FretboardState` | Full state: `tuning`, `numFrets`, `capo`, `viewMode`, `inputMode`, `selectedCells`, `highlightedNotes` |
+| `FretboardViewMode` | Enum — pitchClass / exact / focus / exactFocus |
+| `FretboardInputMode` | Enum — free / chord |
 
 ---
 
@@ -68,12 +69,12 @@ Auxiliary providers:
 
 | Method | Description |
 |---|---|
-| `toggleCell(stringIndex, fret)` | Select / deselect a fret cell |
+| `toggleCell(stringIndex, fret)` | Select / deselect a fret cell; enforces one-per-string in chord mode |
 | `setTuning(tuningName)` | Switch tuning preset, rebuild cells |
 | `setNumFrets(n)` | Change visible fret count (1–24) |
 | `setCapo(fret)` | Set capo position |
-| `setFretboardViewMode(mode)` | Switch display mode |
-| `setFretboardFavouriteViewMode(mode)` | Persist favourite view mode to settings |
+| `setViewMode(mode)` | Switch display mode |
+| `setInputMode(mode)` | Switch input mode (free / chord) |
 | `loadVoicing(voicing)` | Apply a `ChordVoicing` as selected cells |
 | `clearSelectedNotes()` | Clear all cell selection |
 | `reset()` | Restore defaults |
@@ -86,6 +87,10 @@ Auxiliary providers:
 
 ### `GuitarFretboard`
 The main fretboard widget. Rendered entirely with `CustomPainter` + `RepaintBoundary`.
+
+**Controls (top bars):**
+1. **Input Mode Bar** — `Free` vs `Chord` toggle (see [Input Modes](#input-modes) below).
+2. **View Mode Bar** — `All` / `Exact` / `Focus` / `Solo` selector.
 
 **Painter logic:**
 - String lines spaced vertically, fret lines spaced horizontally
@@ -168,6 +173,8 @@ TuningSelector → fretboardProvider.setTuning()
 
 ## Behaviour Notes
 
+- Input modes: The fretboard supports two input modes selected via the `_InputModeBar`. In **free** mode any number of notes may be placed on any string, subject to the existing scale-highlight guard. In **chord** mode only one note per string is allowed; tapping a new fret on an already-occupied string replaces the existing note on that string, making it straightforward to build chord voicings. The active mode is stored as `FretboardState.inputMode` and toggled via `FretboardNotifier.setInputMode()`.
+
 - Out-of-key confirmation: If a scale highlight is active and the user attempts to add a note outside that scale, the app shows an out-of-key confirmation dialog. The dialog offers a "Don't show again" option which persists to settings. See implementation: [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
 
 - View-mode initialization & local override: The fretboard initializes its view mode from app settings but exposes a small view-mode control on the page allowing a local override. Tools such as chord/scale pickers do not force the view mode. Relevant code: [lib/main.dart](lib/main.dart) and [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
@@ -187,4 +194,14 @@ TuningSelector → fretboardProvider.setTuning()
 - **Implementation notes:** Added two inter-widget signals in the store — `scrollToFretProvider` (one-shot int?) and `fretboardManualEditProvider` (counter). Voicing generation and `loadVoicing()` were adjusted to operate on physical frets (capo handled separately) to avoid double-applying the capo offset.
 - **Bugfixes & diagnostics:** Fixed a bug where the capo was being applied twice in pitch calculations. Static checks ran locally; modified files compile cleanly. One minor unused helper (`_toSharp`) remains for cleanup.
 - **Next steps:** Remove the unused helper or integrate it into parsing, and verify the piano page for analogous capo/selection issues.
+
+---
+
+## Recent Changes — 2026-03-23 (input modes)
+
+- **Free mode / Chord mode:** Added `FretboardInputMode` enum (`free`, `chord`) to the data model and `FretboardState`. Default is `free`.
+- **Chord mode constraint:** In chord mode `toggleCell` enforces one note per string: tapping a new fret on an occupied string replaces the existing note; tapping the selected fret deselects it. All other input-mode behaviour (scale guard, view mode, capo) is unchanged.
+- **Free mode:** Existing multi-note-per-string behaviour is preserved, including the out-of-key scale guard.
+- **`_InputModeBar` widget:** A two-button bar (`Free` / `Chord`) is rendered above the existing view-mode bar inside `GuitarFretboard`. Tapping a button calls `FretboardNotifier.setInputMode()` with a light haptic.
+- **`setInputMode()`:** New method on `FretboardNotifier`. Persists `inputMode` in `FretboardState` via `copyWith`.
 
