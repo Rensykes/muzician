@@ -251,7 +251,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _rootNotes.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 6),
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (_, i) {
               final note = _rootNotes[i];
               final active = note == _selectedRoot;
@@ -354,7 +354,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: scalesForCategory.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 6),
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (_, i) {
               final (name, label) = scalesForCategory[i];
               final active = name == _selectedScale;

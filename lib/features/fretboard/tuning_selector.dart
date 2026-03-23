@@ -116,7 +116,7 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: visibleTunings.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final t = visibleTunings[i];
               final isActive = t.name == state.currentTuning;

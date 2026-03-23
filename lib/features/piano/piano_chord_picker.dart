@@ -165,8 +165,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
   @override
   Widget build(BuildContext context) {
     final notifier = ref.read(pianoProvider.notifier);
-    final keys = notifier.getKeys();
-    final keyMidis = keys.map((k) => k.midiNote).toSet();
+    final keyMidis = notifier.getKeys().map((k) => k.midiNote).toSet();
 
     // Live-sync root/quality from first detected chord while not committed.
     ref.listen(pianoProvider.select((s) => s.selectedNotes), (_, notes) {
@@ -180,7 +179,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
     });
 
     // When the user manually taps a key, drop the commit and revert to detection.
-    ref.listen(pianoManualEditProvider, (_, next) {
+    ref.listen(pianoManualEditProvider, (_, _) {
       final detected = _detectFirstChord(
         ref.read(pianoProvider).selectedNotes,
       );
@@ -273,7 +272,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _rootNotes.length,
-              separatorBuilder: (_, i) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final root = _rootNotes[i];
                 final active = _selectedRoot == root;
@@ -324,7 +323,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _qualities.length,
-              separatorBuilder: (_, i) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final (symbol, label) = _qualities[i];
                 final active = _selectedQuality == symbol;
@@ -427,7 +426,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: voicings.length,
-                separatorBuilder: (_, i) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
                   final v = voicings[i];
                   final isSelected = _selectedVoicingIdx == i;
