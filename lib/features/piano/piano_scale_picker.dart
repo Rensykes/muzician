@@ -109,6 +109,28 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
   Widget build(BuildContext context) {
     final notifier = ref.read(pianoProvider.notifier);
     final state = ref.watch(pianoProvider);
+    // Sync from detection panel: consume pianoPendingScaleProvider.
+    final pendingScale = ref.watch(pianoPendingScaleProvider);
+    if (pendingScale != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        var cat = _ScaleCategory.common;
+        for (final entry in _scaleGroups.entries) {
+          if (entry.value.any((s) => s.$1 == pendingScale.scaleName)) {
+            cat = entry.key;
+            break;
+          }
+        }
+        setState(() {
+          _selectedRoot = pendingScale.root;
+          _selectedScale = pendingScale.scaleName;
+          _activeCategory = cat;
+        });
+        final notes = _getScaleNotes(pendingScale.root, pendingScale.scaleName);
+        if (notes.isNotEmpty) notifier.setHighlightedNotes(notes);
+        ref.read(pianoPendingScaleProvider.notifier).state = null;
+      });
+    }
     // Reset pills if highlight was cleared from outside (e.g. out-of-key guard).
     ref.listen(pianoProvider.select((s) => s.highlightedNotes), (prev, next) {
       if (next.isEmpty && (prev?.isNotEmpty ?? false)) {
