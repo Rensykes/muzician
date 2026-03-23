@@ -16,8 +16,10 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
   int _clamp(int value, int minV, int maxV) => value.clamp(minV, maxV);
 
   void setTempo(int tempo) => state = state.copyWith(
-      config: state.config
-          .copyWith(tempo: tempo.clamp(rules.minTempo, rules.maxTempo)));
+    config: state.config.copyWith(
+      tempo: tempo.clamp(rules.minTempo, rules.maxTempo),
+    ),
+  );
 
   void setKey(String? key) =>
       state = state.copyWith(config: state.config.copyWith(key: key));
@@ -26,8 +28,11 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     final maxTick = rules.totalTicks(ts, state.config.totalMeasures);
     final notes = state.notes
         .where((n) => n.startTick < maxTick)
-        .map((n) => n.copyWith(
-            durationTicks: min(n.durationTicks, max(1, maxTick - n.startTick))))
+        .map(
+          (n) => n.copyWith(
+            durationTicks: min(n.durationTicks, max(1, maxTick - n.startTick)),
+          ),
+        )
         .toList();
     state = state.copyWith(
       config: state.config.copyWith(timeSignature: ts),
@@ -40,12 +45,14 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   void setTotalMeasures(int measures) {
     final nextMeasures = measures.clamp(1, 32);
-    final maxTick =
-        rules.totalTicks(state.config.timeSignature, nextMeasures);
+    final maxTick = rules.totalTicks(state.config.timeSignature, nextMeasures);
     final notes = state.notes
         .where((n) => n.startTick < maxTick)
-        .map((n) => n.copyWith(
-            durationTicks: min(n.durationTicks, max(1, maxTick - n.startTick))))
+        .map(
+          (n) => n.copyWith(
+            durationTicks: min(n.durationTicks, max(1, maxTick - n.startTick)),
+          ),
+        )
         .toList();
     state = state.copyWith(
       config: state.config.copyWith(totalMeasures: nextMeasures),
@@ -76,23 +83,21 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   void toggleCellNote(int midiNote, int startTick, [int durationTicks = 1]) {
     final existing = state.notes
-        .where(
-            (n) => n.midiNote == midiNote && n.startTick == startTick)
+        .where((n) => n.midiNote == midiNote && n.startTick == startTick)
         .toList();
     if (existing.isNotEmpty) {
       state = state.copyWith(
-        notes: state.notes
-            .where((n) => n.id != existing.first.id)
-            .toList(),
-        selectedNoteId: () =>
-            state.selectedNoteId == existing.first.id
-                ? null
-                : state.selectedNoteId,
+        notes: state.notes.where((n) => n.id != existing.first.id).toList(),
+        selectedNoteId: () => state.selectedNoteId == existing.first.id
+            ? null
+            : state.selectedNoteId,
       );
       return;
     }
     final maxTick = rules.totalTicks(
-        state.config.timeSignature, state.config.totalMeasures);
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
     if (startTick < 0 || startTick >= maxTick) return;
     final note = PianoRollNote(
       id: _makeId(),
@@ -110,7 +115,9 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   void addNote(int midiNote, int startTick, int durationTicks) {
     final maxTick = rules.totalTicks(
-        state.config.timeSignature, state.config.totalMeasures);
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
     if (startTick < 0 || startTick >= maxTick) return;
     final safeDuration = durationTicks.clamp(1, maxTick - startTick);
     final note = PianoRollNote(
@@ -128,17 +135,21 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
   }
 
   void removeNote(String noteId) => state = state.copyWith(
-        notes: state.notes.where((n) => n.id != noteId).toList(),
-        selectedNoteId: () =>
-            state.selectedNoteId == noteId ? null : state.selectedNoteId,
-      );
+    notes: state.notes.where((n) => n.id != noteId).toList(),
+    selectedNoteId: () =>
+        state.selectedNoteId == noteId ? null : state.selectedNoteId,
+  );
 
   void resizeNote(String noteId, int durationTicks) {
     final target = state.notes.where((n) => n.id == noteId).firstOrNull;
     if (target == null) return;
     final maxTick = rules.totalTicks(
-        state.config.timeSignature, state.config.totalMeasures);
-    final safe = durationTicks.clamp(1, max(1, maxTick - target.startTick)).toInt();
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    final safe = durationTicks
+        .clamp(1, max(1, maxTick - target.startTick))
+        .toInt();
     state = state.copyWith(
       notes: state.notes
           .map((n) => n.id == noteId ? n.copyWith(durationTicks: safe) : n)
@@ -150,42 +161,53 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     final target = state.notes.where((n) => n.id == noteId).firstOrNull;
     if (target == null) return;
     final maxTick = rules.totalTicks(
-        state.config.timeSignature, state.config.totalMeasures);
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
     final boundedStart = newStartTick.clamp(0, max(0, maxTick - 1)).toInt();
-    final midi =
-        (newMidiNote ?? target.midiNote).clamp(state.pitchRangeStart, state.pitchRangeEnd);
+    final midi = (newMidiNote ?? target.midiNote).clamp(
+      state.pitchRangeStart,
+      state.pitchRangeEnd,
+    );
     final maxDuration = max<int>(1, maxTick - boundedStart);
     state = state.copyWith(
       notes: state.notes
-          .map((n) => n.id == noteId
-              ? n.copyWith(
-                  midiNote: midi,
-                  pitchClass: rules.midiToPitchClass(midi),
-                  noteWithOctave: rules.midiToNoteWithOctave(midi),
-                  startTick: boundedStart,
-                  durationTicks: min(n.durationTicks, maxDuration),
-                )
-              : n)
+          .map(
+            (n) => n.id == noteId
+                ? n.copyWith(
+                    midiNote: midi,
+                    pitchClass: rules.midiToPitchClass(midi),
+                    noteWithOctave: rules.midiToNoteWithOctave(midi),
+                    startTick: boundedStart,
+                    durationTicks: min(n.durationTicks, maxDuration),
+                  )
+                : n,
+          )
           .toList(),
     );
   }
 
   void addNoteStack(List<int> midiNotes, int startTick, int durationTicks) {
     final maxTick = rules.totalTicks(
-        state.config.timeSignature, state.config.totalMeasures);
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
     if (startTick < 0 || startTick >= maxTick) return;
     final safe = durationTicks.clamp(1, maxTick - startTick);
     final unique = midiNotes.toSet().where(
-        (m) => m >= state.pitchRangeStart && m <= state.pitchRangeEnd);
+      (m) => m >= state.pitchRangeStart && m <= state.pitchRangeEnd,
+    );
     if (unique.isEmpty) return;
-    final created = unique.map((midi) => PianoRollNote(
-          id: _makeId(),
-          midiNote: midi,
-          pitchClass: rules.midiToPitchClass(midi),
-          noteWithOctave: rules.midiToNoteWithOctave(midi),
-          startTick: startTick,
-          durationTicks: safe,
-        ));
+    final created = unique.map(
+      (midi) => PianoRollNote(
+        id: _makeId(),
+        midiNote: midi,
+        pitchClass: rules.midiToPitchClass(midi),
+        noteWithOctave: rules.midiToNoteWithOctave(midi),
+        startTick: startTick,
+        durationTicks: safe,
+      ),
+    );
     state = state.copyWith(notes: [...state.notes, ...created]);
   }
 
@@ -201,13 +223,14 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
   }
 
   void clearNotes() => state = state.copyWith(
-        notes: [],
-        selectedColumnTick: () => null,
-        selectedNoteId: () => null,
-      );
+    notes: [],
+    selectedColumnTick: () => null,
+    selectedNoteId: () => null,
+  );
 
   void reset() => state = rules.getDefaultPianoRollState();
 }
 
-final pianoRollProvider =
-    NotifierProvider<PianoRollNotifier, PianoRollState>(PianoRollNotifier.new);
+final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollState>(
+  PianoRollNotifier.new,
+);

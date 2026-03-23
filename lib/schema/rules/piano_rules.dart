@@ -5,7 +5,18 @@ library;
 import '../../models/piano.dart';
 
 const chromaticSharp = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
 ];
 
 const pianoRanges = <PianoRangeName, PianoRange>{
@@ -53,23 +64,25 @@ List<PianoKeyCell> getKeysForRange(PianoRangeName rangeName) {
   final keys = <PianoKeyCell>[];
   for (var midi = range.startMidi; midi <= range.endMidi; midi++) {
     final noteName = midiToPitchClass(midi);
-    keys.add(PianoKeyCell(
-      keyIndex: keys.length,
-      midiNote: midi,
-      noteName: noteName,
-      noteWithOctave: midiToNoteWithOctave(midi),
-      octave: (midi ~/ 12) - 1,
-      isNatural: isNaturalNote(noteName),
-      isBlack: isBlackMidiKey(midi),
-    ));
+    keys.add(
+      PianoKeyCell(
+        keyIndex: keys.length,
+        midiNote: midi,
+        noteName: noteName,
+        noteWithOctave: midiToNoteWithOctave(midi),
+        octave: (midi ~/ 12) - 1,
+        isNatural: isNaturalNote(noteName),
+        isBlack: isBlackMidiKey(midi),
+      ),
+    );
   }
   return keys;
 }
 
 PianoState getDefaultPianoState() => const PianoState(
-      currentRange: PianoRangeName.key61,
-      highlightedNotes: [],
-      selectedNotes: [],
-      selectedKeys: [],
-      viewMode: PianoViewMode.pitchClass,
-    );
+  currentRange: PianoRangeName.key61,
+  highlightedNotes: [],
+  selectedNotes: [],
+  selectedKeys: [],
+  viewMode: PianoViewMode.pitchClass,
+);

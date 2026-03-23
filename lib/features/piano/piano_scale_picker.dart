@@ -8,7 +8,18 @@ import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
 
 const _rootNotes = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
 ];
 
 enum _ScaleCategory { common, modes, extended }
@@ -42,7 +53,20 @@ const _catLabel = {
   _ScaleCategory.extended: 'Extended',
 };
 
-const _chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const _chromatic = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
 
 const _scaleIntervals = <String, List<int>>{
   'major': [0, 2, 4, 5, 7, 9, 11],
@@ -86,18 +110,16 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
     final notifier = ref.read(pianoProvider.notifier);
     final state = ref.watch(pianoProvider);
     // Reset pills if highlight was cleared from outside (e.g. out-of-key guard).
-    ref.listen(
-      pianoProvider.select((s) => s.highlightedNotes),
-      (prev, next) {
-        if (next.isEmpty && (prev?.isNotEmpty ?? false)) {
-          setState(() {
-            _selectedRoot = null;
-            _selectedScale = null;
-          });
-        }
-      },
-    );
-    final isActive = state.highlightedNotes.isNotEmpty &&
+    ref.listen(pianoProvider.select((s) => s.highlightedNotes), (prev, next) {
+      if (next.isEmpty && (prev?.isNotEmpty ?? false)) {
+        setState(() {
+          _selectedRoot = null;
+          _selectedScale = null;
+        });
+      }
+    });
+    final isActive =
+        state.highlightedNotes.isNotEmpty &&
         _selectedRoot != null &&
         _selectedScale != null;
 
@@ -109,11 +131,14 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
           // Header
           Row(
             children: [
-              const Text('Scale',
-                  style: TextStyle(
-                      color: Color(0xFFCBD5E1),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                'Scale',
+                style: TextStyle(
+                  color: Color(0xFFCBD5E1),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const Spacer(),
               if (isActive)
                 GestureDetector(
@@ -126,24 +151,33 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                     notifier.setHighlightedNotes([]);
                   },
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       color: Colors.white.withValues(alpha: 0.06),
                       border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14), width: 0.5),
+                        color: Colors.white.withValues(alpha: 0.14),
+                        width: 0.5,
+                      ),
                     ),
-                    child: const Text('Clear',
-                        style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 )
               else
-                const Text('Pick root + scale',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                const Text(
+                  'Pick root + scale',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                ),
             ],
           ),
           const SizedBox(height: 10),
@@ -153,7 +187,7 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _rootNotes.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final note = _rootNotes[i];
                 final active = note == _selectedRoot;
@@ -172,7 +206,9 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       color: active
@@ -185,14 +221,16 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                         width: 0.5,
                       ),
                     ),
-                    child: Text(note,
-                        style: TextStyle(
-                          color: active
-                              ? MuzicianTheme.sky
-                              : const Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        )),
+                    child: Text(
+                      note,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky
+                            : const Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 );
               },
@@ -240,7 +278,7 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: (_scaleGroups[_activeCategory] ?? []).length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final scales = _scaleGroups[_activeCategory]!;
                 final (name, label) = scales[i];
@@ -260,7 +298,9 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       color: active
@@ -273,14 +313,16 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                         width: 0.5,
                       ),
                     ),
-                    child: Text(label,
-                        style: TextStyle(
-                          color: active
-                              ? MuzicianTheme.sky
-                              : const Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        )),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky
+                            : const Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 );
               },
@@ -296,8 +338,9 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
     final scaleNotes = _getScaleNotes(root, scaleName);
     if (scaleNotes.isEmpty) return;
     final currentSelected = ref.read(pianoProvider).selectedNotes;
-    final conflicts =
-        currentSelected.where((n) => !scaleNotes.contains(n)).toList();
+    final conflicts = currentSelected
+        .where((n) => !scaleNotes.contains(n))
+        .toList();
     if (conflicts.isEmpty) {
       setState(() {
         _selectedRoot = root;
@@ -352,16 +395,21 @@ class _ScaleConflictDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          ),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Remove & Apply',
-              style: TextStyle(
-                  color: MuzicianTheme.sky,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700)),
+          child: const Text(
+            'Remove & Apply',
+            style: TextStyle(
+              color: MuzicianTheme.sky,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ],
     );

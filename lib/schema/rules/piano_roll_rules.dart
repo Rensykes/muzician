@@ -5,7 +5,18 @@ library;
 import '../../models/piano_roll.dart';
 
 const chromaticSharp = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
 ];
 
 const ticksPerQuarter = 4;
@@ -51,15 +62,15 @@ List<PianoRollNote> getNotesAtTick(List<PianoRollNote> notes, int tick) {
 }
 
 PianoRollState getDefaultPianoRollState() => const PianoRollState(
-      config: PianoRollConfig(
-        tempo: 120,
-        key: null,
-        timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
-        totalMeasures: 4,
-      ),
-      notes: [],
-      pitchRangeStart: 48,
-      pitchRangeEnd: 84,
-      selectedColumnTick: null,
-      selectedNoteId: null,
-    );
+  config: PianoRollConfig(
+    tempo: 120,
+    key: null,
+    timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+    totalMeasures: 4,
+  ),
+  notes: [],
+  pitchRangeStart: 48,
+  pitchRangeEnd: 84,
+  selectedColumnTick: null,
+  selectedNoteId: null,
+);

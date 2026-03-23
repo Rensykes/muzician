@@ -54,10 +54,10 @@ class PianoCoordinate {
   });
 
   Map<String, dynamic> toJson() => {
-        'keyIndex': keyIndex,
-        'midiNote': midiNote,
-        'noteName': noteName,
-      };
+    'keyIndex': keyIndex,
+    'midiNote': midiNote,
+    'noteName': noteName,
+  };
 
   factory PianoCoordinate.fromJson(Map<String, dynamic> json) =>
       PianoCoordinate(
@@ -92,12 +92,11 @@ class PianoState {
     List<String>? selectedNotes,
     List<PianoCoordinate>? selectedKeys,
     PianoViewMode? viewMode,
-  }) =>
-      PianoState(
-        currentRange: currentRange ?? this.currentRange,
-        highlightedNotes: highlightedNotes ?? this.highlightedNotes,
-        selectedNotes: selectedNotes ?? this.selectedNotes,
-        selectedKeys: selectedKeys ?? this.selectedKeys,
-        viewMode: viewMode ?? this.viewMode,
-      );
+  }) => PianoState(
+    currentRange: currentRange ?? this.currentRange,
+    highlightedNotes: highlightedNotes ?? this.highlightedNotes,
+    selectedNotes: selectedNotes ?? this.selectedNotes,
+    selectedKeys: selectedKeys ?? this.selectedKeys,
+    viewMode: viewMode ?? this.viewMode,
+  );
 }

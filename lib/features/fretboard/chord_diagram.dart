@@ -19,7 +19,8 @@ final double _fg = (_svgH - _mt - _mb) / _slots;
 double _colX(int col) => _ml + col * _sg;
 int _stringToCol(int stringIndex) => _strings - 1 - stringIndex;
 double _wireY(int slot) => _mt + slot * _fg;
-double _dotY(int fret, int displayBase) => _mt + (fret - displayBase) * _fg + _fg / 2;
+double _dotY(int fret, int displayBase) =>
+    _mt + (fret - displayBase) * _fg + _fg / 2;
 
 class ChordDiagram extends StatelessWidget {
   final ChordVoicing voicing;
@@ -163,7 +164,8 @@ class _ChordDiagramPainter extends CustomPainter {
         // Fretted dot
         final cy = _dotY(fret, displayBase);
         if (cy < _mt - _fg / 2 || cy > _wireY(_slots) + _fg / 2) continue;
-        final fill = (rootNote != null &&
+        final fill =
+            (rootNote != null &&
                 si < openNotes.length &&
                 openNotes[si] == rootNote)
             ? MuzicianTheme.sky

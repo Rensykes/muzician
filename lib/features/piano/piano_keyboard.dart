@@ -38,7 +38,8 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         whiteIndex++;
       } else {
         positioned.add(
-            _PosKey(key: key, x: whiteIndex * _whiteKeyW - _blackKeyW / 2));
+          _PosKey(key: key, x: whiteIndex * _whiteKeyW - _blackKeyW / 2),
+        );
       }
     }
 
@@ -46,10 +47,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
 
     return Column(
       children: [
-        _ViewModeBar(
-          current: state.viewMode,
-          onSelect: notifier.setViewMode,
-        ),
+        _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
         const SizedBox(height: 4),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -60,11 +58,13 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
             child: Stack(
               children: [
                 // White keys first
-                ...positioned.where((pk) => !pk.key.isBlack).map((pk) =>
-                    _buildKey(pk, state, notifier)),
+                ...positioned
+                    .where((pk) => !pk.key.isBlack)
+                    .map((pk) => _buildKey(pk, state, notifier)),
                 // Black keys on top
-                ...positioned.where((pk) => pk.key.isBlack).map((pk) =>
-                    _buildKey(pk, state, notifier)),
+                ...positioned
+                    .where((pk) => pk.key.isBlack)
+                    .map((pk) => _buildKey(pk, state, notifier)),
               ],
             ),
           ),
@@ -73,39 +73,46 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     );
   }
 
-  Widget _buildKey(
-      _PosKey pk, PianoState state, PianoNotifier notifier) {
+  Widget _buildKey(_PosKey pk, PianoState state, PianoNotifier notifier) {
     final key = pk.key;
-    final selectedExact =
-        state.selectedKeys.any((k) => k.midiNote == key.midiNote);
+    final selectedExact = state.selectedKeys.any(
+      (k) => k.midiNote == key.midiNote,
+    );
     final selectedPitchClass = state.selectedNotes.contains(key.noteName);
     final isSelected =
         (state.viewMode == PianoViewMode.exact ||
-                state.viewMode == PianoViewMode.exactFocus)
-            ? selectedExact
-            : selectedPitchClass;
+            state.viewMode == PianoViewMode.exactFocus)
+        ? selectedExact
+        : selectedPitchClass;
 
     final inFocusMode =
         state.viewMode == PianoViewMode.focus && state.selectedNotes.isNotEmpty;
     if (inFocusMode && !selectedPitchClass) return const SizedBox.shrink();
 
-    final inExactFocusMode = state.viewMode == PianoViewMode.exactFocus &&
+    final inExactFocusMode =
+        state.viewMode == PianoViewMode.exactFocus &&
         state.selectedKeys.isNotEmpty;
     if (inExactFocusMode && !selectedExact) return const SizedBox.shrink();
 
-    final isHighlighted = state.highlightedNotes.isNotEmpty &&
+    final isHighlighted =
+        state.highlightedNotes.isNotEmpty &&
         state.highlightedNotes.contains(key.noteName);
 
-    final inFocusOrSolo = state.viewMode == PianoViewMode.focus ||
+    final inFocusOrSolo =
+        state.viewMode == PianoViewMode.focus ||
         state.viewMode == PianoViewMode.exactFocus;
     final opacity = isSelected
         ? 1.0
         : (!inFocusOrSolo && state.highlightedNotes.isNotEmpty)
-            ? (isHighlighted ? 1.0 : 0.3)
-            : 1.0;
+        ? (isHighlighted ? 1.0 : 0.3)
+        : 1.0;
 
-    final baseBg = key.isBlack ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
-    final accentBg = key.isNatural ? MuzicianTheme.sky : const Color(0xFFC084FC);
+    final baseBg = key.isBlack
+        ? const Color(0xFF0F172A)
+        : const Color(0xFFF8FAFC);
+    final accentBg = key.isNatural
+        ? MuzicianTheme.sky
+        : const Color(0xFFC084FC);
     final bgColor = isSelected ? accentBg : baseBg;
 
     return Positioned(
@@ -133,8 +140,8 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
                 color: isSelected
                     ? Colors.white.withValues(alpha: 0.8)
                     : key.isBlack
-                        ? Colors.white.withValues(alpha: 0.2)
-                        : const Color(0x330F172A),
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : const Color(0x330F172A),
                 width: 1,
               ),
             ),
@@ -146,8 +153,8 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
                 color: isSelected
                     ? Colors.white
                     : key.isBlack
-                        ? const Color(0xFFE2E8F0)
-                        : const Color(0xFF0F172A),
+                    ? const Color(0xFFE2E8F0)
+                    : const Color(0xFF0F172A),
                 fontSize: key.isBlack ? 9 : 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,
@@ -250,8 +257,11 @@ class _OutOfKeyDialogState extends State<_OutOfKeyDialog> {
                     ),
                   ),
                   child: _suppress
-                      ? const Icon(Icons.check,
-                          size: 12, color: MuzicianTheme.sky)
+                      ? const Icon(
+                          Icons.check,
+                          size: 12,
+                          color: MuzicianTheme.sky,
+                        )
                       : null,
                 ),
                 const SizedBox(width: 8),
@@ -267,17 +277,22 @@ class _OutOfKeyDialogState extends State<_OutOfKeyDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          ),
         ),
         TextButton(
-          onPressed: () => Navigator.of(context)
-              .pop(_OutOfKeyResult(suppress: _suppress)),
-          child: const Text('Continue',
-              style: TextStyle(
-                  color: MuzicianTheme.sky,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700)),
+          onPressed: () =>
+              Navigator.of(context).pop(_OutOfKeyResult(suppress: _suppress)),
+          child: const Text(
+            'Continue',
+            style: TextStyle(
+              color: MuzicianTheme.sky,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ],
     );

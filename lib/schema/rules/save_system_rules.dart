@@ -15,11 +15,11 @@ String generateId() => _uuid.v4();
 // ─── Default State ────────────────────────────────────────────────────────────
 
 SaveSystemState getDefaultSaveSystemState() => const SaveSystemState(
-      folders: [],
-      saves: [],
-      activeSession: null,
-      hydrated: false,
-    );
+  folders: [],
+  saves: [],
+  activeSession: null,
+  hydrated: false,
+);
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -78,14 +78,12 @@ List<SaveEntry> getSavesInFolder(List<SaveEntry> saves, String folderId) {
     ..sort((a, b) => a.order.compareTo(b.order));
 }
 
-List<SaveFolder> getChildFolders(
-    List<SaveFolder> folders, String? parentId) {
+List<SaveFolder> getChildFolders(List<SaveFolder> folders, String? parentId) {
   return folders.where((f) => f.parentId == parentId).toList()
     ..sort((a, b) => a.order.compareTo(b.order));
 }
 
-List<String> getDescendantFolderIds(
-    List<SaveFolder> folders, String folderId) {
+List<String> getDescendantFolderIds(List<SaveFolder> folders, String folderId) {
   final result = <String>[];
   final queue = [folderId];
   while (queue.isNotEmpty) {
@@ -99,7 +97,9 @@ List<String> getDescendantFolderIds(
 }
 
 List<({String id, String name})> buildFolderBreadcrumb(
-    List<SaveFolder> folders, String folderId) {
+  List<SaveFolder> folders,
+  String folderId,
+) {
   final crumbs = <({String id, String name})>[];
   SaveFolder? current;
   try {
@@ -121,7 +121,9 @@ List<({String id, String name})> buildFolderBreadcrumb(
 }
 
 ({String? prev, String? next}) getAdjacentSaves(
-    List<SaveEntry> saves, ActiveSession? session) {
+  List<SaveEntry> saves,
+  ActiveSession? session,
+) {
   if (session == null) return (prev: null, next: null);
   final siblings = getSavesInFolder(saves, session.folderId);
   final idx = siblings.indexWhere((s) => s.id == session.saveId);
@@ -134,8 +136,10 @@ List<({String id, String name})> buildFolderBreadcrumb(
 
 // ─── Serialisation ───────────────────────────────────────────────────────────
 
-String serialiseState(
-    {required List<SaveFolder> folders, required List<SaveEntry> saves}) {
+String serialiseState({
+  required List<SaveFolder> folders,
+  required List<SaveEntry> saves,
+}) {
   return jsonEncode({
     'folders': folders.map((f) => f.toJson()).toList(),
     'saves': saves.map((s) => s.toJson()).toList(),
@@ -143,7 +147,8 @@ String serialiseState(
 }
 
 ({List<SaveFolder> folders, List<SaveEntry> saves})? deserialiseState(
-    String raw) {
+  String raw,
+) {
   try {
     final parsed = jsonDecode(raw) as Map<String, dynamic>;
     if (parsed['folders'] is! List || parsed['saves'] is! List) return null;

@@ -8,27 +8,41 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:music_notes/music_notes.dart' as mn;
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
+import 'package:muzician/utils/note_utils.dart';
 
-const _flatToSharp = {
-  'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B',
-};
+// note normalization provided by lib/utils/note_utils.dart
 
-String _toSharp(String note) => _flatToSharp[note] ?? note;
-
-({List<String> chords, List<String> scales}) _detectFromNotes(List<String> notes) {
+({List<String> chords, List<String> scales}) _detectFromNotes(
+  List<String> notes,
+) {
   if (notes.length < 2) return (chords: <String>[], scales: <String>[]);
   try {
     // Use music_notes for detection
     final parsedNotes = <mn.Note>[];
     for (final n in notes) {
-      try { parsedNotes.add(mn.Note.parse(n)); } catch (_) {}
+      try {
+        parsedNotes.add(mn.Note.parse(n));
+      } catch (_) {}
     }
     if (parsedNotes.length < 2) return (chords: <String>[], scales: <String>[]);
 
     // Detect chords by checking common chord types against selected notes
     final chords = <String>[];
     final noteSet = notes.toSet();
-    final roots = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    final roots = [
+      'C',
+      'C#',
+      'D',
+      'D#',
+      'E',
+      'F',
+      'F#',
+      'G',
+      'G#',
+      'A',
+      'A#',
+      'B',
+    ];
     final qualities = [
       ('', 'major', [0, 4, 7]),
       ('m', 'minor', [0, 3, 7]),
@@ -40,13 +54,28 @@ String _toSharp(String note) => _flatToSharp[note] ?? note;
       ('sus2', 'sus2', [0, 2, 7]),
       ('sus4', 'sus4', [0, 5, 7]),
     ];
-    final chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    final chromatic = [
+      'C',
+      'C#',
+      'D',
+      'D#',
+      'E',
+      'F',
+      'F#',
+      'G',
+      'G#',
+      'A',
+      'A#',
+      'B',
+    ];
 
     for (final root in roots) {
       final rootIdx = chromatic.indexOf(root);
       if (rootIdx < 0) continue;
       for (final (symbol, _, intervals) in qualities) {
-        final chordTones = intervals.map((i) => chromatic[(rootIdx + i) % 12]).toSet();
+        final chordTones = intervals
+            .map((i) => chromatic[(rootIdx + i) % 12])
+            .toSet();
         if (noteSet.every((n) => chordTones.contains(n)) &&
             chordTones.every((n) => noteSet.contains(n))) {
           chords.add('$root${symbol.isEmpty ? '' : symbol}');
@@ -69,7 +98,9 @@ String _toSharp(String note) => _flatToSharp[note] ?? note;
       final rootIdx = chromatic.indexOf(root);
       if (rootIdx < 0) continue;
       for (final (name, intervals) in scaleTypes) {
-        final scaleTones = intervals.map((i) => chromatic[(rootIdx + i) % 12]).toSet();
+        final scaleTones = intervals
+            .map((i) => chromatic[(rootIdx + i) % 12])
+            .toSet();
         if (noteSet.every((n) => scaleTones.contains(n))) {
           scales.add('$root $name');
         }
@@ -94,13 +125,13 @@ String _toSharp(String note) => _flatToSharp[note] ?? note;
     root = chordStr.substring(0, 1);
     quality = chordStr.substring(1);
   }
-  return (root: _toSharp(root), quality: quality);
+  return (root: toSharp(root), quality: quality);
 }
 
 ({String root, String scaleName})? _parseScaleString(String scaleStr) {
   final parts = scaleStr.split(' ');
   if (parts.length < 2) return null;
-  final root = _toSharp(parts[0]);
+  final root = toSharp(parts[0]);
   final scaleName = parts.sublist(1).join(' ');
   return (root: root, scaleName: scaleName);
 }
@@ -140,8 +171,10 @@ class NoteDetectionPanel extends ConsumerWidget {
               GestureDetector(
                 onTap: () => notifier.clearSelectedNotes(),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     color: Colors.white.withValues(alpha: 0.06),
@@ -150,11 +183,14 @@ class NoteDetectionPanel extends ConsumerWidget {
                       width: 0.5,
                     ),
                   ),
-                  child: const Text('Clear',
-                      style: TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Clear',
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -165,11 +201,14 @@ class NoteDetectionPanel extends ConsumerWidget {
             children: [
               const SizedBox(
                 width: 36,
-                child: Text('Notes',
-                    style: TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Notes',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -180,7 +219,9 @@ class NoteDetectionPanel extends ConsumerWidget {
                       return Container(
                         margin: const EdgeInsets.only(right: 6),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 11, vertical: 5),
+                          horizontal: 11,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
                           color: MuzicianTheme.sky.withValues(alpha: 0.15),
@@ -208,27 +249,36 @@ class NoteDetectionPanel extends ConsumerWidget {
           const SizedBox(height: 10),
           // Results
           if (state.selectedNotes.length < 2)
-            const Text('Tap at least 2 notes to detect.',
-                style: TextStyle(
-                    color: Color(0xFF475569),
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic))
+            const Text(
+              'Tap at least 2 notes to detect.',
+              style: TextStyle(
+                color: Color(0xFF475569),
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+              ),
+            )
           else if (hasResults) ...[
             if (detection.chords.isNotEmpty) ...[
               Row(
                 children: [
-                  const Text('Chords',
-                      style: TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5)),
+                  const Text(
+                    'Chords',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  const Text('tap to select voicing',
-                      style: TextStyle(
-                          color: Color(0xFF334155),
-                          fontSize: 10,
-                          fontStyle: FontStyle.italic)),
+                  const Text(
+                    'tap to select voicing',
+                    style: TextStyle(
+                      color: Color(0xFF334155),
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -241,13 +291,17 @@ class NoteDetectionPanel extends ConsumerWidget {
                         final parsed = _parseChordString(c);
                         if (parsed == null) return;
                         HapticFeedback.lightImpact();
-                        ref.read(pendingChordProvider.notifier).state =
-                            (root: parsed.root, quality: parsed.quality);
+                        ref.read(pendingChordProvider.notifier).state = (
+                          root: parsed.root,
+                          quality: parsed.quality,
+                        );
                       },
                       child: Container(
                         margin: const EdgeInsets.only(right: 6),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
                           color: const Color(0x1FC084FC),
@@ -256,11 +310,14 @@ class NoteDetectionPanel extends ConsumerWidget {
                             width: 1,
                           ),
                         ),
-                        child: Text(c,
-                            style: const TextStyle(
-                                color: Color(0xFFE2E8F0),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600)),
+                        child: Text(
+                          c,
+                          style: const TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
@@ -271,18 +328,24 @@ class NoteDetectionPanel extends ConsumerWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  const Text('Scales',
-                      style: TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5)),
+                  const Text(
+                    'Scales',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  const Text('tap to highlight',
-                      style: TextStyle(
-                          color: Color(0xFF334155),
-                          fontSize: 10,
-                          fontStyle: FontStyle.italic)),
+                  const Text(
+                    'tap to highlight',
+                    style: TextStyle(
+                      color: Color(0xFF334155),
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -295,26 +358,35 @@ class NoteDetectionPanel extends ConsumerWidget {
                         final parsed = _parseScaleString(s);
                         if (parsed == null) return;
                         HapticFeedback.lightImpact();
-                        ref.read(pendingScaleProvider.notifier).state =
-                            (root: parsed.root, scaleName: parsed.scaleName);
+                        ref.read(pendingScaleProvider.notifier).state = (
+                          root: parsed.root,
+                          scaleName: parsed.scaleName,
+                        );
                       },
                       child: Container(
                         margin: const EdgeInsets.only(right: 6),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
                           color: MuzicianTheme.emerald.withValues(alpha: 0.10),
                           border: Border.all(
-                            color: MuzicianTheme.emerald.withValues(alpha: 0.35),
+                            color: MuzicianTheme.emerald.withValues(
+                              alpha: 0.35,
+                            ),
                             width: 1,
                           ),
                         ),
-                        child: Text(s,
-                            style: const TextStyle(
-                                color: Color(0xFFE2E8F0),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600)),
+                        child: Text(
+                          s,
+                          style: const TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
@@ -322,11 +394,14 @@ class NoteDetectionPanel extends ConsumerWidget {
               ),
             ],
           ] else
-            const Text('No exact match — try adding more notes.',
-                style: TextStyle(
-                    color: Color(0xFF475569),
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic)),
+            const Text(
+              'No exact match — try adding more notes.',
+              style: TextStyle(
+                color: Color(0xFF475569),
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
         ],
       ),
     );

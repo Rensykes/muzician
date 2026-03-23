@@ -27,7 +27,11 @@ bool _isBlackKey(int midi) {
   return black.contains(midi % 12);
 }
 
-Color _noteColor(PianoRollNote note, String? selectedNoteId, int? selectedColumnTick) {
+Color _noteColor(
+  PianoRollNote note,
+  String? selectedNoteId,
+  int? selectedColumnTick,
+) {
   if (note.id == selectedNoteId) return MuzicianTheme.sky;
   if (selectedColumnTick != null &&
       note.startTick <= selectedColumnTick &&
@@ -93,8 +97,8 @@ class _GridPainter extends CustomPainter {
         ..color = isMeasure
             ? Colors.white.withValues(alpha: 0.18)
             : isBeat
-                ? Colors.white.withValues(alpha: 0.09)
-                : Colors.white.withValues(alpha: 0.035)
+            ? Colors.white.withValues(alpha: 0.09)
+            : Colors.white.withValues(alpha: 0.035)
         ..strokeWidth = isMeasure ? 1.0 : 0.5;
       canvas.drawLine(Offset(x, 0), Offset(x, rangeSize * rowH), paint);
     }
@@ -117,16 +121,23 @@ class _GridPainter extends CustomPainter {
       final y = rowIdx * rowH;
       final w = note.durationTicks * cellW;
 
-      final color = _noteColor(note, state.selectedNoteId, state.selectedColumnTick);
-      final rrect =
-          RRect.fromRectAndRadius(Rect.fromLTWH(x + 1, y + 1, w - 2, rowH - 2), const Radius.circular(4));
+      final color = _noteColor(
+        note,
+        state.selectedNoteId,
+        state.selectedColumnTick,
+      );
+      final rrect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x + 1, y + 1, w - 2, rowH - 2),
+        const Radius.circular(4),
+      );
       canvas.drawRRect(rrect, Paint()..color = color.withValues(alpha: 0.35));
       canvas.drawRRect(
-          rrect,
-          Paint()
-            ..color = color.withValues(alpha: 0.7)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1);
+        rrect,
+        Paint()
+          ..color = color.withValues(alpha: 0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
 
       // Note label
       final tp = TextPainter(
@@ -206,7 +217,9 @@ class _RulerPainter extends CustomPainter {
       }
 
       // Tick line
-      final lineH = isMeasure ? _rulerHeight * 0.6 : (isBeat ? _rulerHeight * 0.35 : 0);
+      final lineH = isMeasure
+          ? _rulerHeight * 0.6
+          : (isBeat ? _rulerHeight * 0.35 : 0);
       if (lineH > 0) {
         canvas.drawLine(
           Offset(x, _rulerHeight - lineH),
@@ -277,17 +290,16 @@ class _PitchSidebarPainter extends CustomPainter {
       )..layout();
       tp.paint(
         canvas,
-        Offset(
-          _pitchLabelWidth - tp.width - 4,
-          y + (rowH - tp.height) / 2,
-        ),
+        Offset(_pitchLabelWidth - tp.width - 4, y + (rowH - tp.height) / 2),
       );
     }
   }
 
   @override
   bool shouldRepaint(covariant _PitchSidebarPainter old) =>
-      rangeStart != old.rangeStart || rangeEnd != old.rangeEnd || rowH != old.rowH;
+      rangeStart != old.rangeStart ||
+      rangeEnd != old.rangeEnd ||
+      rowH != old.rowH;
 }
 
 // ── Main Widget ─────────────────────────────────────────────────────────────
@@ -406,10 +418,13 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   // ── Gesture Handlers ──────────────────────────────────────────────────
 
   void _onRulerTap(TapUpDetails details, PianoRollState state) {
-    final tick = ((details.localPosition.dx + _rulerHScroll.offset) / _cellWidth)
-        .floor();
+    final tick =
+        ((details.localPosition.dx + _rulerHScroll.offset) / _cellWidth)
+            .floor();
     final maxTick = rules.totalTicks(
-        state.config.timeSignature, state.config.totalMeasures);
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
     if (tick >= 0 && tick < maxTick) {
       ref.read(pianoRollProvider.notifier).selectColumn(tick);
       HapticFeedback.selectionClick();
@@ -479,8 +494,11 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       final hDist = max(1.0, (positions[0].dx - positions[1].dx).abs());
       final vDist = max(1.0, (positions[0].dy - positions[1].dy).abs());
       setState(() {
-        _cellW = (_pinchInitCellW * (hDist / _pinchInitHDist)).clamp(10.0, 80.0);
-        _rowH  = (_pinchInitRowH  * (vDist / _pinchInitVDist)).clamp(10.0, 40.0);
+        _cellW = (_pinchInitCellW * (hDist / _pinchInitHDist)).clamp(
+          10.0,
+          80.0,
+        );
+        _rowH = (_pinchInitRowH * (vDist / _pinchInitVDist)).clamp(10.0, 40.0);
       });
       return;
     }
@@ -509,7 +527,11 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       final rawStart = (pos.dx / _cellW).floor() - _grabOffsetTicks;
       final snappedStart = _snapToBeat(rawStart, bt);
       final midiDelta = coord.midi - _dragStartMidi;
-      notifier.moveNote(_dragNoteId!, snappedStart, _noteOriginalMidi + midiDelta);
+      notifier.moveNote(
+        _dragNoteId!,
+        snappedStart,
+        _noteOriginalMidi + midiDelta,
+      );
     } else if (_dragMode == _DragMode.resizeNote) {
       final cursorTick = (pos.dx / _cellW).floor();
       final newDuration = max(1, cursorTick - _noteOriginalStartTick + 1);
@@ -542,7 +564,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       } else {
         final coord = _posToTickMidi(pos, state);
         final maxTick = rules.totalTicks(
-            state.config.timeSignature, state.config.totalMeasures);
+          state.config.timeSignature,
+          state.config.totalMeasures,
+        );
         if (coord.tick >= 0 &&
             coord.tick < maxTick &&
             coord.midi >= state.pitchRangeStart &&
@@ -563,13 +587,17 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
 
   void _manualScroll(Offset delta) {
     if (_hScroll.hasClients) {
-      final newH = (_hScroll.offset - delta.dx)
-          .clamp(0.0, _hScroll.position.maxScrollExtent);
+      final newH = (_hScroll.offset - delta.dx).clamp(
+        0.0,
+        _hScroll.position.maxScrollExtent,
+      );
       _hScroll.jumpTo(newH);
     }
     if (_vScroll.hasClients) {
-      final newV = (_vScroll.offset - delta.dy)
-          .clamp(0.0, _vScroll.position.maxScrollExtent);
+      final newV = (_vScroll.offset - delta.dy).clamp(
+        0.0,
+        _vScroll.position.maxScrollExtent,
+      );
       _vScroll.jumpTo(newV);
     }
   }
@@ -580,26 +608,25 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     final next = hit == null
         ? SystemMouseCursors.basic
         : _isResizeHit(pos, hit, state)
-            ? SystemMouseCursors.resizeRight
-            : SystemMouseCursors.move;
+        ? SystemMouseCursors.resizeRight
+        : SystemMouseCursors.move;
     if (next != _cursor) setState(() => _cursor = next);
   }
 
   Offset _localToGrid(Offset local) {
     // GestureDetector is placed after the sidebar and below the ruler,
     // so localPosition is already relative to the grid area.
-    return Offset(
-      local.dx + _hScroll.offset,
-      local.dy + _vScroll.offset,
-    );
+    return Offset(local.dx + _hScroll.offset, local.dy + _vScroll.offset);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
     final rangeSize = state.pitchRangeEnd - state.pitchRangeStart + 1;
-    final totalTicks =
-        rules.totalTicks(state.config.timeSignature, state.config.totalMeasures);
+    final totalTicks = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
     final gridW = totalTicks * _cellW;
     final gridH = rangeSize * _rowH;
 
@@ -635,7 +662,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                         size: Size(gridW, _rulerHeight),
                         painter: _RulerPainter(
                           timeSig: state.config.timeSignature,
-                          totalTicks: totalTicks,                        cellW: _cellW,                          selectedColumnTick: state.selectedColumnTick,
+                          totalTicks: totalTicks,
+                          cellW: _cellW,
+                          selectedColumnTick: state.selectedColumnTick,
                         ),
                       ),
                     ),

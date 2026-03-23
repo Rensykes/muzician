@@ -7,11 +7,33 @@ import '../../models/fretboard.dart';
 // ─── Chromatic Scales ─────────────────────────────────────────────────────────
 
 const chromaticSharp = [
-  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
 ];
 
 const chromaticFlat = [
-  'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
+  'C',
+  'Db',
+  'D',
+  'Eb',
+  'E',
+  'F',
+  'Gb',
+  'G',
+  'Ab',
+  'A',
+  'Bb',
+  'B',
 ];
 
 const positionMarkerFrets = [3, 5, 7, 9, 12];
@@ -183,7 +205,9 @@ final tunings = <TuningName, Tuning>{
 ({bool valid, List<String> errors}) validateTuning(Tuning tuning) {
   final errors = <String>[];
   if (tuning.strings.length != 6) {
-    errors.add('Tuning must have exactly 6 strings, got ${tuning.strings.length}');
+    errors.add(
+      'Tuning must have exactly 6 strings, got ${tuning.strings.length}',
+    );
   }
   for (final s in tuning.strings) {
     final noteWithoutOctave = s.note.replaceAll(RegExp(r'\d'), '');
@@ -191,7 +215,9 @@ final tunings = <TuningName, Tuning>{
       errors.add('String ${s.stringNumber}: invalid note "${s.note}"');
     }
     if (s.midiNote < 28 || s.midiNote > 88) {
-      errors.add('String ${s.stringNumber}: MIDI note ${s.midiNote} out of guitar range (28–88)');
+      errors.add(
+        'String ${s.stringNumber}: MIDI note ${s.midiNote} out of guitar range (28–88)',
+      );
     }
   }
   return (valid: errors.isEmpty, errors: errors);
@@ -200,11 +226,11 @@ final tunings = <TuningName, Tuning>{
 // ─── Default State ────────────────────────────────────────────────────────────
 
 FretboardState getDefaultFretboardState() => const FretboardState(
-      currentTuning: TuningName.standard,
-      numFrets: 12,
-      capo: 0,
-      highlightedNotes: [],
-      selectedNotes: [],
-      selectedCells: [],
-      viewMode: FretboardViewMode.pitchClass,
-    );
+  currentTuning: TuningName.standard,
+  numFrets: 12,
+  capo: 0,
+  highlightedNotes: [],
+  selectedNotes: [],
+  selectedCells: [],
+  viewMode: FretboardViewMode.pitchClass,
+);

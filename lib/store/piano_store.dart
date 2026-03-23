@@ -31,7 +31,10 @@ class PianoNotifier extends Notifier<PianoState> {
         nextKeys = [
           ...keys,
           PianoCoordinate(
-              keyIndex: keyIndex, midiNote: midiNote, noteName: noteName)
+            keyIndex: keyIndex,
+            midiNote: midiNote,
+            noteName: noteName,
+          ),
         ];
       }
     } else {
@@ -41,22 +44,27 @@ class PianoNotifier extends Notifier<PianoState> {
           : [
               ...keys,
               PianoCoordinate(
-                  keyIndex: keyIndex, midiNote: midiNote, noteName: noteName)
+                keyIndex: keyIndex,
+                midiNote: midiNote,
+                noteName: noteName,
+              ),
             ];
     }
     final selectedNotes = nextKeys.map((k) => k.noteName).toSet().toList();
-    state = state.copyWith(selectedKeys: nextKeys, selectedNotes: selectedNotes);
+    state = state.copyWith(
+      selectedKeys: nextKeys,
+      selectedNotes: selectedNotes,
+    );
   }
 
-  void clearSelectedNotes() => state = state.copyWith(
-        selectedNotes: [],
-        selectedKeys: [],
-      );
+  void clearSelectedNotes() =>
+      state = state.copyWith(selectedNotes: [], selectedKeys: []);
 
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);
-    final newKeys =
-        state.selectedKeys.where((k) => !bad.contains(k.noteName)).toList();
+    final newKeys = state.selectedKeys
+        .where((k) => !bad.contains(k.noteName))
+        .toList();
     final newNotes = newKeys.map((k) => k.noteName).toSet().toList();
     state = state.copyWith(selectedKeys: newKeys, selectedNotes: newNotes);
   }
@@ -71,24 +79,27 @@ class PianoNotifier extends Notifier<PianoState> {
     for (final midi in midis) {
       final key = keyMap[midi];
       if (key == null) continue;
-      selectedKeys.add(PianoCoordinate(
-        keyIndex: key.keyIndex,
-        midiNote: key.midiNote,
-        noteName: key.noteName,
-      ));
+      selectedKeys.add(
+        PianoCoordinate(
+          keyIndex: key.keyIndex,
+          midiNote: key.midiNote,
+          noteName: key.noteName,
+        ),
+      );
     }
-    final selectedNotes =
-        selectedKeys.map((k) => k.noteName).toSet().toList();
+    final selectedNotes = selectedKeys.map((k) => k.noteName).toSet().toList();
     state = state.copyWith(
-        selectedKeys: selectedKeys,
-        selectedNotes: selectedNotes);
+      selectedKeys: selectedKeys,
+      selectedNotes: selectedNotes,
+    );
   }
 
   void reset() => state = getDefaultPianoState();
 }
 
-final pianoProvider =
-    NotifierProvider<PianoNotifier, PianoState>(PianoNotifier.new);
+final pianoProvider = NotifierProvider<PianoNotifier, PianoState>(
+  PianoNotifier.new,
+);
 
 final pianoPendingChordProvider =
     StateProvider<({String root, String quality})?>((_) => null);

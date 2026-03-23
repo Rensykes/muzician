@@ -64,10 +64,9 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
   void _animateToFret(int fret) {
     if (!_scrollController.hasClients) return;
     _scrollController.animateTo(
-      _scrollOffsetForFret(fret).clamp(
-        0.0,
-        _scrollController.position.maxScrollExtent,
-      ),
+      _scrollOffsetForFret(
+        fret,
+      ).clamp(0.0, _scrollController.position.maxScrollExtent),
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
@@ -97,10 +96,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
 
     return Column(
       children: [
-        _ViewModeBar(
-          current: state.viewMode,
-          onSelect: notifier.setViewMode,
-        ),
+        _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
         const SizedBox(height: 4),
         SingleChildScrollView(
           controller: _scrollController,
@@ -254,7 +250,11 @@ class _OutOfKeyDialogState extends State<_OutOfKeyDialog> {
                     ),
                   ),
                   child: _suppress
-                      ? const Icon(Icons.check, size: 12, color: MuzicianTheme.sky)
+                      ? const Icon(
+                          Icons.check,
+                          size: 12,
+                          color: MuzicianTheme.sky,
+                        )
                       : null,
                 ),
                 const SizedBox(width: 8),
@@ -270,17 +270,22 @@ class _OutOfKeyDialogState extends State<_OutOfKeyDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          ),
         ),
         TextButton(
           onPressed: () =>
               Navigator.of(context).pop(_OutOfKeyResult(suppress: _suppress)),
-          child: const Text('Continue',
-              style: TextStyle(
-                  color: MuzicianTheme.sky,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700)),
+          child: const Text(
+            'Continue',
+            style: TextStyle(
+              color: MuzicianTheme.sky,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ],
     );
@@ -531,8 +536,7 @@ class _FretboardPainter extends CustomPainter {
 
   void _drawFretNumbers(Canvas canvas) {
     for (int fret = 0; fret <= numFrets; fret++) {
-      final showLabel = fret == 0 ||
-          positionMarkerFrets.contains(fret);
+      final showLabel = fret == 0 || positionMarkerFrets.contains(fret);
       if (!showLabel) continue;
       final text = fret == 0 ? 'Open' : '$fret';
       final tp = TextPainter(
@@ -542,7 +546,10 @@ class _FretboardPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(_noteX(fret) - tp.width / 2, _headerH - 8 - tp.height));
+      tp.paint(
+        canvas,
+        Offset(_noteX(fret) - tp.width / 2, _headerH - 8 - tp.height),
+      );
     }
   }
 
@@ -561,38 +568,42 @@ class _FretboardPainter extends CustomPainter {
         final isSelectedPitchClass = selectedNotes.contains(cell.noteName);
         final isSelected =
             (viewMode == FretboardViewMode.exact ||
-                    viewMode == FretboardViewMode.exactFocus)
-                ? isSelectedExact
-                : isSelectedPitchClass;
+                viewMode == FretboardViewMode.exactFocus)
+            ? isSelectedExact
+            : isSelectedPitchClass;
 
         final inFocusMode =
             viewMode == FretboardViewMode.focus && selectedNotes.isNotEmpty;
         if (inFocusMode && !isSelectedPitchClass && !behindCapo) continue;
 
         final inExactFocusMode =
-            viewMode == FretboardViewMode.exactFocus && selectedCells.isNotEmpty;
+            viewMode == FretboardViewMode.exactFocus &&
+            selectedCells.isNotEmpty;
         if (inExactFocusMode && !isSelectedExact && !behindCapo) continue;
 
-        final isHighlighted = highlightedNotes.isNotEmpty &&
+        final isHighlighted =
+            highlightedNotes.isNotEmpty &&
             highlightedNotes.contains(cell.noteName);
 
-        final baseColor =
-            behindCapo ? const Color(0xFF334155) : (cell.isNatural ? _naturalColor : _accidentalColor);
+        final baseColor = behindCapo
+            ? const Color(0xFF334155)
+            : (cell.isNatural ? _naturalColor : _accidentalColor);
         final bubbleFill = isSelected ? Colors.white : baseColor;
         final bubbleStroke = isSelected
             ? baseColor
             : (cell.fret == 0 ? const Color(0x40FFFFFF) : Colors.transparent);
         final strokeWidth = isSelected ? 2.5 : (cell.fret == 0 ? 1.0 : 0.0);
         final textColor = isSelected ? baseColor : Colors.white;
-        final inFocusOrSolo = viewMode == FretboardViewMode.focus ||
+        final inFocusOrSolo =
+            viewMode == FretboardViewMode.focus ||
             viewMode == FretboardViewMode.exactFocus;
         final opacity = behindCapo
             ? 0.18
             : isSelected
-                ? 1.0
-                : (inFocusOrSolo || highlightedNotes.isEmpty)
-                    ? 0.88
-                    : (isHighlighted ? 1.0 : 0.25);
+            ? 1.0
+            : (inFocusOrSolo || highlightedNotes.isEmpty)
+            ? 0.88
+            : (isHighlighted ? 1.0 : 0.25);
 
         // Draw circle
         final fillPaint = Paint()

@@ -96,14 +96,14 @@ class CapoControl extends ConsumerWidget {
                         color: isCurrent
                             ? MuzicianTheme.orange
                             : isPast
-                                ? MuzicianTheme.orange.withValues(alpha: 0.3)
-                                : Colors.white.withValues(alpha: 0.08),
+                            ? MuzicianTheme.orange.withValues(alpha: 0.3)
+                            : Colors.white.withValues(alpha: 0.08),
                         border: Border.all(
                           color: isCurrent
                               ? MuzicianTheme.orange
                               : isPast
-                                  ? MuzicianTheme.orange.withValues(alpha: 0.4)
-                                  : Colors.white.withValues(alpha: 0.12),
+                              ? MuzicianTheme.orange.withValues(alpha: 0.4)
+                              : Colors.white.withValues(alpha: 0.12),
                           width: 1,
                         ),
                       ),
@@ -138,7 +138,9 @@ class CapoControl extends ConsumerWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: enabled ? const Color(0xFFE2E8F0) : const Color(0xFF475569),
+                color: enabled
+                    ? const Color(0xFFE2E8F0)
+                    : const Color(0xFF475569),
                 fontSize: 16,
                 fontWeight: FontWeight.w400,
               ),

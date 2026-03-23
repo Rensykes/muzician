@@ -76,13 +76,33 @@ class LandscapePianoModal extends ConsumerWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _modePill('All', PianoViewMode.pitchClass, state.viewMode, notifier),
+                          _modePill(
+                            'All',
+                            PianoViewMode.pitchClass,
+                            state.viewMode,
+                            notifier,
+                          ),
                           const SizedBox(width: 8),
-                          _modePill('Exact', PianoViewMode.exact, state.viewMode, notifier),
+                          _modePill(
+                            'Exact',
+                            PianoViewMode.exact,
+                            state.viewMode,
+                            notifier,
+                          ),
                           const SizedBox(width: 8),
-                          _modePill('Focus', PianoViewMode.focus, state.viewMode, notifier),
+                          _modePill(
+                            'Focus',
+                            PianoViewMode.focus,
+                            state.viewMode,
+                            notifier,
+                          ),
                           const SizedBox(width: 8),
-                          _modePill('Solo', PianoViewMode.exactFocus, state.viewMode, notifier),
+                          _modePill(
+                            'Solo',
+                            PianoViewMode.exactFocus,
+                            state.viewMode,
+                            notifier,
+                          ),
                         ],
                       ),
                     ),
@@ -94,7 +114,9 @@ class LandscapePianoModal extends ConsumerWidget {
                         onTap: onDismiss,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(10),
                             color: Colors.white.withValues(alpha: 0.1),
@@ -103,11 +125,14 @@ class LandscapePianoModal extends ConsumerWidget {
                               width: 0.5,
                             ),
                           ),
-                          child: const Text('Close',
-                              style: TextStyle(
-                                  color: Color(0xFFCBD5E1),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700)),
+                          child: const Text(
+                            'Close',
+                            style: TextStyle(
+                              color: Color(0xFFCBD5E1),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -121,8 +146,12 @@ class LandscapePianoModal extends ConsumerWidget {
     );
   }
 
-  Widget _modePill(String label, PianoViewMode mode,
-      PianoViewMode current, PianoNotifier notifier) {
+  Widget _modePill(
+    String label,
+    PianoViewMode mode,
+    PianoViewMode current,
+    PianoNotifier notifier,
+  ) {
     final active = current == mode;
     return GestureDetector(
       onTap: () => notifier.setViewMode(mode),
@@ -140,12 +169,14 @@ class LandscapePianoModal extends ConsumerWidget {
             width: 0.5,
           ),
         ),
-        child: Text(label,
-            style: TextStyle(
-              color: active ? MuzicianTheme.sky : const Color(0xFF94A3B8),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            )),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? MuzicianTheme.sky : const Color(0xFF94A3B8),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }

@@ -116,11 +116,14 @@ class _LandscapeFretboardModalState
                             ),
                           ),
                           child: const Center(
-                            child: Text('✕',
-                                style: TextStyle(
-                                    color: Color(0xFF94A3B8),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700)),
+                            child: Text(
+                              '✕',
+                              style: TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -174,9 +177,13 @@ class _LandscapeFretboardModalState
                                   onTap: () => notifier.setViewMode(mode),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 11, vertical: 5),
+                                      horizontal: 11,
+                                      vertical: 5,
+                                    ),
                                     color: active
-                                        ? MuzicianTheme.sky.withValues(alpha: 0.20)
+                                        ? MuzicianTheme.sky.withValues(
+                                            alpha: 0.20,
+                                          )
                                         : Colors.transparent,
                                     child: Text(
                                       label,
@@ -196,8 +203,8 @@ class _LandscapeFretboardModalState
                           const SizedBox(height: 4),
                           Text(
                             _viewSegments
-                                    .firstWhere((s) => s.$1 == state.viewMode)
-                                    .$3,
+                                .firstWhere((s) => s.$1 == state.viewMode)
+                                .$3,
                             style: const TextStyle(
                               color: Color(0xFF334155),
                               fontSize: 9,
@@ -224,14 +231,13 @@ class _LandscapeFretboardModalState
         Container(
           width: 7,
           height: 7,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-          ),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         ),
         const SizedBox(width: 5),
-        Text(label,
-            style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+        ),
       ],
     );
   }

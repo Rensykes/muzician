@@ -84,10 +84,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
         decoration: BoxDecoration(
           color: MuzicianTheme.surface.withValues(alpha: 0.96),
           border: const Border(
-            top: BorderSide(
-              color: Color(0x4094A3B8),
-              width: 0.5,
-            ),
+            top: BorderSide(color: Color(0x4094A3B8), width: 0.5),
           ),
         ),
         child: SafeArea(
@@ -159,9 +156,11 @@ class _NavTab extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon,
-                size: 24,
-                color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted),
+            Icon(
+              icon,
+              size: 24,
+              color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted,
+            ),
             const SizedBox(height: 2),
             Text(
               label,
@@ -212,18 +211,24 @@ class _GradientScaffold extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                          color: MuzicianTheme.textPrimary,
-                          letterSpacing: -0.5)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: MuzicianTheme.textPrimary,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          fontSize: 14,
-                          color: MuzicianTheme.textMuted,
-                          letterSpacing: 1)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: MuzicianTheme.textMuted,
+                      letterSpacing: 1,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -248,7 +253,9 @@ class _Card extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
         border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1), width: 0.5),
+          color: Colors.white.withValues(alpha: 0.1),
+          width: 0.5,
+        ),
         borderRadius: BorderRadius.circular(20),
       ),
       padding: const EdgeInsets.all(12),
@@ -276,7 +283,10 @@ class _FretboardScreen extends ConsumerWidget {
         _Card(child: CapoControl()),
         _Card(child: GuitarFretboard()),
         if (state.selectedNotes.isNotEmpty)
-          _Card(key: const ValueKey('fret-detect'), child: NoteDetectionPanel()),
+          _Card(
+            key: const ValueKey('fret-detect'),
+            child: NoteDetectionPanel(),
+          ),
         _Card(key: const ValueKey('fret-chord'), child: ChordVoicingPicker()),
         _Card(key: const ValueKey('fret-scale'), child: ScalePicker()),
       ],
@@ -302,7 +312,10 @@ class _PianoScreen extends ConsumerWidget {
         _Card(child: PianoRangeSelector()),
         _Card(child: PianoKeyboard()),
         if (state.selectedNotes.isNotEmpty)
-          _Card(key: const ValueKey('piano-detect'), child: PianoNoteDetectionPanel()),
+          _Card(
+            key: const ValueKey('piano-detect'),
+            child: PianoNoteDetectionPanel(),
+          ),
         _Card(key: const ValueKey('piano-chord'), child: PianoChordPicker()),
         _Card(key: const ValueKey('piano-scale'), child: PianoScalePicker()),
       ],
@@ -331,10 +344,7 @@ class _PianoRollScreen extends ConsumerWidget {
             behavior: HitTestBehavior.opaque,
             onVerticalDragStart: (_) {},
             onHorizontalDragStart: (_) {},
-            child: SizedBox(
-              height: 320,
-              child: PianoRollGrid(),
-            ),
+            child: SizedBox(height: 320, child: PianoRollGrid()),
           ),
         ),
         _Card(child: PianoRollStackSelector()),
@@ -346,9 +356,10 @@ class _PianoRollScreen extends ConsumerWidget {
             child: Text(
               'Selected stack column: tick ${state.selectedColumnTick! + 1}',
               style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600),
+                color: MuzicianTheme.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
       ],
@@ -378,25 +389,34 @@ class _SettingsScreen extends ConsumerWidget {
                 children: [
                   Text('🎸', style: TextStyle(fontSize: 18)),
                   SizedBox(width: 8),
-                  Text('Fretboard',
-                      style: TextStyle(
-                          color: MuzicianTheme.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    'Fretboard',
+                    style: TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
-              const Text('Favourite View Mode',
-                  style: TextStyle(
-                      color: MuzicianTheme.textMuted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
+              const Text(
+                'Favourite View Mode',
+                style: TextStyle(
+                  color: MuzicianTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 6),
               _ViewModeGrid(
                 current: settings.fretboardFavouriteViewMode.name,
                 onSelect: (mode) => notifier.setFretboardFavouriteViewMode(
-                    FretboardViewMode.values.firstWhere((v) => v.name == mode,
-                        orElse: () => FretboardViewMode.pitchClass)),
+                  FretboardViewMode.values.firstWhere(
+                    (v) => v.name == mode,
+                    orElse: () => FretboardViewMode.pitchClass,
+                  ),
+                ),
               ),
             ],
           ),
@@ -409,25 +429,34 @@ class _SettingsScreen extends ConsumerWidget {
                 children: [
                   Text('🎹', style: TextStyle(fontSize: 18)),
                   SizedBox(width: 8),
-                  Text('Piano',
-                      style: TextStyle(
-                          color: MuzicianTheme.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    'Piano',
+                    style: TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
-              const Text('Favourite View Mode',
-                  style: TextStyle(
-                      color: MuzicianTheme.textMuted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
+              const Text(
+                'Favourite View Mode',
+                style: TextStyle(
+                  color: MuzicianTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 6),
               _ViewModeGrid(
                 current: settings.pianoFavouriteViewMode.name,
                 onSelect: (mode) => notifier.setPianoFavouriteViewMode(
-                    PianoViewMode.values.firstWhere((v) => v.name == mode,
-                        orElse: () => PianoViewMode.pitchClass)),
+                  PianoViewMode.values.firstWhere(
+                    (v) => v.name == mode,
+                    orElse: () => PianoViewMode.pitchClass,
+                  ),
+                ),
               ),
             ],
           ),
@@ -440,17 +469,21 @@ class _SettingsScreen extends ConsumerWidget {
                 children: [
                   Text('🎵', style: TextStyle(fontSize: 18)),
                   SizedBox(width: 8),
-                  Text('Scale Highlight',
-                      style: TextStyle(
-                          color: MuzicianTheme.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    'Scale Highlight',
+                    style: TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               GestureDetector(
                 onTap: () => notifier.setSuppressOutOfKeyAlert(
-                    !settings.suppressOutOfKeyAlert),
+                  !settings.suppressOutOfKeyAlert,
+                ),
                 child: Row(
                   children: [
                     Container(
@@ -469,8 +502,11 @@ class _SettingsScreen extends ConsumerWidget {
                         ),
                       ),
                       child: settings.suppressOutOfKeyAlert
-                          ? const Icon(Icons.check,
-                              size: 12, color: MuzicianTheme.sky)
+                          ? const Icon(
+                              Icons.check,
+                              size: 12,
+                              color: MuzicianTheme.sky,
+                            )
                           : null,
                     ),
                     const SizedBox(width: 10),
@@ -478,9 +514,10 @@ class _SettingsScreen extends ConsumerWidget {
                       child: Text(
                         'Skip out-of-key warning',
                         style: TextStyle(
-                            color: MuzicianTheme.textSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600),
+                          color: MuzicianTheme.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -489,9 +526,7 @@ class _SettingsScreen extends ConsumerWidget {
               const SizedBox(height: 6),
               const Text(
                 'When enabled, adding a note outside the highlighted scale clears the highlight silently.',
-                style: TextStyle(
-                    color: MuzicianTheme.textMuted,
-                    fontSize: 11),
+                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 11),
               ),
             ],
           ),
@@ -500,16 +535,22 @@ class _SettingsScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             children: [
-              const Text('Muzician',
-                  style: TextStyle(
-                      color: MuzicianTheme.textMuted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700)),
+              const Text(
+                'Muzician',
+                style: TextStyle(
+                  color: MuzicianTheme.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text('Settings are saved automatically',
-                  style: TextStyle(
-                      color: MuzicianTheme.textMuted.withValues(alpha: 0.6),
-                      fontSize: 11)),
+              Text(
+                'Settings are saved automatically',
+                style: TextStyle(
+                  color: MuzicianTheme.textMuted.withValues(alpha: 0.6),
+                  fontSize: 11,
+                ),
+              ),
             ],
           ),
         ),
@@ -564,25 +605,34 @@ class _ViewModeGrid extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(m.$2,
-                        style: TextStyle(
-                            color: active
-                                ? MuzicianTheme.sky
-                                : MuzicianTheme.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700)),
+                    Text(
+                      m.$2,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky
+                            : MuzicianTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     if (active)
-                      const Icon(Icons.check_circle,
-                          size: 16, color: MuzicianTheme.sky),
+                      const Icon(
+                        Icons.check_circle,
+                        size: 16,
+                        color: MuzicianTheme.sky,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(m.$3,
-                    style: TextStyle(
-                        color: active
-                            ? MuzicianTheme.sky.withValues(alpha: 0.6)
-                            : MuzicianTheme.textMuted,
-                        fontSize: 9)),
+                Text(
+                  m.$3,
+                  style: TextStyle(
+                    color: active
+                        ? MuzicianTheme.sky.withValues(alpha: 0.6)
+                        : MuzicianTheme.textMuted,
+                    fontSize: 9,
+                  ),
+                ),
               ],
             ),
           ),
