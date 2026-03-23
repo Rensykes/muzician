@@ -192,13 +192,26 @@ class PianoNoteDetectionPanel extends ConsumerWidget {
             )
           else ...[
             if (detection.chords.isNotEmpty) ...[
-              const Text(
-                'Chords',
-                style: TextStyle(
-                  color: Color(0xFF64748B),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                children: [
+                  const Text(
+                    'Chords',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'tap to select voicing',
+                    style: TextStyle(
+                      color: Color(0xFF334155),
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               SingleChildScrollView(
@@ -251,13 +264,26 @@ class PianoNoteDetectionPanel extends ConsumerWidget {
             ],
             if (detection.scales.isNotEmpty) ...[
               const SizedBox(height: 10),
-              const Text(
-                'Scales',
-                style: TextStyle(
-                  color: Color(0xFF64748B),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                children: [
+                  const Text(
+                    'Scales',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'tap to highlight',
+                    style: TextStyle(
+                      color: Color(0xFF334155),
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               SingleChildScrollView(

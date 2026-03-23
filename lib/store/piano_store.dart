@@ -55,6 +55,7 @@ class PianoNotifier extends Notifier<PianoState> {
       selectedKeys: nextKeys,
       selectedNotes: selectedNotes,
     );
+    ref.read(pianoManualEditProvider.notifier).state++;
   }
 
   void clearSelectedNotes() =>
@@ -109,3 +110,7 @@ final pianoPendingScaleProvider =
 
 /// MIDI note the keyboard should animate to (one-shot, cleared after use).
 final pianoScrollToMidiProvider = StateProvider<int?>((_) => null);
+
+/// Incremented each time the user manually taps a key on the piano.
+/// Consumers (e.g. PianoChordPicker) listen to this to clear committed state.
+final pianoManualEditProvider = StateProvider<int>((_) => 0);
