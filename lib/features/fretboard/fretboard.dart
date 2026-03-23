@@ -96,6 +96,11 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
 
     return Column(
       children: [
+        _InputModeBar(
+          current: state.inputMode,
+          onSelect: notifier.setInputMode,
+        ),
+        const SizedBox(height: 4),
         _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
         const SizedBox(height: 4),
         SingleChildScrollView(
@@ -288,6 +293,82 @@ class _OutOfKeyDialogState extends State<_OutOfKeyDialog> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Input Mode Bar ───────────────────────────────────────────────────────────
+
+class _InputModeBar extends StatelessWidget {
+  final FretboardInputMode current;
+  final void Function(FretboardInputMode) onSelect;
+
+  const _InputModeBar({required this.current, required this.onSelect});
+
+  static const _modes = [
+    (FretboardInputMode.free, 'Free', 'Multiple notes per string'),
+    (FretboardInputMode.chord, 'Chord', 'One note per string'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: _modes.map((m) {
+          final active = current == m.$1;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                onSelect(m.$1);
+                HapticFeedback.lightImpact();
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: active
+                      ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.03),
+                  border: Border.all(
+                    color: active
+                        ? MuzicianTheme.sky.withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.08),
+                    width: 0.5,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      m.$2,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky
+                            : MuzicianTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      m.$3,
+                      style: TextStyle(
+                        color: active
+                            ? MuzicianTheme.sky.withValues(alpha: 0.6)
+                            : MuzicianTheme.textMuted,
+                        fontSize: 8,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

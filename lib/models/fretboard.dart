@@ -22,6 +22,13 @@ enum TuningCategory { standard, metal, midwestEmo }
 /// View modes for selected notes on the fretboard.
 enum FretboardViewMode { pitchClass, exact, focus, exactFocus }
 
+/// Input behaviour modes for the fretboard.
+///
+/// - [free]: any number of notes may be placed on the same string.
+/// - [chord]: at most one note per string; tapping a new fret on an occupied
+///   string replaces the existing selection on that string.
+enum FretboardInputMode { free, chord }
+
 /// A single string's open note with MIDI reference.
 class StringTuning {
   final int stringNumber;
@@ -115,6 +122,7 @@ class FretboardState {
   final List<String> selectedNotes;
   final List<FretCoordinate> selectedCells;
   final FretboardViewMode viewMode;
+  final FretboardInputMode inputMode;
 
   const FretboardState({
     required this.currentTuning,
@@ -124,6 +132,7 @@ class FretboardState {
     required this.selectedNotes,
     required this.selectedCells,
     required this.viewMode,
+    required this.inputMode,
   });
 
   FretboardState copyWith({
@@ -134,6 +143,7 @@ class FretboardState {
     List<String>? selectedNotes,
     List<FretCoordinate>? selectedCells,
     FretboardViewMode? viewMode,
+    FretboardInputMode? inputMode,
   }) => FretboardState(
     currentTuning: currentTuning ?? this.currentTuning,
     numFrets: numFrets ?? this.numFrets,
@@ -142,5 +152,6 @@ class FretboardState {
     selectedNotes: selectedNotes ?? this.selectedNotes,
     selectedCells: selectedCells ?? this.selectedCells,
     viewMode: viewMode ?? this.viewMode,
+    inputMode: inputMode ?? this.inputMode,
   );
 }

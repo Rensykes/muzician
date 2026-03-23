@@ -88,7 +88,29 @@ class FretboardNotifier extends Notifier<FretboardState> {
   void toggleCell(int stringIndex, int fret, String noteName) {
     final cells = state.selectedCells;
     List<FretCoordinate> newCells;
-    if (state.viewMode == FretboardViewMode.exact ||
+
+    if (state.inputMode == FretboardInputMode.chord) {
+      // Chord mode: at most one note per string.
+      // Tapping the already-selected fret deselects it; tapping any other fret
+      // on that string replaces the existing selection.
+      final idx = cells.indexWhere(
+        (c) => c.stringIndex == stringIndex && c.fret == fret,
+      );
+      if (idx >= 0) {
+        // Deselect currently tapped position.
+        newCells = List.of(cells)..removeAt(idx);
+      } else {
+        // Remove any existing note on this string, then add the new one.
+        newCells = [
+          ...cells.where((c) => c.stringIndex != stringIndex),
+          FretCoordinate(
+            stringIndex: stringIndex,
+            fret: fret,
+            noteName: noteName,
+          ),
+        ];
+      }
+    } else if (state.viewMode == FretboardViewMode.exact ||
         state.viewMode == FretboardViewMode.exactFocus) {
       final idx = cells.indexWhere(
         (c) => c.stringIndex == stringIndex && c.fret == fret,
@@ -137,6 +159,9 @@ class FretboardNotifier extends Notifier<FretboardState> {
 
   void setViewMode(FretboardViewMode mode) =>
       state = state.copyWith(viewMode: mode);
+
+  void setInputMode(FretboardInputMode mode) =>
+      state = state.copyWith(inputMode: mode);
 
   void loadVoicing(ChordVoicing voicing) {
     final tuning = tunings[state.currentTuning]!;
