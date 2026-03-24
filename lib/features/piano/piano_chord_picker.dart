@@ -120,6 +120,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
         _selectedQuality = detected?.quality ?? '';
         _selectedVoicingIdx = null;
       });
+      ref.read(pianoChordCommittedProvider.notifier).state = false;
     });
 
     // Sync when the user taps a chord chip in the detection panel.
@@ -133,6 +134,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
           _selectedQuality = pendingChord.quality;
           _selectedVoicingIdx = null;
         });
+        ref.read(pianoChordCommittedProvider.notifier).state = true;
         ref.read(pianoPendingChordProvider.notifier).state = null;
       });
     }
@@ -353,7 +355,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
               ),
             ),
             SizedBox(
-              height: 58,
+              height: 70,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: voicings.length,
@@ -368,6 +370,8 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                         _voicingCommitted = true;
                         _selectedVoicingIdx = i;
                       });
+                      ref.read(pianoChordCommittedProvider.notifier).state =
+                          true;
                       notifier.loadExactMidis(v.midis);
                       if (v.midis.isNotEmpty) {
                         ref.read(pianoScrollToMidiProvider.notifier).state =
@@ -393,6 +397,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                         ),
                       ),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(

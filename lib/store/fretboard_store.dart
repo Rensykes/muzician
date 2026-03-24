@@ -200,3 +200,7 @@ final scrollToFretProvider = StateProvider<int?>((_) => null);
 /// Incremented each time the user manually taps a note on the fretboard.
 /// Consumers (e.g. ChordVoicingPicker) listen to this to clear their selection.
 final fretboardManualEditProvider = StateProvider<int>((_) => 0);
+
+/// True while the user has committed a chord voicing (tapped a voicing card).
+/// Cleared when the user manually edits the fretboard.
+final fretboardChordCommittedProvider = StateProvider<bool>((_) => false);

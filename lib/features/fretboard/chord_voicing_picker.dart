@@ -190,6 +190,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
         _selectedQuality = detected?.quality ?? '';
         _selectedVoicingIdx = null;
       });
+      ref.read(fretboardChordCommittedProvider.notifier).state = false;
     });
 
     // When the capo moves, transpose the committed chord root by the same
@@ -217,6 +218,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
           _selectedQuality = pendingChord.quality;
           _selectedVoicingIdx = null;
         });
+        ref.read(fretboardChordCommittedProvider.notifier).state = true;
         ref.read(pendingChordProvider.notifier).state = null;
       });
     }
@@ -411,6 +413,8 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                     _voicingCommitted = true;
                     _selectedVoicingIdx = i;
                   });
+                  ref.read(fretboardChordCommittedProvider.notifier).state =
+                      true;
                   notifier.loadVoicing(voicings[i]);
                   final baseFret = voicings[i].baseFret;
                   if (baseFret > 0) {
