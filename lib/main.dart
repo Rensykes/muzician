@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/fretboard/fretboard_feature.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_feature.dart';
-import 'models/fretboard.dart' show FretboardViewMode;
-import 'models/piano.dart' show PianoViewMode;
+import 'models/fretboard.dart' show FretboardViewMode, TuningName;
+import 'models/piano.dart' show PianoViewMode, PianoRangeName;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/piano_roll_store.dart';
@@ -266,11 +266,35 @@ class _Card extends StatelessWidget {
 
 // ── Fretboard Screen ────────────────────────────────────────────────────────
 
-class _FretboardScreen extends ConsumerWidget {
+enum _FretPanel { tuning, capo, chord, scale }
+
+class _FretboardScreen extends ConsumerStatefulWidget {
   const _FretboardScreen();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FretboardScreen> createState() => _FretboardScreenState();
+}
+
+class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
+  _FretPanel? _activePanel;
+
+  void _togglePanel(_FretPanel panel) {
+    HapticFeedback.selectionClick();
+    setState(() => _activePanel = _activePanel == panel ? null : panel);
+  }
+
+  Widget _activePanelWidget() => switch (_activePanel) {
+        _FretPanel.tuning => const _Card(child: TuningSelector()),
+        _FretPanel.capo => const _Card(child: CapoControl()),
+        _FretPanel.chord =>
+          const _Card(key: ValueKey('fret-chord'), child: ChordVoicingPicker()),
+        _FretPanel.scale =>
+          const _Card(key: ValueKey('fret-scale'), child: ScalePicker()),
+        null => const SizedBox.shrink(),
+      };
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
 
     return _GradientScaffold(
@@ -279,28 +303,207 @@ class _FretboardScreen extends ConsumerWidget {
           ? 'Tap notes to select them'
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
       children: [
-        _Card(child: TuningSelector()),
-        _Card(child: CapoControl()),
-        _Card(child: GuitarFretboard()),
-        if (state.selectedNotes.isNotEmpty)
-          _Card(
-            key: const ValueKey('fret-detect'),
-            child: NoteDetectionPanel(),
-          ),
-        _Card(key: const ValueKey('fret-chord'), child: ChordVoicingPicker()),
-        _Card(key: const ValueKey('fret-scale'), child: ScalePicker()),
+        const _Card(child: GuitarFretboard()),
+        const _Card(
+          key: ValueKey('fret-detect'),
+          child: NoteDetectionPanel(),
+        ),
+        _PanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          child: _activePanelWidget(),
+        ),
       ],
+    );
+  }
+}
+
+// ── Fretboard Panel Access Bar ───────────────────────────────────────────────
+
+class _PanelAccessBar extends ConsumerWidget {
+  final _FretPanel? activePanel;
+  final void Function(_FretPanel) onToggle;
+
+  const _PanelAccessBar({
+    required this.activePanel,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(fretboardProvider);
+    final chordCommitted = ref.watch(fretboardChordCommittedProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Row(
+        children: [
+          _PanelTab(
+            icon: Icons.tune,
+            label: 'Tuning',
+            color: MuzicianTheme.sky,
+            active: activePanel == _FretPanel.tuning,
+            hasValue: state.currentTuning != TuningName.standard,
+            onTap: () => onToggle(_FretPanel.tuning),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.compress,
+            label: 'Capo',
+            color: MuzicianTheme.orange,
+            active: activePanel == _FretPanel.capo,
+            hasValue: state.capo > 0,
+            onTap: () => onToggle(_FretPanel.capo),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.library_music_outlined,
+            label: 'Chord',
+            color: MuzicianTheme.violet,
+            active: activePanel == _FretPanel.chord,
+            hasValue: chordCommitted,
+            onTap: () => onToggle(_FretPanel.chord),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.stacked_line_chart,
+            label: 'Scale',
+            color: MuzicianTheme.emerald,
+            active: activePanel == _FretPanel.scale,
+            hasValue: state.highlightedNotes.isNotEmpty,
+            onTap: () => onToggle(_FretPanel.scale),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PanelTab extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool active;
+  final bool hasValue;
+  final VoidCallback onTap;
+
+  const _PanelTab({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.active,
+    required this.hasValue,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final showDot = hasValue && !active;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: active
+                ? color.withValues(alpha: 0.15)
+                : hasValue
+                    ? color.withValues(alpha: 0.07)
+                    : Colors.white.withValues(alpha: 0.04),
+            border: Border.all(
+              color: active
+                  ? color.withValues(alpha: 0.4)
+                  : hasValue
+                      ? color.withValues(alpha: 0.25)
+                      : Colors.white.withValues(alpha: 0.08),
+              width: 0.5,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: active
+                        ? color
+                        : hasValue
+                            ? color.withValues(alpha: 0.7)
+                            : MuzicianTheme.textMuted,
+                  ),
+                  if (showDot)
+                    Positioned(
+                      top: -2,
+                      right: -4,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: active
+                      ? color
+                      : hasValue
+                          ? color.withValues(alpha: 0.7)
+                          : MuzicianTheme.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
 // ── Piano Screen ────────────────────────────────────────────────────────────
 
-class _PianoScreen extends ConsumerWidget {
+enum _PianoPanel { range, chord, scale }
+
+class _PianoScreen extends ConsumerStatefulWidget {
   const _PianoScreen();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PianoScreen> createState() => _PianoScreenState();
+}
+
+class _PianoScreenState extends ConsumerState<_PianoScreen> {
+  _PianoPanel? _activePanel;
+
+  void _togglePanel(_PianoPanel panel) {
+    HapticFeedback.selectionClick();
+    setState(() => _activePanel = _activePanel == panel ? null : panel);
+  }
+
+  Widget _activePanelWidget() => switch (_activePanel) {
+        _PianoPanel.range => const _Card(child: PianoRangeSelector()),
+        _PianoPanel.chord =>
+          const _Card(key: ValueKey('piano-chord'), child: PianoChordPicker()),
+        _PianoPanel.scale =>
+          const _Card(key: ValueKey('piano-scale'), child: PianoScalePicker()),
+        null => const SizedBox.shrink(),
+      };
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(pianoProvider);
 
     return _GradientScaffold(
@@ -309,16 +512,70 @@ class _PianoScreen extends ConsumerWidget {
           ? 'Tap keys to select them'
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
       children: [
-        _Card(child: PianoRangeSelector()),
-        _Card(child: PianoKeyboard()),
-        if (state.selectedNotes.isNotEmpty)
-          _Card(
-            key: const ValueKey('piano-detect'),
-            child: PianoNoteDetectionPanel(),
-          ),
-        _Card(key: const ValueKey('piano-chord'), child: PianoChordPicker()),
-        _Card(key: const ValueKey('piano-scale'), child: PianoScalePicker()),
+        const _Card(child: PianoKeyboard()),
+        const _Card(
+          key: ValueKey('piano-detect'),
+          child: PianoNoteDetectionPanel(),
+        ),
+        _PianoPanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          child: _activePanelWidget(),
+        ),
       ],
+    );
+  }
+}
+
+// ── Piano Panel Access Bar ───────────────────────────────────────────────────
+
+class _PianoPanelAccessBar extends ConsumerWidget {
+  final _PianoPanel? activePanel;
+  final void Function(_PianoPanel) onToggle;
+
+  const _PianoPanelAccessBar({
+    required this.activePanel,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(pianoProvider);
+    final chordCommitted = ref.watch(pianoChordCommittedProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Row(
+        children: [
+          _PanelTab(
+            icon: Icons.piano_outlined,
+            label: 'Range',
+            color: MuzicianTheme.sky,
+            active: activePanel == _PianoPanel.range,
+            hasValue: state.currentRange != PianoRangeName.key88,
+            onTap: () => onToggle(_PianoPanel.range),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.library_music_outlined,
+            label: 'Chord',
+            color: MuzicianTheme.violet,
+            active: activePanel == _PianoPanel.chord,
+            hasValue: chordCommitted,
+            onTap: () => onToggle(_PianoPanel.chord),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.stacked_line_chart,
+            label: 'Scale',
+            color: MuzicianTheme.emerald,
+            active: activePanel == _PianoPanel.scale,
+            hasValue: state.highlightedNotes.isNotEmpty,
+            onTap: () => onToggle(_PianoPanel.scale),
+          ),
+        ],
+      ),
     );
   }
 }

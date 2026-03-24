@@ -16,7 +16,31 @@ class PianoNoteDetectionPanel extends ConsumerWidget {
     final state = ref.watch(pianoProvider);
     final notifier = ref.read(pianoProvider.notifier);
 
-    if (state.selectedNotes.isEmpty) return const SizedBox.shrink();
+    if (state.selectedNotes.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
+        child: Row(
+          children: [
+            Icon(
+              Icons.touch_app_outlined,
+              size: 14,
+              color: MuzicianTheme.textDim,
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Tap keys on the keyboard to detect chords & scales.',
+                style: TextStyle(
+                  color: MuzicianTheme.textDim,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     final detection = detectChordsAndScales(state.selectedNotes);
 

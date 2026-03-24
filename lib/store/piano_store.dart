@@ -114,3 +114,7 @@ final pianoScrollToMidiProvider = StateProvider<int?>((_) => null);
 /// Incremented each time the user manually taps a key on the piano.
 /// Consumers (e.g. PianoChordPicker) listen to this to clear committed state.
 final pianoManualEditProvider = StateProvider<int>((_) => 0);
+
+/// True while the user has committed a piano chord voicing (tapped a voicing card).
+/// Cleared when the user manually edits the keyboard.
+final pianoChordCommittedProvider = StateProvider<bool>((_) => false);

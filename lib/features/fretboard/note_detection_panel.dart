@@ -39,7 +39,31 @@ class NoteDetectionPanel extends ConsumerWidget {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
 
-    if (state.selectedNotes.isEmpty) return const SizedBox.shrink();
+    if (state.selectedNotes.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
+        child: Row(
+          children: [
+            Icon(
+              Icons.touch_app_outlined,
+              size: 14,
+              color: MuzicianTheme.textDim,
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Tap notes on the fretboard to detect chords & scales.',
+                style: TextStyle(
+                  color: MuzicianTheme.textDim,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     final detection = detectChordsAndScales(state.selectedNotes);
     final hasResults =
