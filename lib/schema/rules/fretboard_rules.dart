@@ -3,23 +3,11 @@
 library;
 
 import '../../models/fretboard.dart';
+import '../../utils/note_utils.dart';
+
+export '../../utils/note_utils.dart' show chromaticNotes, isNaturalNote;
 
 // ─── Chromatic Scales ─────────────────────────────────────────────────────────
-
-const chromaticSharp = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
 
 const chromaticFlat = [
   'C',
@@ -44,22 +32,18 @@ const doubleMarkerFret = 12;
 String getPitchClassAtFret(int openMidi, int fret) {
   final midi = openMidi + fret;
   final pc = ((midi % 12) + 12) % 12;
-  return chromaticSharp[pc];
+  return chromaticNotes[pc];
 }
 
 String getNoteWithOctaveAtFret(int openMidi, int fret) {
   final midi = openMidi + fret;
   final octave = (midi ~/ 12) - 1;
   final pc = ((midi % 12) + 12) % 12;
-  return '${chromaticSharp[pc]}$octave';
-}
-
-bool isNaturalNote(String noteName) {
-  return !noteName.contains('#') && !noteName.contains('b');
+  return '${chromaticNotes[pc]}$octave';
 }
 
 bool isValidPitchClass(String note) {
-  return chromaticSharp.contains(note) || chromaticFlat.contains(note);
+  return chromaticNotes.contains(note) || chromaticFlat.contains(note);
 }
 
 // ─── Tunings ──────────────────────────────────────────────────────────────────

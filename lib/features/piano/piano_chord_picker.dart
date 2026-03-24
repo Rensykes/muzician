@@ -7,23 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_utils.dart';
 
-const _rootNotes = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
-
-const _qualities = [
+/// Qualities shown in the piano chord picker UI (subset of [chordIntervals]).
+const _pianoQualities = [
   ('', 'maj'),
   ('m', 'min'),
   ('7', 'dom7'),
@@ -35,57 +22,18 @@ const _qualities = [
   ('aug', 'aug'),
 ];
 
-const _noteToPc = {
-  'C': 0,
-  'C#': 1,
-  'D': 2,
-  'D#': 3,
-  'E': 4,
-  'F': 5,
-  'F#': 6,
-  'G': 7,
-  'G#': 8,
-  'A': 9,
-  'A#': 10,
-  'B': 11,
-};
-
-// note normalization provided by lib/utils/note_utils.dart
-
-// Chord intervals in semitones
-const _chordIntervals = <String, List<int>>{
-  '': [0, 4, 7],
-  'm': [0, 3, 7],
-  '7': [0, 4, 7, 10],
-  'maj7': [0, 4, 7, 11],
-  'm7': [0, 3, 7, 10],
-  'sus2': [0, 2, 7],
-  'sus4': [0, 5, 7],
-  'dim': [0, 3, 6],
-  'aug': [0, 4, 8],
-};
-
-List<String> _getChordNotes(String root, String quality) {
-  final rootIdx = _noteToPc[root];
-  if (rootIdx == null) return [];
-  final intervals = _chordIntervals[quality];
-  if (intervals == null) return [];
-  final chromatic = [
-    'C',
-    'C#',
-    'D',
-    'D#',
-    'E',
-    'F',
-    'F#',
-    'G',
-    'G#',
-    'A',
-    'A#',
-    'B',
-  ];
-  return intervals.map((i) => chromatic[(rootIdx + i) % 12]).toList();
-}
+/// Symbols for the 9 chord types the piano picker supports.
+const _pianoQualitySymbols = [
+  '',
+  'm',
+  '7',
+  'maj7',
+  'm7',
+  'sus2',
+  'sus4',
+  'dim',
+  'aug',
+];
 
 List<int> _buildVoicingMidis(
   List<String> notes,
@@ -97,7 +45,7 @@ List<int> _buildVoicingMidis(
   final midis = <int>[];
   int prev = rootBase - 1;
   for (int idx = 0; idx < rotated.length; idx++) {
-    final pc = _noteToPc[rotated[idx]];
+    final pc = noteToPC[rotated[idx]];
     if (pc == null) continue;
     // Start one octave below rootBase so the while-loop lands in the right
     // octave for both positive and negative octave offsets.
@@ -111,27 +59,10 @@ List<int> _buildVoicingMidis(
   return midis;
 }
 
-/// Returns the first chord in [_qualities] whose tones exactly match [notes],
-/// or null when no chord matches or notes has fewer than 2 members.
-({String root, String quality})? _detectFirstChord(List<String> notes) {
-  if (notes.length < 2) return null;
-  final noteSet = notes.toSet();
-  for (final root in _rootNotes) {
-    final rootIdx = _noteToPc[root];
-    if (rootIdx == null) continue;
-    for (final (symbol, _) in _qualities) {
-      final intervals = _chordIntervals[symbol];
-      if (intervals == null || intervals.length < 2) continue;
-      final chordTones =
-          intervals.map((i) => _rootNotes[(rootIdx + i) % 12]).toSet();
-      if (noteSet.every(chordTones.contains) &&
-          chordTones.every(noteSet.contains)) {
-        return (root: root, quality: symbol);
-      }
-    }
-  }
-  return null;
-}
+/// Returns the first chord in [_pianoQualities] whose tones exactly match
+/// [notes], or null when no chord matches or notes has fewer than 2 members.
+({String root, String quality})? _detectFirstChordForPiano(List<String> notes) =>
+    detectFirstChord(notes, qualitySymbols: _pianoQualitySymbols);
 
 class PianoChordPicker extends ConsumerStatefulWidget {
   const PianoChordPicker({super.key});
@@ -157,7 +88,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
   void initState() {
     super.initState();
     final notes = ref.read(pianoProvider).selectedNotes;
-    final detected = _detectFirstChord(notes);
+    final detected = _detectFirstChordForPiano(notes);
     _selectedRoot = detected?.root;
     _selectedQuality = detected?.quality ?? '';
   }
@@ -170,7 +101,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
     // Live-sync root/quality from first detected chord while not committed.
     ref.listen(pianoProvider.select((s) => s.selectedNotes), (_, notes) {
       if (_voicingCommitted) return;
-      final detected = _detectFirstChord(notes);
+      final detected = _detectFirstChordForPiano(notes);
       setState(() {
         _selectedRoot = detected?.root;
         _selectedQuality = detected?.quality ?? '';
@@ -180,7 +111,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
 
     // When the user manually taps a key, drop the commit and revert to detection.
     ref.listen(pianoManualEditProvider, (_, _) {
-      final detected = _detectFirstChord(
+      final detected = _detectFirstChordForPiano(
         ref.read(pianoProvider).selectedNotes,
       );
       setState(() {
@@ -207,7 +138,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
     }
 
     final chordNotes = _selectedRoot != null
-        ? _getChordNotes(_selectedRoot!, _selectedQuality)
+        ? getChordNotes(_selectedRoot!, _selectedQuality)
         : <String>[];
 
     final voicings = <({String label, List<int> midis})>[];
@@ -271,10 +202,10 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             height: 36,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: _rootNotes.length,
+              itemCount: chromaticNotes.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
-                final root = _rootNotes[i];
+                final root = chromaticNotes[i];
                 final active = _selectedRoot == root;
                 return GestureDetector(
                   onTap: () {
@@ -322,10 +253,10 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
             height: 36,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: _qualities.length,
+              itemCount: _pianoQualities.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
-                final (symbol, label) = _qualities[i];
+                final (symbol, label) = _pianoQualities[i];
                 final active = _selectedQuality == symbol;
                 return GestureDetector(
                   onTap: () {

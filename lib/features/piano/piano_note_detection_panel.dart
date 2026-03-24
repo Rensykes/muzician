@@ -6,69 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
-
-const _chromatic = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
-
-({List<String> chords, List<String> scales}) _detect(List<String> notes) {
-  if (notes.length < 2) return (chords: <String>[], scales: <String>[]);
-  final noteSet = notes.toSet();
-  final chords = <String>[];
-  final qualities = [
-    ('', [0, 4, 7]),
-    ('m', [0, 3, 7]),
-    ('7', [0, 4, 7, 10]),
-    ('maj7', [0, 4, 7, 11]),
-    ('m7', [0, 3, 7, 10]),
-    ('dim', [0, 3, 6]),
-    ('aug', [0, 4, 8]),
-    ('sus2', [0, 2, 7]),
-    ('sus4', [0, 5, 7]),
-  ];
-  for (final root in _chromatic) {
-    final rootIdx = _chromatic.indexOf(root);
-    for (final (symbol, intervals) in qualities) {
-      final chordTones = intervals
-          .map((i) => _chromatic[(rootIdx + i) % 12])
-          .toSet();
-      if (noteSet.every(chordTones.contains) &&
-          chordTones.every(noteSet.contains)) {
-        chords.add('$root${symbol.isEmpty ? '' : symbol}');
-      }
-    }
-  }
-  final scales = <String>[];
-  final scaleTypes = [
-    ('major', [0, 2, 4, 5, 7, 9, 11]),
-    ('minor', [0, 2, 3, 5, 7, 8, 10]),
-    ('major pentatonic', [0, 2, 4, 7, 9]),
-    ('minor pentatonic', [0, 3, 5, 7, 10]),
-  ];
-  for (final root in _chromatic) {
-    final rootIdx = _chromatic.indexOf(root);
-    for (final (name, intervals) in scaleTypes) {
-      final scaleTones = intervals
-          .map((i) => _chromatic[(rootIdx + i) % 12])
-          .toSet();
-      if (noteSet.every(scaleTones.contains)) {
-        scales.add('$root $name');
-      }
-    }
-  }
-  return (chords: chords.take(8).toList(), scales: scales.take(8).toList());
-}
+import '../../utils/note_utils.dart';
 
 class PianoNoteDetectionPanel extends ConsumerWidget {
   const PianoNoteDetectionPanel({super.key});
@@ -80,7 +18,7 @@ class PianoNoteDetectionPanel extends ConsumerWidget {
 
     if (state.selectedNotes.isEmpty) return const SizedBox.shrink();
 
-    final detection = _detect(state.selectedNotes);
+    final detection = detectChordsAndScales(state.selectedNotes);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),

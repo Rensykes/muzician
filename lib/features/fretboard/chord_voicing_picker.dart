@@ -10,22 +10,8 @@ import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_utils.dart';
 import 'chord_diagram.dart';
-
-const _rootNotes = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
 
 const _qualities = [
   ('5', '5th'),
@@ -43,7 +29,7 @@ const _qualities = [
   ('maj9', 'maj9'),
 ];
 
-// note normalization provided by lib/utils/note_utils.dart
+// note normalization and chord data provided by lib/utils/note_utils.dart
 
 // ─── Voicing generation ──────────────────────────────────────────────────────
 
@@ -146,48 +132,7 @@ List<ChordVoicing> _generateVoicings(
   return voicings.take(limit).toList();
 }
 
-// ─── Helper: get chord notes using semitone intervals ────────────────────────
-
-const _chordIntervals = <String, List<int>>{
-  '': [0, 4, 7],
-  'm': [0, 3, 7],
-  '7': [0, 4, 7, 10],
-  'maj7': [0, 4, 7, 11],
-  'm7': [0, 3, 7, 10],
-  'dim': [0, 3, 6],
-  'aug': [0, 4, 8],
-  '5': [0, 7],
-  'sus2': [0, 2, 7],
-  'sus4': [0, 5, 7],
-  'm7b5': [0, 3, 6, 10],
-  'add9': [0, 4, 7, 14],
-  'maj9': [0, 4, 7, 11, 14],
-};
-
-List<String> _getChordNotes(String root, String quality) {
-  final intervals = _chordIntervals[quality];
-  if (intervals == null) return [];
-  final rootIdx = _rootNotes.indexOf(root);
-  if (rootIdx < 0) return [];
-  return intervals.map((i) => _rootNotes[(rootIdx + i) % 12]).toList();
-}
-
-/// Returns the first chord matching [notes] exactly, or null if none found.
-({String root, String quality})? _detectFirstChord(List<String> notes) {
-  if (notes.length < 2) return null;
-  final noteSet = notes.toSet();
-  for (final root in _rootNotes) {
-    for (final (symbol, _) in _qualities) {
-      final chordTones = _getChordNotes(root, symbol).toSet();
-      if (chordTones.length < 2) continue;
-      if (noteSet.every(chordTones.contains) &&
-          chordTones.every(noteSet.contains)) {
-        return (root: root, quality: symbol);
-      }
-    }
-  }
-  return null;
-}
+// ─── Helper: chord notes and detection provided by lib/utils/note_utils.dart ─
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -212,7 +157,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
     super.initState();
     // Seed from detection so the picker is populated on first render.
     final notes = ref.read(fretboardProvider).selectedNotes;
-    final detected = _detectFirstChord(notes);
+    final detected = detectFirstChord(notes);
     _selectedRoot = detected?.root;
     _selectedQuality = detected?.quality ?? '';
   }
@@ -225,7 +170,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
     // Live-sync root/quality to first detected chord while not committed.
     ref.listen(fretboardProvider.select((s) => s.selectedNotes), (_, notes) {
       if (_voicingCommitted) return;
-      final detected = _detectFirstChord(notes);
+      final detected = detectFirstChord(notes);
       setState(() {
         _selectedRoot = detected?.root;
         _selectedQuality = detected?.quality ?? '';
@@ -236,7 +181,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
     // When the user manually taps a fretboard note, drop the commit and
     // revert to whatever detection now says.
     ref.listen(fretboardManualEditProvider, (_, _) {
-      final detected = _detectFirstChord(
+      final detected = detectFirstChord(
         ref.read(fretboardProvider).selectedNotes,
       );
       setState(() {
@@ -253,10 +198,10 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
       if (!_voicingCommitted || _selectedRoot == null) return;
       final delta = next - (prev ?? next);
       if (delta == 0) return;
-      final idx = _rootNotes.indexOf(_selectedRoot!);
+      final idx = chromaticNotes.indexOf(_selectedRoot!);
       if (idx < 0) return;
       setState(() {
-        _selectedRoot = _rootNotes[(idx + delta + 12 * 12) % 12];
+        _selectedRoot = chromaticNotes[(idx + delta + 12 * 12) % 12];
         _selectedVoicingIdx = null;
       });
     });
@@ -285,7 +230,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
         ? '$_selectedRoot$_selectedQuality'
         : null;
     final chordNotes = _selectedRoot != null
-        ? _getChordNotes(_selectedRoot!, _selectedQuality)
+        ? getChordNotes(_selectedRoot!, _selectedQuality)
         : <String>[];
     final voicings = chordNotes.isNotEmpty
         ? _generateVoicings(chordNotes, stringMidis, capo: state.capo)
@@ -337,10 +282,10 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _rootNotes.length,
+            itemCount: chromaticNotes.length,
             separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (_, i) {
-              final root = _rootNotes[i];
+              final root = chromaticNotes[i];
               final active = _selectedRoot == root;
               return GestureDetector(
                 onTap: () {
