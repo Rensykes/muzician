@@ -3,21 +3,9 @@
 library;
 
 import '../../models/piano.dart';
+import '../../utils/note_utils.dart';
 
-const chromaticSharp = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
+export '../../utils/note_utils.dart' show chromaticNotes, isNaturalNote;
 
 const pianoRanges = <PianoRangeName, PianoRange>{
   PianoRangeName.key88: PianoRange(
@@ -42,16 +30,12 @@ const pianoRanges = <PianoRangeName, PianoRange>{
 
 String midiToPitchClass(int midi) {
   final pc = ((midi % 12) + 12) % 12;
-  return chromaticSharp[pc];
+  return chromaticNotes[pc];
 }
 
 String midiToNoteWithOctave(int midi) {
   final octave = (midi ~/ 12) - 1;
   return '${midiToPitchClass(midi)}$octave';
-}
-
-bool isNaturalNote(String noteName) {
-  return !noteName.contains('#') && !noteName.contains('b');
 }
 
 bool isBlackMidiKey(int midi) {

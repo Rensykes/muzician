@@ -5,116 +5,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:music_notes/music_notes.dart' as mn;
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
-import 'package:muzician/utils/note_utils.dart';
-
-// note normalization provided by lib/utils/note_utils.dart
-
-({List<String> chords, List<String> scales}) _detectFromNotes(
-  List<String> notes,
-) {
-  if (notes.length < 2) return (chords: <String>[], scales: <String>[]);
-  try {
-    // Use music_notes for detection
-    final parsedNotes = <mn.Note>[];
-    for (final n in notes) {
-      try {
-        parsedNotes.add(mn.Note.parse(n));
-      } catch (_) {}
-    }
-    if (parsedNotes.length < 2) return (chords: <String>[], scales: <String>[]);
-
-    // Detect chords by checking common chord types against selected notes
-    final chords = <String>[];
-    final noteSet = notes.toSet();
-    final roots = [
-      'C',
-      'C#',
-      'D',
-      'D#',
-      'E',
-      'F',
-      'F#',
-      'G',
-      'G#',
-      'A',
-      'A#',
-      'B',
-    ];
-    final qualities = [
-      ('', 'major', [0, 4, 7]),
-      ('m', 'minor', [0, 3, 7]),
-      ('7', 'dom7', [0, 4, 7, 10]),
-      ('maj7', 'maj7', [0, 4, 7, 11]),
-      ('m7', 'min7', [0, 3, 7, 10]),
-      ('dim', 'dim', [0, 3, 6]),
-      ('aug', 'aug', [0, 4, 8]),
-      ('sus2', 'sus2', [0, 2, 7]),
-      ('sus4', 'sus4', [0, 5, 7]),
-    ];
-    final chromatic = [
-      'C',
-      'C#',
-      'D',
-      'D#',
-      'E',
-      'F',
-      'F#',
-      'G',
-      'G#',
-      'A',
-      'A#',
-      'B',
-    ];
-
-    for (final root in roots) {
-      final rootIdx = chromatic.indexOf(root);
-      if (rootIdx < 0) continue;
-      for (final (symbol, _, intervals) in qualities) {
-        final chordTones = intervals
-            .map((i) => chromatic[(rootIdx + i) % 12])
-            .toSet();
-        if (noteSet.every((n) => chordTones.contains(n)) &&
-            chordTones.every((n) => noteSet.contains(n))) {
-          chords.add('$root${symbol.isEmpty ? '' : symbol}');
-        }
-      }
-    }
-
-    // Detect scales
-    final scales = <String>[];
-    final scaleTypes = [
-      ('major', [0, 2, 4, 5, 7, 9, 11]),
-      ('minor', [0, 2, 3, 5, 7, 8, 10]),
-      ('major pentatonic', [0, 2, 4, 7, 9]),
-      ('minor pentatonic', [0, 3, 5, 7, 10]),
-      ('blues', [0, 3, 5, 6, 7, 10]),
-      ('dorian', [0, 2, 3, 5, 7, 9, 10]),
-    ];
-
-    for (final root in roots) {
-      final rootIdx = chromatic.indexOf(root);
-      if (rootIdx < 0) continue;
-      for (final (name, intervals) in scaleTypes) {
-        final scaleTones = intervals
-            .map((i) => chromatic[(rootIdx + i) % 12])
-            .toSet();
-        if (noteSet.every((n) => scaleTones.contains(n))) {
-          scales.add('$root $name');
-        }
-      }
-    }
-
-    return (chords: chords.take(8).toList(), scales: scales.take(8).toList());
-  } catch (_) {
-    return (chords: <String>[], scales: <String>[]);
-  }
-}
+import '../../utils/note_utils.dart';
 
 ({String root, String quality})? _parseChordString(String chordStr) {
-  // Simple chord parsing: root is 1 or 2 chars, rest is quality
   if (chordStr.isEmpty) return null;
   String root;
   String quality;
@@ -146,7 +41,7 @@ class NoteDetectionPanel extends ConsumerWidget {
 
     if (state.selectedNotes.isEmpty) return const SizedBox.shrink();
 
-    final detection = _detectFromNotes(state.selectedNotes);
+    final detection = detectChordsAndScales(state.selectedNotes);
     final hasResults =
         detection.chords.isNotEmpty || detection.scales.isNotEmpty;
 
