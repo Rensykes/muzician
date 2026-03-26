@@ -1,4 +1,4 @@
-package com.example.muzician
+package io.bytebakehouse.muzician
 
 import io.flutter.embedding.android.FlutterActivity
 
