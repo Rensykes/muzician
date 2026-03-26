@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -19,11 +22,32 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    signingConfigs {
+        val keystoreProperties = Properties()
+        val keystorePropertiesFile = rootProject.file("local.properties")
+        if (keystorePropertiesFile.exists()) {
+            keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+        }
+
+        create("release") {
+            // This looks at Environment Variables (for GitHub) OR local.properties (for you)
+            storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH") 
+                ?: keystoreProperties.getProperty("ANDROID_KEYSTORE_PATH") 
+                ?: "keystore.jks")
+            
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") 
+                ?: keystoreProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
+            
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS") 
+                ?: keystoreProperties.getProperty("ANDROID_KEY_ALIAS")
+            
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD") 
+                ?: keystoreProperties.getProperty("ANDROID_KEY_PASSWORD")
+        }
+    }
+
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "io.bytebakehouse.muzician"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -32,9 +56,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
