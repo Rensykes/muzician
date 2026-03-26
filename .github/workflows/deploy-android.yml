@@ -1,4 +1,4 @@
-name: Deploy Android (on tag)
+name: Deploy Android (on push main)
 
 on:
   push:
@@ -43,7 +43,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --build-number=$GITHUB_RUN_NUMBER
 
       - name: Upload to Google Play (internal track)
         uses: r0adkll/upload-google-play@v1
