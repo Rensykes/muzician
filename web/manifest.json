@@ -1,11 +1,12 @@
 {
     "name": "muzician",
     "short_name": "muzician",
+    "id": "io.bytebakehouse.muzician",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0A0A1E",
     "theme_color": "#0A0A1E",
-    "description": "A new Flutter project.",
+    "description": "Premium music theory app by Bytebake House.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
