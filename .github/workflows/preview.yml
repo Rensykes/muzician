@@ -1,9 +1,9 @@
-name: Deploy Preview (on push)
+name: Deploy Preview (on push main)
 
 on:
   push:
     branches:
-      - '**'
+      - 'main'
 
 jobs:
   build_and_preview:
