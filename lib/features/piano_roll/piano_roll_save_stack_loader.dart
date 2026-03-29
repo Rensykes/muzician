@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
+import '../../schema/rules/fretboard_rules.dart' as fretRules;
 import '../../store/save_system_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
@@ -51,17 +52,6 @@ int? _bestMidiInRange(
   return best;
 }
 
-int? _noteNameToMidi(String noteName) {
-  // Parse "C#4" => pitch class + octave => MIDI
-  final match = RegExp(r'^([A-G]#?)(\d+)$').firstMatch(noteName);
-  if (match == null) return null;
-  final pc = _noteToPC[match.group(1)!];
-  if (pc == null) return null;
-  final octave = int.tryParse(match.group(2)!);
-  if (octave == null) return null;
-  return (octave + 1) * 12 + pc;
-}
-
 List<int> _extractMidis(
   InstrumentSnapshot snap,
   String mode,
@@ -70,10 +60,13 @@ List<int> _extractMidis(
 ) {
   if (mode == 'exact') {
     if (snap is FretboardSnapshot) {
-      // Fretboard cells don't carry MIDI directly; compute from noteName
+      // Compute MIDI from the saved tuning + string + fret; noteName is a
+      // pitch class only (no octave) so it cannot be parsed into a MIDI number.
+      final tuning = fretRules.tunings[snap.tuning];
+      if (tuning == null) return [];
       return snap.selectedCells
-          .map((c) => _noteNameToMidi(c.noteName))
-          .whereType<int>()
+          .where((c) => c.stringIndex < tuning.strings.length)
+          .map((c) => tuning.strings[c.stringIndex].midiNote + c.fret)
           .where((m) => m >= rangeStart && m <= rangeEnd)
           .toList();
     } else if (snap is PianoSnapshot) {
