@@ -6,15 +6,31 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/scale_conflict_dialog.dart';
 import '../../utils/note_utils.dart';
 
-class PianoNoteDetectionPanel extends ConsumerWidget {
+class PianoNoteDetectionPanel extends ConsumerStatefulWidget {
   const PianoNoteDetectionPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PianoNoteDetectionPanel> createState() =>
+      _PianoNoteDetectionPanelState();
+}
+
+class _PianoNoteDetectionPanelState
+    extends ConsumerState<PianoNoteDetectionPanel> {
+  String? _activeScaleChip;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(pianoProvider);
     final notifier = ref.read(pianoProvider.notifier);
+
+    ref.listen(pianoProvider.select((s) => s.highlightedNotes), (_, next) {
+      if (next.isEmpty && _activeScaleChip != null) {
+        setState(() => _activeScaleChip = null);
+      }
+    });
 
     if (state.selectedNotes.isEmpty) {
       return const Padding(
@@ -261,19 +277,12 @@ class PianoNoteDetectionPanel extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: detection.scales
-                      .map(
-                        (s) => GestureDetector(
+                      .map((s) {
+                        final isActive = _activeScaleChip == s;
+                        return GestureDetector(
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            final parts = s.split(' ');
-                            if (parts.length >= 2) {
-                              ref
-                                  .read(pianoPendingScaleProvider.notifier)
-                                  .state = (
-                                root: parts[0],
-                                scaleName: parts.sublist(1).join(' '),
-                              );
-                            }
+                            _tryApplyScale(s);
                           },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
@@ -283,27 +292,31 @@ class PianoNoteDetectionPanel extends ConsumerWidget {
                             ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
-                              color: MuzicianTheme.violet.withValues(
-                                alpha: 0.12,
-                              ),
+                              color: isActive
+                                  ? MuzicianTheme.emerald
+                                  : MuzicianTheme.emerald.withValues(
+                                      alpha: 0.12,
+                                    ),
                               border: Border.all(
-                                color: MuzicianTheme.violet.withValues(
-                                  alpha: 0.45,
+                                color: MuzicianTheme.emerald.withValues(
+                                  alpha: isActive ? 1.0 : 0.45,
                                 ),
                                 width: 1,
                               ),
                             ),
                             child: Text(
                               s,
-                              style: const TextStyle(
-                                color: Color(0xFFE2E8F0),
+                              style: TextStyle(
+                                color: isActive
+                                    ? Colors.white
+                                    : const Color(0xFFE2E8F0),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                        ),
-                      )
+                        );
+                      })
                       .toList(),
                 ),
               ),
@@ -312,6 +325,44 @@ class PianoNoteDetectionPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _tryApplyScale(String displayString) async {
+    if (_activeScaleChip == displayString) {
+      setState(() => _activeScaleChip = null);
+      ref.read(pianoProvider.notifier).setHighlightedNotes([]);
+      return;
+    }
+    final parts = displayString.split(' ');
+    if (parts.length < 2) return;
+    final root = toSharp(parts[0]);
+    final scaleName = parts.sublist(1).join(' ');
+    final scaleNotes = getScaleNotes(root, scaleName);
+    if (scaleNotes.isEmpty) return;
+    final conflicts = ref
+        .read(pianoProvider)
+        .selectedNotes
+        .where((n) => !scaleNotes.contains(n))
+        .toList();
+    if (conflicts.isEmpty) {
+      setState(() => _activeScaleChip = displayString);
+      ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pianoPendingScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
+    );
+    if (confirmed == true) {
+      ref.read(pianoProvider.notifier).removeNotesByPitchClass(conflicts);
+      setState(() => _activeScaleChip = displayString);
+      ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pianoPendingScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
+    }
   }
 
   String _parseRoot(String chord) {
