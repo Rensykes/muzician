@@ -8,12 +8,39 @@ This file documents the multi-agentic workflow available for Muzician developmen
 
 | Agent | File | Role | Tools |
 |-------|------|------|-------|
+| [Orchestrator](#orchestrator) | `orchestrator.agent.md` | Decomposes cross-domain tasks, delegates to specialists, integrates outputs | read, search, edit, execute |
 | [Music Theory Expert](#music-theory-expert) | `music-theory.agent.md` | Music theory logic, chord/scale detection, interval math | read, search, edit, execute |
 | [Instrument Renderer](#instrument-renderer) | `instrument-renderer.agent.md` | CustomPainter, gesture handling, fretboard/piano/roll UI | read, search, edit, execute |
 | [State Architect](#state-architect) | `state-architect.agent.md` | Riverpod providers, immutable state, data-flow architecture | read, search, edit, execute |
 | [Save System Engineer](#save-system-engineer) | `save-system.agent.md` | Persistence, JSON serialization, folder/save operations | read, search, edit, execute |
 | [Accessibility & UX Reviewer](#accessibility--ux-reviewer) | `accessibility-ux.agent.md` | WCAG audits, touch targets, haptics, screen reader support | read, search *(review only)* |
 | [Code Quality Auditor](#code-quality-auditor) | `code-quality.agent.md` | Dart conventions, static analysis, dead code, duplication | read, search, execute *(audit only)* |
+
+---
+
+## Orchestrator
+
+**File**: `.github/agents/orchestrator.agent.md`
+
+**Persona**: A technical lead who decomposes complex, cross-domain requests and routes each piece to the right specialist. Integrates their outputs into a coherent, working result.
+
+**Invoke when**:
+- A task touches more than one specialist domain simultaneously
+- You need a complete feature implemented end-to-end across multiple layers
+- You are unsure which specialist to use
+- A feature requires planned coordination across music theory, state, rendering, and/or persistence
+- You want to add something to all three instruments (fretboard + piano + piano roll) consistently
+
+**Does NOT**:
+- Implement music theory details (delegates to Music Theory Expert)
+- Design Riverpod providers (delegates to State Architect)
+- Write CustomPainter code (delegates to Instrument Renderer)
+- Write persistence logic (delegates to Save System Engineer)
+
+**Example invocations**:
+> "Add a `m9` chord quality end-to-end — theory, state, UI, and detection panels."
+> "Implement a global transpose feature for the fretboard and piano simultaneously."
+> "Add a new instrument: a chromatic button accordion."
 
 ---
 
@@ -165,7 +192,9 @@ This file documents the multi-agentic workflow available for Muzician developmen
 
 ## Multi-Agent Workflows
 
-Some tasks benefit from routing across multiple agents sequentially:
+For tasks that span multiple domains, invoke the **Orchestrator** agent — it will plan, delegate, and integrate automatically.
+
+Example multi-domain tasks:
 
 ### Adding a new chord type
 1. **Music Theory Expert** → add the interval to `chordIntervals` in `note_utils.dart`
