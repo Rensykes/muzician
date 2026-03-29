@@ -68,7 +68,7 @@ class PianoCoordinate {
 }
 
 /// Mirrors fretboard view modes.
-enum PianoViewMode { pitchClass, exact, focus, exactFocus }
+enum PianoViewMode { exact, exactFocus }
 
 /// Piano display and selection state.
 class PianoState {
@@ -78,12 +78,17 @@ class PianoState {
   final List<PianoCoordinate> selectedKeys;
   final PianoViewMode viewMode;
 
+  /// Pitch classes tapped in the detection panel – shows all occurrences on
+  /// the keyboard without adding them to [selectedKeys].
+  final Set<String> focusedNotes;
+
   const PianoState({
     required this.currentRange,
     required this.highlightedNotes,
     required this.selectedNotes,
     required this.selectedKeys,
     required this.viewMode,
+    this.focusedNotes = const {},
   });
 
   PianoState copyWith({
@@ -92,11 +97,13 @@ class PianoState {
     List<String>? selectedNotes,
     List<PianoCoordinate>? selectedKeys,
     PianoViewMode? viewMode,
+    Set<String>? focusedNotes,
   }) => PianoState(
     currentRange: currentRange ?? this.currentRange,
     highlightedNotes: highlightedNotes ?? this.highlightedNotes,
     selectedNotes: selectedNotes ?? this.selectedNotes,
     selectedKeys: selectedKeys ?? this.selectedKeys,
     viewMode: viewMode ?? this.viewMode,
+    focusedNotes: focusedNotes ?? this.focusedNotes,
   );
 }

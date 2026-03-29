@@ -111,8 +111,8 @@ class FretboardNotifier extends Notifier<FretboardState> {
           ),
         ];
       }
-    } else if (state.viewMode == FretboardViewMode.exact ||
-        state.viewMode == FretboardViewMode.exactFocus) {
+    } else {
+      // Exact: toggle this specific fret position.
       final idx = cells.indexWhere(
         (c) => c.stringIndex == stringIndex && c.fret == fret,
       );
@@ -128,26 +128,25 @@ class FretboardNotifier extends Notifier<FretboardState> {
           ),
         ];
       }
-    } else {
-      final hasPitchClass = cells.any((c) => c.noteName == noteName);
-      newCells = hasPitchClass
-          ? cells.where((c) => c.noteName != noteName).toList()
-          : [
-              ...cells,
-              FretCoordinate(
-                stringIndex: stringIndex,
-                fret: fret,
-                noteName: noteName,
-              ),
-            ];
     }
     final newNotes = newCells.map((c) => c.noteName).toSet().toList();
-    state = state.copyWith(selectedCells: newCells, selectedNotes: newNotes);
+    // Remove focused pitch classes that no longer have any tapped cell.
+    final remainingPc = newCells.map((c) => c.noteName).toSet();
+    final newFocused = state.focusedNotes.intersection(remainingPc);
+    state = state.copyWith(
+      selectedCells: newCells,
+      selectedNotes: newNotes,
+      focusedNotes: newFocused,
+    );
     ref.read(fretboardManualEditProvider.notifier).state++;
   }
 
   void clearSelectedNotes() =>
-      state = state.copyWith(selectedNotes: [], selectedCells: []);
+      state = state.copyWith(
+        selectedNotes: [],
+        selectedCells: [],
+        focusedNotes: {},
+      );
 
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);
@@ -163,6 +162,19 @@ class FretboardNotifier extends Notifier<FretboardState> {
 
   void setInputMode(FretboardInputMode mode) =>
       state = state.copyWith(inputMode: mode);
+
+  void setFocusedNote(String? note) =>
+      state = state.copyWith(focusedNotes: {});
+
+  void toggleFocusedNote(String note) {
+    final next = Set<String>.from(state.focusedNotes);
+    if (next.contains(note)) {
+      next.remove(note);
+    } else {
+      next.add(note);
+    }
+    state = state.copyWith(focusedNotes: next);
+  }
 
   void loadSnapshot(FretboardSnapshot snap) {
     state = FretboardState(

@@ -77,22 +77,8 @@ class LandscapePianoModal extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _modePill(
-                            'All',
-                            PianoViewMode.pitchClass,
-                            state.viewMode,
-                            notifier,
-                          ),
-                          const SizedBox(width: 8),
-                          _modePill(
                             'Exact',
                             PianoViewMode.exact,
-                            state.viewMode,
-                            notifier,
-                          ),
-                          const SizedBox(width: 8),
-                          _modePill(
-                            'Focus',
-                            PianoViewMode.focus,
                             state.viewMode,
                             notifier,
                           ),

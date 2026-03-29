@@ -129,6 +129,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
                 selectedNotes: state.selectedNotes,
                 selectedCells: state.selectedCells,
                 viewMode: state.viewMode,
+                focusedNotes: state.focusedNotes,
               ),
             ),
           ),
@@ -282,9 +283,7 @@ class _ViewModeBar extends StatelessWidget {
   const _ViewModeBar({required this.current, required this.onSelect});
 
   static const _modes = [
-    (FretboardViewMode.pitchClass, 'All', 'All occurrences'),
     (FretboardViewMode.exact, 'Exact', 'Tapped positions only'),
-    (FretboardViewMode.focus, 'Focus', 'Hide unselected'),
     (FretboardViewMode.exactFocus, 'Solo', 'Exact positions only'),
   ];
 
@@ -362,6 +361,7 @@ class _FretboardPainter extends CustomPainter {
   final List<String> selectedNotes;
   final List<FretCoordinate> selectedCells;
   final FretboardViewMode viewMode;
+  final Set<String> focusedNotes;
 
   _FretboardPainter({
     required this.tuning,
@@ -372,6 +372,7 @@ class _FretboardPainter extends CustomPainter {
     required this.selectedNotes,
     required this.selectedCells,
     required this.viewMode,
+    this.focusedNotes = const {},
   });
 
   static const _naturalColor = Color(0xFF38BDF8);
@@ -546,21 +547,19 @@ class _FretboardPainter extends CustomPainter {
         final isSelectedExact = selectedCells.any(
           (c) => c.stringIndex == cell.stringIndex && c.fret == cell.fret,
         );
-        final isSelectedPitchClass = selectedNotes.contains(cell.noteName);
-        final isSelected =
-            (viewMode == FretboardViewMode.exact ||
-                viewMode == FretboardViewMode.exactFocus)
-            ? isSelectedExact
-            : isSelectedPitchClass;
+        final isSelected = isSelectedExact;
 
-        final inFocusMode =
-            viewMode == FretboardViewMode.focus && selectedNotes.isNotEmpty;
-        if (inFocusMode && !isSelectedPitchClass && !behindCapo) continue;
+        // focusedNotes: pitch classes tapped in the detection panel.
+        final isFocusedPitchClass = focusedNotes.contains(cell.noteName);
 
+        // In Solo mode, hide notes that are neither selected nor focused.
         final inExactFocusMode =
             viewMode == FretboardViewMode.exactFocus &&
             selectedCells.isNotEmpty;
-        if (inExactFocusMode && !isSelectedExact && !behindCapo) continue;
+        if (inExactFocusMode && !isSelectedExact && !isFocusedPitchClass &&
+            !behindCapo) {
+          continue;
+        }
 
         final isHighlighted =
             highlightedNotes.isNotEmpty &&
@@ -569,20 +568,38 @@ class _FretboardPainter extends CustomPainter {
         final baseColor = behindCapo
             ? const Color(0xFF334155)
             : (cell.isNatural ? _naturalColor : _accidentalColor);
-        final bubbleFill = isSelected ? Colors.white : baseColor;
-        final bubbleStroke = isSelected
-            ? baseColor
-            : (cell.fret == 0 ? const Color(0x40FFFFFF) : Colors.transparent);
-        final strokeWidth = isSelected ? 2.5 : (cell.fret == 0 ? 1.0 : 0.0);
-        final textColor = isSelected ? baseColor : Colors.white;
-        final inFocusOrSolo =
-            viewMode == FretboardViewMode.focus ||
-            viewMode == FretboardViewMode.exactFocus;
+
+        // Selected (exact tap): white fill, coloured stroke.
+        // Focused pitch class (panel tap): coloured fill, white stroke.
+        final Color bubbleFill;
+        final Color bubbleStroke;
+        final double strokeWidth;
+        final Color textColor;
+        if (isSelected) {
+          bubbleFill = Colors.white;
+          bubbleStroke = baseColor;
+          strokeWidth = 2.5;
+          textColor = baseColor;
+        } else if (isFocusedPitchClass) {
+          bubbleFill = baseColor;
+          bubbleStroke = Colors.white;
+          strokeWidth = 2.0;
+          textColor = Colors.white;
+        } else {
+          bubbleFill = baseColor;
+          bubbleStroke =
+              cell.fret == 0 ? const Color(0x40FFFFFF) : Colors.transparent;
+          strokeWidth = cell.fret == 0 ? 1.0 : 0.0;
+          textColor = Colors.white;
+        }
+
         final opacity = behindCapo
             ? 0.18
-            : isSelected
+            : (isSelected || isFocusedPitchClass)
             ? 1.0
-            : (inFocusOrSolo || highlightedNotes.isEmpty)
+            : focusedNotes.isNotEmpty
+            ? 0.18
+            : highlightedNotes.isEmpty
             ? 0.88
             : (isHighlighted ? 1.0 : 0.25);
 
@@ -624,5 +641,6 @@ class _FretboardPainter extends CustomPainter {
       old.viewMode != viewMode ||
       old.selectedNotes != selectedNotes ||
       old.selectedCells != selectedCells ||
-      old.highlightedNotes != highlightedNotes;
+      old.highlightedNotes != highlightedNotes ||
+      old.focusedNotes != focusedNotes;
 }

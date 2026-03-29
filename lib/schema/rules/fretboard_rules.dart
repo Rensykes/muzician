@@ -216,6 +216,6 @@ FretboardState getDefaultFretboardState() => const FretboardState(
   highlightedNotes: [],
   selectedNotes: [],
   selectedCells: [],
-  viewMode: FretboardViewMode.pitchClass,
+  viewMode: FretboardViewMode.exact,
   inputMode: FretboardInputMode.free,
 );
