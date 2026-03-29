@@ -33,7 +33,9 @@ import '../../utils/note_utils.dart';
 }
 
 class NoteDetectionPanel extends ConsumerStatefulWidget {
-  const NoteDetectionPanel({super.key});
+  final VoidCallback? onChordPanelRequested;
+
+  const NoteDetectionPanel({super.key, this.onChordPanelRequested});
 
   @override
   ConsumerState<NoteDetectionPanel> createState() =>
@@ -245,6 +247,7 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
                           root: parsed.root,
                           quality: parsed.quality,
                         );
+                        widget.onChordPanelRequested?.call();
                       },
                       child: Container(
                         margin: const EdgeInsets.only(right: 6),

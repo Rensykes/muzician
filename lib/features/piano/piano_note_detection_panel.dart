@@ -10,7 +10,9 @@ import '../../ui/core/scale_conflict_dialog.dart';
 import '../../utils/note_utils.dart';
 
 class PianoNoteDetectionPanel extends ConsumerStatefulWidget {
-  const PianoNoteDetectionPanel({super.key});
+  final VoidCallback? onChordPanelRequested;
+
+  const PianoNoteDetectionPanel({super.key, this.onChordPanelRequested});
 
   @override
   ConsumerState<PianoNoteDetectionPanel> createState() =>
@@ -215,6 +217,7 @@ class _PianoNoteDetectionPanelState
                               root: _parseRoot(c),
                               quality: _parseQuality(c),
                             );
+                            widget.onChordPanelRequested?.call();
                           },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),

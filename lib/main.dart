@@ -301,9 +301,12 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
       children: [
         const _Card(child: GuitarFretboard()),
-        const _Card(
-          key: ValueKey('fret-detect'),
-          child: NoteDetectionPanel(),
+        _Card(
+          key: const ValueKey('fret-detect'),
+          child: NoteDetectionPanel(
+            onChordPanelRequested: () =>
+                setState(() => _activePanel = _FretPanel.chord),
+          ),
         ),
         _PanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
         AnimatedSize(
@@ -524,9 +527,12 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
       children: [
         const _Card(child: PianoKeyboard()),
-        const _Card(
-          key: ValueKey('piano-detect'),
-          child: PianoNoteDetectionPanel(),
+        _Card(
+          key: const ValueKey('piano-detect'),
+          child: PianoNoteDetectionPanel(
+            onChordPanelRequested: () =>
+                setState(() => _activePanel = _PianoPanel.chord),
+          ),
         ),
         _PianoPanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
         AnimatedSize(

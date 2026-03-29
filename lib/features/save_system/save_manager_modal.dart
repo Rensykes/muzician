@@ -7,8 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../schema/rules/save_system_rules.dart';
+import '../../store/fretboard_store.dart';
+import '../../store/piano_store.dart';
 import '../../store/save_system_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_utils.dart';
 
 enum SaveManagerMode { defaultMode, folderPicker, progressionLoader }
 
@@ -43,6 +46,7 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
   bool _showNewFolderForm = false;
   final _saveNameCtrl = TextEditingController();
   final _folderNameCtrl = TextEditingController();
+  List<String> _saveSuggestions = [];
 
   @override
   void dispose() {
@@ -293,6 +297,12 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
               setState(() {
                 _showSaveForm = !_showSaveForm;
                 _showNewFolderForm = false;
+                if (_showSaveForm) {
+                  _saveSuggestions = _buildSuggestions();
+                  _saveNameCtrl.text = _saveSuggestions.isNotEmpty
+                      ? _saveSuggestions.first
+                      : '';
+                }
               });
             }, primary: true),
           ],
@@ -392,7 +402,7 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: Colors.white.withValues(alpha: 0.04),
@@ -401,29 +411,159 @@ class _SaveManagerModalState extends ConsumerState<SaveManagerModal> {
             width: 0.5,
           ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _saveNameCtrl,
-                autofocus: true,
-                maxLength: 80,
-                style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Save name (e.g. C chord, Intro arp)…',
-                  hintStyle: TextStyle(color: MuzicianTheme.textMuted),
-                  counterText: '',
-                  isDense: true,
-                  border: InputBorder.none,
+            if (_saveSuggestions.isNotEmpty) ...
+              [
+                Text(
+                  'SUGGESTIONS',
+                  style: TextStyle(
+                    color: MuzicianTheme.textDim,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
                 ),
-                onSubmitted: (_) => _saveCurrent(notifier),
-              ),
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _saveSuggestions.map((s) {
+                      final isSelected = _saveNameCtrl.text.trim() == s;
+                      return GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          setState(() => _saveNameCtrl.text = s);
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: isSelected
+                                ? MuzicianTheme.teal.withValues(alpha: 0.18)
+                                : Colors.white.withValues(alpha: 0.06),
+                            border: Border.all(
+                              color: isSelected
+                                  ? MuzicianTheme.teal.withValues(alpha: 0.5)
+                                  : Colors.white.withValues(alpha: 0.12),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            s,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? MuzicianTheme.teal
+                                  : const Color(0xFF94A3B8),
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _saveNameCtrl,
+                    autofocus: _saveSuggestions.isEmpty,
+                    maxLength: 80,
+                    style: const TextStyle(
+                      color: Color(0xFFE2E8F0),
+                      fontSize: 14,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: _saveSuggestions.isEmpty
+                          ? 'Save name (e.g. C chord, Intro arp)…'
+                          : 'Or type a custom name…',
+                      hintStyle: TextStyle(color: MuzicianTheme.textMuted),
+                      counterText: '',
+                      isDense: true,
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => _saveCurrent(notifier),
+                  ),
+                ),
+                _toolbarBtn('Save', () => _saveCurrent(notifier)),
+              ],
             ),
-            _toolbarBtn('Save', () => _saveCurrent(notifier)),
           ],
         ),
       ),
     );
+  }
+
+  // ── Name suggestion ─────────────────────────────────────────────────────────
+
+  /// Builds a de-duped list of name suggestions in priority order:
+  /// 1) detected chord, 2) notes + scale, 3) note names only.
+  List<String> _buildSuggestions() {
+    final List<String> selectedNotes;
+    final List<String> highlightedNotes;
+
+    if (widget.instrument == 'fretboard') {
+      final s = ref.read(fretboardProvider);
+      selectedNotes = s.selectedNotes;
+      highlightedNotes = s.highlightedNotes;
+    } else {
+      final s = ref.read(pianoProvider);
+      selectedNotes = s.selectedNotes;
+      highlightedNotes = s.highlightedNotes;
+    }
+
+    if (selectedNotes.isEmpty) return [];
+
+    final result = <String>{};
+
+    // 1. Detected chord
+    final chord = detectFirstChord(selectedNotes);
+    if (chord != null) result.add('${chord.root}${chord.quality}');
+
+    // 2. Notes + scale
+    if (highlightedNotes.isNotEmpty) {
+      final scale = _detectScaleFromNotes(highlightedNotes);
+      if (scale != null) {
+        result.add('${selectedNotes.join(' ')} | ${scale.root} ${scale.scaleName}');
+      }
+    }
+
+    // 3. Note names only
+    result.add(selectedNotes.join(' '));
+
+    return result.toList();
+  }
+
+  /// Identifies the first scale whose pitch-class set exactly matches [tones].
+  ({String root, String scaleName})? _detectScaleFromNotes(
+    List<String> tones,
+  ) {
+    if (tones.isEmpty) return null;
+    final set = tones.toSet();
+    for (final root in chromaticNotes) {
+      final rootIdx = noteToPC[root]!;
+      for (final entry in scaleIntervals.entries) {
+        final scaleTones = entry.value
+            .map((i) => chromaticNotes[(rootIdx + i) % 12])
+            .toSet();
+        if (scaleTones.length == set.length && scaleTones.every(set.contains)) {
+          return (root: root, scaleName: entry.key);
+        }
+      }
+    }
+    return null;
   }
 
   void _createFolder(SaveSystemNotifier notifier) {
