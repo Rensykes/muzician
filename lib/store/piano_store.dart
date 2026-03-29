@@ -22,45 +22,38 @@ class PianoNotifier extends Notifier<PianoState> {
 
   void toggleKey(int keyIndex, int midiNote, String noteName) {
     final keys = state.selectedKeys;
-    List<PianoCoordinate> nextKeys;
-    if (state.viewMode == PianoViewMode.exact ||
-        state.viewMode == PianoViewMode.exactFocus) {
-      final idx = keys.indexWhere((k) => k.midiNote == midiNote);
-      if (idx >= 0) {
-        nextKeys = List.of(keys)..removeAt(idx);
-      } else {
-        nextKeys = [
-          ...keys,
-          PianoCoordinate(
-            keyIndex: keyIndex,
-            midiNote: midiNote,
-            noteName: noteName,
-          ),
-        ];
-      }
+    final idx = keys.indexWhere((k) => k.midiNote == midiNote);
+    final List<PianoCoordinate> nextKeys;
+    if (idx >= 0) {
+      nextKeys = List.of(keys)..removeAt(idx);
     } else {
-      final hasPitchClass = keys.any((k) => k.noteName == noteName);
-      nextKeys = hasPitchClass
-          ? keys.where((k) => k.noteName != noteName).toList()
-          : [
-              ...keys,
-              PianoCoordinate(
-                keyIndex: keyIndex,
-                midiNote: midiNote,
-                noteName: noteName,
-              ),
-            ];
+      nextKeys = [
+        ...keys,
+        PianoCoordinate(
+          keyIndex: keyIndex,
+          midiNote: midiNote,
+          noteName: noteName,
+        ),
+      ];
     }
     final selectedNotes = nextKeys.map((k) => k.noteName).toSet().toList();
+    // Remove focused pitch classes that no longer have any tapped key.
+    final remainingPc = nextKeys.map((k) => k.noteName).toSet();
+    final newFocused = state.focusedNotes.intersection(remainingPc);
     state = state.copyWith(
       selectedKeys: nextKeys,
       selectedNotes: selectedNotes,
+      focusedNotes: newFocused,
     );
     ref.read(pianoManualEditProvider.notifier).state++;
   }
 
   void clearSelectedNotes() =>
-      state = state.copyWith(selectedNotes: [], selectedKeys: []);
+      state = state.copyWith(
+        selectedNotes: [],
+        selectedKeys: [],
+        focusedNotes: {},
+      );
 
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);
@@ -73,6 +66,19 @@ class PianoNotifier extends Notifier<PianoState> {
 
   void setViewMode(PianoViewMode mode) =>
       state = state.copyWith(viewMode: mode);
+
+  void setFocusedNote(String? note) =>
+      state = state.copyWith(focusedNotes: {});
+
+  void toggleFocusedNote(String note) {
+    final next = Set<String>.from(state.focusedNotes);
+    if (next.contains(note)) {
+      next.remove(note);
+    } else {
+      next.add(note);
+    }
+    state = state.copyWith(focusedNotes: next);
+  }
 
   void loadExactMidis(List<int> midis) {
     final allKeys = getKeys();

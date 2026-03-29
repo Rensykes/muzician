@@ -118,52 +118,65 @@ class NoteDetectionPanel extends ConsumerWidget {
           // Selected notes chips
           Row(
             children: [
-              const SizedBox(
-                width: 36,
-                child: Text(
-                  'Notes',
-                  style: TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
+              const Text(
+                'Notes',
+                style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: state.selectedNotes.map((note) {
-                      return Container(
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          color: MuzicianTheme.sky.withValues(alpha: 0.15),
-                          border: Border.all(
-                            color: MuzicianTheme.sky.withValues(alpha: 0.45),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          note,
-                          style: const TextStyle(
-                            color: MuzicianTheme.sky,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+              const SizedBox(width: 6),
+              const Text(
+                'tap to focus',
+                style: TextStyle(
+                  color: Color(0xFF334155),
+                  fontSize: 10,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: state.selectedNotes.map((note) {
+                final isFocused = state.focusedNotes.contains(note);
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    notifier.toggleFocusedNote(note);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      color: isFocused
+                          ? MuzicianTheme.sky
+                          : MuzicianTheme.sky.withValues(alpha: 0.15),
+                      border: Border.all(
+                        color: MuzicianTheme.sky.withValues(alpha: 0.65),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      note,
+                      style: TextStyle(
+                        color: isFocused ? Colors.white : MuzicianTheme.sky,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ),
           const SizedBox(height: 10),
           // Results

@@ -7,41 +7,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
 import '../../store/fretboard_store.dart';
-import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'fretboard.dart';
 
 const _viewSegments = <(FretboardViewMode, String, String)>[
-  (FretboardViewMode.pitchClass, 'All', 'All occurrences highlighted'),
   (FretboardViewMode.exact, 'Exact', 'Only tapped positions'),
-  (FretboardViewMode.focus, 'Focus', 'Hide non-selected notes'),
   (FretboardViewMode.exactFocus, 'Solo', 'Exact positions, all others hidden'),
 ];
 
-class LandscapeFretboardModal extends ConsumerStatefulWidget {
+class LandscapeFretboardModal extends ConsumerWidget {
   final VoidCallback onDismiss;
 
   const LandscapeFretboardModal({super.key, required this.onDismiss});
 
   @override
-  ConsumerState<LandscapeFretboardModal> createState() =>
-      _LandscapeFretboardModalState();
-}
-
-class _LandscapeFretboardModalState
-    extends ConsumerState<LandscapeFretboardModal> {
-  @override
-  void initState() {
-    super.initState();
-    // Apply favourite view mode on open
-    final favMode = ref.read(settingsProvider).fretboardFavouriteViewMode;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(fretboardProvider.notifier).setViewMode(favMode);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final screenSize = MediaQuery.of(context).size;
     final screenW = screenSize.width;
     final screenH = screenSize.height;
@@ -60,7 +40,7 @@ class _LandscapeFretboardModalState
         children: [
           // Scrim
           GestureDetector(
-            onTap: widget.onDismiss,
+            onTap: onDismiss,
             child: Container(color: const Color(0xB8000000)),
           ),
           // Rotated container
@@ -103,7 +83,7 @@ class _LandscapeFretboardModalState
                       top: 12,
                       right: 14,
                       child: GestureDetector(
-                        onTap: widget.onDismiss,
+                        onTap: onDismiss,
                         child: Container(
                           width: 30,
                           height: 30,
@@ -129,7 +109,7 @@ class _LandscapeFretboardModalState
                       ),
                     ),
                     // Legend
-                    Positioned(
+    Positioned(
                       bottom: 12,
                       left: 18,
                       child: Row(

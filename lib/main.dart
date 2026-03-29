@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/fretboard/fretboard_feature.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_feature.dart';
-import 'models/fretboard.dart' show FretboardViewMode, TuningName;
-import 'models/piano.dart' show PianoViewMode, PianoRangeName;
+import 'models/fretboard.dart' show TuningName;
+import 'models/piano.dart' show PianoRangeName;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/piano_roll_store.dart';
@@ -54,17 +54,9 @@ class _AppShellState extends ConsumerState<_AppShell> {
   @override
   void initState() {
     super.initState();
-    // Hydrate persisted state on startup, then apply the favourite view modes.
     Future.microtask(() async {
       await ref.read(saveSystemProvider.notifier).hydrate();
       await ref.read(settingsProvider.notifier).hydrate();
-      final settings = ref.read(settingsProvider);
-      ref
-          .read(fretboardProvider.notifier)
-          .setViewMode(settings.fretboardFavouriteViewMode);
-      ref
-          .read(pianoProvider.notifier)
-          .setViewMode(settings.pianoFavouriteViewMode);
     });
   }
 
@@ -672,86 +664,6 @@ class _SettingsScreen extends ConsumerWidget {
             children: [
               const Row(
                 children: [
-                  Text('🎸', style: TextStyle(fontSize: 18)),
-                  SizedBox(width: 8),
-                  Text(
-                    'Fretboard',
-                    style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Favourite View Mode',
-                style: TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 6),
-              _ViewModeGrid(
-                current: settings.fretboardFavouriteViewMode.name,
-                onSelect: (mode) => notifier.setFretboardFavouriteViewMode(
-                  FretboardViewMode.values.firstWhere(
-                    (v) => v.name == mode,
-                    orElse: () => FretboardViewMode.pitchClass,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        _Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Text('🎹', style: TextStyle(fontSize: 18)),
-                  SizedBox(width: 8),
-                  Text(
-                    'Piano',
-                    style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Favourite View Mode',
-                style: TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 6),
-              _ViewModeGrid(
-                current: settings.pianoFavouriteViewMode.name,
-                onSelect: (mode) => notifier.setPianoFavouriteViewMode(
-                  PianoViewMode.values.firstWhere(
-                    (v) => v.name == mode,
-                    orElse: () => PianoViewMode.pitchClass,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        _Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
                   Text('🎵', style: TextStyle(fontSize: 18)),
                   SizedBox(width: 8),
                   Text(
@@ -840,89 +752,6 @@ class _SettingsScreen extends ConsumerWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ViewModeGrid extends StatelessWidget {
-  final String current;
-  final ValueChanged<String> onSelect;
-
-  const _ViewModeGrid({required this.current, required this.onSelect});
-
-  static const _modes = [
-    ('pitchClass', 'All', 'All occurrences'),
-    ('exact', 'Exact', 'Tapped positions only'),
-    ('focus', 'Focus', 'Hide unselected'),
-    ('exactFocus', 'Solo', 'Exact positions only'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _modes.map((m) {
-        final active = current == m.$1;
-        return GestureDetector(
-          onTap: () {
-            onSelect(m.$1);
-            HapticFeedback.lightImpact();
-          },
-          child: Container(
-            width: (MediaQuery.of(context).size.width - 80) / 2,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: active
-                  ? MuzicianTheme.sky.withValues(alpha: 0.12)
-                  : Colors.white.withValues(alpha: 0.03),
-              border: Border.all(
-                color: active
-                    ? MuzicianTheme.sky.withValues(alpha: 0.4)
-                    : Colors.white.withValues(alpha: 0.08),
-                width: 0.5,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      m.$2,
-                      style: TextStyle(
-                        color: active
-                            ? MuzicianTheme.sky
-                            : MuzicianTheme.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (active)
-                      const Icon(
-                        Icons.check_circle,
-                        size: 16,
-                        color: MuzicianTheme.sky,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  m.$3,
-                  style: TextStyle(
-                    color: active
-                        ? MuzicianTheme.sky.withValues(alpha: 0.6)
-                        : MuzicianTheme.textMuted,
-                    fontSize: 9,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 }

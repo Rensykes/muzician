@@ -20,7 +20,7 @@ enum TuningName {
 enum TuningCategory { standard, metal, midwestEmo }
 
 /// View modes for selected notes on the fretboard.
-enum FretboardViewMode { pitchClass, exact, focus, exactFocus }
+enum FretboardViewMode { exact, exactFocus }
 
 /// Input behaviour modes for the fretboard.
 ///
@@ -124,6 +124,10 @@ class FretboardState {
   final FretboardViewMode viewMode;
   final FretboardInputMode inputMode;
 
+  /// Pitch classes tapped in the detection panel – shows all occurrences on
+  /// the fretboard without adding them to [selectedCells].
+  final Set<String> focusedNotes;
+
   const FretboardState({
     required this.currentTuning,
     required this.numFrets,
@@ -133,6 +137,7 @@ class FretboardState {
     required this.selectedCells,
     required this.viewMode,
     required this.inputMode,
+    this.focusedNotes = const {},
   });
 
   FretboardState copyWith({
@@ -144,6 +149,7 @@ class FretboardState {
     List<FretCoordinate>? selectedCells,
     FretboardViewMode? viewMode,
     FretboardInputMode? inputMode,
+    Set<String>? focusedNotes,
   }) => FretboardState(
     currentTuning: currentTuning ?? this.currentTuning,
     numFrets: numFrets ?? this.numFrets,
@@ -153,5 +159,6 @@ class FretboardState {
     selectedCells: selectedCells ?? this.selectedCells,
     viewMode: viewMode ?? this.viewMode,
     inputMode: inputMode ?? this.inputMode,
+    focusedNotes: focusedNotes ?? this.focusedNotes,
   );
 }

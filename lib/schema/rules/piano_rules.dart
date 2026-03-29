@@ -68,5 +68,5 @@ PianoState getDefaultPianoState() => const PianoState(
   highlightedNotes: [],
   selectedNotes: [],
   selectedKeys: [],
-  viewMode: PianoViewMode.pitchClass,
+  viewMode: PianoViewMode.exact,
 );

@@ -120,10 +120,18 @@ class FretboardSnapshot extends InstrumentSnapshot {
       selectedNotes:
           (json['selectedNotes'] as List?)?.map((n) => n as String).toList() ??
           [],
-      viewMode: FretboardViewMode.values.firstWhere(
-        (v) => v.name == json['viewMode'],
-        orElse: () => FretboardViewMode.pitchClass,
-      ),
+      viewMode: () {
+        const legacyMap = <String, String>{
+          'pitchClass': 'exact',
+          'focus': 'exact',
+        };
+        final raw = json['viewMode'] as String?;
+        final mapped = legacyMap[raw] ?? raw;
+        return FretboardViewMode.values.firstWhere(
+          (v) => v.name == mapped,
+          orElse: () => FretboardViewMode.exact,
+        );
+      }(),
       pendingChord: json['pendingChord'] != null
           ? PendingChord.fromJson(json['pendingChord'] as Map<String, dynamic>)
           : null,
@@ -182,10 +190,18 @@ class PianoSnapshot extends InstrumentSnapshot {
       selectedNotes:
           (json['selectedNotes'] as List?)?.map((n) => n as String).toList() ??
           [],
-      viewMode: PianoViewMode.values.firstWhere(
-        (v) => v.name == json['viewMode'],
-        orElse: () => PianoViewMode.pitchClass,
-      ),
+      viewMode: () {
+        const legacyMap = <String, String>{
+          'pitchClass': 'exact',
+          'focus': 'exact',
+        };
+        final raw = json['viewMode'] as String?;
+        final mapped = legacyMap[raw] ?? raw;
+        return PianoViewMode.values.firstWhere(
+          (v) => v.name == mapped,
+          orElse: () => PianoViewMode.exact,
+        );
+      }(),
       pendingChord: json['pendingChord'] != null
           ? PendingChord.fromJson(json['pendingChord'] as Map<String, dynamic>)
           : null,
@@ -419,43 +435,19 @@ class SaveSystemState {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 class AppSettings {
-  final FretboardViewMode fretboardFavouriteViewMode;
-  final PianoViewMode pianoFavouriteViewMode;
   final bool suppressOutOfKeyAlert;
 
-  const AppSettings({
-    this.fretboardFavouriteViewMode = FretboardViewMode.pitchClass,
-    this.pianoFavouriteViewMode = PianoViewMode.pitchClass,
-    this.suppressOutOfKeyAlert = false,
-  });
+  const AppSettings({this.suppressOutOfKeyAlert = false});
 
-  AppSettings copyWith({
-    FretboardViewMode? fretboardFavouriteViewMode,
-    PianoViewMode? pianoFavouriteViewMode,
-    bool? suppressOutOfKeyAlert,
-  }) => AppSettings(
-    fretboardFavouriteViewMode:
-        fretboardFavouriteViewMode ?? this.fretboardFavouriteViewMode,
-    pianoFavouriteViewMode:
-        pianoFavouriteViewMode ?? this.pianoFavouriteViewMode,
+  AppSettings copyWith({bool? suppressOutOfKeyAlert}) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
   );
 
   Map<String, dynamic> toJson() => {
-    'fretboardFavouriteViewMode': fretboardFavouriteViewMode.name,
-    'pianoFavouriteViewMode': pianoFavouriteViewMode.name,
     'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
-    fretboardFavouriteViewMode: FretboardViewMode.values.firstWhere(
-      (v) => v.name == json['fretboardFavouriteViewMode'],
-      orElse: () => FretboardViewMode.pitchClass,
-    ),
-    pianoFavouriteViewMode: PianoViewMode.values.firstWhere(
-      (v) => v.name == json['pianoFavouriteViewMode'],
-      orElse: () => PianoViewMode.pitchClass,
-    ),
     suppressOutOfKeyAlert: json['suppressOutOfKeyAlert'] as bool? ?? false,
   );
 }

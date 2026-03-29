@@ -118,32 +118,28 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     final selectedExact = state.selectedKeys.any(
       (k) => k.midiNote == key.midiNote,
     );
-    final selectedPitchClass = state.selectedNotes.contains(key.noteName);
-    final isSelected =
-        (state.viewMode == PianoViewMode.exact ||
-            state.viewMode == PianoViewMode.exactFocus)
-        ? selectedExact
-        : selectedPitchClass;
+    final isSelected = selectedExact;
 
-    final inFocusMode =
-        state.viewMode == PianoViewMode.focus && state.selectedNotes.isNotEmpty;
-    if (inFocusMode && !selectedPitchClass) return const SizedBox.shrink();
+    // focusedNotes: pitch classes tapped in the detection panel.
+    final isFocusedPitchClass = state.focusedNotes.contains(key.noteName);
 
+    // In Solo mode, hide keys that are neither selected nor focused.
     final inExactFocusMode =
         state.viewMode == PianoViewMode.exactFocus &&
         state.selectedKeys.isNotEmpty;
-    if (inExactFocusMode && !selectedExact) return const SizedBox.shrink();
+    if (inExactFocusMode && !selectedExact && !isFocusedPitchClass) {
+      return const SizedBox.shrink();
+    }
 
     final isHighlighted =
         state.highlightedNotes.isNotEmpty &&
         state.highlightedNotes.contains(key.noteName);
 
-    final inFocusOrSolo =
-        state.viewMode == PianoViewMode.focus ||
-        state.viewMode == PianoViewMode.exactFocus;
-    final opacity = isSelected
+    final opacity = (isSelected || isFocusedPitchClass)
         ? 1.0
-        : (!inFocusOrSolo && state.highlightedNotes.isNotEmpty)
+        : (state.focusedNotes.isNotEmpty)
+        ? 0.25
+        : (state.highlightedNotes.isNotEmpty)
         ? (isHighlighted ? 1.0 : 0.3)
         : 1.0;
 
@@ -153,7 +149,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     final accentBg = key.isNatural
         ? MuzicianTheme.sky
         : const Color(0xFFC084FC);
-    final bgColor = isSelected ? accentBg : baseBg;
+    final bgColor = (isSelected || isFocusedPitchClass) ? accentBg : baseBg;
 
     return Positioned(
       left: pk.x,
@@ -255,9 +251,7 @@ class _ViewModeBar extends StatelessWidget {
   const _ViewModeBar({required this.current, required this.onSelect});
 
   static const _modes = [
-    (PianoViewMode.pitchClass, 'All', 'All occurrences'),
     (PianoViewMode.exact, 'Exact', 'Tapped positions only'),
-    (PianoViewMode.focus, 'Focus', 'Hide unselected'),
     (PianoViewMode.exactFocus, 'Solo', 'Exact positions only'),
   ];
 
