@@ -136,6 +136,10 @@ const chordIntervals = <String, List<int>>{
   'm7b5': [0, 3, 6, 10],
   'add9': [0, 4, 7, 14],
   'maj9': [0, 4, 7, 11, 14],
+  '6': [0, 4, 7, 9],
+  'm6': [0, 3, 7, 9],
+  'dim7': [0, 3, 6, 9],
+  '7sus4': [0, 5, 7, 10],
 };
 
 /// Returns the pitch classes of a chord built on [root] with [quality].
@@ -199,6 +203,13 @@ List<String> getChordNotes(String root, String quality) {
     ('aug', [0, 4, 8]),
     ('sus2', [0, 2, 7]),
     ('sus4', [0, 5, 7]),
+    ('m7b5', [0, 3, 6, 10]),
+    ('add9', [0, 4, 7, 2]),
+    ('maj9', [0, 4, 7, 11, 2]),
+    ('6', [0, 4, 7, 9]),
+    ('m6', [0, 3, 7, 9]),
+    ('dim7', [0, 3, 6, 9]),
+    ('7sus4', [0, 5, 7, 10]),
   ];
 
   const detectionScales = [

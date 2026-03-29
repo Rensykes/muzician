@@ -25,6 +25,7 @@ const _roots = [
 ];
 
 const _qualities = <(String symbol, String label)>[
+  ('5', '5th'),
   ('', 'maj'),
   ('m', 'min'),
   ('7', 'dom7'),
@@ -34,6 +35,13 @@ const _qualities = <(String symbol, String label)>[
   ('sus4', 'sus4'),
   ('dim', 'dim'),
   ('aug', 'aug'),
+  ('m7b5', 'm7♭5'),
+  ('add9', 'add9'),
+  ('maj9', 'maj9'),
+  ('6', '6'),
+  ('m6', 'm6'),
+  ('dim7', 'dim7'),
+  ('7sus4', '7sus4'),
 ];
 
 const _durationOptions = <(String label, int ticks)>[
@@ -63,6 +71,7 @@ const _noteToPC = <String, int>{
 
 // Chord intervals for each quality
 const _chordIntervals = <String, List<int>>{
+  '5': [0, 7],
   '': [0, 4, 7],
   'm': [0, 3, 7],
   '7': [0, 4, 7, 10],
@@ -72,6 +81,13 @@ const _chordIntervals = <String, List<int>>{
   'sus4': [0, 5, 7],
   'dim': [0, 3, 6],
   'aug': [0, 4, 8],
+  'm7b5': [0, 3, 6, 10],
+  'add9': [0, 4, 7, 2],
+  'maj9': [0, 4, 7, 11, 2],
+  '6': [0, 4, 7, 9],
+  'm6': [0, 3, 7, 9],
+  'dim7': [0, 3, 6, 9],
+  '7sus4': [0, 5, 7, 10],
 };
 
 // use toSharp from utils

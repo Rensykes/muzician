@@ -11,6 +11,7 @@ import '../../utils/note_utils.dart';
 
 /// Qualities shown in the piano chord picker UI (subset of [chordIntervals]).
 const _pianoQualities = [
+  ('5', '5th'),
   ('', 'maj'),
   ('m', 'min'),
   ('7', 'dom7'),
@@ -20,10 +21,18 @@ const _pianoQualities = [
   ('sus4', 'sus4'),
   ('dim', 'dim'),
   ('aug', 'aug'),
+  ('m7b5', 'm7♭5'),
+  ('add9', 'add9'),
+  ('maj9', 'maj9'),
+  ('6', '6'),
+  ('m6', 'm6'),
+  ('dim7', 'dim7'),
+  ('7sus4', '7sus4'),
 ];
 
-/// Symbols for the 9 chord types the piano picker supports.
+/// Symbols for the chord types the piano picker supports.
 const _pianoQualitySymbols = [
+  '5',
   '',
   'm',
   '7',
@@ -33,6 +42,13 @@ const _pianoQualitySymbols = [
   'sus4',
   'dim',
   'aug',
+  'm7b5',
+  'add9',
+  'maj9',
+  '6',
+  'm6',
+  'dim7',
+  '7sus4',
 ];
 
 List<int> _buildVoicingMidis(
