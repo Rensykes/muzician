@@ -9,8 +9,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
+import '../store/fretboard_store.dart';
+import '../store/piano_store.dart';
 import '../store/save_system_store.dart';
 import '../theme/muzician_theme.dart';
+import '../utils/note_utils.dart';
 
 // ─── Public Widget ─────────────────────────────────────────────────────────────
 
@@ -70,6 +73,131 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   }
 
   // ── Dialogs ──────────────────────────────────────────────────────────────
+
+  Future<String?> _nameDialogWithSuggestions({
+    required String title,
+    required List<String> suggestions,
+    String hint = 'Enter name…',
+  }) async {
+    var value = suggestions.isNotEmpty ? suggestions.first : '';
+    final controller = TextEditingController(text: value);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF141826),
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: MuzicianTheme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (suggestions.isNotEmpty) ...
+                [
+                  const Text(
+                    'SUGGESTIONS',
+                    style: TextStyle(
+                      color: MuzicianTheme.textDim,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: suggestions.map((s) {
+                        final isSelected = controller.text.trim() == s;
+                        return GestureDetector(
+                          onTap: () {
+                            controller.text = s;
+                            setDialogState(() => value = s);
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              color: isSelected
+                                  ? MuzicianTheme.teal.withValues(alpha: 0.18)
+                                  : Colors.white.withValues(alpha: 0.06),
+                              border: Border.all(
+                                color: isSelected
+                                    ? MuzicianTheme.teal.withValues(alpha: 0.5)
+                                    : Colors.white.withValues(alpha: 0.12),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              s,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? MuzicianTheme.teal
+                                    : const Color(0xFF94A3B8),
+                                fontSize: 12,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              TextField(
+                controller: controller,
+                autofocus: suggestions.isEmpty,
+                style: const TextStyle(color: MuzicianTheme.textPrimary),
+                decoration: InputDecoration(
+                  hintText: suggestions.isNotEmpty
+                      ? 'Or type a custom name…'
+                      : hint,
+                  hintStyle: const TextStyle(color: MuzicianTheme.textMuted),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: MuzicianTheme.textDim),
+                  ),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: MuzicianTheme.sky),
+                  ),
+                ),
+                onChanged: (v) => setDialogState(() => value = v),
+                onSubmitted: (_) => Navigator.pop(ctx, controller.text.trim()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: MuzicianTheme.textSecondary),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text(
+                'OK',
+                style: TextStyle(color: MuzicianTheme.sky),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<String?> _nameDialog({
     required String title,
@@ -168,13 +296,69 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   Future<void> _handleSaveHere() async {
     final capture = widget.captureSnapshot;
     if (capture == null || _currentFolderId == null) return;
-    final name = await _nameDialog(title: 'Save name', hint: 'e.g. Verse 1 – Chord…');
+    final suggestions = _buildSuggestions();
+    final name = await _nameDialogWithSuggestions(
+      title: 'Save name',
+      suggestions: suggestions,
+      hint: 'e.g. Verse 1 – Chord…',
+    );
     if (name == null || name.isEmpty) return;
     final snap = capture();
     ref
         .read(saveSystemProvider.notifier)
         .saveSnapshot(name, _currentFolderId!, snap);
     HapticFeedback.mediumImpact();
+  }
+
+  List<String> _buildSuggestions() {
+    final List<String> selectedNotes;
+    final List<String> highlightedNotes;
+
+    if (widget.instrumentFilter == 'fretboard') {
+      final s = ref.read(fretboardProvider);
+      selectedNotes = s.selectedNotes;
+      highlightedNotes = s.highlightedNotes;
+    } else if (widget.instrumentFilter == 'piano') {
+      final s = ref.read(pianoProvider);
+      selectedNotes = s.selectedNotes;
+      highlightedNotes = s.highlightedNotes;
+    } else {
+      return [];
+    }
+
+    if (selectedNotes.isEmpty) return [];
+
+    final result = <String>{};
+
+    // 1. Detected chord
+    final chord = detectFirstChord(selectedNotes);
+    if (chord != null) result.add('${chord.root}${chord.quality}');
+
+    // 2. Notes + scale
+    if (highlightedNotes.isNotEmpty) {
+      for (final root in chromaticNotes) {
+        final rootIdx = noteToPC[root]!;
+        for (final entry in scaleIntervals.entries) {
+          final scaleTones = entry.value
+              .map((i) => chromaticNotes[(rootIdx + i) % 12])
+              .toSet();
+          final toneSet = highlightedNotes.toSet();
+          if (scaleTones.length == toneSet.length &&
+              scaleTones.every(toneSet.contains)) {
+            result.add(
+              '${selectedNotes.join(' ')} | $root ${entry.key}',
+            );
+            break;
+          }
+        }
+        if (result.length >= 2) break;
+      }
+    }
+
+    // 3. Note names only
+    result.add(selectedNotes.join(' '));
+
+    return result.toList();
   }
 
   Future<void> _handleRenameFolder(SaveFolder folder) async {
