@@ -27,6 +27,10 @@ const _qualities = [
   ('m7b5', 'm7♭5'),
   ('add9', 'add9'),
   ('maj9', 'maj9'),
+  ('6', '6'),
+  ('m6', 'm6'),
+  ('dim7', 'dim7'),
+  ('7sus4', '7sus4'),
 ];
 
 // note normalization and chord data provided by lib/utils/note_utils.dart
