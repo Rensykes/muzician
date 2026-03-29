@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/fretboard.dart';
+import '../models/save_system.dart' show FretboardSnapshot;
 import '../schema/rules/fretboard_rules.dart';
 
 class FretboardNotifier extends Notifier<FretboardState> {
@@ -162,6 +163,19 @@ class FretboardNotifier extends Notifier<FretboardState> {
 
   void setInputMode(FretboardInputMode mode) =>
       state = state.copyWith(inputMode: mode);
+
+  void loadSnapshot(FretboardSnapshot snap) {
+    state = FretboardState(
+      currentTuning: snap.tuning,
+      numFrets: snap.numFrets,
+      capo: snap.capo,
+      highlightedNotes: const [],
+      selectedNotes: List<String>.from(snap.selectedNotes),
+      selectedCells: List<FretCoordinate>.from(snap.selectedCells),
+      viewMode: snap.viewMode,
+      inputMode: state.inputMode,
+    );
+  }
 
   void loadVoicing(ChordVoicing voicing) {
     final tuning = tunings[state.currentTuning]!;

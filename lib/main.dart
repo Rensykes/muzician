@@ -266,7 +266,7 @@ class _Card extends StatelessWidget {
 
 // ── Fretboard Screen ────────────────────────────────────────────────────────
 
-enum _FretPanel { tuning, capo, chord, scale }
+enum _FretPanel { tuning, capo, chord, scale, saves }
 
 class _FretboardScreen extends ConsumerStatefulWidget {
   const _FretboardScreen();
@@ -290,6 +290,11 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
           const _Card(key: ValueKey('fret-chord'), child: ChordVoicingPicker()),
         _FretPanel.scale =>
           const _Card(key: ValueKey('fret-scale'), child: ScalePicker()),
+        _FretPanel.saves =>
+          const _Card(
+            key: ValueKey('fret-saves'),
+            child: FretboardSavePanel(),
+          ),
         null => const SizedBox.shrink(),
       };
 
@@ -373,6 +378,15 @@ class _PanelAccessBar extends ConsumerWidget {
             active: activePanel == _FretPanel.scale,
             hasValue: state.highlightedNotes.isNotEmpty,
             onTap: () => onToggle(_FretPanel.scale),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.save_outlined,
+            label: 'Saves',
+            color: MuzicianTheme.teal,
+            active: activePanel == _FretPanel.saves,
+            hasValue: false,
+            onTap: () => onToggle(_FretPanel.saves),
           ),
         ],
       ),
@@ -476,7 +490,7 @@ class _PanelTab extends StatelessWidget {
 
 // ── Piano Screen ────────────────────────────────────────────────────────────
 
-enum _PianoPanel { range, chord, scale }
+enum _PianoPanel { range, chord, scale, saves }
 
 class _PianoScreen extends ConsumerStatefulWidget {
   const _PianoScreen();
@@ -499,6 +513,11 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
           const _Card(key: ValueKey('piano-chord'), child: PianoChordPicker()),
         _PianoPanel.scale =>
           const _Card(key: ValueKey('piano-scale'), child: PianoScalePicker()),
+        _PianoPanel.saves =>
+          const _Card(
+            key: ValueKey('piano-saves'),
+            child: PianoSavePanel(),
+          ),
         null => const SizedBox.shrink(),
       };
 
@@ -573,6 +592,15 @@ class _PianoPanelAccessBar extends ConsumerWidget {
             active: activePanel == _PianoPanel.scale,
             hasValue: state.highlightedNotes.isNotEmpty,
             onTap: () => onToggle(_PianoPanel.scale),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.save_outlined,
+            label: 'Saves',
+            color: MuzicianTheme.teal,
+            active: activePanel == _PianoPanel.saves,
+            hasValue: false,
+            onTap: () => onToggle(_PianoPanel.saves),
           ),
         ],
       ),
