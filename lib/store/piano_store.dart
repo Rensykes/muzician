@@ -67,9 +67,6 @@ class PianoNotifier extends Notifier<PianoState> {
   void setViewMode(PianoViewMode mode) =>
       state = state.copyWith(viewMode: mode);
 
-  void setFocusedNote(String? note) =>
-      state = state.copyWith(focusedNotes: {});
-
   void toggleFocusedNote(String note) {
     final next = Set<String>.from(state.focusedNotes);
     if (next.contains(note)) {

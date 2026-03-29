@@ -163,9 +163,6 @@ class FretboardNotifier extends Notifier<FretboardState> {
   void setInputMode(FretboardInputMode mode) =>
       state = state.copyWith(inputMode: mode);
 
-  void setFocusedNote(String? note) =>
-      state = state.copyWith(focusedNotes: {});
-
   void toggleFocusedNote(String note) {
     final next = Set<String>.from(state.focusedNotes);
     if (next.contains(note)) {
