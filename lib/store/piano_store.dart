@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/piano.dart';
+import '../models/save_system.dart' show PianoSnapshot;
 import '../schema/rules/piano_rules.dart';
 
 class PianoNotifier extends Notifier<PianoState> {
@@ -92,6 +93,16 @@ class PianoNotifier extends Notifier<PianoState> {
     state = state.copyWith(
       selectedKeys: selectedKeys,
       selectedNotes: selectedNotes,
+    );
+  }
+
+  void loadSnapshot(PianoSnapshot snap) {
+    state = PianoState(
+      currentRange: snap.currentRange,
+      highlightedNotes: const [],
+      selectedNotes: List<String>.from(snap.selectedNotes),
+      selectedKeys: List<PianoCoordinate>.from(snap.selectedKeys),
+      viewMode: snap.viewMode,
     );
   }
 

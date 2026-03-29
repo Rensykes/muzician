@@ -149,7 +149,7 @@ class _PianoRollSaveStackLoaderState
           )
         : <int>[];
 
-    void handleAddStack() {
+    Future<void> handleAddStack() async {
       if (previewMidis.isEmpty) return;
       final maxTicks = rules.totalTicks(
         prState.config.timeSignature,
@@ -164,10 +164,69 @@ class _PianoRollSaveStackLoaderState
       ).clamp(0, maxTicks - 1);
       final startTick = prState.selectedColumnTick ?? fallbackStart;
 
+      // Conflict check: notes already present at the target column.
+      final conflicting = prState.notes
+          .where((n) => n.startTick == startTick)
+          .toList();
+      if (conflicting.isNotEmpty) {
+        final action = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF141826),
+            title: const Text(
+              'Notes already present',
+              style: TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            content: Text(
+              '${conflicting.length} note${conflicting.length != 1 ? 's' : ''} '
+              'already exist at this column. What would you like to do?',
+              style: const TextStyle(
+                color: MuzicianTheme.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'cancel'),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: MuzicianTheme.textSecondary),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'merge'),
+                child: const Text(
+                  'Keep both',
+                  style: TextStyle(color: MuzicianTheme.sky),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'overwrite'),
+                child: const Text(
+                  'Overwrite',
+                  style: TextStyle(color: MuzicianTheme.orange),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (action == null || action == 'cancel') return;
+        if (action == 'overwrite') {
+          for (final n in conflicting) {
+            prNotifier.removeNote(n.id);
+          }
+        }
+        // 'merge' simply falls through and adds on top.
+      }
+
       prNotifier.addNoteStack(previewMidis, startTick, 4);
       prNotifier.selectColumn(startTick);
 
-      // Centre pitch range on added notes
+      // Centre pitch range on added notes.
       final minM = previewMidis.reduce(min);
       final maxM = previewMidis.reduce(max);
       final midCenter = ((minM + maxM) / 2).round();

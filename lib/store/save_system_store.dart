@@ -135,6 +135,108 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     _persist();
   }
 
+  void moveSaveUp(String id) {
+    final save = state.saves.where((s) => s.id == id).firstOrNull;
+    if (save == null) return;
+    final siblings = getSavesInFolder(state.saves, save.folderId);
+    final idx = siblings.indexWhere((s) => s.id == id);
+    if (idx <= 0) return;
+    final updated = List<SaveEntry>.of(siblings);
+    final prev = updated[idx - 1];
+    updated[idx - 1] = updated[idx].copyWith(order: idx - 1);
+    updated[idx] = prev.copyWith(order: idx);
+    state = state.copyWith(
+      saves: [
+        ...state.saves.where((s) => s.folderId != save.folderId),
+        ...updated,
+      ],
+    );
+    _persist();
+  }
+
+  void moveSaveDown(String id) {
+    final save = state.saves.where((s) => s.id == id).firstOrNull;
+    if (save == null) return;
+    final siblings = getSavesInFolder(state.saves, save.folderId);
+    final idx = siblings.indexWhere((s) => s.id == id);
+    if (idx >= siblings.length - 1) return;
+    final updated = List<SaveEntry>.of(siblings);
+    final next = updated[idx + 1];
+    updated[idx + 1] = updated[idx].copyWith(order: idx + 1);
+    updated[idx] = next.copyWith(order: idx);
+    state = state.copyWith(
+      saves: [
+        ...state.saves.where((s) => s.folderId != save.folderId),
+        ...updated,
+      ],
+    );
+    _persist();
+  }
+
+  void moveFolderUp(String id) {
+    final folder = state.folders.where((f) => f.id == id).firstOrNull;
+    if (folder == null) return;
+    final siblings = getChildFolders(state.folders, folder.parentId);
+    final idx = siblings.indexWhere((f) => f.id == id);
+    if (idx <= 0) return;
+    final swapped = List<SaveFolder>.of(siblings);
+    swapped[idx - 1] = SaveFolder(
+      id: siblings[idx].id,
+      name: siblings[idx].name,
+      parentId: siblings[idx].parentId,
+      createdAt: siblings[idx].createdAt,
+      order: idx - 1,
+      progressionMeta: siblings[idx].progressionMeta,
+    );
+    swapped[idx] = SaveFolder(
+      id: siblings[idx - 1].id,
+      name: siblings[idx - 1].name,
+      parentId: siblings[idx - 1].parentId,
+      createdAt: siblings[idx - 1].createdAt,
+      order: idx,
+      progressionMeta: siblings[idx - 1].progressionMeta,
+    );
+    state = state.copyWith(
+      folders: [
+        ...state.folders.where((f) => f.parentId != folder.parentId),
+        ...swapped,
+      ],
+    );
+    _persist();
+  }
+
+  void moveFolderDown(String id) {
+    final folder = state.folders.where((f) => f.id == id).firstOrNull;
+    if (folder == null) return;
+    final siblings = getChildFolders(state.folders, folder.parentId);
+    final idx = siblings.indexWhere((f) => f.id == id);
+    if (idx >= siblings.length - 1) return;
+    final swapped = List<SaveFolder>.of(siblings);
+    swapped[idx + 1] = SaveFolder(
+      id: siblings[idx].id,
+      name: siblings[idx].name,
+      parentId: siblings[idx].parentId,
+      createdAt: siblings[idx].createdAt,
+      order: idx + 1,
+      progressionMeta: siblings[idx].progressionMeta,
+    );
+    swapped[idx] = SaveFolder(
+      id: siblings[idx + 1].id,
+      name: siblings[idx + 1].name,
+      parentId: siblings[idx + 1].parentId,
+      createdAt: siblings[idx + 1].createdAt,
+      order: idx,
+      progressionMeta: siblings[idx + 1].progressionMeta,
+    );
+    state = state.copyWith(
+      folders: [
+        ...state.folders.where((f) => f.parentId != folder.parentId),
+        ...swapped,
+      ],
+    );
+    _persist();
+  }
+
   // ── Session / Navigation ─────────────────────────────────────────────────
 
   void setActiveSession(ActiveSession? session) {
