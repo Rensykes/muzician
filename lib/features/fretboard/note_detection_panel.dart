@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/scale_conflict_dialog.dart';
 import '../../utils/note_utils.dart';
 
 ({String root, String quality})? _parseChordString(String chordStr) {
@@ -31,13 +32,30 @@ import '../../utils/note_utils.dart';
   return (root: root, scaleName: scaleName);
 }
 
-class NoteDetectionPanel extends ConsumerWidget {
+class NoteDetectionPanel extends ConsumerStatefulWidget {
   const NoteDetectionPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NoteDetectionPanel> createState() =>
+      _NoteDetectionPanelState();
+}
+
+class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
+  String? _activeScaleChip;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
+
+    ref.listen(fretboardProvider.select((s) => s.highlightedNotes), (
+      _,
+      next,
+    ) {
+      if (next.isEmpty && _activeScaleChip != null) {
+        setState(() => _activeScaleChip = null);
+      }
+    });
 
     if (state.selectedNotes.isEmpty) {
       return const Padding(
@@ -285,15 +303,11 @@ class NoteDetectionPanel extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: detection.scales.map((s) {
+                    final isActive = _activeScaleChip == s;
                     return GestureDetector(
                       onTap: () {
-                        final parsed = _parseScaleString(s);
-                        if (parsed == null) return;
                         HapticFeedback.lightImpact();
-                        ref.read(pendingScaleProvider.notifier).state = (
-                          root: parsed.root,
-                          scaleName: parsed.scaleName,
-                        );
+                        _tryApplyScale(s);
                       },
                       child: Container(
                         margin: const EdgeInsets.only(right: 6),
@@ -303,18 +317,22 @@ class NoteDetectionPanel extends ConsumerWidget {
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
-                          color: MuzicianTheme.emerald.withValues(alpha: 0.10),
+                          color: isActive
+                              ? MuzicianTheme.emerald
+                              : MuzicianTheme.emerald.withValues(alpha: 0.10),
                           border: Border.all(
                             color: MuzicianTheme.emerald.withValues(
-                              alpha: 0.35,
+                              alpha: isActive ? 1.0 : 0.35,
                             ),
                             width: 1,
                           ),
                         ),
                         child: Text(
                           s,
-                          style: const TextStyle(
-                            color: Color(0xFFE2E8F0),
+                          style: TextStyle(
+                            color: isActive
+                                ? Colors.white
+                                : const Color(0xFFE2E8F0),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -337,5 +355,41 @@ class NoteDetectionPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _tryApplyScale(String displayString) async {
+    if (_activeScaleChip == displayString) {
+      setState(() => _activeScaleChip = null);
+      ref.read(fretboardProvider.notifier).setHighlightedNotes([]);
+      return;
+    }
+    final parsed = _parseScaleString(displayString);
+    if (parsed == null) return;
+    final scaleNotes = getScaleNotes(parsed.root, parsed.scaleName);
+    if (scaleNotes.isEmpty) return;
+    final conflicts = ref
+        .read(fretboardProvider)
+        .selectedNotes
+        .where((n) => !scaleNotes.contains(n))
+        .toList();
+    if (conflicts.isEmpty) {
+      setState(() => _activeScaleChip = displayString);
+      ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pendingScaleProvider.notifier).state =
+          (root: parsed.root, scaleName: parsed.scaleName);
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
+    );
+    if (confirmed == true) {
+      ref.read(fretboardProvider.notifier).removeNotesByPitchClass(conflicts);
+      setState(() => _activeScaleChip = displayString);
+      ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pendingScaleProvider.notifier).state =
+          (root: parsed.root, scaleName: parsed.scaleName);
+    }
   }
 }
