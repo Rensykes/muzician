@@ -301,12 +301,36 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
       children: [
         const _Card(child: GuitarFretboard()),
-        _Card(
-          key: const ValueKey('fret-detect'),
-          child: NoteDetectionPanel(
-            onChordPanelRequested: () =>
-                setState(() => _activePanel = _FretPanel.chord),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 320),
+          reverseDuration: const Duration(milliseconds: 220),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOut,
+            ),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, -0.08),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+              ),
+              child: child,
+            ),
           ),
+          child: state.selectedNotes.isNotEmpty
+              ? _Card(
+                  key: const ValueKey('fret-detect'),
+                  child: NoteDetectionPanel(
+                    onChordPanelRequested: () =>
+                        setState(() => _activePanel = _FretPanel.chord),
+                  ),
+                )
+              : const SizedBox.shrink(key: ValueKey('fret-detect-empty')),
         ),
         _PanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
         AnimatedSize(
@@ -527,12 +551,36 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
       children: [
         const _Card(child: PianoKeyboard()),
-        _Card(
-          key: const ValueKey('piano-detect'),
-          child: PianoNoteDetectionPanel(
-            onChordPanelRequested: () =>
-                setState(() => _activePanel = _PianoPanel.chord),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 320),
+          reverseDuration: const Duration(milliseconds: 220),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOut,
+            ),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, -0.08),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+              ),
+              child: child,
+            ),
           ),
+          child: state.selectedNotes.isNotEmpty
+              ? _Card(
+                  key: const ValueKey('piano-detect'),
+                  child: PianoNoteDetectionPanel(
+                    onChordPanelRequested: () =>
+                        setState(() => _activePanel = _PianoPanel.chord),
+                  ),
+                )
+              : const SizedBox.shrink(key: ValueKey('piano-detect-empty')),
         ),
         _PianoPanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
         AnimatedSize(
