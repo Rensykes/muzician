@@ -59,37 +59,29 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
       }
     });
 
-    if (state.selectedNotes.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
-        child: Row(
-          children: [
-            Icon(
-              Icons.touch_app_outlined,
-              size: 14,
-              color: MuzicianTheme.textDim,
-            ),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Tap notes on the fretboard to detect chords & scales.',
-                style: TextStyle(
-                  color: MuzicianTheme.textDim,
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
+    final hasNotes = state.selectedNotes.isNotEmpty;
     final detection = detectChordsAndScales(state.selectedNotes);
     final hasResults =
         detection.chords.isNotEmpty || detection.scales.isNotEmpty;
 
-    return Padding(
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, animation) {
+        final slide = Tween<Offset>(
+          begin: const Offset(0, -0.12),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        );
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          child: SlideTransition(position: slide, child: child),
+        );
+      },
+      child: hasNotes
+          ? Padding(
+              key: const ValueKey(true),
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,6 +349,8 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
             ),
         ],
       ),
+    )
+          : const SizedBox.shrink(key: ValueKey(false)),
     );
   }
 
