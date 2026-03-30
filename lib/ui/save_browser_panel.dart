@@ -442,10 +442,6 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     final subFolders = _childFolders(ssState.folders);
     final saves = _savesHere(ssState.saves);
 
-    final selectedSave = _selectedSaveId != null
-        ? ssState.saves.where((s) => s.id == _selectedSaveId).firstOrNull
-        : null;
-
     final activeSession = ssState.activeSession;
     final adjSaves = getAdjacentSaves(ssState.saves, activeSession);
     final hasPrev =
@@ -536,14 +532,18 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                   ),
                 ),
                 // saves
-                ...saves.map(
-                  (save) => _SaveRow(
+                ...saves.map((save) {
+                  final isSelected = _selectedSaveId == save.id;
+                  return _SaveRow(
                     save: save,
-                    isSelected: _selectedSaveId == save.id,
+                    isSelected: isSelected,
                     isActiveSession: activeSession?.saveId == save.id,
                     editMode: _editMode,
                     isFirst: saves.first == save,
                     isLast: saves.last == save,
+                    canLoad: widget.onLoad != null,
+                    hasPrev: isSelected && hasPrev,
+                    hasNext: isSelected && hasNext,
                     onTap: () => setState(() {
                       _selectedSaveId =
                           _selectedSaveId == save.id ? null : save.id;
@@ -552,31 +552,15 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                     onDelete: () => _handleDeleteSave(save),
                     onMoveUp: () => notifier.moveSaveUp(save.id),
                     onMoveDown: () => notifier.moveSaveDown(save.id),
-                  ),
-                ),
+                    onLoad: () => _handleLoad(save),
+                    onPrev: _navigatePrev,
+                    onNext: _navigateNext,
+                  );
+                }),
               ],
             ),
           ),
         ),
-
-        // ── Selected save preview ──
-        if (selectedSave != null && !_editMode) ...[
-          Divider(
-            color: MuzicianTheme.glassBorder,
-            height: 16,
-            thickness: 0.5,
-          ),
-          _SavePreview(
-            save: selectedSave,
-            canLoad: widget.onLoad != null,
-            hasPrev: hasPrev,
-            hasNext: hasNext,
-            isActiveSession: activeSession?.saveId == selectedSave.id,
-            onLoad: () => _handleLoad(selectedSave),
-            onPrev: _navigatePrev,
-            onNext: _navigateNext,
-          ),
-        ],
       ],
     );
   }
@@ -883,18 +867,24 @@ class _FolderRow extends StatelessWidget {
   }
 }
 
-class _SaveRow extends StatelessWidget {
+class _SaveRow extends StatefulWidget {
   final SaveEntry save;
   final bool isSelected;
   final bool isActiveSession;
   final bool editMode;
   final bool isFirst;
   final bool isLast;
+  final bool canLoad;
+  final bool hasPrev;
+  final bool hasNext;
   final VoidCallback onTap;
   final VoidCallback onRename;
   final VoidCallback onDelete;
   final VoidCallback onMoveUp;
   final VoidCallback onMoveDown;
+  final VoidCallback onLoad;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
 
   const _SaveRow({
     required this.save,
@@ -903,127 +893,251 @@ class _SaveRow extends StatelessWidget {
     required this.editMode,
     required this.isFirst,
     required this.isLast,
+    required this.canLoad,
+    required this.hasPrev,
+    required this.hasNext,
     required this.onTap,
     required this.onRename,
     required this.onDelete,
     required this.onMoveUp,
     required this.onMoveDown,
+    required this.onLoad,
+    required this.onPrev,
+    required this.onNext,
   });
 
-  String get _icon =>
-      save.snapshot.instrument == 'piano' ? '🎹' : '🎸';
+  @override
+  State<_SaveRow> createState() => _SaveRowState();
+}
 
-  Color get _accentColor => isActiveSession
+class _SaveRowState extends State<_SaveRow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _expandProgress;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _expandProgress = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOutCubic,
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.15, 1.0, curve: Curves.easeOut),
+    );
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, -0.1),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    if (widget.isSelected) _controller.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(covariant _SaveRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSelected != oldWidget.isSelected) {
+      if (widget.isSelected) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String get _icon =>
+      widget.save.snapshot.instrument == 'piano' ? '🎹' : '🎸';
+
+  Color get _accentColor => widget.isActiveSession
       ? MuzicianTheme.emerald
-      : isSelected
+      : widget.isSelected
           ? MuzicianTheme.sky
           : MuzicianTheme.textSecondary;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: editMode ? onRename : onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isSelected && !editMode
-              ? MuzicianTheme.sky.withValues(alpha: 0.1)
-              : isActiveSession && !editMode
-                  ? MuzicianTheme.emerald.withValues(alpha: 0.08)
-                  : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected && !editMode
-                ? MuzicianTheme.sky.withValues(alpha: 0.3)
-                : Colors.transparent,
-            width: 0.5,
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _expandProgress.value;
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          decoration: BoxDecoration(
+            color: widget.isSelected && !widget.editMode
+                ? MuzicianTheme.sky.withValues(alpha: 0.08 + 0.07 * t)
+                : widget.isActiveSession && !widget.editMode
+                    ? MuzicianTheme.emerald.withValues(alpha: 0.08)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8 + 4 * t),
+            border: Border.all(
+              color: widget.isSelected && !widget.editMode
+                  ? MuzicianTheme.sky.withValues(alpha: 0.25 + 0.25 * t)
+                  : widget.isActiveSession
+                      ? MuzicianTheme.emerald.withValues(alpha: 0.15)
+                      : Colors.transparent,
+              width: widget.isSelected && !widget.editMode
+                  ? 0.5 + 0.5 * t
+                  : 0.5,
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            if (editMode) ...[
-              Column(
-                children: [
-                  _UpDownButton(
-                    icon: Icons.arrow_upward,
-                    enabled: !isFirst,
-                    onTap: onMoveUp,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Name row ──
+              GestureDetector(
+                onTap: widget.editMode ? widget.onRename : widget.onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 7,
+                    horizontal: 8,
                   ),
-                  _UpDownButton(
-                    icon: Icons.arrow_downward,
-                    enabled: !isLast,
-                    onTap: onMoveDown,
+                  child: Row(
+                    children: [
+                      if (widget.editMode) ...[
+                        Column(
+                          children: [
+                            _UpDownButton(
+                              icon: Icons.arrow_upward,
+                              enabled: !widget.isFirst,
+                              onTap: widget.onMoveUp,
+                            ),
+                            _UpDownButton(
+                              icon: Icons.arrow_downward,
+                              enabled: !widget.isLast,
+                              onTap: widget.onMoveDown,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(_icon, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.save.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _accentColor,
+                                fontSize: 13,
+                                fontWeight:
+                                    widget.isSelected || widget.isActiveSession
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                decoration: widget.editMode
+                                    ? TextDecoration.underline
+                                    : null,
+                                decorationColor: MuzicianTheme.orange,
+                              ),
+                            ),
+                            if (widget.save.snapshot.pendingChord != null)
+                              Text(
+                                widget.save.snapshot.pendingChord!.symbol,
+                                style: const TextStyle(
+                                  color: MuzicianTheme.violet,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (widget.isActiveSession && !widget.editMode)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: MuzicianTheme.emerald
+                                .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'active',
+                            style: TextStyle(
+                              color: MuzicianTheme.emerald,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      if (widget.editMode)
+                        GestureDetector(
+                          onTap: widget.onDelete,
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: MuzicianTheme.red,
+                            ),
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Icon(
+                            widget.isSelected
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            size: 16,
+                            color: widget.isSelected
+                                ? MuzicianTheme.sky
+                                    .withValues(alpha: 0.8 + 0.2 * t)
+                                : MuzicianTheme.textDim
+                                    .withValues(alpha: 0.5),
+                          ),
+                        ),
+                    ],
                   ),
-                ],
+                ),
               ),
-              const SizedBox(width: 4),
-            ],
-            Text(_icon, style: const TextStyle(fontSize: 14)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    save.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _accentColor,
-                      fontSize: 13,
-                      fontWeight: isSelected || isActiveSession
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      decoration: editMode ? TextDecoration.underline : null,
-                      decorationColor: MuzicianTheme.orange,
-                    ),
-                  ),
-                  if (save.snapshot.pendingChord != null)
-                    Text(
-                      save.snapshot.pendingChord!.symbol,
-                      style: const TextStyle(
-                        color: MuzicianTheme.violet,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+              // ── Expandable details ──
+              ClipRect(
+                child: SizeTransition(
+                  sizeFactor: _expandProgress,
+                  axisAlignment: -1.0,
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: SlideTransition(
+                      position: _slideAnim,
+                      child: _SaveExpandedDetails(
+                        save: widget.save,
+                        canLoad: widget.canLoad,
+                        hasPrev: widget.hasPrev,
+                        hasNext: widget.hasNext,
+                        isActiveSession: widget.isActiveSession,
+                        onLoad: widget.onLoad,
+                        onPrev: widget.onPrev,
+                        onNext: widget.onNext,
                       ),
                     ),
-                ],
-              ),
-            ),
-            if (isActiveSession && !editMode)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: MuzicianTheme.emerald.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'active',
-                  style: TextStyle(
-                    color: MuzicianTheme.emerald,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
                   ),
                 ),
               ),
-            if (editMode)
-              GestureDetector(
-                onTap: onDelete,
-                child: const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: 18,
-                    color: MuzicianTheme.red,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1050,7 +1164,7 @@ class _UpDownButton extends StatelessWidget {
   );
 }
 
-class _SavePreview extends StatelessWidget {
+class _SaveExpandedDetails extends StatelessWidget {
   final SaveEntry save;
   final bool canLoad;
   final bool hasPrev;
@@ -1060,7 +1174,7 @@ class _SavePreview extends StatelessWidget {
   final VoidCallback onPrev;
   final VoidCallback onNext;
 
-  const _SavePreview({
+  const _SaveExpandedDetails({
     required this.save,
     required this.canLoad,
     required this.hasPrev,
@@ -1071,161 +1185,123 @@ class _SavePreview extends StatelessWidget {
     required this.onNext,
   });
 
-  String get _instrumentLabel =>
-      save.snapshot.instrument == 'piano' ? 'Piano' : 'Fretboard';
-
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Save name + instrument
-        Row(
-          children: [
-            Text(
-              save.snapshot.instrument == 'piano' ? '🎹' : '🎸',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    save.name,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    _instrumentLabel,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textMuted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        // Notes chips
-        if (save.snapshot.selectedNotes.isNotEmpty) ...[
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: save.snapshot.selectedNotes.map((note) {
-                return Container(
-                  margin: const EdgeInsets.only(right: 6),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.12),
-                    border: Border.all(
-                      color: MuzicianTheme.sky.withValues(alpha: 0.3),
-                      width: 0.5,
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    note,
-                    style: const TextStyle(
-                      color: MuzicianTheme.sky,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Divider(
+            color: MuzicianTheme.glassBorder,
+            height: 12,
+            thickness: 0.5,
           ),
-          const SizedBox(height: 6),
-        ],
-        // Chord / scale context
-        if (save.snapshot.pendingChord != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 3),
-            child: Text(
-              'Chord: ${save.snapshot.pendingChord!.symbol}',
-              style: const TextStyle(
-                color: MuzicianTheme.violet,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        if (save.snapshot.pendingScale != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 3),
-            child: Text(
-              'Scale: ${save.snapshot.pendingScale!.root} ${save.snapshot.pendingScale!.scaleName}',
-              style: const TextStyle(
-                color: MuzicianTheme.emerald,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        const SizedBox(height: 8),
-        // Load + navigation row
-        Row(
-          children: [
-            if (hasPrev)
-              _NavButton(
-                label: '← Prev',
-                onTap: onPrev,
-              ),
-            if (hasPrev) const SizedBox(width: 6),
-            if (canLoad)
-              Expanded(
-                child: GestureDetector(
-                  onTap: onLoad,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+          if (save.snapshot.selectedNotes.isNotEmpty) ...[
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: save.snapshot.selectedNotes.map((note) {
+                  return Container(
+                    margin: const EdgeInsets.only(right: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: isActiveSession
-                          ? MuzicianTheme.emerald.withValues(alpha: 0.15)
-                          : MuzicianTheme.sky.withValues(alpha: 0.15),
+                      color: MuzicianTheme.sky.withValues(alpha: 0.12),
                       border: Border.all(
-                        color: isActiveSession
-                            ? MuzicianTheme.emerald.withValues(alpha: 0.4)
-                            : MuzicianTheme.sky.withValues(alpha: 0.4),
+                        color: MuzicianTheme.sky.withValues(alpha: 0.3),
                         width: 0.5,
                       ),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Center(
-                      child: Text(
-                        isActiveSession ? 'Reload' : 'Load',
-                        style: TextStyle(
+                    child: Text(
+                      note,
+                      style: const TextStyle(
+                        color: MuzicianTheme.sky,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 5),
+          ],
+          if (save.snapshot.pendingChord != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text(
+                'Chord: ${save.snapshot.pendingChord!.symbol}',
+                style: const TextStyle(
+                  color: MuzicianTheme.violet,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          if (save.snapshot.pendingScale != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text(
+                'Scale: ${save.snapshot.pendingScale!.root} ${save.snapshot.pendingScale!.scaleName}',
+                style: const TextStyle(
+                  color: MuzicianTheme.emerald,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              if (hasPrev) ...[
+                _NavButton(label: '← Prev', onTap: onPrev),
+                const SizedBox(width: 6),
+              ],
+              if (canLoad)
+                Expanded(
+                  child: GestureDetector(
+                    onTap: onLoad,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isActiveSession
+                            ? MuzicianTheme.emerald.withValues(alpha: 0.15)
+                            : MuzicianTheme.sky.withValues(alpha: 0.15),
+                        border: Border.all(
                           color: isActiveSession
-                              ? MuzicianTheme.emerald
-                              : MuzicianTheme.sky,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                              ? MuzicianTheme.emerald.withValues(alpha: 0.4)
+                              : MuzicianTheme.sky.withValues(alpha: 0.4),
+                          width: 0.5,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          isActiveSession ? 'Reload' : 'Load',
+                          style: TextStyle(
+                            color: isActiveSession
+                                ? MuzicianTheme.emerald
+                                : MuzicianTheme.sky,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            if (hasNext) const SizedBox(width: 6),
-            if (hasNext)
-              _NavButton(
-                label: 'Next →',
-                onTap: onNext,
-              ),
-          ],
-        ),
-      ],
+              if (hasNext) ...[
+                const SizedBox(width: 6),
+                _NavButton(label: 'Next →', onTap: onNext),
+              ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
