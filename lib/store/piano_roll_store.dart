@@ -88,9 +88,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     if (existing.isNotEmpty) {
       state = state.copyWith(
         notes: state.notes.where((n) => n.id != existing.first.id).toList(),
-        selectedNoteId: () => state.selectedNoteId == existing.first.id
-            ? null
-            : state.selectedNoteId,
+        selectedNoteIds: state.selectedNoteIds.difference({existing.first.id}),
       );
       return;
     }
@@ -109,7 +107,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
     state = state.copyWith(
       notes: [...state.notes, note],
-      selectedNoteId: () => note.id,
+      selectedNoteIds: {note.id},
     );
   }
 
@@ -130,15 +128,54 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
     state = state.copyWith(
       notes: [...state.notes, note],
-      selectedNoteId: () => note.id,
+      selectedNoteIds: {note.id},
     );
   }
 
   void removeNote(String noteId) => state = state.copyWith(
     notes: state.notes.where((n) => n.id != noteId).toList(),
-    selectedNoteId: () =>
-        state.selectedNoteId == noteId ? null : state.selectedNoteId,
+    selectedNoteIds: state.selectedNoteIds.difference({noteId}),
   );
+
+  void setActiveTool(PianoRollTool tool) =>
+      state = state.copyWith(activeTool: tool);
+
+  void setSnapTicks(int ticks) =>
+      state = state.copyWith(snapTicks: ticks.clamp(1, 16));
+
+  void toggleNoteInSelection(String noteId) {
+    final updated = state.selectedNoteIds.contains(noteId)
+        ? state.selectedNoteIds.difference({noteId})
+        : {...state.selectedNoteIds, noteId};
+    state = state.copyWith(selectedNoteIds: updated);
+  }
+
+  void setSelection(Set<String> ids) =>
+      state = state.copyWith(selectedNoteIds: ids);
+
+  void splitNote(String noteId, int splitTick) {
+    final target = state.notes.where((n) => n.id == noteId).firstOrNull;
+    if (target == null) return;
+    if (splitTick <= target.startTick ||
+        splitTick >= target.startTick + target.durationTicks) {
+      return;
+    }
+    final dur1 = splitTick - target.startTick;
+    final dur2 = (target.startTick + target.durationTicks) - splitTick;
+    final left = target.copyWith(durationTicks: dur1);
+    final right = PianoRollNote(
+      id: _makeId(),
+      midiNote: target.midiNote,
+      pitchClass: target.pitchClass,
+      noteWithOctave: target.noteWithOctave,
+      startTick: splitTick,
+      durationTicks: dur2,
+    );
+    state = state.copyWith(
+      notes: [...state.notes.where((n) => n.id != noteId), left, right],
+      selectedNoteIds: {right.id},
+    );
+  }
 
   void resizeNote(String noteId, int durationTicks) {
     final target = state.notes.where((n) => n.id == noteId).firstOrNull;
@@ -187,6 +224,39 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
   }
 
+  void moveNotesBatch(
+    List<({String id, int startTick, int midiNote})> updates,
+  ) {
+    if (updates.isEmpty) return;
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    final updateMap = <String, ({int startTick, int midiNote})>{
+      for (final u in updates)
+        u.id: (startTick: u.startTick, midiNote: u.midiNote),
+    };
+    state = state.copyWith(
+      notes: state.notes.map((n) {
+        final u = updateMap[n.id];
+        if (u == null) return n;
+        final boundedStart = u.startTick.clamp(0, max(0, maxTick - 1)).toInt();
+        final midi = u.midiNote.clamp(
+          state.pitchRangeStart,
+          state.pitchRangeEnd,
+        );
+        final maxDuration = max<int>(1, maxTick - boundedStart);
+        return n.copyWith(
+          midiNote: midi,
+          pitchClass: rules.midiToPitchClass(midi),
+          noteWithOctave: rules.midiToNoteWithOctave(midi),
+          startTick: boundedStart,
+          durationTicks: min(n.durationTicks, maxDuration),
+        );
+      }).toList(),
+    );
+  }
+
   void addNoteStack(List<int> midiNotes, int startTick, int durationTicks) {
     final maxTick = rules.totalTicks(
       state.config.timeSignature,
@@ -214,8 +284,9 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
   void selectColumn(int? tick) =>
       state = state.copyWith(selectedColumnTick: () => tick);
 
-  void selectNote(String? noteId) =>
-      state = state.copyWith(selectedNoteId: () => noteId);
+  void selectNote(String? noteId) => state = state.copyWith(
+    selectedNoteIds: noteId == null ? const <String>{} : {noteId},
+  );
 
   List<PianoRollNote> getNotesAtSelectedColumn() {
     if (state.selectedColumnTick == null) return [];
@@ -224,8 +295,8 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   void clearNotes() => state = state.copyWith(
     notes: [],
+    selectedNoteIds: const <String>{},
     selectedColumnTick: () => null,
-    selectedNoteId: () => null,
   );
 
   void reset() => state = rules.getDefaultPianoRollState();

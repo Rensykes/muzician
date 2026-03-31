@@ -32,6 +32,13 @@ const _roots = [
   'B',
 ];
 
+const _snapOptions = <(int ticks, String label)>[
+  (1, 'Free'),
+  (2, '1/8'),
+  (4, '1/4'),
+  (8, '1/2'),
+];
+
 class PianoRollToolbar extends ConsumerStatefulWidget {
   const PianoRollToolbar({super.key});
 
@@ -145,6 +152,61 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
                 ),
               ),
             ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // ── Tool ──
+          Row(
+            children: [
+              const Text(
+                'Tool',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 10),
+              _Pill(
+                label: 'Draw',
+                active: state.activeTool == PianoRollTool.draw,
+                onTap: () => notifier.setActiveTool(PianoRollTool.draw),
+              ),
+              const SizedBox(width: 8),
+              _Pill(
+                label: '✂ Scissors',
+                active: state.activeTool == PianoRollTool.scissors,
+                onTap: () {
+                  notifier.setActiveTool(PianoRollTool.scissors);
+                  HapticFeedback.lightImpact();
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // ── Snap ──
+          const Text(
+            'Snap',
+            style: TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: _snapOptions.map((o) {
+              return _Pill(
+                label: o.$2,
+                active: state.snapTicks == o.$1,
+                onTap: () => notifier.setSnapTicks(o.$1),
+              );
+            }).toList(),
           ),
 
           const SizedBox(height: 10),

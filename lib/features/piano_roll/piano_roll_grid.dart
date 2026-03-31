@@ -29,10 +29,14 @@ bool _isBlackKey(int midi) {
 
 Color _noteColor(
   PianoRollNote note,
-  String? selectedNoteId,
+  Set<String> selectedNoteIds,
   int? selectedColumnTick,
 ) {
-  if (note.id == selectedNoteId) return MuzicianTheme.sky;
+  if (selectedNoteIds.contains(note.id)) {
+    return selectedNoteIds.length > 1
+        ? MuzicianTheme.violet
+        : MuzicianTheme.sky;
+  }
   if (selectedColumnTick != null &&
       note.startTick <= selectedColumnTick &&
       selectedColumnTick < note.startTick + note.durationTicks) {
@@ -49,6 +53,7 @@ class _GridPainter extends CustomPainter {
   final TimeSignature timeSig;
   final double cellW;
   final double rowH;
+  final double? scissorsCursorX;
 
   _GridPainter({
     required this.state,
@@ -56,6 +61,7 @@ class _GridPainter extends CustomPainter {
     required this.timeSig,
     required this.cellW,
     required this.rowH,
+    this.scissorsCursorX,
   });
 
   @override
@@ -121,22 +127,42 @@ class _GridPainter extends CustomPainter {
       final y = rowIdx * rowH;
       final w = note.durationTicks * cellW;
 
+      final isSelected = state.selectedNoteIds.contains(note.id);
+      final isMulti = isSelected && state.selectedNoteIds.length > 1;
       final color = _noteColor(
         note,
-        state.selectedNoteId,
+        state.selectedNoteIds,
         state.selectedColumnTick,
       );
       final rrect = RRect.fromRectAndRadius(
         Rect.fromLTWH(x + 1, y + 1, w - 2, rowH - 2),
         const Radius.circular(4),
       );
-      canvas.drawRRect(rrect, Paint()..color = color.withValues(alpha: 0.35));
+
+      // Multi-selection outer glow
+      if (isMulti) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x - 1, y - 1, w + 2, rowH + 2),
+            const Radius.circular(6),
+          ),
+          Paint()
+            ..color = color.withValues(alpha: 0.35)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.5,
+        );
+      }
+
+      canvas.drawRRect(
+        rrect,
+        Paint()..color = color.withValues(alpha: isSelected ? 0.5 : 0.35),
+      );
       canvas.drawRRect(
         rrect,
         Paint()
-          ..color = color.withValues(alpha: 0.7)
+          ..color = color.withValues(alpha: isSelected ? 0.9 : 0.7)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
+          ..strokeWidth = isMulti ? 1.5 : 1,
       );
 
       // Note label
@@ -162,6 +188,17 @@ class _GridPainter extends CustomPainter {
           Paint()..color = color.withValues(alpha: 0.6),
         );
       }
+    }
+
+    // Scissors cut-line cursor
+    if (scissorsCursorX != null) {
+      canvas.drawLine(
+        Offset(scissorsCursorX!, 0),
+        Offset(scissorsCursorX!, rangeSize * rowH),
+        Paint()
+          ..color = MuzicianTheme.orange.withValues(alpha: 0.8)
+          ..strokeWidth = 1.5,
+      );
     }
   }
 
@@ -343,6 +380,15 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
 
   // Mouse cursor (desktop)
   SystemMouseCursor _cursor = SystemMouseCursors.basic;
+  double? _scissorsCursorX;
+
+  // Double-tap detection
+  DateTime? _lastTapTime;
+  String? _lastTapNoteId;
+  Set<String> _preTapSelection = const {};
+
+  // Multi-note drag: original positions snapshot keyed by note id
+  Map<String, ({int startTick, int midiNote})> _multiDragOriginals = {};
 
   @override
   void initState() {
@@ -410,8 +456,6 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
 
   // ── Beat-grid snapping ────────────────────────────────────────────────
 
-  int _beatTicks(TimeSignature ts) => ts.beatUnit == 8 ? 2 : 4;
-
   int _snapToBeat(int tick, int beatTicks) =>
       ((tick / beatTicks).round() * beatTicks).clamp(0, 1 << 20);
 
@@ -460,15 +504,31 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     _longPressConsumed = false;
 
     if (hit != null) {
-      final coord = _posToTickMidi(pos, state);
       _dragNoteId = hit.id;
-      _dragStartMidi = coord.midi;
-      _noteOriginalStartTick = hit.startTick;
-      _noteOriginalMidi = hit.midiNote;
-      _grabOffsetTicks = coord.tick - hit.startTick;
-      _dragMode = _isResizeHit(pos, hit, state)
-          ? _DragMode.resizeNote
-          : _DragMode.moveNote;
+      if (state.activeTool == PianoRollTool.scissors) {
+        // Scissors mode: arm long-press delete only, no move/resize drag.
+        _dragMode = _DragMode.none;
+      } else {
+        final coord = _posToTickMidi(pos, state);
+        _dragStartMidi = coord.midi;
+        _noteOriginalStartTick = hit.startTick;
+        _noteOriginalMidi = hit.midiNote;
+        _grabOffsetTicks = coord.tick - hit.startTick;
+        _dragMode = _isResizeHit(pos, hit, state)
+            ? _DragMode.resizeNote
+            : _DragMode.moveNote;
+        if (_dragMode == _DragMode.moveNote &&
+            state.selectedNoteIds.contains(hit.id) &&
+            state.selectedNoteIds.length > 1) {
+          _multiDragOriginals = {
+            for (final n in state.notes)
+              if (state.selectedNoteIds.contains(n.id))
+                n.id: (startTick: n.startTick, midiNote: n.midiNote),
+          };
+        } else {
+          _multiDragOriginals = {};
+        }
+      }
       _longPressTimer?.cancel();
       _longPressTimer = Timer(const Duration(milliseconds: 500), () {
         if (!_movedBeyondSlop && _dragNoteId != null) {
@@ -507,7 +567,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     if (!_movedBeyondSlop && _totalPointerDelta.distance > 8.0) {
       _movedBeyondSlop = true;
       _longPressTimer?.cancel();
-      if (_dragNoteId != null) {
+      if (_dragNoteId != null &&
+          state.activeTool != PianoRollTool.scissors &&
+          _multiDragOriginals.isEmpty) {
         ref.read(pianoRollProvider.notifier).selectNote(_dragNoteId!);
       }
     }
@@ -523,15 +585,26 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     final coord = _posToTickMidi(pos, state);
 
     if (_dragMode == _DragMode.moveNote) {
-      final bt = _beatTicks(state.config.timeSignature);
       final rawStart = (pos.dx / _cellW).floor() - _grabOffsetTicks;
-      final snappedStart = _snapToBeat(rawStart, bt);
+      final snappedStart = _snapToBeat(rawStart, state.snapTicks);
       final midiDelta = coord.midi - _dragStartMidi;
-      notifier.moveNote(
-        _dragNoteId!,
-        snappedStart,
-        _noteOriginalMidi + midiDelta,
-      );
+      if (_multiDragOriginals.isNotEmpty) {
+        final tickDelta = snappedStart - _noteOriginalStartTick;
+        notifier.moveNotesBatch([
+          for (final e in _multiDragOriginals.entries)
+            (
+              id: e.key,
+              startTick: e.value.startTick + tickDelta,
+              midiNote: e.value.midiNote + midiDelta,
+            ),
+        ]);
+      } else {
+        notifier.moveNote(
+          _dragNoteId!,
+          snappedStart,
+          _noteOriginalMidi + midiDelta,
+        );
+      }
     } else if (_dragMode == _DragMode.resizeNote) {
       final cursorTick = (pos.dx / _cellW).floor();
       final newDuration = max(1, cursorTick - _noteOriginalStartTick + 1);
@@ -558,22 +631,54 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       final hit = _hitTestNote(pos, state);
       final notifier = ref.read(pianoRollProvider.notifier);
       if (hit != null) {
-        notifier.selectNote(hit.id == state.selectedNoteId ? null : hit.id);
-        notifier.selectColumn(hit.startTick);
-        HapticFeedback.selectionClick();
-      } else {
-        final coord = _posToTickMidi(pos, state);
-        final maxTick = rules.totalTicks(
-          state.config.timeSignature,
-          state.config.totalMeasures,
-        );
-        if (coord.tick >= 0 &&
-            coord.tick < maxTick &&
-            coord.midi >= state.pitchRangeStart &&
-            coord.midi <= state.pitchRangeEnd) {
-          notifier.toggleCellNote(coord.midi, coord.tick, 1);
-          notifier.selectColumn(coord.tick);
+        if (state.activeTool == PianoRollTool.scissors) {
+          final coord = _posToTickMidi(pos, state);
+          notifier.splitNote(hit.id, coord.tick);
           HapticFeedback.lightImpact();
+        } else {
+          final now = DateTime.now();
+          final isDoubleTap =
+              _lastTapNoteId == hit.id &&
+              _lastTapTime != null &&
+              now.difference(_lastTapTime!).inMilliseconds < 300;
+          if (isDoubleTap) {
+            // Restore the selection that existed before the first tap,
+            // then toggle this note in/out of it.
+            final toggled = _preTapSelection.contains(hit.id)
+                ? _preTapSelection.difference({hit.id})
+                : {..._preTapSelection, hit.id};
+            notifier.setSelection(toggled.isEmpty ? {hit.id} : toggled);
+            notifier.selectColumn(hit.startTick);
+            HapticFeedback.mediumImpact();
+            _lastTapTime = null;
+            _lastTapNoteId = null;
+          } else {
+            _preTapSelection = state.selectedNoteIds;
+            final isAlreadySolo =
+                state.selectedNoteIds.length == 1 &&
+                state.selectedNoteIds.contains(hit.id);
+            notifier.selectNote(isAlreadySolo ? null : hit.id);
+            notifier.selectColumn(hit.startTick);
+            HapticFeedback.selectionClick();
+            _lastTapTime = now;
+            _lastTapNoteId = hit.id;
+          }
+        }
+      } else {
+        if (state.activeTool != PianoRollTool.scissors) {
+          final coord = _posToTickMidi(pos, state);
+          final maxTick = rules.totalTicks(
+            state.config.timeSignature,
+            state.config.totalMeasures,
+          );
+          if (coord.tick >= 0 &&
+              coord.tick < maxTick &&
+              coord.midi >= state.pitchRangeStart &&
+              coord.midi <= state.pitchRangeEnd) {
+            notifier.toggleCellNote(coord.midi, coord.tick, 1);
+            notifier.selectColumn(coord.tick);
+            HapticFeedback.lightImpact();
+          }
         }
       }
     } else if (_dragMode != _DragMode.none) {
@@ -581,6 +686,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     }
     _dragMode = _DragMode.none;
     _dragNoteId = null;
+    _multiDragOriginals = {};
     _movedBeyondSlop = false;
     _totalPointerDelta = Offset.zero;
   }
@@ -605,12 +711,24 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   void _onHover(PointerHoverEvent event, PianoRollState state) {
     final pos = _localToGrid(event.localPosition);
     final hit = _hitTestNote(pos, state);
-    final next = hit == null
-        ? SystemMouseCursors.basic
-        : _isResizeHit(pos, hit, state)
-        ? SystemMouseCursors.resizeRight
-        : SystemMouseCursors.move;
-    if (next != _cursor) setState(() => _cursor = next);
+    final isScissors = state.activeTool == PianoRollTool.scissors;
+    final SystemMouseCursor next;
+    if (hit == null) {
+      next = SystemMouseCursors.basic;
+    } else if (isScissors) {
+      next = SystemMouseCursors.precise;
+    } else {
+      next = _isResizeHit(pos, hit, state)
+          ? SystemMouseCursors.resizeRight
+          : SystemMouseCursors.move;
+    }
+    final newScissorX = (isScissors && hit != null) ? pos.dx : null;
+    if (next != _cursor || newScissorX != _scissorsCursorX) {
+      setState(() {
+        _cursor = next;
+        _scissorsCursorX = newScissorX;
+      });
+    }
   }
 
   Offset _localToGrid(Offset local) {
@@ -700,32 +818,81 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                   child: MouseRegion(
                     cursor: _cursor,
                     onHover: (e) => _onHover(e, state),
-                    child: Listener(
-                      behavior: HitTestBehavior.opaque,
-                      onPointerDown: (e) => _onPointerDown(e, state),
-                      onPointerMove: (e) => _onPointerMove(e, state),
-                      onPointerUp: (e) => _onPointerUp(e, state),
-                      child: SingleChildScrollView(
-                        controller: _vScroll,
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: SingleChildScrollView(
-                          controller: _hScroll,
-                          scrollDirection: Axis.horizontal,
-                          physics: const NeverScrollableScrollPhysics(),
-                          child: RepaintBoundary(
-                            child: CustomPaint(
-                              size: Size(gridW, gridH),
-                              painter: _GridPainter(
-                                state: state,
-                                totalTicks: totalTicks,
-                                timeSig: state.config.timeSignature,
-                                cellW: _cellW,
-                                rowH: _rowH,
+                    onExit: (_) {
+                      if (_scissorsCursorX != null) {
+                        setState(() => _scissorsCursorX = null);
+                      }
+                    },
+                    child: Stack(
+                      children: [
+                        Listener(
+                          behavior: HitTestBehavior.opaque,
+                          onPointerDown: (e) => _onPointerDown(e, state),
+                          onPointerMove: (e) => _onPointerMove(e, state),
+                          onPointerUp: (e) => _onPointerUp(e, state),
+                          child: SingleChildScrollView(
+                            controller: _vScroll,
+                            physics: const NeverScrollableScrollPhysics(),
+                            child: SingleChildScrollView(
+                              controller: _hScroll,
+                              scrollDirection: Axis.horizontal,
+                              physics: const NeverScrollableScrollPhysics(),
+                              child: RepaintBoundary(
+                                child: CustomPaint(
+                                  size: Size(gridW, gridH),
+                                  painter: _GridPainter(
+                                    state: state,
+                                    totalTicks: totalTicks,
+                                    timeSig: state.config.timeSignature,
+                                    cellW: _cellW,
+                                    rowH: _rowH,
+                                    scissorsCursorX: _scissorsCursorX,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
+                        if (state.selectedNoteIds.length > 1)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: GestureDetector(
+                              onTap: () {
+                                ref
+                                    .read(pianoRollProvider.notifier)
+                                    .selectNote(null);
+                                HapticFeedback.selectionClick();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: MuzicianTheme.violet.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                  border: Border.all(
+                                    color: MuzicianTheme.violet.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${state.selectedNoteIds.length} selected  ×',
+                                  style: const TextStyle(
+                                    color: MuzicianTheme.violet,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),

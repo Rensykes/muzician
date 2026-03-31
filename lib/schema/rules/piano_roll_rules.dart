@@ -72,5 +72,6 @@ PianoRollState getDefaultPianoRollState() => const PianoRollState(
   pitchRangeStart: 48,
   pitchRangeEnd: 84,
   selectedColumnTick: null,
-  selectedNoteId: null,
+  selectedNoteIds: <String>{},
+  snapTicks: 1,
 );

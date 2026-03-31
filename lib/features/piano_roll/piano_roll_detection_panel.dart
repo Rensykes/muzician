@@ -133,7 +133,7 @@ class PianoRollDetectionPanel extends ConsumerWidget {
             spacing: 6,
             runSpacing: 4,
             children: notesAtTick.map((note) {
-              final isSelected = state.selectedNoteId == note.id;
+              final isSelected = state.selectedNoteIds.contains(note.id);
               return GestureDetector(
                 onTap: () {
                   notifier.selectNote(isSelected ? null : note.id);
@@ -277,11 +277,13 @@ class PianoRollDetectionPanel extends ConsumerWidget {
           ],
 
           // Delete selected note button
-          if (state.selectedNoteId != null) ...[
+          if (state.selectedNoteIds.isNotEmpty) ...[
             const SizedBox(height: 10),
             GestureDetector(
               onTap: () {
-                notifier.removeNote(state.selectedNoteId!);
+                for (final id in state.selectedNoteIds) {
+                  notifier.removeNote(id);
+                }
                 HapticFeedback.lightImpact();
               },
               child: Container(
