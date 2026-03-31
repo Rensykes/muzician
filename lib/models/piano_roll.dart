@@ -78,13 +78,17 @@ class PianoRollConfig {
   );
 }
 
+enum PianoRollTool { draw, scissors }
+
 class PianoRollState {
   final PianoRollConfig config;
   final List<PianoRollNote> notes;
   final int pitchRangeStart;
   final int pitchRangeEnd;
   final int? selectedColumnTick;
-  final String? selectedNoteId;
+  final Set<String> selectedNoteIds;
+  final PianoRollTool activeTool;
+  final int snapTicks;
 
   const PianoRollState({
     required this.config,
@@ -92,7 +96,9 @@ class PianoRollState {
     required this.pitchRangeStart,
     required this.pitchRangeEnd,
     this.selectedColumnTick,
-    this.selectedNoteId,
+    this.selectedNoteIds = const <String>{},
+    this.activeTool = PianoRollTool.draw,
+    this.snapTicks = 1,
   });
 
   PianoRollState copyWith({
@@ -101,7 +107,9 @@ class PianoRollState {
     int? pitchRangeStart,
     int? pitchRangeEnd,
     int? Function()? selectedColumnTick,
-    String? Function()? selectedNoteId,
+    Set<String>? selectedNoteIds,
+    PianoRollTool? activeTool,
+    int? snapTicks,
   }) => PianoRollState(
     config: config ?? this.config,
     notes: notes ?? this.notes,
@@ -110,8 +118,8 @@ class PianoRollState {
     selectedColumnTick: selectedColumnTick != null
         ? selectedColumnTick()
         : this.selectedColumnTick,
-    selectedNoteId: selectedNoteId != null
-        ? selectedNoteId()
-        : this.selectedNoteId,
+    selectedNoteIds: selectedNoteIds ?? this.selectedNoteIds,
+    activeTool: activeTool ?? this.activeTool,
+    snapTicks: snapTicks ?? this.snapTicks,
   );
 }
