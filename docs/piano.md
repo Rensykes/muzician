@@ -141,3 +141,25 @@ PianoRangeSelector → pianoProvider.setRange()
 
 - Scale highlight & conflicts: Applying a scale highlights pitch classes and will prompt to remove conflicting selected keys if necessary. See: [lib/features/piano/piano_scale_picker.dart](lib/features/piano/piano_scale_picker.dart).
 
+
+---
+
+## Info Panel
+
+File: `lib/ui/core/app_info_panel.dart`
+
+A shared, dismissible help overlay. Opened by tapping the **?** button in the top-right corner of the Piano screen header (opens the info sheet pre-selected on the Piano tab).
+
+### Entry point
+
+```dart
+showAppInfoPanel(context, initialTab: 1); // 0 = Fretboard, 1 = Piano, 2 = Piano Roll
+```
+
+### Piano tab sections
+
+| Section | Content |
+|---|---|
+| **Gestures** | Tap key to select / deselect; pan / drag to scroll (61 / 88-key layouts) |
+| **Panels & Tools** | Range selector (49 / 61 / 88 keys), Chord picker, Scale picker, Detection, Saves |
+| **Behaviour Notes** | Out-of-key alert, colour coding (sky / teal / violet / emerald) |

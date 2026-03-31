@@ -195,3 +195,42 @@ PianoRollToolbar → pianoRollProvider.setTempo() / setTimeSignature() / …
                               │
     PianoRollDetectionPanel shows chords/scales at that column
 ```
+
+---
+
+## Info Panel
+
+File: `lib/ui/core/app_info_panel.dart`
+
+A shared, dismissible help overlay available from every instrument screen. Opened by tapping the **?** button in the top-right corner of each screen header.
+
+### Entry point
+
+```dart
+showAppInfoPanel(context, initialTab: 2); // 0 = Fretboard, 1 = Piano, 2 = Piano Roll
+```
+
+### Structure
+
+Rendered as a modal bottom sheet at 88 % of screen height with a drag handle.
+
+| Widget | Role |
+|---|---|
+| `_AppInfoSheet` | `StatefulWidget` owning a `TabController` |
+| `_DragHandle` | Visual pull-down indicator |
+| `_Header` | Title + close (×) button |
+| `_TabBar` | Three tabs: Fretboard / Piano / Piano Roll |
+| `_FretboardInfoTab` | Gesture + mode + tool entries for the fretboard |
+| `_PianoInfoTab` | Gesture + tool + behaviour entries for the piano |
+| `_PianoRollInfoTab` | Gesture + toolbar + panel + timeline-math entries |
+| `_Section` | Section header (icon + uppercase label) + card container |
+| `_Entry` | Icon badge + bold label + description text |
+
+### Piano Roll tab sections
+
+| Section | Content |
+|---|---|
+| **Gestures** | Tap to add/select, drag body to move (beat-snapped + semitone), drag edge to resize, long-press to delete, ruler tap to set column, pinch to zoom, single-finger drag to scroll |
+| **Toolbar Controls** | Tempo (20–300), Measures, Time signature, Key, Pitch window (▲/▼ ±12 semitones), Clear |
+| **Panels** | Stack selector, Save stack loader (Exact MIDI vs Pitch Class), Detection panel (note chips + chords + scales) |
+| **Timeline Math** | 1 tick = 1/16th note, beat snapping rules |
