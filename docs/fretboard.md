@@ -205,3 +205,25 @@ TuningSelector → fretboardProvider.setTuning()
 - **`_InputModeBar` widget:** A two-button bar (`Free` / `Chord`) is rendered above the existing view-mode bar inside `GuitarFretboard`. Tapping a button calls `FretboardNotifier.setInputMode()` with a light haptic.
 - **`setInputMode()`:** New method on `FretboardNotifier`. Persists `inputMode` in `FretboardState` via `copyWith`.
 
+
+---
+
+## Info Panel
+
+File: `lib/ui/core/app_info_panel.dart`
+
+A shared, dismissible help overlay. Opened by tapping the **?** button in the top-right corner of the Fretboard screen header (opens the info sheet pre-selected on the Fretboard tab).
+
+### Entry point
+
+```dart
+showAppInfoPanel(context, initialTab: 0); // 0 = Fretboard, 1 = Piano, 2 = Piano Roll
+```
+
+### Fretboard tab sections
+
+| Section | Content |
+|---|---|
+| **Gestures** | Tap fret cell to select / deselect |
+| **Input & View Modes** | Free mode, Chord mode, All / Exact / Focus / Solo views |
+| **Panels & Tools** | Tuning (10 presets), Capo (0–11), Chord voicing picker, Scale picker, Detection panel, Saves |

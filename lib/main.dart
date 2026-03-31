@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/fretboard/fretboard_feature.dart';
+import 'ui/core/app_info_panel.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_feature.dart';
 import 'models/fretboard.dart' show TuningName;
@@ -175,11 +176,13 @@ class _GradientScaffold extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<Widget> children;
+  final Widget? trailing;
 
   const _GradientScaffold({
     required this.title,
     required this.subtitle,
     required this.children,
+    this.trailing,
   });
 
   @override
@@ -200,27 +203,35 @@ class _GradientScaffold extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      color: MuzicianTheme.textPrimary,
-                      letterSpacing: -0.5,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            color: MuzicianTheme.textPrimary,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: MuzicianTheme.textMuted,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: MuzicianTheme.textMuted,
-                      letterSpacing: 1,
-                    ),
-                  ),
+                  ?trailing,
                 ],
               ),
             ),
@@ -252,6 +263,38 @@ class _Card extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(12),
       child: child,
+    );
+  }
+}
+
+// ── Help Button ─────────────────────────────────────────────────────────────
+
+class _HelpButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _HelpButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: MuzicianTheme.sky.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: MuzicianTheme.sky.withValues(alpha: 0.25),
+            width: 0.5,
+          ),
+        ),
+        child: const Icon(
+          Icons.help_outline_rounded,
+          color: MuzicianTheme.sky,
+          size: 17,
+        ),
+      ),
     );
   }
 }
@@ -302,6 +345,9 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       subtitle: state.selectedNotes.isEmpty
           ? 'Tap notes to select them'
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
+      trailing: _HelpButton(
+        onTap: () => showAppInfoPanel(context, initialTab: 0),
+      ),
       children: [
         const _Card(child: GuitarFretboard()),
         AnimatedSwitcher(
@@ -547,6 +593,9 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
 
     return _GradientScaffold(
       title: 'Piano',
+      trailing: _HelpButton(
+        onTap: () => showAppInfoPanel(context, initialTab: 1),
+      ),
       subtitle: state.selectedNotes.isEmpty
           ? 'Tap keys to select them'
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
@@ -699,6 +748,9 @@ class _PianoRollScreenState extends ConsumerState<_PianoRollScreen> {
     return _GradientScaffold(
       title: 'Piano Roll',
       subtitle: 'Build quantized note stacks by beat and time signature',
+      trailing: _HelpButton(
+        onTap: () => showAppInfoPanel(context, initialTab: 2),
+      ),
       children: [
         // ── Tab pickers ──
         _PianoRollPanelAccessBar(
