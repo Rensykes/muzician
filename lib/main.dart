@@ -276,19 +276,22 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
   }
 
   Widget _activePanelWidget() => switch (_activePanel) {
-        _FretPanel.tuning => const _Card(child: TuningSelector()),
-        _FretPanel.capo => const _Card(child: CapoControl()),
-        _FretPanel.chord =>
-          const _Card(key: ValueKey('fret-chord'), child: ChordVoicingPicker()),
-        _FretPanel.scale =>
-          const _Card(key: ValueKey('fret-scale'), child: ScalePicker()),
-        _FretPanel.saves =>
-          const _Card(
-            key: ValueKey('fret-saves'),
-            child: FretboardSavePanel(),
-          ),
-        null => const SizedBox.shrink(),
-      };
+    _FretPanel.tuning => const _Card(child: TuningSelector()),
+    _FretPanel.capo => const _Card(child: CapoControl()),
+    _FretPanel.chord => const _Card(
+      key: ValueKey('fret-chord'),
+      child: ChordVoicingPicker(),
+    ),
+    _FretPanel.scale => const _Card(
+      key: ValueKey('fret-scale'),
+      child: ScalePicker(),
+    ),
+    _FretPanel.saves => const _Card(
+      key: ValueKey('fret-saves'),
+      child: FretboardSavePanel(),
+    ),
+    null => const SizedBox.shrink(),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -305,20 +308,18 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
           duration: const Duration(milliseconds: 320),
           reverseDuration: const Duration(milliseconds: 220),
           transitionBuilder: (child, animation) => FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOut,
-            ),
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
             child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, -0.08),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
-              ),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, -0.08),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             ),
           ),
@@ -349,10 +350,7 @@ class _PanelAccessBar extends ConsumerWidget {
   final _FretPanel? activePanel;
   final void Function(_FretPanel) onToggle;
 
-  const _PanelAccessBar({
-    required this.activePanel,
-    required this.onToggle,
-  });
+  const _PanelAccessBar({required this.activePanel, required this.onToggle});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -444,14 +442,14 @@ class _PanelTab extends StatelessWidget {
             color: active
                 ? color.withValues(alpha: 0.15)
                 : hasValue
-                    ? color.withValues(alpha: 0.07)
-                    : Colors.white.withValues(alpha: 0.04),
+                ? color.withValues(alpha: 0.07)
+                : Colors.white.withValues(alpha: 0.04),
             border: Border.all(
               color: active
                   ? color.withValues(alpha: 0.4)
                   : hasValue
-                      ? color.withValues(alpha: 0.25)
-                      : Colors.white.withValues(alpha: 0.08),
+                  ? color.withValues(alpha: 0.25)
+                  : Colors.white.withValues(alpha: 0.08),
               width: 0.5,
             ),
             borderRadius: BorderRadius.circular(14),
@@ -468,8 +466,8 @@ class _PanelTab extends StatelessWidget {
                     color: active
                         ? color
                         : hasValue
-                            ? color.withValues(alpha: 0.7)
-                            : MuzicianTheme.textMuted,
+                        ? color.withValues(alpha: 0.7)
+                        : MuzicianTheme.textMuted,
                   ),
                   if (showDot)
                     Positioned(
@@ -495,8 +493,8 @@ class _PanelTab extends StatelessWidget {
                   color: active
                       ? color
                       : hasValue
-                          ? color.withValues(alpha: 0.7)
-                          : MuzicianTheme.textMuted,
+                      ? color.withValues(alpha: 0.7)
+                      : MuzicianTheme.textMuted,
                 ),
               ),
             ],
@@ -527,18 +525,21 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
   }
 
   Widget _activePanelWidget() => switch (_activePanel) {
-        _PianoPanel.range => const _Card(child: PianoRangeSelector()),
-        _PianoPanel.chord =>
-          const _Card(key: ValueKey('piano-chord'), child: PianoChordPicker()),
-        _PianoPanel.scale =>
-          const _Card(key: ValueKey('piano-scale'), child: PianoScalePicker()),
-        _PianoPanel.saves =>
-          const _Card(
-            key: ValueKey('piano-saves'),
-            child: PianoSavePanel(),
-          ),
-        null => const SizedBox.shrink(),
-      };
+    _PianoPanel.range => const _Card(child: PianoRangeSelector()),
+    _PianoPanel.chord => const _Card(
+      key: ValueKey('piano-chord'),
+      child: PianoChordPicker(),
+    ),
+    _PianoPanel.scale => const _Card(
+      key: ValueKey('piano-scale'),
+      child: PianoScalePicker(),
+    ),
+    _PianoPanel.saves => const _Card(
+      key: ValueKey('piano-saves'),
+      child: PianoSavePanel(),
+    ),
+    null => const SizedBox.shrink(),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -555,20 +556,18 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
           duration: const Duration(milliseconds: 320),
           reverseDuration: const Duration(milliseconds: 220),
           transitionBuilder: (child, animation) => FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOut,
-            ),
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
             child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, -0.08),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
-              ),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, -0.08),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             ),
           ),
@@ -656,18 +655,62 @@ class _PianoPanelAccessBar extends ConsumerWidget {
 
 // ── Piano Roll Screen ───────────────────────────────────────────────────────
 
-class _PianoRollScreen extends ConsumerWidget {
+enum _PianoRollPanel { playback, edit, pitch, scale }
+
+class _PianoRollScreen extends ConsumerStatefulWidget {
   const _PianoRollScreen();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PianoRollScreen> createState() => _PianoRollScreenState();
+}
+
+class _PianoRollScreenState extends ConsumerState<_PianoRollScreen> {
+  _PianoRollPanel? _activePanel;
+
+  void _togglePanel(_PianoRollPanel panel) {
+    HapticFeedback.selectionClick();
+    setState(() => _activePanel = _activePanel == panel ? null : panel);
+  }
+
+  Widget _activePanelWidget() => switch (_activePanel) {
+    _PianoRollPanel.playback => const _Card(
+      key: ValueKey('pr-playback'),
+      child: PianoRollPlaybackConfig(),
+    ),
+    _PianoRollPanel.edit => const _Card(
+      key: ValueKey('pr-edit'),
+      child: PianoRollEditConfig(),
+    ),
+    _PianoRollPanel.pitch => const _Card(
+      key: ValueKey('pr-pitch'),
+      child: PianoRollPitchConfig(),
+    ),
+    _PianoRollPanel.scale => const _Card(
+      key: ValueKey('pr-scale'),
+      child: PianoRollScalePicker(),
+    ),
+    null => const SizedBox.shrink(),
+  };
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
 
     return _GradientScaffold(
       title: 'Piano Roll',
       subtitle: 'Build quantized note stacks by beat and time signature',
       children: [
-        _Card(child: PianoRollToolbar()),
+        // ── Tab pickers ──
+        _PianoRollPanelAccessBar(
+          activePanel: _activePanel,
+          onToggle: _togglePanel,
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          child: _activePanelWidget(),
+        ),
+        // ── Grid ──
         _Card(
           // GestureDetector claims vertical + horizontal pan in the gesture
           // arena so the parent ListView never steals touch events from the grid.
@@ -678,6 +721,8 @@ class _PianoRollScreen extends ConsumerWidget {
             child: SizedBox(height: 320, child: PianoRollGrid()),
           ),
         ),
+        // ── Config cards ──
+        // ── Panels ──
         _Card(child: PianoRollStackSelector()),
         _Card(child: PianoRollSaveStackLoader()),
         _Card(child: PianoRollDetectionPanel()),
@@ -694,6 +739,66 @@ class _PianoRollScreen extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ── Piano Roll Panel Access Bar ──────────────────────────────────────────────
+
+class _PianoRollPanelAccessBar extends ConsumerWidget {
+  final _PianoRollPanel? activePanel;
+  final void Function(_PianoRollPanel) onToggle;
+
+  const _PianoRollPanelAccessBar({
+    required this.activePanel,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(pianoRollProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Row(
+        children: [
+          _PanelTab(
+            icon: Icons.music_note_outlined,
+            label: 'Playback',
+            color: MuzicianTheme.sky,
+            active: activePanel == _PianoRollPanel.playback,
+            hasValue: false,
+            onTap: () => onToggle(_PianoRollPanel.playback),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.edit_outlined,
+            label: 'Edit',
+            color: MuzicianTheme.violet,
+            active: activePanel == _PianoRollPanel.edit,
+            hasValue: false,
+            onTap: () => onToggle(_PianoRollPanel.edit),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.piano_outlined,
+            label: 'Pitch',
+            color: MuzicianTheme.orange,
+            active: activePanel == _PianoRollPanel.pitch,
+            hasValue: false,
+            onTap: () => onToggle(_PianoRollPanel.pitch),
+          ),
+          const SizedBox(width: 8),
+          _PanelTab(
+            icon: Icons.stacked_line_chart,
+            label: 'Scale',
+            color: MuzicianTheme.emerald,
+            active: activePanel == _PianoRollPanel.scale,
+            hasValue: state.highlightedNotes.isNotEmpty,
+            onTap: () => onToggle(_PianoRollPanel.scale),
+          ),
+        ],
+      ),
     );
   }
 }

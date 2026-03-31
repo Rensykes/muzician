@@ -89,6 +89,7 @@ class PianoRollState {
   final Set<String> selectedNoteIds;
   final PianoRollTool activeTool;
   final int snapTicks;
+  final List<String> highlightedNotes;
 
   const PianoRollState({
     required this.config,
@@ -99,6 +100,7 @@ class PianoRollState {
     this.selectedNoteIds = const <String>{},
     this.activeTool = PianoRollTool.draw,
     this.snapTicks = 1,
+    this.highlightedNotes = const <String>[],
   });
 
   PianoRollState copyWith({
@@ -110,6 +112,7 @@ class PianoRollState {
     Set<String>? selectedNoteIds,
     PianoRollTool? activeTool,
     int? snapTicks,
+    List<String>? highlightedNotes,
   }) => PianoRollState(
     config: config ?? this.config,
     notes: notes ?? this.notes,
@@ -121,5 +124,6 @@ class PianoRollState {
     selectedNoteIds: selectedNoteIds ?? this.selectedNoteIds,
     activeTool: activeTool ?? this.activeTool,
     snapTicks: snapTicks ?? this.snapTicks,
+    highlightedNotes: highlightedNotes ?? this.highlightedNotes,
   );
 }

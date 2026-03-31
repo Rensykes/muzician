@@ -70,14 +70,19 @@ class _GridPainter extends CustomPainter {
     if (rangeSize <= 0 || totalTicks <= 0) return;
 
     // Background rows
+    final highlightSet = state.highlightedNotes.toSet();
     for (int i = 0; i < rangeSize; i++) {
       final midi = state.pitchRangeEnd - i;
       final y = i * rowH;
       final isBlack = _isBlackKey(midi);
+      final pc = rules.midiToPitchClass(midi);
+      final isHighlighted = highlightSet.contains(pc);
       canvas.drawRect(
         Rect.fromLTWH(0, y, totalTicks * cellW, rowH),
         Paint()
-          ..color = isBlack
+          ..color = isHighlighted
+              ? MuzicianTheme.emerald.withValues(alpha: 0.09)
+              : isBlack
               ? Colors.white.withValues(alpha: 0.03)
               : Colors.white.withValues(alpha: 0.015),
       );
