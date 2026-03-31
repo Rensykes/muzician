@@ -299,9 +299,26 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     selectedColumnTick: () => null,
   );
 
+  void setHighlightedNotes(List<String> notes) =>
+      state = state.copyWith(highlightedNotes: notes);
+
+  void removeNotesByPitchClass(List<String> pitchClasses) {
+    final bad = Set<String>.from(pitchClasses);
+    final removed = state.notes.where((n) => bad.contains(n.pitchClass));
+    state = state.copyWith(
+      notes: state.notes.where((n) => !bad.contains(n.pitchClass)).toList(),
+      selectedNoteIds: state.selectedNoteIds.difference(
+        removed.map((n) => n.id).toSet(),
+      ),
+    );
+  }
+
   void reset() => state = rules.getDefaultPianoRollState();
 }
 
 final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollState>(
   PianoRollNotifier.new,
 );
+
+final pianoRollPendingScaleProvider =
+    StateProvider<({String root, String scaleName})?>((_) => null);

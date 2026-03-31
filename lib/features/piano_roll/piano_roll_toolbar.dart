@@ -1,4 +1,4 @@
-/// PianoRollToolbar – tempo, measures, time signature, key, pitch window controls.
+/// Piano Roll config widgets – Playback, Edit, and Pitch focused cards.
 library;
 
 import 'package:flutter/material.dart';
@@ -17,21 +17,6 @@ const _timeSigOptions = <(int beats, int unit, String label)>[
   (6, 8, '6/8'),
 ];
 
-const _roots = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
-
 const _snapOptions = <(int ticks, String label)>[
   (1, 'Free'),
   (2, '1/8'),
@@ -39,18 +24,14 @@ const _snapOptions = <(int ticks, String label)>[
   (8, '1/2'),
 ];
 
-class PianoRollToolbar extends ConsumerStatefulWidget {
-  const PianoRollToolbar({super.key});
+// ── Playback Config ──────────────────────────────────────────────────────────
+
+/// Tempo, measure count, and time signature.
+class PianoRollPlaybackConfig extends ConsumerWidget {
+  const PianoRollPlaybackConfig({super.key});
 
   @override
-  ConsumerState<PianoRollToolbar> createState() => _PianoRollToolbarState();
-}
-
-class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
-  String _keyMode = 'major';
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(pianoRollProvider);
     final notifier = ref.read(pianoRollProvider.notifier);
 
@@ -67,270 +48,247 @@ class _PianoRollToolbarState extends ConsumerState<PianoRollToolbar> {
       state.config.totalMeasures,
     );
 
-    void pickKey(String root) {
-      final value = '$root $_keyMode';
-      notifier.setKey(state.config.key == value ? null : value);
-      HapticFeedback.lightImpact();
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Tempo + Measures ──
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              const Text(
-                'Tempo',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              _Stepper(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('PLAYBACK'),
+        Row(
+          children: [
+            Expanded(
+              child: _LabeledStepper(
+                label: 'Tempo',
                 value: '${state.config.tempo} BPM',
                 onDecrement: () => notifier.setTempo(state.config.tempo - 1),
                 onIncrement: () => notifier.setTempo(state.config.tempo + 1),
               ),
-              const Text(
-                'Measures',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              _Stepper(
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _LabeledStepper(
+                label: 'Measures',
                 value: '${state.config.totalMeasures}',
                 onDecrement: () =>
                     notifier.setTotalMeasures(state.config.totalMeasures - 1),
                 onIncrement: () =>
                     notifier.setTotalMeasures(state.config.totalMeasures + 1),
               ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // ── Info ──
-          Wrap(
-            spacing: 12,
-            children: [
-              Text(
-                'Tick Grid: 1/16',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                'Timeline: $totalRollTicks ticks',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                'Range: ${state.pitchRangeStart} to ${state.pitchRangeEnd}',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // ── Tool ──
-          Row(
-            children: [
-              const Text(
-                'Tool',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 10),
-              _Pill(
-                label: 'Draw',
-                active: state.activeTool == PianoRollTool.draw,
-                onTap: () => notifier.setActiveTool(PianoRollTool.draw),
-              ),
-              const SizedBox(width: 8),
-              _Pill(
-                label: '✂ Scissors',
-                active: state.activeTool == PianoRollTool.scissors,
-                onTap: () {
-                  notifier.setActiveTool(PianoRollTool.scissors);
-                  HapticFeedback.lightImpact();
-                },
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // ── Snap ──
-          const Text(
-            'Snap',
-            style: TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
             ),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: _snapOptions.map((o) {
-              return _Pill(
-                label: o.$2,
-                active: state.snapTicks == o.$1,
-                onTap: () => notifier.setSnapTicks(o.$1),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 10),
-
-          // ── Time Signature ──
-          const Text(
-            'Time Signature',
-            style: TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: _timeSigOptions.map((o) {
-              final active = activeTimeSig == o.$3;
-              return _Pill(
-                label: o.$3,
-                active: active,
-                onTap: () => notifier.setTimeSignature(
-                  TimeSignature(beatsPerMeasure: o.$1, beatUnit: o.$2),
-                ),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 10),
-
-          // ── Key ──
-          Row(
-            children: [
-              const Text(
-                'Key (Optional)',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const _Label('Time Signature'),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: _timeSigOptions.map((o) {
+            return _Pill(
+              label: o.$3,
+              active: activeTimeSig == o.$3,
+              onTap: () => notifier.setTimeSignature(
+                TimeSignature(beatsPerMeasure: o.$1, beatUnit: o.$2),
               ),
-              const Spacer(),
-              _ModeBtn(
-                label: 'Major',
-                active: _keyMode == 'major',
-                onTap: () => setState(() => _keyMode = 'major'),
-              ),
-              const SizedBox(width: 4),
-              _ModeBtn(
-                label: 'Minor',
-                active: _keyMode == 'minor',
-                onTap: () => setState(() => _keyMode = 'minor'),
-              ),
-              const SizedBox(width: 4),
-              _ModeBtn(
-                label: 'None',
-                active: false,
-                onTap: () => notifier.setKey(null),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: _roots.map((root) {
-              final active = state.config.key == '$root $_keyMode';
-              return _Pill(
-                label: root,
-                active: active,
-                onTap: () => pickKey(root),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 10),
-
-          // ── Pitch Window ──
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              const Text(
-                'Pitch Window',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              _StepButton(
-                label: '-1 Oct',
-                onTap: () => notifier.shiftPitchRange(-12),
-              ),
-              _StepButton(
-                label: '+1 Oct',
-                onTap: () => notifier.shiftPitchRange(12),
-              ),
-              _StepButton(
-                label: 'Clear Notes',
-                danger: true,
-                onTap: () => notifier.clearNotes(),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 6),
-          Text(
-            'Tempo range: ${rules.minTempo}-${rules.maxTempo} BPM',
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 14,
+          runSpacing: 4,
+          children: [
+            _InfoText('Tick grid: 1/16'),
+            _InfoText('$totalRollTicks ticks total'),
+            _InfoText('Tempo: ${rules.minTempo}–${rules.maxTempo} BPM'),
+          ],
+        ),
+      ],
     );
   }
 }
 
-// ── Reusable sub-widgets ────────────────────────────────────────────────────
+// ── Edit Config ───────────────────────────────────────────────────────────────
+
+/// Active tool and snap resolution.
+class PianoRollEditConfig extends ConsumerWidget {
+  const PianoRollEditConfig({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(pianoRollProvider);
+    final notifier = ref.read(pianoRollProvider.notifier);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('EDIT'),
+        const _Label('Tool'),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            _Pill(
+              label: 'Draw',
+              active: state.activeTool == PianoRollTool.draw,
+              onTap: () => notifier.setActiveTool(PianoRollTool.draw),
+            ),
+            const SizedBox(width: 8),
+            _Pill(
+              label: '✂ Scissors',
+              active: state.activeTool == PianoRollTool.scissors,
+              onTap: () {
+                notifier.setActiveTool(PianoRollTool.scissors);
+                HapticFeedback.lightImpact();
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const _Label('Snap'),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: _snapOptions.map((o) {
+            return _Pill(
+              label: o.$2,
+              active: state.snapTicks == o.$1,
+              onTap: () => notifier.setSnapTicks(o.$1),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Pitch Config ─────────────────────────────────────────────────────────────
+
+/// Pitch window shift and note clearing.
+class PianoRollPitchConfig extends ConsumerWidget {
+  const PianoRollPitchConfig({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(pianoRollProvider);
+    final notifier = ref.read(pianoRollProvider.notifier);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('PITCH WINDOW'),
+        Row(
+          children: [
+            _StepButton(
+              label: '−1 Oct',
+              onTap: () => notifier.shiftPitchRange(-12),
+            ),
+            const SizedBox(width: 8),
+            _StepButton(
+              label: '+1 Oct',
+              onTap: () => notifier.shiftPitchRange(12),
+            ),
+            const Spacer(),
+            Text(
+              'MIDI ${state.pitchRangeStart}–${state.pitchRangeEnd}',
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _StepButton(
+          label: 'Clear All Notes',
+          danger: true,
+          onTap: () => notifier.clearNotes(),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Reusable sub-widgets ──────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+
+  const _SectionHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+      ),
+    ),
+  );
+}
+
+class _Label extends StatelessWidget {
+  final String text;
+
+  const _Label(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      color: MuzicianTheme.textSecondary,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    ),
+  );
+}
+
+class _InfoText extends StatelessWidget {
+  final String text;
+
+  const _InfoText(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      color: MuzicianTheme.textMuted,
+      fontSize: 10,
+      fontWeight: FontWeight.w600,
+    ),
+  );
+}
+
+class _LabeledStepper extends StatelessWidget {
+  final String label;
+  final String value;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  const _LabeledStepper({
+    required this.label,
+    required this.value,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _Label(label),
+      const SizedBox(height: 6),
+      _Stepper(
+        value: value,
+        onDecrement: onDecrement,
+        onIncrement: onIncrement,
+      ),
+    ],
+  );
+}
 
 class _Stepper extends StatelessWidget {
   final String value;
@@ -347,7 +305,7 @@ class _Stepper extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      _StepButton(label: '-', onTap: onDecrement),
+      _StepButton(label: '−', onTap: onDecrement),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: ConstrainedBox(
@@ -437,46 +395,6 @@ class _Pill extends StatelessWidget {
         style: TextStyle(
           color: active ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
           fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    ),
-  );
-}
-
-class _ModeBtn extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _ModeBtn({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: active
-            ? MuzicianTheme.emerald.withValues(alpha: 0.15)
-            : Colors.white.withValues(alpha: 0.04),
-        border: Border.all(
-          color: active
-              ? MuzicianTheme.emerald.withValues(alpha: 0.45)
-              : Colors.white.withValues(alpha: 0.16),
-          width: 0.5,
-        ),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFFDBEAFE),
-          fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
       ),
