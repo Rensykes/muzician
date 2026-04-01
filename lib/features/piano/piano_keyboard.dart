@@ -11,6 +11,7 @@ import '../../store/piano_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
+import '../../utils/note_player.dart';
 
 const double _whiteKeyW = 42;
 const double _blackKeyW = 26;
@@ -47,10 +48,10 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     if (!_scrollController.hasClients) return;
     final range = ref.read(pianoProvider).currentRange;
     _scrollController.animateTo(
-      _scrollOffsetForMidi(midi, range).clamp(
-        0.0,
-        _scrollController.position.maxScrollExtent,
-      ),
+      _scrollOffsetForMidi(
+        midi,
+        range,
+      ).clamp(0.0, _scrollController.position.maxScrollExtent),
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
@@ -157,12 +158,15 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
       child: Opacity(
         opacity: opacity,
         child: GestureDetector(
-          onTap: () => _guardOutOfKey(
-            noteName: key.noteName,
-            onConfirmed: () =>
-                notifier.toggleKey(key.keyIndex, key.midiNote, key.noteName),
-            notifier: notifier,
-          ),
+          onTap: () {
+            NotePlayer.instance.previewNote(key.midiNote);
+            _guardOutOfKey(
+              noteName: key.noteName,
+              onConfirmed: () =>
+                  notifier.toggleKey(key.keyIndex, key.midiNote, key.noteName),
+              notifier: notifier,
+            );
+          },
           child: Container(
             width: key.isBlack ? _blackKeyW : _whiteKeyW,
             height: key.isBlack ? _blackKeyH : _whiteKeyH,

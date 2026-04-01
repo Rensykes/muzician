@@ -14,6 +14,7 @@ import 'store/piano_roll_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'theme/muzician_theme.dart';
+import 'utils/note_player.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +57,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
   void initState() {
     super.initState();
     Future.microtask(() async {
+      await NotePlayer.instance.init();
       await ref.read(saveSystemProvider.notifier).hydrate();
       await ref.read(settingsProvider.notifier).hydrate();
     });

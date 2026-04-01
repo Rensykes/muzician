@@ -12,6 +12,7 @@ import '../../store/fretboard_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
+import '../../utils/note_player.dart';
 
 // ─── Layout Constants ──────────────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
         final dx = pos.dx - cx;
         final dy = pos.dy - cy;
         if (math.sqrt(dx * dx + dy * dy) <= hitRadius) {
+          NotePlayer.instance.previewNote(cell.midiNote);
           _guardOutOfKey(
             noteName: cell.noteName,
             onConfirmed: () =>
@@ -556,7 +558,9 @@ class _FretboardPainter extends CustomPainter {
         final inExactFocusMode =
             viewMode == FretboardViewMode.exactFocus &&
             selectedCells.isNotEmpty;
-        if (inExactFocusMode && !isSelectedExact && !isFocusedPitchClass &&
+        if (inExactFocusMode &&
+            !isSelectedExact &&
+            !isFocusedPitchClass &&
             !behindCapo) {
           continue;
         }
@@ -587,8 +591,9 @@ class _FretboardPainter extends CustomPainter {
           textColor = Colors.white;
         } else {
           bubbleFill = baseColor;
-          bubbleStroke =
-              cell.fret == 0 ? const Color(0x40FFFFFF) : Colors.transparent;
+          bubbleStroke = cell.fret == 0
+              ? const Color(0x40FFFFFF)
+              : Colors.transparent;
           strokeWidth = cell.fret == 0 ? 1.0 : 0.0;
           textColor = Colors.white;
         }
