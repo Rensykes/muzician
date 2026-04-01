@@ -57,9 +57,9 @@ class _AppShellState extends ConsumerState<_AppShell> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      await NotePlayer.instance.init();
       await ref.read(saveSystemProvider.notifier).hydrate();
       await ref.read(settingsProvider.notifier).hydrate();
+      await NotePlayer.instance.init();
     });
   }
 
@@ -871,6 +871,73 @@ class _SettingsScreen extends ConsumerWidget {
       title: 'Settings',
       subtitle: 'Personalise your experience',
       children: [
+        _Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Text('🔊', style: TextStyle(fontSize: 18)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Note Preview Volume',
+                    style: TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.volume_mute,
+                    size: 16,
+                    color: MuzicianTheme.textMuted,
+                  ),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: MuzicianTheme.sky,
+                        inactiveTrackColor: MuzicianTheme.sky.withValues(
+                          alpha: 0.15,
+                        ),
+                        thumbColor: MuzicianTheme.sky,
+                        overlayColor: MuzicianTheme.sky.withValues(alpha: 0.12),
+                        trackHeight: 3,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 7,
+                        ),
+                      ),
+                      child: Slider(
+                        value: settings.noteVolume,
+                        min: 0,
+                        max: 1,
+                        divisions: 20,
+                        onChanged: (v) => notifier.setNoteVolume(v),
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.volume_up,
+                    size: 16,
+                    color: MuzicianTheme.textMuted,
+                  ),
+                ],
+              ),
+              Text(
+                '${(settings.noteVolume * 100).round()} %',
+                style: const TextStyle(
+                  color: MuzicianTheme.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         _Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

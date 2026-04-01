@@ -98,17 +98,18 @@ class NotePlayer {
     _ready = true;
   }
 
-  /// Plays [midiNote] as a short synthesised tone.
+  /// Plays [midiNote] as a short synthesised tone at [volume] (0.0–1.0).
   /// First call per note writes the WAV file; subsequent calls are instant.
-  void previewNote(int midiNote, {int velocity = 90}) {
+  void previewNote(int midiNote, {double volume = 0.8}) {
     if (!_ready) return;
-    unawaited(_play(midiNote));
+    unawaited(_play(midiNote, volume));
   }
 
-  Future<void> _play(int midi) async {
+  Future<void> _play(int midi, double volume) async {
     final path = await _ensureFile(midi);
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
+    await player.setVolume(volume.clamp(0.0, 1.0));
     await player.play(DeviceFileSource(path));
   }
 

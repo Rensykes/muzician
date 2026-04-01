@@ -155,7 +155,10 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
         final dx = pos.dx - cx;
         final dy = pos.dy - cy;
         if (math.sqrt(dx * dx + dy * dy) <= hitRadius) {
-          NotePlayer.instance.previewNote(cell.midiNote);
+          NotePlayer.instance.previewNote(
+            cell.midiNote,
+            volume: ref.read(settingsProvider).noteVolume,
+          );
           _guardOutOfKey(
             noteName: cell.noteName,
             onConfirmed: () =>

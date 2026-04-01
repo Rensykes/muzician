@@ -31,6 +31,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(suppressOutOfKeyAlert: suppress);
     await _persist();
   }
+
+  Future<void> setNoteVolume(double volume) async {
+    state = state.copyWith(noteVolume: volume.clamp(0.0, 1.0));
+    await _persist();
+  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
