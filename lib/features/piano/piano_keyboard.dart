@@ -159,7 +159,10 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         opacity: opacity,
         child: GestureDetector(
           onTap: () {
-            NotePlayer.instance.previewNote(key.midiNote);
+            NotePlayer.instance.previewNote(
+              key.midiNote,
+              volume: ref.read(settingsProvider).noteVolume,
+            );
             _guardOutOfKey(
               noteName: key.noteName,
               onConfirmed: () =>

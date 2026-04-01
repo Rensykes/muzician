@@ -436,18 +436,28 @@ class SaveSystemState {
 
 class AppSettings {
   final bool suppressOutOfKeyAlert;
+  // 0.0 (silent) … 1.0 (full volume). Default 0.8.
+  final double noteVolume;
 
-  const AppSettings({this.suppressOutOfKeyAlert = false});
+  const AppSettings({
+    this.suppressOutOfKeyAlert = false,
+    this.noteVolume = 0.8,
+  });
 
-  AppSettings copyWith({bool? suppressOutOfKeyAlert}) => AppSettings(
-    suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
-  );
+  AppSettings copyWith({bool? suppressOutOfKeyAlert, double? noteVolume}) =>
+      AppSettings(
+        suppressOutOfKeyAlert:
+            suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
+        noteVolume: noteVolume ?? this.noteVolume,
+      );
 
   Map<String, dynamic> toJson() => {
     'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
+    'noteVolume': noteVolume,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
     suppressOutOfKeyAlert: json['suppressOutOfKeyAlert'] as bool? ?? false,
+    noteVolume: (json['noteVolume'] as num?)?.toDouble() ?? 0.8,
   );
 }
