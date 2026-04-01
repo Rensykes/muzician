@@ -12,6 +12,7 @@ import '../../models/piano_roll.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_player.dart';
 
 // ── Layout constants ────────────────────────────────────────────────────────
 
@@ -641,6 +642,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
           notifier.splitNote(hit.id, coord.tick);
           HapticFeedback.lightImpact();
         } else {
+          NotePlayer.instance.previewNote(hit.midiNote);
           final now = DateTime.now();
           final isDoubleTap =
               _lastTapNoteId == hit.id &&
@@ -680,6 +682,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
               coord.tick < maxTick &&
               coord.midi >= state.pitchRangeStart &&
               coord.midi <= state.pitchRangeEnd) {
+            NotePlayer.instance.previewNote(coord.midi);
             notifier.toggleCellNote(coord.midi, coord.tick, 1);
             notifier.selectColumn(coord.tick);
             HapticFeedback.lightImpact();
