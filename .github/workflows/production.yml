@@ -35,3 +35,4 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MUZICIAN_B0953 }}
           projectId: muzician-b0953
+          channelId: live
