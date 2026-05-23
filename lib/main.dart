@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/fretboard/fretboard_feature.dart';
 import 'ui/core/app_info_panel.dart';
+import 'features/fretboard/fretboard_screen_v2_mockup.dart';
 import 'features/piano/piano_feature.dart';
+import 'features/piano/piano_screen_v2_mockup.dart';
 import 'features/piano_roll/piano_roll_feature.dart';
+import 'features/piano_roll/piano_roll_screen_v2_mockup.dart';
 import 'models/fretboard.dart' show TuningName;
 import 'models/piano.dart' show PianoRangeName;
 import 'store/fretboard_store.dart';
@@ -301,6 +304,34 @@ class _HelpButton extends StatelessWidget {
   }
 }
 
+/// Trailing-action group: sparkle icon opens the V2 mockup, then [_HelpButton].
+class _MockupLauncher extends StatelessWidget {
+  final WidgetBuilder builder;
+  final int helpTab;
+  const _MockupLauncher({required this.builder, required this.helpTab});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'V2 mockup',
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          icon: const Icon(Icons.auto_awesome, size: 18, color: MuzicianTheme.sky),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: builder, fullscreenDialog: true),
+          ),
+        ),
+        const SizedBox(width: 4),
+        _HelpButton(onTap: () => showAppInfoPanel(context, initialTab: helpTab)),
+      ],
+    );
+  }
+}
+
 // ── Fretboard Screen ────────────────────────────────────────────────────────
 
 enum _FretPanel { tuning, capo, chord, scale, saves }
@@ -347,8 +378,9 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       subtitle: state.selectedNotes.isEmpty
           ? 'Tap notes to select them'
           : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
-      trailing: _HelpButton(
-        onTap: () => showAppInfoPanel(context, initialTab: 0),
+      trailing: _MockupLauncher(
+        builder: (_) => const FretboardScreenV2Mockup(),
+        helpTab: 0,
       ),
       children: [
         const _Card(child: GuitarFretboard()),
@@ -595,8 +627,9 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
 
     return _GradientScaffold(
       title: 'Piano',
-      trailing: _HelpButton(
-        onTap: () => showAppInfoPanel(context, initialTab: 1),
+      trailing: _MockupLauncher(
+        builder: (_) => const PianoScreenV2Mockup(),
+        helpTab: 1,
       ),
       subtitle: state.selectedNotes.isEmpty
           ? 'Tap keys to select them'
@@ -750,8 +783,9 @@ class _PianoRollScreenState extends ConsumerState<_PianoRollScreen> {
     return _GradientScaffold(
       title: 'Piano Roll',
       subtitle: 'Build quantized note stacks by beat and time signature',
-      trailing: _HelpButton(
-        onTap: () => showAppInfoPanel(context, initialTab: 2),
+      trailing: _MockupLauncher(
+        builder: (_) => const PianoRollScreenV2Mockup(),
+        helpTab: 2,
       ),
       children: [
         // ── Tab pickers ──
