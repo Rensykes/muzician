@@ -122,6 +122,14 @@ final pianoPendingChordProvider =
 final pianoPendingScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
 
+/// Currently committed scale selection (published by [PianoScalePicker]).
+final pianoActiveScaleProvider =
+    StateProvider<({String root, String scaleName})?>((_) => null);
+
+/// Currently committed chord selection (published by [PianoChordPicker]).
+final pianoActiveChordProvider =
+    StateProvider<({String root, String quality})?>((_) => null);
+
 /// MIDI note the keyboard should animate to (one-shot, cleared after use).
 final pianoScrollToMidiProvider = StateProvider<int?>((_) => null);
 

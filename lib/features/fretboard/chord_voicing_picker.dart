@@ -238,6 +238,18 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
     final chordNotes = _selectedRoot != null
         ? getChordNotes(_selectedRoot!, _selectedQuality)
         : <String>[];
+
+    // Publish to active provider so external surfaces (e.g. V2 dock) can show it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final newActive = _selectedRoot != null
+          ? (root: _selectedRoot!, quality: _selectedQuality)
+          : null;
+      final cur = ref.read(activeChordProvider);
+      if (cur?.root != newActive?.root || cur?.quality != newActive?.quality) {
+        ref.read(activeChordProvider.notifier).state = newActive;
+      }
+    });
     final voicings = chordNotes.isNotEmpty
         ? _generateVoicings(chordNotes, stringMidis, capo: state.capo)
         : <ChordVoicing>[];

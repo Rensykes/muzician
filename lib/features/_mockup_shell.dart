@@ -302,7 +302,7 @@ class DockedToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 60,
+      height: 68,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       decoration: BoxDecoration(
         color: MuzicianTheme.glassBg,
@@ -330,6 +330,93 @@ class DockedToolbar extends StatelessWidget {
       if (i < kids.length - 1) out.add(const SizedBox(width: 4));
     }
     return out;
+  }
+}
+
+/// Production-style icon tab: icon + small label, color-tinted when its
+/// underlying picker has a committed/non-default value. Mirrors the existing
+/// `_PanelTab` so the V2 dock visually matches what users already know.
+class DockTab extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool hasValue;
+  final VoidCallback onTap;
+  final int flex;
+  const DockTab({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.hasValue,
+    required this.onTap,
+    this.flex = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: hasValue
+                ? color.withValues(alpha: 0.10)
+                : Colors.white.withValues(alpha: 0.04),
+            border: Border.all(
+              color: hasValue
+                  ? color.withValues(alpha: 0.40)
+                  : MuzicianTheme.glassBorder,
+              width: 0.5,
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: hasValue
+                        ? color
+                        : MuzicianTheme.textMuted,
+                  ),
+                  if (hasValue)
+                    Positioned(
+                      top: -2,
+                      right: -4,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: hasValue ? color : MuzicianTheme.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -458,9 +545,32 @@ Future<T?> showPickerSheet<T extends Object>({
   return showModalBottomSheet<T>(
     context: context,
     backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(context).size.height * 0.7,
+    ),
     builder: (ctx) => _PickerSheet<T>(
       title: title, options: options, current: current,
     ),
+  );
+}
+
+/// Open an arbitrary widget in a glass bottom sheet — used for wrapping
+/// existing production widgets (ChordVoicingPicker, FretboardSavePanel,
+/// PianoChordPicker, etc.) into the V2 sheet idiom.
+Future<void> showWidgetSheet({
+  required BuildContext context,
+  required String title,
+  required Widget child,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(context).size.height * 0.85,
+    ),
+    builder: (ctx) => _WidgetSheet(title: title, child: child),
   );
 }
 
@@ -481,12 +591,11 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
             color: MuzicianTheme.surface.withValues(alpha: 0.96),
             border: Border(top: BorderSide(color: MuzicianTheme.glassBorder)),
           ),
-          padding: EdgeInsets.fromLTRB(
-              16, 12, 16, 16 + MediaQuery.of(context).padding.bottom),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SizedBox(height: 12),
               Center(
                 child: Container(
                   width: 36, height: 4,
@@ -496,49 +605,122 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(title,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  )),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8, runSpacing: 8,
-                children: options.map((o) {
-                  final selected = o == current;
-                  return GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      Navigator.of(context).pop(o);
-                    },
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 56, minHeight: 44),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? Colors.white.withValues(alpha: 0.10)
-                            : Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: selected
-                              ? Colors.white.withValues(alpha: 0.30)
-                              : MuzicianTheme.glassBorder,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Text(title,
+                    style: const TextStyle(
+                      color: MuzicianTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                      16, 4, 16, 16 + MediaQuery.of(context).padding.bottom),
+                  child: Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: options.map((o) {
+                      final selected = o == current;
+                      return GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          Navigator.of(context).pop(o);
+                        },
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 56, minHeight: 44),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? Colors.white.withValues(alpha: 0.10)
+                                : Colors.white.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: selected
+                                  ? Colors.white.withValues(alpha: 0.30)
+                                  : MuzicianTheme.glassBorder,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '$o',
+                            style: TextStyle(
+                              color: MuzicianTheme.textPrimary,
+                              fontSize: 14,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$o',
-                        style: TextStyle(
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Widget sheet (host for production widgets in V2 bottom sheets) ─────────
+
+class _WidgetSheet extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _WidgetSheet({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          decoration: BoxDecoration(
+            color: MuzicianTheme.surface.withValues(alpha: 0.96),
+            border: Border(top: BorderSide(color: MuzicianTheme.glassBorder)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: MuzicianTheme.textMuted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Row(
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
                           color: MuzicianTheme.textPrimary,
-                          fontSize: 14,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        ),
-                      ),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        )),
+                    const Spacer(),
+                    IconBtn(
+                      icon: Icons.close_rounded,
+                      onTap: () => Navigator.of(context).maybePop(),
                     ),
-                  );
-                }).toList(),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    bottom: 16 + MediaQuery.of(context).padding.bottom,
+                  ),
+                  child: child,
+                ),
               ),
             ],
           ),

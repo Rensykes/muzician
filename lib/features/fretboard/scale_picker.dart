@@ -67,6 +67,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
           _selectedRoot = null;
           _selectedScale = null;
         });
+        ref.read(activeScaleProvider.notifier).state = null;
       }
     });
     final activeColor = _catColor[_activeCategory]!;
@@ -280,6 +281,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                   if (newScale == null) {
                     setState(() => _selectedScale = null);
                     notifier.setHighlightedNotes([]);
+                    ref.read(activeScaleProvider.notifier).state = null;
                   } else if (_selectedRoot != null) {
                     _tryApplyScale(_selectedRoot!, newScale);
                   } else {
@@ -334,6 +336,8 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(activeScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
       return;
     }
     if (!mounted) return;
@@ -348,6 +352,8 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(activeScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
     }
   }
 }

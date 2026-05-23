@@ -13,9 +13,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../_mockup_shell.dart';
 import '../../models/piano.dart';
-import '../../schema/rules/piano_rules.dart' show getKeysForRange, pianoRanges;
+import '../../schema/rules/piano_rules.dart' show getKeysForRange;
 import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
+import 'piano_chord_picker.dart';
+import 'piano_note_detection_panel.dart';
+import 'piano_range_selector.dart';
+import 'piano_save_panel.dart';
+import 'piano_scale_picker.dart';
 
 class PianoScreenV2Mockup extends ConsumerStatefulWidget {
   const PianoScreenV2Mockup({super.key});
@@ -25,19 +30,21 @@ class PianoScreenV2Mockup extends ConsumerStatefulWidget {
 }
 
 class _PianoScreenV2MockupState extends ConsumerState<PianoScreenV2Mockup> {
-  String _scale = 'C maj';
-  String _chord = 'maj';
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoProvider);
     final notifier = ref.read(pianoProvider.notifier);
-    final selectedCount = state.selectedNotes.length;
-    final detected = selectedCount == 0
+    final activeScale = ref.watch(pianoActiveScaleProvider);
+    final activeChord = ref.watch(pianoActiveChordProvider);
+    // Octave-aware pitch labels (e.g. C4, E5) so the ribbon shows the
+    // EXACT pitches the user tapped, not just their pitch classes.
+    final selectedLabels = (state.selectedKeys.toList()
+          ..sort((a, b) => a.midiNote.compareTo(b.midiNote)))
+        .map((k) => '${k.noteName}${(k.midiNote ~/ 12) - 1}')
+        .toList();
+    final detected = selectedLabels.isEmpty
         ? null
-        : selectedCount == 1
-            ? 'Selected: ${state.selectedNotes.first}'
-            : 'Selected: ${state.selectedNotes.join(' · ')}';
+        : 'Selected: ${selectedLabels.join(' · ')}';
 
     return Theme(
       data: MuzicianTheme.dark(),
@@ -47,11 +54,30 @@ class _PianoScreenV2MockupState extends ConsumerState<PianoScreenV2Mockup> {
           children: [
             CompactAppBar(
               title: 'Piano',
-              chipLabel: _scale,
+              chipLabel: state.selectedNotes.isEmpty
+                  ? null
+                  : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
               onClose: () => Navigator.of(context).pop(),
               actions: [
-                IconBtn(icon: Icons.bookmark_border_rounded, onTap: () {}),
-                IconBtn(icon: Icons.tune_rounded, onTap: () {}),
+                IconBtn(
+                  icon: Icons.bookmark_border_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Saves',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoSavePanel(),
+                    ),
+                  ),
+                ),
+                IconBtn(
+                  icon: Icons.tune_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Settings',
+                    child: _PianoTuneSheetContent(),
+                  ),
+                ),
               ],
             ),
             Expanded(
@@ -59,10 +85,14 @@ class _PianoScreenV2MockupState extends ConsumerState<PianoScreenV2Mockup> {
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                 child: _VerticalPianoCanvas(
                   range: state.currentRange,
-                  selectedNotes: state.selectedNotes.toSet(),
+                  // Octave-specific selection: identify the exact pitch by
+                  // MIDI, not by pitch class. Tap C4 → only the C4 row lights
+                  // up, not C2/C3/C5.
+                  selectedMidis: state.selectedKeys.map((k) => k.midiNote).toSet(),
+                  highlightedNotes: state.highlightedNotes.toSet(),
+                  viewMode: state.viewMode,
                   onTapMidi: (midi, name) {
                     HapticFeedback.selectionClick();
-                    // Reuse the same toggle API as the horizontal keyboard.
                     final keys = notifier.getKeys();
                     final idx = keys.indexWhere((k) => k.midiNote == midi);
                     if (idx >= 0) notifier.toggleKey(idx, midi, name);
@@ -73,64 +103,61 @@ class _PianoScreenV2MockupState extends ConsumerState<PianoScreenV2Mockup> {
             DetectionRibbon(detectedLabel: detected),
             DockedToolbar(
               children: [
-                DockField(
-                  value: _rangeLabel(state.currentRange),
-                  flex: 3,
-                  onTap: () async {
-                    final byLabel = {
-                      for (final r in PianoRangeName.values) _rangeLabel(r): r,
-                    };
-                    final picked = await showPickerSheet<String>(
-                      context: context,
-                      title: 'Range',
-                      options: byLabel.keys.toList(),
-                      current: _rangeLabel(state.currentRange),
-                    );
-                    if (picked != null) notifier.setRange(byLabel[picked]!);
-                  },
+                DockTab(
+                  icon: Icons.piano_outlined,
+                  label: 'Range',
+                  color: MuzicianTheme.sky,
+                  hasValue: state.currentRange != PianoRangeName.key88,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Range',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoRangeSelector(),
+                    ),
+                  ),
                 ),
-                DockField(
-                  value: _scale,
-                  flex: 2,
-                  onTap: () async {
-                    final picked = await showPickerSheet<String>(
-                      context: context,
-                      title: 'Scale',
-                      options: const [
-                        'C maj', 'C min', 'D maj', 'D min', 'E maj', 'E min',
-                        'F maj', 'G maj', 'A min', 'B min', 'C pent', 'A blues',
-                      ],
-                      current: _scale,
-                    );
-                    if (picked != null) setState(() => _scale = picked);
-                  },
+                DockTab(
+                  icon: Icons.stacked_line_chart,
+                  label: 'Scale',
+                  color: MuzicianTheme.emerald,
+                  hasValue: activeScale != null || state.highlightedNotes.isNotEmpty,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Scale',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoScalePicker(),
+                    ),
+                  ),
                 ),
-                DockField(
-                  value: _chord,
-                  flex: 2,
-                  onTap: () async {
-                    final picked = await showPickerSheet<String>(
-                      context: context,
-                      title: 'Chord',
-                      options: const ['maj', 'min', 'dom7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug'],
-                      current: _chord,
-                    );
-                    if (picked != null) setState(() => _chord = picked);
-                  },
+                DockTab(
+                  icon: Icons.library_music_outlined,
+                  label: 'Chord',
+                  color: MuzicianTheme.violet,
+                  hasValue: activeChord != null,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Chord',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoChordPicker(),
+                    ),
+                  ),
                 ),
-                DockPrimaryButton(
-                  icon: Icons.play_arrow_rounded,
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Preview $_chord chord'),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: MuzicianTheme.surface,
-                        duration: const Duration(milliseconds: 900),
-                      ),
-                    );
-                  },
+                DockTab(
+                  icon: Icons.auto_fix_high_rounded,
+                  label: 'Detect',
+                  color: MuzicianTheme.teal,
+                  hasValue: state.selectedNotes.isNotEmpty,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Note detection',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoNoteDetectionPanel(),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -140,23 +167,73 @@ class _PianoScreenV2MockupState extends ConsumerState<PianoScreenV2Mockup> {
     );
   }
 
-  // Strip "X Keys (...)" → just the pitch span for compactness.
-  String _rangeLabel(PianoRangeName r) {
-    final raw = pianoRanges[r]?.displayName ?? r.name;
-    final m = RegExp(r'\(([^)]+)\)').firstMatch(raw);
-    return m?.group(1) ?? raw;
+}
+
+// ── Tune sheet content ─────────────────────────────────────────────────────
+
+class _PianoTuneSheetContent extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(pianoProvider);
+    final notifier = ref.read(pianoProvider.notifier);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _TuneSectionLabel('View mode'),
+          ModeSegment<PianoViewMode>(
+            current: state.viewMode,
+            onSelect: notifier.setViewMode,
+            options: const [
+              (PianoViewMode.exact, Icons.visibility_rounded, 'Exact'),
+              (PianoViewMode.exactFocus, Icons.center_focus_strong_rounded, 'Solo'),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
+
+class _TuneSectionLabel extends StatelessWidget {
+  final String label;
+  const _TuneSectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: MuzicianTheme.textMuted,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+// Pitch-class extractor: 'C4' → 'C', 'D#5' → 'D#'.
+String _pitchClassName(String noteWithOctave) =>
+    noteWithOctave.replaceAll(RegExp(r'\d'), '');
 
 // ── Vertical canvas ─────────────────────────────────────────────────────────
 
 class _VerticalPianoCanvas extends StatefulWidget {
   final PianoRangeName range;
-  final Set<String> selectedNotes;
+  final Set<int> selectedMidis; // exact MIDI pitches (octave-specific).
+  final Set<String> highlightedNotes; // pitch-class names (no octave).
+  final PianoViewMode viewMode;
   final void Function(int midi, String name) onTapMidi;
   const _VerticalPianoCanvas({
     required this.range,
-    required this.selectedNotes,
+    required this.selectedMidis,
+    required this.highlightedNotes,
+    required this.viewMode,
     required this.onTapMidi,
   });
 
@@ -176,7 +253,13 @@ class _VerticalPianoCanvasState extends State<_VerticalPianoCanvas> {
   @override
   Widget build(BuildContext context) {
     // Pitches flow top→bottom: highest at top, lowest at bottom.
-    final keys = getKeysForRange(widget.range).reversed.toList();
+    final allKeys = getKeysForRange(widget.range).reversed.toList();
+    // Solo mode = production "exactFocus": show only EXACT tapped pitches.
+    // The scale highlight does NOT spread across octaves here; tap C4 and
+    // only C4 is visible, not every C in the range.
+    final keys = widget.viewMode == PianoViewMode.exactFocus
+        ? allKeys.where((k) => widget.selectedMidis.contains(k.midiNote)).toList()
+        : allKeys;
     return LayoutBuilder(
       builder: (ctx, c) {
         // Aim for roughly 1.5 octaves (~18 rows) on a typical phone, scroll for more.
@@ -204,12 +287,18 @@ class _VerticalPianoCanvasState extends State<_VerticalPianoCanvas> {
               padding: EdgeInsets.zero,
               itemBuilder: (_, i) {
                 final k = keys[i];
-                final selected = widget.selectedNotes.contains(k.noteName);
+                // Octave-specific selection: this row matches only if the
+                // EXACT midi was tapped (k.noteName is pitch-class only).
+                final selected = widget.selectedMidis.contains(k.midiNote);
+                // Scale highlight only visible in Exact mode — Solo hides it.
+                final highlighted = widget.viewMode == PianoViewMode.exact &&
+                    widget.highlightedNotes.contains(_pitchClassName(k.noteName));
                 return _PitchRow(
                   midi: k.midiNote,
                   name: k.noteName,
                   isBlack: k.isBlack,
                   selected: selected,
+                  highlighted: highlighted,
                   onTap: () => widget.onTapMidi(k.midiNote, k.noteName),
                 );
               },
@@ -261,12 +350,14 @@ class _PitchRow extends StatelessWidget {
   final String name;
   final bool isBlack;
   final bool selected;
+  final bool highlighted;
   final VoidCallback onTap;
   const _PitchRow({
     required this.midi,
     required this.name,
     required this.isBlack,
     required this.selected,
+    required this.highlighted,
     required this.onTap,
   });
 
@@ -279,18 +370,29 @@ class _PitchRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
+          // Realistic key colors: whites are nearly white, blacks are nearly
+          // black. Selected adds a cyan overlay; highlighted (scale) adds an
+          // emerald tint applied on top of the base key color.
           color: selected
-              ? MuzicianTheme.sky.withValues(alpha: 0.32)
-              : isBlack
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.white.withValues(alpha: 0.18),
+              ? MuzicianTheme.sky
+              : highlighted
+                  ? (isBlack
+                      ? const Color(0xFF1E3A2E)
+                      : const Color(0xFFBFE8D2))
+                  : isBlack
+                      ? const Color(0xFF18181D)
+                      : const Color(0xFFEDEDE6),
           border: Border(
             left: BorderSide(
-              color: selected ? MuzicianTheme.sky : Colors.transparent,
+              color: selected
+                  ? MuzicianTheme.scaffoldBg
+                  : highlighted
+                      ? MuzicianTheme.emerald
+                      : Colors.transparent,
               width: 3,
             ),
             bottom: BorderSide(
-              color: MuzicianTheme.scaffoldBg.withValues(alpha: 0.55),
+              color: MuzicianTheme.scaffoldBg.withValues(alpha: 0.7),
               width: 1,
             ),
           ),
@@ -299,28 +401,32 @@ class _PitchRow extends StatelessWidget {
           children: [
             const SizedBox(width: 10),
             SizedBox(
-              width: 36,
+              width: 40,
               child: Text(
-                isC ? 'C$octave' : name,
+                '$name$octave',
                 style: TextStyle(
+                  // Dark text on white keys, light text on black keys. C-rows
+                  // bolder/larger as octave landmarks.
                   color: selected
                       ? MuzicianTheme.scaffoldBg
                       : isBlack
-                          ? MuzicianTheme.textMuted
-                          : MuzicianTheme.scaffoldBg.withValues(alpha: 0.75),
+                          ? const Color(0xFFB8BCC8)
+                          : const Color(0xFF1A1A22),
                   fontSize: isC ? 13 : 11,
-                  fontWeight: isC || selected ? FontWeight.w700 : FontWeight.w600,
+                  fontWeight: isC || selected
+                      ? FontWeight.w700
+                      : FontWeight.w600,
                 ),
               ),
             ),
             const Spacer(),
             if (selected)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
+              const Padding(
+                padding: EdgeInsets.only(right: 12),
                 child: Icon(
                   Icons.check_circle_rounded,
                   size: 16,
-                  color: MuzicianTheme.scaffoldBg.withValues(alpha: 0.7),
+                  color: MuzicianTheme.scaffoldBg,
                 ),
               ),
           ],
