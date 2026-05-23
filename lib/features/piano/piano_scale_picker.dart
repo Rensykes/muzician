@@ -54,6 +54,7 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
           _selectedRoot = null;
           _selectedScale = null;
         });
+        ref.read(pianoActiveScaleProvider.notifier).state = null;
       }
     });
     final isActive =
@@ -228,6 +229,7 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                     if (newScale == null) {
                       setState(() => _selectedScale = null);
                       notifier.setHighlightedNotes([]);
+                      ref.read(pianoActiveScaleProvider.notifier).state = null;
                     } else if (_selectedRoot != null) {
                       _tryApplyScale(_selectedRoot!, newScale);
                     } else {
@@ -285,6 +287,8 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pianoActiveScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
       return;
     }
     if (!mounted) return;
@@ -299,6 +303,8 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pianoActiveScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
     }
   }
 }

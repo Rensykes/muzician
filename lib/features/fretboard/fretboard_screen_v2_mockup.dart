@@ -16,6 +16,12 @@ import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart' show tunings;
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
+import 'capo_control.dart';
+import 'chord_voicing_picker.dart';
+import 'fretboard_save_panel.dart';
+import 'note_detection_panel.dart';
+import 'scale_picker.dart';
+import 'tuning_selector.dart';
 
 class FretboardScreenV2Mockup extends ConsumerStatefulWidget {
   const FretboardScreenV2Mockup({super.key});
@@ -25,18 +31,25 @@ class FretboardScreenV2Mockup extends ConsumerStatefulWidget {
 }
 
 class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mockup> {
-  String _scale = 'C maj';
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
-    final selectedCount = state.selectedNotes.length;
-    final detected = selectedCount == 0
+    final activeScale = ref.watch(activeScaleProvider);
+    final activeChord = ref.watch(activeChordProvider);
+    // Octave-aware labels — derive from string MIDI + fret. selectedCells
+    // already stores the exact (string, fret); selectedNotes is the
+    // pitch-class fallback.
+    final tuning = tunings[state.currentTuning]!;
+    // c.noteName from the V2 mockup already includes the octave (e.g. "B2",
+    // "D#3"). Sort low-to-high by MIDI for a stable readout.
+    final selectedLabels = (state.selectedCells.toList()
+          ..sort((a, b) => _midiOf(tuning, a).compareTo(_midiOf(tuning, b))))
+        .map((c) => c.noteName)
+        .toList();
+    final detected = selectedLabels.isEmpty
         ? null
-        : selectedCount == 1
-            ? 'Selected: ${state.selectedNotes.first}'
-            : 'Selected: ${state.selectedNotes.join(' · ')}';
+        : 'Selected: ${selectedLabels.join(' · ')}';
 
     return Theme(
       data: MuzicianTheme.dark(),
@@ -46,11 +59,30 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
           children: [
             CompactAppBar(
               title: 'Fretboard',
-              chipLabel: _scale,
+              chipLabel: state.selectedNotes.isEmpty
+                  ? null
+                  : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
               onClose: () => Navigator.of(context).pop(),
               actions: [
-                IconBtn(icon: Icons.bookmark_border_rounded, onTap: () {}),
-                IconBtn(icon: Icons.tune_rounded, onTap: () {}),
+                IconBtn(
+                  icon: Icons.bookmark_border_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Saves',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: FretboardSavePanel(),
+                    ),
+                  ),
+                ),
+                IconBtn(
+                  icon: Icons.tune_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Settings',
+                    child: _FretTuneSheetContent(),
+                  ),
+                ),
               ],
             ),
             ModeSegment<FretboardInputMode>(
@@ -68,6 +100,8 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
                   tuningName: state.currentTuning,
                   capo: state.capo,
                   selectedCells: state.selectedCells,
+                  highlightedNotes: state.highlightedNotes.toSet(),
+                  viewMode: state.viewMode,
                   onToggleCell: notifier.toggleCell,
                   resolveNoteName: (stringIndex, fret) =>
                       _noteNameFor(state.currentTuning, stringIndex, fret),
@@ -77,64 +111,61 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
             DetectionRibbon(detectedLabel: detected),
             DockedToolbar(
               children: [
-                DockField(
-                  value: _tuningLabel(state.currentTuning),
-                  flex: 3,
-                  onTap: () async {
-                    final byLabel = {
-                      for (final t in TuningName.values) _tuningLabel(t): t,
-                    };
-                    final picked = await showPickerSheet<String>(
-                      context: context,
-                      title: 'Tuning',
-                      options: byLabel.keys.toList(),
-                      current: _tuningLabel(state.currentTuning),
-                    );
-                    if (picked != null) notifier.setTuning(byLabel[picked]!);
-                  },
+                DockTab(
+                  icon: Icons.tune_rounded,
+                  label: 'Tuning',
+                  color: MuzicianTheme.sky,
+                  hasValue: state.currentTuning != TuningName.standard,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Tuning',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: TuningSelector(),
+                    ),
+                  ),
                 ),
-                DockField(
-                  value: state.capo == 0 ? 'Capo 0' : 'Capo ${state.capo}',
-                  flex: 2,
-                  onTap: () async {
-                    final picked = await showPickerSheet<int>(
-                      context: context,
-                      title: 'Capo',
-                      options: List.generate(13, (i) => i),
-                      current: state.capo,
-                    );
-                    if (picked != null) notifier.setCapo(picked);
-                  },
+                DockTab(
+                  icon: Icons.vertical_align_top_rounded,
+                  label: 'Capo',
+                  color: MuzicianTheme.orange,
+                  hasValue: state.capo > 0,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Capo',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: CapoControl(),
+                    ),
+                  ),
                 ),
-                DockField(
-                  value: _scale,
-                  flex: 3,
-                  onTap: () async {
-                    final picked = await showPickerSheet<String>(
-                      context: context,
-                      title: 'Scale',
-                      options: const [
-                        'C maj', 'C min', 'D maj', 'D min', 'E maj', 'E min',
-                        'F maj', 'G maj', 'A min', 'B min', 'C pent', 'A blues',
-                      ],
-                      current: _scale,
-                    );
-                    if (picked != null) setState(() => _scale = picked);
-                  },
+                DockTab(
+                  icon: Icons.stacked_line_chart,
+                  label: 'Scale',
+                  color: MuzicianTheme.emerald,
+                  hasValue: activeScale != null || state.highlightedNotes.isNotEmpty,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Scale',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: ScalePicker(),
+                    ),
+                  ),
                 ),
-                DockPrimaryButton(
-                  icon: Icons.library_music_rounded,
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Open chord voicing picker'),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: MuzicianTheme.surface,
-                        duration: Duration(milliseconds: 900),
-                      ),
-                    );
-                  },
+                DockTab(
+                  icon: Icons.library_music_outlined,
+                  label: 'Chord',
+                  color: MuzicianTheme.violet,
+                  hasValue: activeChord != null,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Chord voicings',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: ChordVoicingPicker(),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -142,11 +173,6 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
         ),
       ),
     );
-  }
-
-  String _tuningLabel(TuningName name) {
-    final raw = tunings[name]?.displayName ?? name.name;
-    return raw.startsWith('Std ') ? raw.substring(4) : raw;
   }
 
   String _noteNameFor(TuningName tuningName, int stringIndex, int fret) {
@@ -163,18 +189,76 @@ String _midiToName(int midi) {
   return '${_semitones[pc]}$oct';
 }
 
+int _midiOf(Tuning tuning, FretCoordinate cell) =>
+    tuning.strings[cell.stringIndex].midiNote + cell.fret;
+
+// ── Tune sheet content (View mode + Tuning + Capo + Note detection) ───────
+
+class _FretTuneSheetContent extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(fretboardProvider);
+    final notifier = ref.read(fretboardProvider.notifier);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _TuneSectionLabel('View mode'),
+          ModeSegment<FretboardViewMode>(
+            current: state.viewMode,
+            onSelect: notifier.setViewMode,
+            options: const [
+              (FretboardViewMode.exact, Icons.visibility_rounded, 'Exact'),
+              (FretboardViewMode.exactFocus, Icons.center_focus_strong_rounded, 'Solo'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const _TuneSectionLabel('Note detection'),
+          const NoteDetectionPanel(),
+        ],
+      ),
+    );
+  }
+}
+
+class _TuneSectionLabel extends StatelessWidget {
+  final String label;
+  const _TuneSectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: MuzicianTheme.textMuted,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
 // ── Vertical fretboard canvas ──────────────────────────────────────────────
 
 class _VerticalFretboardCanvas extends StatelessWidget {
   final TuningName tuningName;
   final int capo;
   final List<FretCoordinate> selectedCells;
+  final Set<String> highlightedNotes;
+  final FretboardViewMode viewMode;
   final void Function(int stringIndex, int fret, String noteName) onToggleCell;
   final String Function(int stringIndex, int fret) resolveNoteName;
   const _VerticalFretboardCanvas({
     required this.tuningName,
     required this.capo,
     required this.selectedCells,
+    required this.highlightedNotes,
+    required this.viewMode,
     required this.onToggleCell,
     required this.resolveNoteName,
   });
@@ -201,6 +285,8 @@ class _VerticalFretboardCanvas extends StatelessWidget {
               tuning: tuning,
               capo: capo,
               selectedCells: selectedCells,
+              highlightedNotes: highlightedNotes,
+              viewMode: viewMode,
               layout: layout,
             ),
           ),
@@ -252,13 +338,22 @@ class _VFretPainter extends CustomPainter {
   final Tuning tuning;
   final int capo;
   final List<FretCoordinate> selectedCells;
+  final Set<String> highlightedNotes; // pitch-class names (no octave), e.g. {'C','E','G'}.
+  final FretboardViewMode viewMode;
   final _VFretLayout layout;
   _VFretPainter({
     required this.tuning,
     required this.capo,
     required this.selectedCells,
+    required this.highlightedNotes,
+    required this.viewMode,
     required this.layout,
   });
+
+  /// In exact mode, every scale note shows on the board; in focused mode,
+  /// only the cells the user actually selected are visible.
+  bool get _showHighlights =>
+      viewMode == FretboardViewMode.exact && highlightedNotes.isNotEmpty;
 
   // Wood palette (reverted from midnight — notes pop better against warm wood).
   static const _boardDark = Color(0xFF1A0D00);
@@ -283,8 +378,56 @@ class _VFretPainter extends CustomPainter {
     _paintStrings(c, r);
     _paintFretNumbers(c, Offset(0, layout.boardTop), Size(_VFretLayout.leftMarginW, layout.boardH));
     if (capo > 0) _paintCapo(c, r);
+    if (_showHighlights) _paintHighlightedScale(c, r);
     _paintMutedAndOpenMarkers(c, r);
     _paintSelectedNotes(c, r);
+  }
+
+  /// Paint every (string, fret) cell whose pitch-class is in [highlightedNotes]
+  /// as a faint outlined circle so the player sees the scale geometry.
+  void _paintHighlightedScale(Canvas c, Rect r) {
+    final rowH = r.height / _VFretLayout.numFrets;
+    final colW = r.width / _VFretLayout.stringCount;
+    final pitchClasses = highlightedNotes
+        .map(_pitchClassFromName)
+        .where((pc) => pc >= 0)
+        .toSet();
+    if (pitchClasses.isEmpty) return;
+    // Pre-build selected (stringIndex, fret) for skip lookup.
+    final selectedKeys = {
+      for (final c in selectedCells) (c.stringIndex, c.fret),
+    };
+    for (var stringIndex = 0; stringIndex < _VFretLayout.stringCount; stringIndex++) {
+      final openMidi = tuning.strings[stringIndex].midiNote;
+      final col = 5 - stringIndex;
+      final cx = r.left + col * colW + colW / 2;
+      for (var fret = 0; fret <= _VFretLayout.numFrets; fret++) {
+        if ((fret == 0)) continue; // open notes shown above the nut via separate marker
+        final pc = (openMidi + fret) % 12;
+        if (!pitchClasses.contains(pc)) continue;
+        if (selectedKeys.contains((stringIndex, fret))) continue;
+        final cy = r.top + (fret - 0.5) * rowH;
+        c.drawCircle(
+          Offset(cx, cy),
+          7,
+          Paint()
+            ..color = MuzicianTheme.emerald.withValues(alpha: 0.55)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      }
+    }
+  }
+
+  static int _pitchClassFromName(String name) {
+    const map = {
+      'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3,
+      'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8,
+      'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11,
+    };
+    // Strip any octave digit.
+    final clean = name.replaceAll(RegExp(r'\d'), '');
+    return map[clean] ?? -1;
   }
 
   void _paintBoard(Canvas c, Rect r) {
@@ -483,5 +626,7 @@ class _VFretPainter extends CustomPainter {
   bool shouldRepaint(covariant _VFretPainter old) =>
       old.tuning.name != tuning.name ||
       old.capo != capo ||
-      old.selectedCells != selectedCells;
+      old.selectedCells != selectedCells ||
+      old.highlightedNotes != highlightedNotes ||
+      old.viewMode != viewMode;
 }

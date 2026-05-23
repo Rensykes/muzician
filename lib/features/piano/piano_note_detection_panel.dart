@@ -203,12 +203,16 @@ class _PianoNoteDetectionPanelState
                         (c) => GestureDetector(
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            ref
-                                .read(pianoPendingChordProvider.notifier)
-                                .state = (
+                            final parsed = (
                               root: _parseRoot(c),
                               quality: _parseQuality(c),
                             );
+                            ref
+                                .read(pianoPendingChordProvider.notifier)
+                                .state = parsed;
+                            ref
+                                .read(pianoActiveChordProvider.notifier)
+                                .state = parsed;
                             widget.onChordPanelRequested?.call();
                           },
                           child: Container(
@@ -328,6 +332,7 @@ class _PianoNoteDetectionPanelState
     if (_activeScaleChip == displayString) {
       setState(() => _activeScaleChip = null);
       ref.read(pianoProvider.notifier).setHighlightedNotes([]);
+      ref.read(pianoActiveScaleProvider.notifier).state = null;
       return;
     }
     final parts = displayString.split(' ');
@@ -346,6 +351,8 @@ class _PianoNoteDetectionPanelState
       ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
       ref.read(pianoPendingScaleProvider.notifier).state =
           (root: root, scaleName: scaleName);
+      ref.read(pianoActiveScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
       return;
     }
     if (!mounted) return;
@@ -358,6 +365,8 @@ class _PianoNoteDetectionPanelState
       setState(() => _activeScaleChip = displayString);
       ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
       ref.read(pianoPendingScaleProvider.notifier).state =
+          (root: root, scaleName: scaleName);
+      ref.read(pianoActiveScaleProvider.notifier).state =
           (root: root, scaleName: scaleName);
     }
   }

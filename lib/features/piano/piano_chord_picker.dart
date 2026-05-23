@@ -176,6 +176,19 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
         ? '$_selectedRoot$_selectedQuality'
         : null;
 
+    // Publish the active chord so external surfaces (e.g. V2 dock) can show it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final newActive = _selectedRoot != null
+          ? (root: _selectedRoot!, quality: _selectedQuality)
+          : null;
+      final current = ref.read(pianoActiveChordProvider);
+      if (current?.root != newActive?.root ||
+          current?.quality != newActive?.quality) {
+        ref.read(pianoActiveChordProvider.notifier).state = newActive;
+      }
+    });
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(

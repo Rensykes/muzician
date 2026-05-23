@@ -239,6 +239,10 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
                           root: parsed.root,
                           quality: parsed.quality,
                         );
+                        ref.read(activeChordProvider.notifier).state = (
+                          root: parsed.root,
+                          quality: parsed.quality,
+                        );
                         widget.onChordPanelRequested?.call();
                       },
                       child: Container(
@@ -358,6 +362,7 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
     if (_activeScaleChip == displayString) {
       setState(() => _activeScaleChip = null);
       ref.read(fretboardProvider.notifier).setHighlightedNotes([]);
+      ref.read(activeScaleProvider.notifier).state = null;
       return;
     }
     final parsed = _parseScaleString(displayString);
@@ -374,6 +379,8 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
       ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
       ref.read(pendingScaleProvider.notifier).state =
           (root: parsed.root, scaleName: parsed.scaleName);
+      ref.read(activeScaleProvider.notifier).state =
+          (root: parsed.root, scaleName: parsed.scaleName);
       return;
     }
     if (!mounted) return;
@@ -386,6 +393,8 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
       setState(() => _activeScaleChip = displayString);
       ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
       ref.read(pendingScaleProvider.notifier).state =
+          (root: parsed.root, scaleName: parsed.scaleName);
+      ref.read(activeScaleProvider.notifier).state =
           (root: parsed.root, scaleName: parsed.scaleName);
     }
   }

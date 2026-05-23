@@ -217,6 +217,18 @@ final pendingScaleProvider = StateProvider<({String root, String scaleName})?>(
   (_) => null,
 );
 
+/// Currently committed scale selection (published by [ScalePicker]).
+/// Cleared when the user clears the picker. Read by the V2 dock to show the
+/// active scale name (e.g. "C major") instead of a generic "Scale" label.
+final activeScaleProvider = StateProvider<({String root, String scaleName})?>(
+  (_) => null,
+);
+
+/// Currently committed chord-voicing selection (published by [ChordVoicingPicker]).
+final activeChordProvider = StateProvider<({String root, String quality})?>(
+  (_) => null,
+);
+
 /// Fret position to scroll to (set by capo/chord actions, consumed by fretboard).
 final scrollToFretProvider = StateProvider<int?>((_) => null);
 
