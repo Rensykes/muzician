@@ -43,8 +43,63 @@ double _scrollOffsetForFret(int fret) {
   return _fretWireX(fret - 1) + 8.0;
 }
 
+/// Visual palette for the fretboard surface. Lets the V2 redesign trade
+/// the traditional brown mahogany for a cool palette that fits the dark
+/// glassmorphism theme.
+enum FretboardPalette {
+  /// Original mahogany — warm brown wood + gold strings.
+  wood,
+  /// Dark navy → indigo gradient, silver strings. Matches the V2 theme.
+  midnight,
+  /// Neutral graphite gradient with silver strings.
+  graphite,
+}
+
+class _PaletteSpec {
+  final Color boardDark;
+  final Color boardMid;
+  final Color stringBase;
+  const _PaletteSpec({
+    required this.boardDark,
+    required this.boardMid,
+    required this.stringBase,
+  });
+
+  static const _all = <FretboardPalette, _PaletteSpec>{
+    FretboardPalette.wood: _PaletteSpec(
+      boardDark: Color(0xFF1A0D00),
+      boardMid: Color(0xFF3D1F00),
+      stringBase: Color(0xFFC8A050),
+    ),
+    FretboardPalette.midnight: _PaletteSpec(
+      boardDark: Color(0xFF0A1024),
+      boardMid: Color(0xFF1A1F3A),
+      stringBase: Color(0xFFB8C2D6),
+    ),
+    FretboardPalette.graphite: _PaletteSpec(
+      boardDark: Color(0xFF11141C),
+      boardMid: Color(0xFF22293A),
+      stringBase: Color(0xFFAFB7C2),
+    ),
+  };
+
+  static _PaletteSpec of(FretboardPalette p) => _all[p]!;
+}
+
 class GuitarFretboard extends ConsumerStatefulWidget {
-  const GuitarFretboard({super.key});
+  /// When true, suppress the built-in input-mode + view-mode toolbars. The
+  /// V2 shell renders an equivalent segmented control above the canvas.
+  final bool hideToolbar;
+
+  /// Color palette for the board surface and strings. Defaults to the
+  /// original mahogany; the V2 mockup overrides with [FretboardPalette.midnight].
+  final FretboardPalette palette;
+
+  const GuitarFretboard({
+    super.key,
+    this.hideToolbar = false,
+    this.palette = FretboardPalette.wood,
+  });
 
   @override
   ConsumerState<GuitarFretboard> createState() => _GuitarFretboardState();
@@ -98,13 +153,15 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
 
     return Column(
       children: [
-        _InputModeBar(
-          current: state.inputMode,
-          onSelect: notifier.setInputMode,
-        ),
-        const SizedBox(height: 4),
-        _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
-        const SizedBox(height: 4),
+        if (!widget.hideToolbar) ...[
+          _InputModeBar(
+            current: state.inputMode,
+            onSelect: notifier.setInputMode,
+          ),
+          const SizedBox(height: 4),
+          _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
+          const SizedBox(height: 4),
+        ],
         SingleChildScrollView(
           controller: _scrollController,
           scrollDirection: Axis.horizontal,
@@ -131,6 +188,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
                 selectedCells: state.selectedCells,
                 viewMode: state.viewMode,
                 focusedNotes: state.focusedNotes,
+                palette: widget.palette,
               ),
             ),
           ),
@@ -368,6 +426,8 @@ class _FretboardPainter extends CustomPainter {
   final FretboardViewMode viewMode;
   final Set<String> focusedNotes;
 
+  final FretboardPalette palette;
+
   _FretboardPainter({
     required this.tuning,
     required this.cells,
@@ -378,13 +438,14 @@ class _FretboardPainter extends CustomPainter {
     required this.selectedCells,
     required this.viewMode,
     this.focusedNotes = const {},
+    this.palette = FretboardPalette.wood,
   });
 
   static const _naturalColor = Color(0xFF38BDF8);
   static const _accidentalColor = Color(0xFFC084FC);
-  static const _boardDark = Color(0xFF1A0D00);
-  static const _boardMid = Color(0xFF3D1F00);
-  static const _stringBase = Color(0xFFC8A050);
+  Color get _boardDark => _PaletteSpec.of(palette).boardDark;
+  Color get _boardMid => _PaletteSpec.of(palette).boardMid;
+  Color get _stringBase => _PaletteSpec.of(palette).stringBase;
   static const _fretWireColor = Color(0xFF9AA5AE);
   static const _nutColor = Color(0xFFE8E4D8);
   static const _markerFill = Color(0x1AFFFFFF);
@@ -647,6 +708,7 @@ class _FretboardPainter extends CustomPainter {
       old.capo != capo ||
       old.tuning.name != tuning.name ||
       old.viewMode != viewMode ||
+      old.palette != palette ||
       old.selectedNotes != selectedNotes ||
       old.selectedCells != selectedCells ||
       old.highlightedNotes != highlightedNotes ||

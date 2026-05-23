@@ -1,8 +1,14 @@
-/// Shared visual primitives for the V2 redesign mockups
-/// ([PianoRollScreenV2Mockup], [FretboardScreenV2Mockup], [PianoScreenV2Mockup]).
+/// Shared visual primitives for the V2 redesign mockups.
 ///
-/// Kept in one file so all three screens iterate together on the same
-/// design language: compact app bar, glass surfaces, docked action bar.
+/// Iteration 2 — design decisions baked in:
+///  * Cyan diet: reserved only for the dock primary CTA. Status chip is
+///    neutral, mode segment uses soft white, sidebar dots use teal.
+///  * Dock labels dropped: each field shows leading icon + value + chevron.
+///  * Detection ribbon hides when empty (animates in only when detection
+///    has something to say).
+///  * No back arrow at the screen root — these are top-level tabs.
+///  * Mode toggles render as a [ModeSegment] above the canvas (the real
+///    widgets are passed `hideToolbar: true`).
 library;
 
 import 'dart:ui';
@@ -44,13 +50,17 @@ class CompactAppBar extends StatelessWidget {
   final String title;
   final String? chipLabel;
   final List<Widget> actions;
-  final VoidCallback? onBack;
+
+  /// When non-null, renders a close icon on the left and invokes this on tap.
+  /// Provided by the mockup launcher (which pushes a fullscreen dialog).
+  /// In production this is omitted because the screen is a top-level tab.
+  final VoidCallback? onClose;
   const CompactAppBar({
     super.key,
     required this.title,
     this.chipLabel,
     this.actions = const [],
-    this.onBack,
+    this.onClose,
   });
 
   @override
@@ -58,18 +68,18 @@ class CompactAppBar extends StatelessWidget {
     return SizedBox(
       height: 44,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: EdgeInsets.fromLTRB(onClose == null ? 16 : 4, 0, 16, 0),
         child: Row(
           children: [
-            IconBtn(icon: Icons.chevron_left, onTap: onBack ?? () => Navigator.of(context).maybePop()),
-            const SizedBox(width: 4),
+            if (onClose != null) IconBtn(icon: Icons.close_rounded, onTap: onClose!),
+            if (onClose != null) const SizedBox(width: 4),
             Text(
               title,
               style: const TextStyle(
                 color: MuzicianTheme.textPrimary,
-                fontSize: 17,
+                fontSize: 20,
                 fontWeight: FontWeight.w700,
-                letterSpacing: -0.2,
+                letterSpacing: -0.3,
               ),
             ),
             if (chipLabel != null) ...[
@@ -85,27 +95,26 @@ class CompactAppBar extends StatelessWidget {
   }
 }
 
+/// Neutral status chip. White-on-glass — no cyan competition.
 class StatusChip extends StatelessWidget {
   final String label;
-  final Color? color;
-  const StatusChip({super.key, required this.label, this.color});
+  const StatusChip({super.key, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? MuzicianTheme.sky;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.12),
+        color: Colors.white.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.withValues(alpha: 0.35)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: c,
+        style: const TextStyle(
+          color: MuzicianTheme.textPrimary,
           fontSize: 11.5,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
           letterSpacing: 0.2,
         ),
       ),
@@ -133,55 +142,153 @@ class IconBtn extends StatelessWidget {
   }
 }
 
-// ── Detection ribbon (slim status bar between canvas and dock) ──────────────
+// ── Mode segment (slim segmented control above canvas) ─────────────────────
 
-class DetectionRibbon extends StatelessWidget {
-  final String? detectedLabel;
-  final String hintLabel;
-  const DetectionRibbon({super.key, this.detectedLabel, required this.hintLabel});
+class ModeSegment<T extends Object> extends StatelessWidget {
+  final List<(T value, IconData icon, String label)> options;
+  final T current;
+  final ValueChanged<T> onSelect;
+  const ModeSegment({
+    super.key,
+    required this.options,
+    required this.current,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final hasDetection = detectedLabel != null;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeInOut,
-      height: 32,
+    return Container(
+      height: 36,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: hasDetection
-            ? MuzicianTheme.emerald.withValues(alpha: 0.10)
-            : MuzicianTheme.glassBg,
+        color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: hasDetection
-              ? MuzicianTheme.emerald.withValues(alpha: 0.45)
-              : MuzicianTheme.glassBorder,
-        ),
+        border: Border.all(color: MuzicianTheme.glassBorder),
       ),
       child: Row(
         children: [
-          Icon(
-            hasDetection ? Icons.auto_fix_high_rounded : Icons.touch_app_rounded,
-            size: 14,
-            color: hasDetection ? MuzicianTheme.emerald : MuzicianTheme.textMuted,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              detectedLabel ?? hintLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: hasDetection ? MuzicianTheme.emerald : MuzicianTheme.textMuted,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
+          for (final opt in options)
+            Expanded(
+              child: _Segment(
+                icon: opt.$2,
+                label: opt.$3,
+                selected: opt.$1 == current,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onSelect(opt.$1);
+                },
               ),
             ),
-          ),
         ],
       ),
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _Segment({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.white.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: selected
+                ? Colors.white.withValues(alpha: 0.22)
+                : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? MuzicianTheme.textPrimary : MuzicianTheme.textMuted,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? MuzicianTheme.textPrimary : MuzicianTheme.textMuted,
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Detection ribbon (hidden when empty) ───────────────────────────────────
+
+class DetectionRibbon extends StatelessWidget {
+  final String? detectedLabel;
+  const DetectionRibbon({super.key, this.detectedLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeInOut,
+      alignment: Alignment.topCenter,
+      child: detectedLabel == null
+          ? const SizedBox(width: double.infinity)
+          : Container(
+              height: 30,
+              margin: const EdgeInsets.fromLTRB(12, 2, 12, 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: MuzicianTheme.emerald.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: MuzicianTheme.emerald.withValues(alpha: 0.40),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.auto_fix_high_rounded,
+                    size: 13,
+                    color: MuzicianTheme.emerald,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      detectedLabel!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: MuzicianTheme.emerald,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -195,22 +302,22 @@ class DockedToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 72,
+      height: 60,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       decoration: BoxDecoration(
         color: MuzicianTheme.glassBg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: MuzicianTheme.glassBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.all(6),
         child: Row(children: _spaced(children)),
       ),
     );
@@ -220,20 +327,20 @@ class DockedToolbar extends StatelessWidget {
     final out = <Widget>[];
     for (var i = 0; i < kids.length; i++) {
       out.add(kids[i]);
-      if (i < kids.length - 1) out.add(const SizedBox(width: 6));
+      if (i < kids.length - 1) out.add(const SizedBox(width: 4));
     }
     return out;
   }
 }
 
+/// Value + chevron. No leading icon, no all-caps label — the value carries
+/// itself. Maximizes text width inside a tight dock pill.
 class DockField extends StatelessWidget {
-  final String label;
   final String value;
   final VoidCallback onTap;
   final int flex;
   const DockField({
     super.key,
-    required this.label,
     required this.value,
     required this.onTap,
     this.flex = 1,
@@ -247,42 +354,30 @@ class DockField extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.fromLTRB(12, 0, 6, 0),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: MuzicianTheme.glassBorder),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text(label,
+              Expanded(
+                child: Text(
+                  value,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                   style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
-                  )),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      value,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: MuzicianTheme.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    color: MuzicianTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const Icon(Icons.keyboard_arrow_down_rounded,
-                      size: 18, color: MuzicianTheme.textSecondary),
-                ],
+                ),
+              ),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: MuzicianTheme.textMuted,
               ),
             ],
           ),
@@ -292,36 +387,25 @@ class DockField extends StatelessWidget {
   }
 }
 
+/// The single primary CTA. Violet — chosen so it doesn't compete with the
+/// bottom-nav active state (cyan, app-wide brand).
 class DockPrimaryButton extends StatelessWidget {
   final IconData icon;
-  final String? tooltip;
   final VoidCallback onTap;
-  const DockPrimaryButton({super.key, required this.icon, required this.onTap, this.tooltip});
+  const DockPrimaryButton({super.key, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 56,
-        height: 56,
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [MuzicianTheme.sky, MuzicianTheme.teal],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: MuzicianTheme.sky.withValues(alpha: 0.4),
-              blurRadius: 16,
-              spreadRadius: -2,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: MuzicianTheme.violet,
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 28, color: MuzicianTheme.scaffoldBg),
+        child: Icon(icon, size: 24, color: MuzicianTheme.scaffoldBg),
       ),
     );
   }
@@ -345,13 +429,13 @@ class GlassFrame extends StatelessWidget {
     return Padding(
       padding: margin,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             decoration: BoxDecoration(
               color: MuzicianTheme.glassBg,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: MuzicianTheme.glassBorder),
             ),
             padding: padding,
@@ -434,20 +518,22 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         color: selected
-                            ? MuzicianTheme.sky.withValues(alpha: 0.16)
-                            : Colors.white.withValues(alpha: 0.05),
+                            ? Colors.white.withValues(alpha: 0.10)
+                            : Colors.white.withValues(alpha: 0.04),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: selected ? MuzicianTheme.sky : MuzicianTheme.glassBorder,
+                          color: selected
+                              ? Colors.white.withValues(alpha: 0.30)
+                              : MuzicianTheme.glassBorder,
                         ),
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         '$o',
                         style: TextStyle(
-                          color: selected ? MuzicianTheme.sky : MuzicianTheme.textPrimary,
+                          color: MuzicianTheme.textPrimary,
                           fontSize: 14,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                         ),
                       ),
                     ),
