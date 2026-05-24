@@ -7,9 +7,9 @@ import '../schema/rules/mono_pitch_rules.dart' as rules;
 import '../store/piano_roll_store.dart';
 import '../utils/mic_pitch_session.dart';
 
-final micPitchSessionProvider = Provider<MicPitchSession>((_) {
-  throw UnimplementedError('Override or provide a concrete mic session');
-});
+final micPitchSessionProvider = Provider<MicPitchSession>(
+  (_) => RecordMicPitchSession(),
+);
 
 class HumToMidiNotifier extends Notifier<HumToMidiState> {
   StreamSubscription<PitchFrame>? _framesSub;
