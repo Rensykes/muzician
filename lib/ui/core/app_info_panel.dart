@@ -542,7 +542,9 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Tap Play to hear the roll from the selected column through '
                   'the end of the timeline. Tap Stop to cancel. Playback is '
-                  'disabled while humming is active.',
+                  'disabled while humming is active. Hum import expands '
+                  'measures horizontally when needed (no pitch-range '
+                  'auto-growth).',
               color: MuzicianTheme.orange,
             ),
             _Entry(
