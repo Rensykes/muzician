@@ -398,3 +398,5 @@ final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollState>(
 
 final pianoRollPendingScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
+
+final pianoRollScrollToTickProvider = StateProvider<int?>((_) => null);
