@@ -38,7 +38,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
   );
 
   void setKey(String? key) =>
-      state = state.copyWith(config: state.config.copyWith(key: key));
+      state = state.copyWith(config: state.config.copyWith(key: () => key));
 
   void setTimeSignature(TimeSignature ts) {
     final maxTick = rules.totalTicks(ts, state.config.totalMeasures);
@@ -73,6 +73,11 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       config: state.config.copyWith(totalMeasures: nextMeasures),
       notes: notes,
+      selectedColumnTick: () {
+        final selectedTick = state.selectedColumnTick;
+        if (selectedTick == null) return null;
+        return min(selectedTick, maxTick - 1);
+      },
     );
   }
 
@@ -338,7 +343,13 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   int suggestedImportAnchorTick() {
     final selectedTick = state.selectedColumnTick;
-    if (selectedTick != null) return selectedTick;
+    if (selectedTick != null) {
+      final maxTick = rules.totalTicks(
+        state.config.timeSignature,
+        state.config.totalMeasures,
+      );
+      return selectedTick.clamp(0, maxTick - 1).toInt();
+    }
     if (state.notes.isEmpty) return 0;
     final measureTicks = rules.ticksPerMeasure(state.config.timeSignature);
     final latestEndTick = state.notes
