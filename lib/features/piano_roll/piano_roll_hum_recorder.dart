@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/hum_to_midi.dart';
 import '../../store/hum_to_midi_store.dart';
+import '../../store/piano_roll_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../schema/rules/mono_pitch_rules.dart' as rules;
 
@@ -30,6 +31,9 @@ class _PianoRollHumRecorderPanelState
   Widget build(BuildContext context) {
     final ref = this.ref;
     final state = ref.watch(humToMidiProvider);
+    final latestImportedRange = ref.watch(
+      pianoRollProvider.select((state) => state.latestImportedRange),
+    );
     if (state.status == HumToMidiStatus.recording && _ticker == null) {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
@@ -73,6 +77,12 @@ class _PianoRollHumRecorderPanelState
       onStop: state.status == HumToMidiStatus.recording
           ? () => ref.read(humToMidiProvider.notifier).stopRecording()
           : null,
+      onJumpToLatest: latestImportedRange == null
+          ? null
+          : () {
+              ref.read(pianoRollScrollToTickProvider.notifier).state =
+                  latestImportedRange.startTick;
+            },
     );
   }
 }
@@ -84,6 +94,7 @@ class PianoRollHumRecorderCard extends StatelessWidget {
   final String elapsedLabel;
   final VoidCallback? onStart;
   final VoidCallback? onStop;
+  final VoidCallback? onJumpToLatest;
 
   const PianoRollHumRecorderCard({
     super.key,
@@ -93,6 +104,7 @@ class PianoRollHumRecorderCard extends StatelessWidget {
     required this.elapsedLabel,
     required this.onStart,
     required this.onStop,
+    this.onJumpToLatest,
   });
 
   @override
@@ -149,6 +161,13 @@ class PianoRollHumRecorderCard extends StatelessWidget {
             ),
           ],
         ),
+        if (onJumpToLatest != null) ...[
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: onJumpToLatest,
+            child: const Text('Jump to latest'),
+          ),
+        ],
       ],
     );
   }
