@@ -124,7 +124,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     await container.read(humToMidiProvider.notifier).stopRecording();
 
-    expect(container.read(pianoRollScrollToTickProvider), isNotNull);
+    expect(container.read(pianoRollScrollToTickProvider), 0);
   });
 
   test(
@@ -296,7 +296,9 @@ void main() {
       await container.read(humToMidiProvider.notifier).stopRecording();
 
       final range = container.read(pianoRollProvider).latestImportedRange;
-      expect(range?.startTick, isNot(4));
+      expect(range, isNotNull);
+      expect(range!.startTick, 0);
+      expect(range.endTickExclusive, 1);
     },
   );
 
