@@ -77,8 +77,9 @@ List<int> _buildVoicingMidis(
 
 /// Returns the first chord in [_pianoQualities] whose tones exactly match
 /// [notes], or null when no chord matches or notes has fewer than 2 members.
-({String root, String quality})? _detectFirstChordForPiano(List<String> notes) =>
-    detectFirstChord(notes, qualitySymbols: _pianoQualitySymbols);
+({String root, String quality})? _detectFirstChordForPiano(
+  List<String> notes,
+) => detectFirstChord(notes, qualitySymbols: _pianoQualitySymbols);
 
 class PianoChordPicker extends ConsumerStatefulWidget {
   const PianoChordPicker({super.key});
@@ -162,9 +163,11 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
     final voicings = <({String label, List<int> midis})>[];
     if (chordNotes.isNotEmpty) {
       for (int inv = 0; inv < 3 && inv < chordNotes.length; inv++) {
-        final midis = _buildVoicingMidis(chordNotes, inv, _octaveOffset)
-            .where((m) => keyMidis.contains(m))
-            .toList();
+        final midis = _buildVoicingMidis(
+          chordNotes,
+          inv,
+          _octaveOffset,
+        ).where((m) => keyMidis.contains(m)).toList();
         if (midis.length >= 3) {
           voicings.add((label: inv == 0 ? 'Root' : '$inv inv', midis: midis));
         }
@@ -343,8 +346,10 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                 icon: Icons.remove,
                 enabled: _octaveOffset > _minOctaveOffset,
                 onTap: () => setState(
-                  () => _octaveOffset =
-                      math.max(_minOctaveOffset, _octaveOffset - 1),
+                  () => _octaveOffset = math.max(
+                    _minOctaveOffset,
+                    _octaveOffset - 1,
+                  ),
                 ),
               ),
               SizedBox(
@@ -363,8 +368,10 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                 icon: Icons.add,
                 enabled: _octaveOffset < _maxOctaveOffset,
                 onTap: () => setState(
-                  () => _octaveOffset =
-                      math.min(_maxOctaveOffset, _octaveOffset + 1),
+                  () => _octaveOffset = math.min(
+                    _maxOctaveOffset,
+                    _octaveOffset + 1,
+                  ),
                 ),
               ),
             ],
@@ -403,8 +410,9 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                           true;
                       notifier.loadExactMidis(v.midis);
                       if (v.midis.isNotEmpty) {
-                        ref.read(pianoScrollToMidiProvider.notifier).state =
-                            v.midis.reduce(math.min);
+                        ref.read(pianoScrollToMidiProvider.notifier).state = v
+                            .midis
+                            .reduce(math.min);
                       }
                     },
                     child: Container(
@@ -502,9 +510,7 @@ class _OctaveButton extends StatelessWidget {
         child: Icon(
           icon,
           size: 14,
-          color: enabled
-              ? const Color(0xFFE2E8F0)
-              : const Color(0xFF475569),
+          color: enabled ? const Color(0xFFE2E8F0) : const Color(0xFF475569),
         ),
       ),
     );

@@ -327,7 +327,10 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   void _ensureTimelineCoversEndTick(int endTickExclusive) {
     final measureTicks = rules.ticksPerMeasure(state.config.timeSignature);
-    final requiredMeasures = max(1, (endTickExclusive + measureTicks - 1) ~/ measureTicks);
+    final requiredMeasures = max(
+      1,
+      (endTickExclusive + measureTicks - 1) ~/ measureTicks,
+    );
     if (requiredMeasures > state.config.totalMeasures) {
       setTotalMeasures(requiredMeasures);
     }
@@ -341,7 +344,10 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
         .where((note) => note.durationTicks > 0)
         .map(
           (note) => QuantizedHumNote(
-            midiNote: note.midiNote.clamp(state.pitchRangeStart, state.pitchRangeEnd),
+            midiNote: note.midiNote.clamp(
+              state.pitchRangeStart,
+              state.pitchRangeEnd,
+            ),
             startTick: note.startTick,
             durationTicks: note.durationTicks,
           ),
@@ -359,23 +365,22 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
     var truncated = false;
 
-    final created = clamped.map(
-      (note) {
-        final boundedStart = note.startTick.clamp(0, maxTick - 1);
-        final boundedDuration = min(note.durationTicks, maxTick - boundedStart);
-        if (boundedStart != note.startTick || boundedDuration != note.durationTicks) {
-          truncated = true;
-        }
-        return PianoRollNote(
-          id: _makeId(),
-          midiNote: note.midiNote,
-          pitchClass: rules.midiToPitchClass(note.midiNote),
-          noteWithOctave: rules.midiToNoteWithOctave(note.midiNote),
-          startTick: boundedStart,
-          durationTicks: max(1, boundedDuration),
-        );
-      },
-    ).toList();
+    final created = clamped.map((note) {
+      final boundedStart = note.startTick.clamp(0, maxTick - 1);
+      final boundedDuration = min(note.durationTicks, maxTick - boundedStart);
+      if (boundedStart != note.startTick ||
+          boundedDuration != note.durationTicks) {
+        truncated = true;
+      }
+      return PianoRollNote(
+        id: _makeId(),
+        midiNote: note.midiNote,
+        pitchClass: rules.midiToPitchClass(note.midiNote),
+        noteWithOctave: rules.midiToNoteWithOctave(note.midiNote),
+        startTick: boundedStart,
+        durationTicks: max(1, boundedDuration),
+      );
+    }).toList();
 
     state = state.copyWith(
       notes: [...state.notes, ...created],

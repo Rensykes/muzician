@@ -4,7 +4,9 @@ import 'package:muzician/features/piano_roll/piano_roll_hum_recorder.dart';
 import 'package:muzician/models/hum_to_midi.dart';
 
 void main() {
-  testWidgets('shows the live note and stop button while recording', (tester) async {
+  testWidgets('shows the live note and stop button while recording', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(

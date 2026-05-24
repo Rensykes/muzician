@@ -336,8 +336,10 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
-      ref.read(activeScaleProvider.notifier).state =
-          (root: root, scaleName: scaleName);
+      ref.read(activeScaleProvider.notifier).state = (
+        root: root,
+        scaleName: scaleName,
+      );
       return;
     }
     if (!mounted) return;
@@ -352,10 +354,10 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
-      ref.read(activeScaleProvider.notifier).state =
-          (root: root, scaleName: scaleName);
+      ref.read(activeScaleProvider.notifier).state = (
+        root: root,
+        scaleName: scaleName,
+      );
     }
   }
 }
-
-

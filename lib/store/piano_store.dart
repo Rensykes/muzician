@@ -48,12 +48,11 @@ class PianoNotifier extends Notifier<PianoState> {
     ref.read(pianoManualEditProvider.notifier).state++;
   }
 
-  void clearSelectedNotes() =>
-      state = state.copyWith(
-        selectedNotes: [],
-        selectedKeys: [],
-        focusedNotes: {},
-      );
+  void clearSelectedNotes() => state = state.copyWith(
+    selectedNotes: [],
+    selectedKeys: [],
+    focusedNotes: {},
+  );
 
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);

@@ -27,10 +27,12 @@ class FretboardScreenV2Mockup extends ConsumerStatefulWidget {
   const FretboardScreenV2Mockup({super.key});
 
   @override
-  ConsumerState<FretboardScreenV2Mockup> createState() => _FretboardScreenV2MockupState();
+  ConsumerState<FretboardScreenV2Mockup> createState() =>
+      _FretboardScreenV2MockupState();
 }
 
-class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mockup> {
+class _FretboardScreenV2MockupState
+    extends ConsumerState<FretboardScreenV2Mockup> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
@@ -43,10 +45,12 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
     final tuning = tunings[state.currentTuning]!;
     // c.noteName from the V2 mockup already includes the octave (e.g. "B2",
     // "D#3"). Sort low-to-high by MIDI for a stable readout.
-    final selectedLabels = (state.selectedCells.toList()
-          ..sort((a, b) => _midiOf(tuning, a).compareTo(_midiOf(tuning, b))))
-        .map((c) => c.noteName)
-        .toList();
+    final selectedLabels =
+        (state.selectedCells.toList()..sort(
+              (a, b) => _midiOf(tuning, a).compareTo(_midiOf(tuning, b)),
+            ))
+            .map((c) => c.noteName)
+            .toList();
     final detected = selectedLabels.isEmpty
         ? null
         : 'Selected: ${selectedLabels.join(' · ')}';
@@ -90,7 +94,11 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
               onSelect: notifier.setInputMode,
               options: const [
                 (FretboardInputMode.free, Icons.touch_app_rounded, 'Free'),
-                (FretboardInputMode.chord, Icons.library_music_rounded, 'Chord'),
+                (
+                  FretboardInputMode.chord,
+                  Icons.library_music_rounded,
+                  'Chord',
+                ),
               ],
             ),
             Expanded(
@@ -117,7 +125,8 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
                   icon: Icons.stacked_line_chart,
                   label: 'Scale',
                   color: MuzicianTheme.emerald,
-                  hasValue: activeScale != null || state.highlightedNotes.isNotEmpty,
+                  hasValue:
+                      activeScale != null || state.highlightedNotes.isNotEmpty,
                   onTap: () => showWidgetSheet(
                     context: context,
                     title: 'Scale',
@@ -156,7 +165,20 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
   }
 }
 
-const _semitones = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const _semitones = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
 String _midiToName(int midi) {
   final pc = midi % 12;
   final oct = (midi ~/ 12) - 1;
@@ -173,7 +195,8 @@ class _FretTuneSheetContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
-    final hasFilters = state.selectedCells.isNotEmpty ||
+    final hasFilters =
+        state.selectedCells.isNotEmpty ||
         state.highlightedNotes.isNotEmpty ||
         state.focusedNotes.isNotEmpty;
     return Padding(
@@ -200,7 +223,11 @@ class _FretTuneSheetContent extends ConsumerWidget {
             onSelect: notifier.setViewMode,
             options: const [
               (FretboardViewMode.exact, Icons.visibility_rounded, 'Exact'),
-              (FretboardViewMode.exactFocus, Icons.center_focus_strong_rounded, 'Solo'),
+              (
+                FretboardViewMode.exactFocus,
+                Icons.center_focus_strong_rounded,
+                'Solo',
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -375,7 +402,8 @@ class _VFretPainter extends CustomPainter {
   final Tuning tuning;
   final int capo;
   final List<FretCoordinate> selectedCells;
-  final Set<String> highlightedNotes; // pitch-class names (no octave), e.g. {'C','E','G'}.
+  final Set<String>
+  highlightedNotes; // pitch-class names (no octave), e.g. {'C','E','G'}.
   final FretboardViewMode viewMode;
   final _VFretLayout layout;
   _VFretPainter({
@@ -403,18 +431,39 @@ class _VFretPainter extends CustomPainter {
   @override
   void paint(Canvas c, Size size) {
     final r = layout.boardRect;
-    _paintStringLabels(c, Offset(layout.boardLeft, 0), Size(layout.boardW, _VFretLayout.topLabelH));
+    _paintStringLabels(
+      c,
+      Offset(layout.boardLeft, 0),
+      Size(layout.boardW, _VFretLayout.topLabelH),
+    );
     _paintBoard(c, r);
     _paintFretWires(c, r);
     _paintPositionMarkers(c, r);
     _paintStrings(c, r);
-    _paintFretNumbers(c, Offset(0, layout.boardTop), Size(_VFretLayout.leftMarginW, layout.boardH));
+    _paintFretNumbers(
+      c,
+      Offset(0, layout.boardTop),
+      Size(_VFretLayout.leftMarginW, layout.boardH),
+    );
     if (capo > 0) _paintCapo(c, r);
     _paintMutedAndOpenMarkers(c, r);
     _paintAllNoteBubbles(c, r);
   }
 
-  static const _pcNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  static const _pcNames = [
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
+  ];
 
   /// Render EVERY (string, fret) position as a colored bubble — production
   /// parity. Selected = white fill + colored stroke (production tap style).
@@ -432,10 +481,14 @@ class _VFretPainter extends CustomPainter {
     final selectedKeys = {
       for (final c in selectedCells) (c.stringIndex, c.fret),
     };
-    final inSolo = viewMode == FretboardViewMode.exactFocus &&
-        selectedCells.isNotEmpty;
+    final inSolo =
+        viewMode == FretboardViewMode.exactFocus && selectedCells.isNotEmpty;
 
-    for (var stringIndex = 0; stringIndex < _VFretLayout.stringCount; stringIndex++) {
+    for (
+      var stringIndex = 0;
+      stringIndex < _VFretLayout.stringCount;
+      stringIndex++
+    ) {
       final openMidi = tuning.strings[stringIndex].midiNote;
       final col = 5 - stringIndex;
       final cx = r.left + col * colW + colW / 2;
@@ -493,9 +546,23 @@ class _VFretPainter extends CustomPainter {
 
   static int _pitchClassFromName(String name) {
     const map = {
-      'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3,
-      'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8,
-      'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11,
+      'C': 0,
+      'C#': 1,
+      'Db': 1,
+      'D': 2,
+      'D#': 3,
+      'Eb': 3,
+      'E': 4,
+      'F': 5,
+      'F#': 6,
+      'Gb': 6,
+      'G': 7,
+      'G#': 8,
+      'Ab': 8,
+      'A': 9,
+      'A#': 10,
+      'Bb': 10,
+      'B': 11,
     };
     // Strip any octave digit.
     final clean = name.replaceAll(RegExp(r'\d'), '');
@@ -615,7 +682,9 @@ class _VFretPainter extends CustomPainter {
     for (var col = 0; col < _VFretLayout.stringCount; col++) {
       final stringIndex = 5 - col;
       final cx = r.left + col * colW + colW / 2;
-      final cellOnString = selectedCells.where((s) => s.stringIndex == stringIndex);
+      final cellOnString = selectedCells.where(
+        (s) => s.stringIndex == stringIndex,
+      );
       final hasOpen = cellOnString.any((s) => s.fret == 0);
       final hasFretted = cellOnString.any((s) => s.fret > 0);
       // Markers sit at y ~ nut - 12.
@@ -630,8 +699,15 @@ class _VFretPainter extends CustomPainter {
             ..strokeWidth = 1.5,
         );
       } else if (hasAnySelection && !hasFretted) {
-        _drawText(c, '×', Offset(cx, markerY),
-            color: MuzicianTheme.textMuted, size: 16, weight: FontWeight.w700, center: true);
+        _drawText(
+          c,
+          '×',
+          Offset(cx, markerY),
+          color: MuzicianTheme.textMuted,
+          size: 16,
+          weight: FontWeight.w700,
+          center: true,
+        );
       }
     }
   }
@@ -646,7 +722,10 @@ class _VFretPainter extends CustomPainter {
     bool center = false,
   }) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: weight)),
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: color, fontSize: size, fontWeight: weight),
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
     final offset = center

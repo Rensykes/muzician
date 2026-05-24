@@ -1,4 +1,11 @@
-enum HumToMidiStatus { idle, requestingPermission, recording, processing, completed, error }
+enum HumToMidiStatus {
+  idle,
+  requestingPermission,
+  recording,
+  processing,
+  completed,
+  error,
+}
 
 class PitchFrame {
   final int timestampMs;
@@ -76,7 +83,9 @@ class HumToMidiState {
       frames: frames ?? this.frames,
       liveMidiNote: liveMidiNote != null ? liveMidiNote() : this.liveMidiNote,
       startedAtMs: startedAtMs != null ? startedAtMs() : this.startedAtMs,
-      feedbackMessage: feedbackMessage != null ? feedbackMessage() : this.feedbackMessage,
+      feedbackMessage: feedbackMessage != null
+          ? feedbackMessage()
+          : this.feedbackMessage,
       errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
     );
   }

@@ -20,7 +20,9 @@ void main() {
     addTearDown(container.dispose);
 
     final notifier = container.read(pianoRollProvider.notifier);
-    notifier.setTimeSignature(const TimeSignature(beatsPerMeasure: 4, beatUnit: 4));
+    notifier.setTimeSignature(
+      const TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+    );
     notifier.addNote(69, 9, 2);
 
     expect(notifier.suggestedImportAnchorTick(), 16);

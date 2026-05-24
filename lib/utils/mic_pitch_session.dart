@@ -14,7 +14,7 @@ abstract class MicPitchSession {
 
 class RecordMicPitchSession implements MicPitchSession {
   RecordMicPitchSession({AudioRecorder? recorder})
-      : _recorder = recorder ?? AudioRecorder();
+    : _recorder = recorder ?? AudioRecorder();
 
   final AudioRecorder _recorder;
 
@@ -31,8 +31,13 @@ class RecordMicPitchSession implements MicPitchSession {
       ),
     );
     return stream.map((bytes) {
-      final frequency = rules.estimateDominantFrequency(bytes, sampleRate: 16000);
-      final midiNote = frequency == null ? null : rules.frequencyToMidi(frequency);
+      final frequency = rules.estimateDominantFrequency(
+        bytes,
+        sampleRate: 16000,
+      );
+      final midiNote = frequency == null
+          ? null
+          : rules.frequencyToMidi(frequency);
       return PitchFrame(
         timestampMs: DateTime.now().millisecondsSinceEpoch,
         frequencyHz: frequency ?? 0,

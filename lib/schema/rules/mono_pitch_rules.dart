@@ -10,7 +10,20 @@ const maxHumFrequencyHz = 1000.0;
 const minStableConfidence = 0.85;
 const minStableNoteMs = 120;
 const maxMergeGapMs = 120;
-const _noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const _noteNames = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
 
 int? frequencyToMidi(double frequencyHz) {
   if (frequencyHz < minHumFrequencyHz || frequencyHz > maxHumFrequencyHz) {
@@ -99,7 +112,9 @@ List<DetectedMonoNote> segmentStableNotes(List<PitchFrame> frames) {
               startMs: startMs,
               endMs: endMs,
               midiNote: activeMidi,
-              confidence: confidenceCount == 0 ? 0 : confidenceTotal / confidenceCount,
+              confidence: confidenceCount == 0
+                  ? 0
+                  : confidenceTotal / confidenceCount,
             ),
           );
         }
@@ -114,14 +129,17 @@ List<DetectedMonoNote> segmentStableNotes(List<PitchFrame> frames) {
       continue;
     }
 
-    if (activeMidi != null && frame.timestampMs - lastVoicedMs > maxMergeGapMs) {
+    if (activeMidi != null &&
+        frame.timestampMs - lastVoicedMs > maxMergeGapMs) {
       if (startMs != null && lastVoicedMs - startMs >= minStableNoteMs) {
         notes.add(
           DetectedMonoNote(
             startMs: startMs,
             endMs: lastVoicedMs,
             midiNote: activeMidi,
-            confidence: confidenceCount == 0 ? 0 : confidenceTotal / confidenceCount,
+            confidence: confidenceCount == 0
+                ? 0
+                : confidenceTotal / confidenceCount,
           ),
         );
       }
@@ -132,13 +150,17 @@ List<DetectedMonoNote> segmentStableNotes(List<PitchFrame> frames) {
     }
   }
 
-  if (activeMidi != null && startMs != null && lastVoicedMs - startMs >= minStableNoteMs) {
+  if (activeMidi != null &&
+      startMs != null &&
+      lastVoicedMs - startMs >= minStableNoteMs) {
     notes.add(
       DetectedMonoNote(
         startMs: startMs,
         endMs: lastVoicedMs,
         midiNote: activeMidi,
-        confidence: confidenceCount == 0 ? 0 : confidenceTotal / confidenceCount,
+        confidence: confidenceCount == 0
+            ? 0
+            : confidenceTotal / confidenceCount,
       ),
     );
   }
@@ -160,9 +182,10 @@ List<QuantizedHumNote> quantizeNotesToTicks({
     final roundedStart = rawStartTick.round();
     final roundedEnd = max(roundedStart + 1, rawEndTick.round());
     final snappedStart =
-        snapTicks > 1 && (roundedStart % snapTicks).abs() <= max(1, snapTicks ~/ 2)
-            ? (roundedStart / snapTicks).round() * snapTicks
-            : roundedStart;
+        snapTicks > 1 &&
+            (roundedStart % snapTicks).abs() <= max(1, snapTicks ~/ 2)
+        ? (roundedStart / snapTicks).round() * snapTicks
+        : roundedStart;
     return QuantizedHumNote(
       midiNote: note.midiNote,
       startTick: snappedStart,

@@ -172,8 +172,9 @@ List<String> getChordNotes(String root, String quality) {
     for (final symbol in symbols) {
       final intervals = chordIntervals[symbol];
       if (intervals == null || intervals.length < 2) continue;
-      final chordTones =
-          intervals.map((i) => chromaticNotes[(rootIdx + i) % 12]).toSet();
+      final chordTones = intervals
+          .map((i) => chromaticNotes[(rootIdx + i) % 12])
+          .toSet();
       if (noteSet.every(chordTones.contains) &&
           chordTones.every(noteSet.contains)) {
         return (root: root, quality: symbol);
@@ -225,8 +226,9 @@ List<String> getChordNotes(String root, String quality) {
   for (final root in chromaticNotes) {
     final rootIdx = noteToPC[root]!;
     for (final (symbol, intervals) in detectionQualities) {
-      final chordTones =
-          intervals.map((i) => chromaticNotes[(rootIdx + i) % 12]).toSet();
+      final chordTones = intervals
+          .map((i) => chromaticNotes[(rootIdx + i) % 12])
+          .toSet();
       if (noteSet.every(chordTones.contains) &&
           chordTones.every(noteSet.contains)) {
         chords.add('$root${symbol.isEmpty ? '' : symbol}');
@@ -238,8 +240,9 @@ List<String> getChordNotes(String root, String quality) {
   for (final root in chromaticNotes) {
     final rootIdx = noteToPC[root]!;
     for (final (name, intervals) in detectionScales) {
-      final scaleTones =
-          intervals.map((i) => chromaticNotes[(rootIdx + i) % 12]).toSet();
+      final scaleTones = intervals
+          .map((i) => chromaticNotes[(rootIdx + i) % 12])
+          .toSet();
       if (noteSet.every(scaleTones.contains)) {
         scales.add('$root $name');
       }
