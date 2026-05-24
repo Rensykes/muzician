@@ -64,7 +64,10 @@ class _PianoRollHumRecorderPanelState
       elapsedLabel: state.status == HumToMidiStatus.recording
           ? elapsedLabel
           : 'Idle',
-      onStart: state.status == HumToMidiStatus.idle
+      onStart:
+          state.status == HumToMidiStatus.idle ||
+              state.status == HumToMidiStatus.completed ||
+              state.status == HumToMidiStatus.error
           ? () => ref.read(humToMidiProvider.notifier).startRecording()
           : null,
       onStop: state.status == HumToMidiStatus.recording
