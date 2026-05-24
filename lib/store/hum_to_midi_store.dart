@@ -66,12 +66,19 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
       timeSignature: pianoRoll.config.timeSignature,
       snapTicks: pianoRoll.snapTicks,
     );
+    final preImportColumn =
+        ref.read(pianoRollProvider).selectedColumnTick;
     final importResult = ref
         .read(pianoRollProvider.notifier)
         .appendImportedNotes(imported);
-    if (imported.isNotEmpty) {
-      final firstTick = imported.first.startTick;
-      ref.read(pianoRollScrollToTickProvider.notifier).state = firstTick;
+    if (importResult.createdCount > 0) {
+      if (preImportColumn == null) {
+        ref
+            .read(pianoRollProvider.notifier)
+            .selectColumn(importResult.firstStartTick);
+      }
+      ref.read(pianoRollScrollToTickProvider.notifier).state =
+          importResult.firstStartTick;
     }
     final feedbackMessage = imported.isEmpty
         ? 'No stable note detected'

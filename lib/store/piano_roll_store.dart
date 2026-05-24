@@ -336,10 +336,18 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     }
   }
 
-  ({int createdCount, bool truncated}) appendImportedNotes(
+  ({int createdCount, bool truncated, int? firstStartTick, int? furthestEndTick})
+  appendImportedNotes(
     List<QuantizedHumNote> imported,
   ) {
-    if (imported.isEmpty) return (createdCount: 0, truncated: false);
+    if (imported.isEmpty) {
+      return (
+        createdCount: 0,
+        truncated: false,
+        firstStartTick: null,
+        furthestEndTick: null,
+      );
+    }
     final clamped = imported
         .where((note) => note.durationTicks > 0)
         .map(
@@ -353,11 +361,19 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
           ),
         )
         .toList();
-    if (clamped.isEmpty) return (createdCount: 0, truncated: false);
+    if (clamped.isEmpty) {
+      return (
+        createdCount: 0,
+        truncated: false,
+        firstStartTick: null,
+        furthestEndTick: null,
+      );
+    }
 
     final furthestEndTick = clamped
         .map((note) => note.startTick + note.durationTicks)
         .reduce(max);
+    final firstStartTick = clamped.map((note) => note.startTick).reduce(min);
     _ensureTimelineCoversEndTick(furthestEndTick);
     final maxTick = rules.totalTicks(
       state.config.timeSignature,
@@ -386,7 +402,12 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       notes: [...state.notes, ...created],
       selectedNoteIds: created.map((note) => note.id).toSet(),
     );
-    return (createdCount: created.length, truncated: truncated);
+    return (
+      createdCount: created.length,
+      truncated: truncated,
+      firstStartTick: firstStartTick,
+      furthestEndTick: furthestEndTick,
+    );
   }
 
   void reset() => state = rules.getDefaultPianoRollState();
