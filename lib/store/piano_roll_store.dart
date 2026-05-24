@@ -3,6 +3,7 @@ library;
 
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/hum_to_midi.dart';
 import '../models/piano_roll.dart';
 import '../schema/rules/piano_roll_rules.dart' as rules;
 
@@ -311,6 +312,76 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
         removed.map((n) => n.id).toSet(),
       ),
     );
+  }
+
+  int suggestedImportAnchorTick() {
+    final selectedTick = state.selectedColumnTick;
+    if (selectedTick != null) return selectedTick;
+    if (state.notes.isEmpty) return 0;
+    final measureTicks = rules.ticksPerMeasure(state.config.timeSignature);
+    final latestEndTick = state.notes
+        .map((note) => note.startTick + note.durationTicks)
+        .reduce(max);
+    return ((latestEndTick + measureTicks - 1) ~/ measureTicks) * measureTicks;
+  }
+
+  void _ensureTimelineCoversEndTick(int endTickExclusive) {
+    final measureTicks = rules.ticksPerMeasure(state.config.timeSignature);
+    final requiredMeasures = max(1, (endTickExclusive + measureTicks - 1) ~/ measureTicks);
+    if (requiredMeasures > state.config.totalMeasures) {
+      setTotalMeasures(requiredMeasures);
+    }
+  }
+
+  ({int createdCount, bool truncated}) appendImportedNotes(
+    List<QuantizedHumNote> imported,
+  ) {
+    if (imported.isEmpty) return (createdCount: 0, truncated: false);
+    final clamped = imported
+        .where((note) => note.durationTicks > 0)
+        .map(
+          (note) => QuantizedHumNote(
+            midiNote: note.midiNote.clamp(state.pitchRangeStart, state.pitchRangeEnd),
+            startTick: note.startTick,
+            durationTicks: note.durationTicks,
+          ),
+        )
+        .toList();
+    if (clamped.isEmpty) return (createdCount: 0, truncated: false);
+
+    final furthestEndTick = clamped
+        .map((note) => note.startTick + note.durationTicks)
+        .reduce(max);
+    _ensureTimelineCoversEndTick(furthestEndTick);
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    var truncated = false;
+
+    final created = clamped.map(
+      (note) {
+        final boundedStart = note.startTick.clamp(0, maxTick - 1);
+        final boundedDuration = min(note.durationTicks, maxTick - boundedStart);
+        if (boundedStart != note.startTick || boundedDuration != note.durationTicks) {
+          truncated = true;
+        }
+        return PianoRollNote(
+          id: _makeId(),
+          midiNote: note.midiNote,
+          pitchClass: rules.midiToPitchClass(note.midiNote),
+          noteWithOctave: rules.midiToNoteWithOctave(note.midiNote),
+          startTick: boundedStart,
+          durationTicks: max(1, boundedDuration),
+        );
+      },
+    ).toList();
+
+    state = state.copyWith(
+      notes: [...state.notes, ...created],
+      selectedNoteIds: created.map((note) => note.id).toSet(),
+    );
+    return (createdCount: created.length, truncated: truncated);
   }
 
   void reset() => state = rules.getDefaultPianoRollState();
