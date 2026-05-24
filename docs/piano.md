@@ -112,7 +112,7 @@ Root + scale type selector. Tapping "Highlight" calls `highlightScale()` and wri
 ---
 
 ### `PianoNoteDetectionPanel`
-Reading `pianoPendingChordProvider` and `pianoPendingScaleProvider`, displays the detected chord and scale for active selected keys. Includes a "Clear" button that resets both providers and clears highlights.
+Reading `pianoPendingChordProvider` and `pianoPendingScaleProvider`, displays the detected chord and scale for active selected keys using shared `formatChordSymbol` / `formatScaleLabel` helpers with contextual flat spelling. Supports inversion-aware slash chords (e.g. `"C/E"`) and the full scale catalog. Includes a "Clear" button that resets both providers and clears highlights.
 
 ---
 

@@ -295,8 +295,7 @@ class _FretboardInfoTab extends StatelessWidget {
               icon: Icons.search,
               label: 'Detection',
               desc:
-                  'Automatically identifies the chord name and scale name from your '
-                  'selected notes. Shown below the fretboard when notes are active.',
+                  'Detection now uses the exact selected notes, so inversions such as C/E and friendlier spellings such as Bb or Eb can appear on the result chips.',
               color: MuzicianTheme.orange,
             ),
             _Entry(
@@ -377,8 +376,7 @@ class _PianoInfoTab extends StatelessWidget {
               icon: Icons.search,
               label: 'Detection',
               desc:
-                  'Identifies the chord name and scale name from currently selected '
-                  'keys, updating in real time.',
+                  'Detection now uses the exact selected notes, so inversions such as C/E and friendlier spellings such as Bb or Eb can appear on the result chips.',
               color: MuzicianTheme.violet,
             ),
             _Entry(

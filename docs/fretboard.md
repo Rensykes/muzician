@@ -129,11 +129,11 @@ Chord tones are computed from a semitone-interval map (`_chordIntervals`) rather
 
 ### `NoteDetectionPanel`
 Reads `pendingChordProvider` and `pendingScaleProvider`. Displays:
-- The detected chord name (e.g. `"Cmaj7"`)
-- The detected scale name (e.g. `"C major"`)
+- The detected chord name (e.g. `"C/E"` or `"Cmaj7"`) using shared contextual flat spelling
+- The detected scale name (e.g. `"Eb dorian"`) using shared contextual flat spelling
 - A "Clear" button that resets both providers
 
-Chord/scale detection is triggered by the fretboard store whenever `selectedCells` changes, writing results into the pending providers.
+Detection uses the shared exact-note-aware API (`detectChordResultsFromExactNotes` / `detectScaleResultsFromExactNotes`) from `note_utils.dart`, supporting inversion-aware slash-chord results and the full picker scale catalog. Tapping a chip writes canonical root/quality or root/scaleName into the pending providers.
 
 ---
 
