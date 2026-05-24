@@ -91,7 +91,7 @@ void main() {
     });
 
     test(
-      'normalizes overlapping imported hum notes into a one-note sequence',
+      'trims overlapping imported hum notes into a monophonic two-note sequence',
       () {
         final imported = [
           const QuantizedHumNote(
