@@ -89,5 +89,92 @@ void main() {
       expect(imported.single.startTick, 8);
       expect(imported.single.durationTicks, greaterThanOrEqualTo(2));
     });
+
+    test(
+      'normalizes overlapping imported hum notes into a one-note sequence',
+      () {
+        final imported = [
+          const QuantizedHumNote(
+            midiNote: 69,
+            startTick: 8,
+            durationTicks: 4,
+          ),
+          const QuantizedHumNote(
+            midiNote: 71,
+            startTick: 10,
+            durationTicks: 4,
+          ),
+        ];
+
+        final normalized = rules.normalizeQuantizedHumNotesMonophonically(
+          imported,
+        );
+
+        expect(normalized, hasLength(2));
+        expect(normalized[0].midiNote, 69);
+        expect(normalized[0].startTick, 8);
+        expect(normalized[0].durationTicks, 2);
+        expect(normalized[1].midiNote, 71);
+        expect(normalized[1].startTick, 10);
+        expect(normalized[1].durationTicks, 4);
+      },
+    );
+
+    test(
+      'drops the earlier imported hum note when two notes quantize to the same tick',
+      () {
+        final imported = [
+          const QuantizedHumNote(
+            midiNote: 69,
+            startTick: 12,
+            durationTicks: 2,
+          ),
+          const QuantizedHumNote(
+            midiNote: 71,
+            startTick: 12,
+            durationTicks: 3,
+          ),
+        ];
+
+        final normalized = rules.normalizeQuantizedHumNotesMonophonically(
+          imported,
+        );
+
+        expect(normalized, hasLength(1));
+        expect(normalized.single.midiNote, 71);
+        expect(normalized.single.startTick, 12);
+        expect(normalized.single.durationTicks, 3);
+      },
+    );
+
+    test(
+      'sorts imported hum notes by start tick before monophonic normalization',
+      () {
+        final imported = [
+          const QuantizedHumNote(
+            midiNote: 71,
+            startTick: 10,
+            durationTicks: 4,
+          ),
+          const QuantizedHumNote(
+            midiNote: 69,
+            startTick: 8,
+            durationTicks: 4,
+          ),
+        ];
+
+        final normalized = rules.normalizeQuantizedHumNotesMonophonically(
+          imported,
+        );
+
+        expect(normalized, hasLength(2));
+        expect(normalized[0].midiNote, 69);
+        expect(normalized[0].startTick, 8);
+        expect(normalized[0].durationTicks, 2);
+        expect(normalized[1].midiNote, 71);
+        expect(normalized[1].startTick, 10);
+        expect(normalized[1].durationTicks, 4);
+      },
+    );
   });
 }
