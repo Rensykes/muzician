@@ -6,5 +6,6 @@ export 'piano_roll_grid.dart';
 export 'piano_roll_save_stack_loader.dart';
 export 'piano_roll_scale_picker.dart';
 export 'piano_roll_stack_selector.dart';
+export 'piano_roll_hum_recorder.dart';
 export 'piano_roll_toolbar.dart'
     show PianoRollPlaybackConfig, PianoRollEditConfig, PianoRollPitchConfig;

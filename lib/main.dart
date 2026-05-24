@@ -798,6 +798,7 @@ class _PianoRollScreenState extends ConsumerState<_PianoRollScreen> {
           curve: Curves.easeInOut,
           child: _activePanelWidget(),
         ),
+        const _Card(child: PianoRollHumRecorderPanel()),
         // ── Grid ──
         _Card(
           // GestureDetector claims vertical + horizontal pan in the gesture
