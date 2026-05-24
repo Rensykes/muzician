@@ -65,6 +65,19 @@ The piano roll now includes a mobile-only `Hum to MIDI` recorder. It captures mo
 - If a column was already selected, the existing selection is **preserved**.
 - Stopping a hum take **stops active playback** first if the transport is already running.
 
+### Latest import navigation
+
+- After a successful hum import that creates notes, the `Hum to MIDI` card shows a `Jump to latest` button.
+- `Jump to latest` scrolls horizontally to the start tick of the most recent hum-imported range.
+- The action is navigation-only: it does not change playback state, selected notes, or `selectedColumnTick`.
+- The button tracks only the latest hum import target. A later successful hum import replaces it, and non-import note-add actions clear it.
+
+### Post-quantization monophonic normalization
+
+- Quantized hum notes are normalized before append so the final import remains monophonic.
+- If two neighboring imported notes overlap after quantization, the earlier note is trimmed to end at the later note's start tick.
+- If trimming would reduce that earlier note to zero length, that earlier note is dropped.
+
 ---
 
 ## Playback
