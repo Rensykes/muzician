@@ -44,4 +44,13 @@ void main() {
       expect(formatRootChoiceLabel('C#'), 'Db');
     });
   });
+
+  group('compatibility', () {
+    test('compatibility wrapper still returns canonical root and quality', () {
+      final detected = detectFirstChord(['C', 'E', 'G']);
+      expect(detected, isNotNull);
+      expect(detected!.root, 'C');
+      expect(detected.quality, '');
+    });
+  });
 }

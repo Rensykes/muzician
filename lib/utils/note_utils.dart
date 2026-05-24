@@ -157,6 +157,152 @@ List<String> getChordNotes(String root, String quality) {
 
 // ─── Detection helpers ────────────────────────────────────────────────────────
 
+int _compareChordResults(ChordDetectionResult a, ChordDetectionResult b) {
+  final aSlash = a.bass == null ? 0 : 1;
+  final bSlash = b.bass == null ? 0 : 1;
+  if (aSlash != bSlash) return aSlash.compareTo(bSlash);
+  if (a.root != b.root) {
+    return chromaticNotes
+        .indexOf(a.root)
+        .compareTo(chromaticNotes.indexOf(b.root));
+  }
+  return a.quality.compareTo(b.quality);
+}
+
+int _compareScaleResults(
+  ScaleDetectionResult a,
+  ScaleDetectionResult b,
+  int selectedPitchClassCount,
+) {
+  final aExtra = scaleIntervals[a.scaleName]!.length - selectedPitchClassCount;
+  final bExtra = scaleIntervals[b.scaleName]!.length - selectedPitchClassCount;
+  if (aExtra != bExtra) return aExtra.compareTo(bExtra);
+
+  int categoryIndex(String name) {
+    for (final entry in scaleGroups.entries) {
+      if (entry.value.any((s) => s.$1 == name)) return entry.key.index;
+    }
+    return ScaleCategory.values.length;
+  }
+
+  final aCategory = categoryIndex(a.scaleName);
+  final bCategory = categoryIndex(b.scaleName);
+  if (aCategory != bCategory) return aCategory.compareTo(bCategory);
+
+  if (a.root != b.root) {
+    return chromaticNotes
+        .indexOf(a.root)
+        .compareTo(chromaticNotes.indexOf(b.root));
+  }
+  return a.scaleName.compareTo(b.scaleName);
+}
+
+/// Detects chords from exact MIDI notes with optional slash-chord detection.
+List<ChordDetectionResult> detectChordResultsFromExactNotes(
+  List<ExactSelectionNote> notes, {
+  List<String>? qualitySymbols,
+}) {
+  if (notes.length < 2) return const [];
+
+  final sorted = [...notes]..sort((a, b) => a.midiNote.compareTo(b.midiNote));
+  final pitchClasses = sorted.map((note) => note.pitchClass).toSet();
+  final bass = sorted.first.pitchClass;
+  final symbols = qualitySymbols ?? chordIntervals.keys.toList();
+  final results = <ChordDetectionResult>[];
+
+  for (final root in chromaticNotes) {
+    final rootIndex = noteToPC[root]!;
+    for (final quality in symbols) {
+      final intervals = chordIntervals[quality];
+      if (intervals == null) continue;
+      final tones = intervals
+          .map((interval) => chromaticNotes[(rootIndex + interval) % 12])
+          .toSet();
+      if (tones.length != pitchClasses.length) continue;
+      if (!pitchClasses.every(tones.contains)) continue;
+      results.add(
+        ChordDetectionResult(
+          root: root,
+          quality: quality,
+          bass: bass == root ? null : bass,
+        ),
+      );
+    }
+  }
+
+  results.sort(_compareChordResults);
+  return results;
+}
+
+/// Detects parent scales from exact MIDI notes using the full scale catalog.
+List<ScaleDetectionResult> detectScaleResultsFromExactNotes(
+  List<ExactSelectionNote> notes,
+) {
+  if (notes.length < 2) return const [];
+  final pitchClasses = notes.map((note) => note.pitchClass).toSet();
+  final results = <ScaleDetectionResult>[];
+
+  for (final root in chromaticNotes) {
+    for (final scaleName in scaleIntervals.keys) {
+      final scaleTones = getScaleNotes(root, scaleName).toSet();
+      if (pitchClasses.every(scaleTones.contains)) {
+        results.add(ScaleDetectionResult(root: root, scaleName: scaleName));
+      }
+    }
+  }
+
+  results.sort((a, b) => _compareScaleResults(a, b, pitchClasses.length));
+  return results;
+}
+
+/// Formats a canonical sharp root as a flat label for display (e.g. `A#` → `Bb`).
+String formatRootChoiceLabel(String canonicalRoot) => switch (canonicalRoot) {
+      'A#' => 'Bb',
+      'C#' => 'Db',
+      'D#' => 'Eb',
+      'G#' => 'Ab',
+      _ => canonicalRoot,
+    };
+
+/// Formats a [ChordDetectionResult] as a human-readable chord symbol
+/// (e.g. `Cmaj7` or `C/E`).
+String formatChordSymbol(ChordDetectionResult result) {
+  final root = formatRootChoiceLabel(result.root);
+  final bass = result.bass == null ? null : formatRootChoiceLabel(result.bass!);
+  return bass == null ? '$root${result.quality}' : '$root${result.quality}/$bass';
+}
+
+/// Formats a [ScaleDetectionResult] as a human-readable label
+/// (e.g. `C major` or `Eb dorian`).
+String formatScaleLabel(ScaleDetectionResult result) =>
+    '${formatRootChoiceLabel(result.root)} ${result.scaleName}';
+
+/// Internal helper that detects chords from a set of pitch-class names.
+List<ChordDetectionResult> _detectChordResultsFromPitchClasses(
+  Set<String> pitchClasses, {
+  List<String>? qualitySymbols,
+}) {
+  final symbols = qualitySymbols ?? chordIntervals.keys.toList();
+  final results = <ChordDetectionResult>[];
+
+  for (final root in chromaticNotes) {
+    final rootIndex = noteToPC[root]!;
+    for (final quality in symbols) {
+      final intervals = chordIntervals[quality];
+      if (intervals == null) continue;
+      final chordTones = intervals
+          .map((interval) => chromaticNotes[(rootIndex + interval) % 12])
+          .toSet();
+      if (chordTones.length != pitchClasses.length) continue;
+      if (!pitchClasses.every(chordTones.contains)) continue;
+      results.add(ChordDetectionResult(root: root, quality: quality));
+    }
+  }
+
+  results.sort(_compareChordResults);
+  return results;
+}
+
 /// Returns the first chord whose tones exactly match [notes], or null.
 ///
 /// Pass [qualitySymbols] to restrict detection to a subset of qualities
@@ -166,24 +312,12 @@ List<String> getChordNotes(String root, String quality) {
   List<String> notes, {
   List<String>? qualitySymbols,
 }) {
-  if (notes.length < 2) return null;
-  final noteSet = notes.toSet();
-  final symbols = qualitySymbols ?? chordIntervals.keys.toList();
-  for (final root in chromaticNotes) {
-    final rootIdx = noteToPC[root]!;
-    for (final symbol in symbols) {
-      final intervals = chordIntervals[symbol];
-      if (intervals == null || intervals.length < 2) continue;
-      final chordTones = intervals
-          .map((i) => chromaticNotes[(rootIdx + i) % 12])
-          .toSet();
-      if (noteSet.every(chordTones.contains) &&
-          chordTones.every(noteSet.contains)) {
-        return (root: root, quality: symbol);
-      }
-    }
-  }
-  return null;
+  final results = _detectChordResultsFromPitchClasses(
+    notes.toSet(),
+    qualitySymbols: qualitySymbols,
+  );
+  final first = results.isEmpty ? null : results.first;
+  return first == null ? null : (root: first.root, quality: first.quality);
 }
 
 /// Detects matching chords and potential parent scales from [notes].
@@ -193,63 +327,20 @@ List<String> getChordNotes(String root, String quality) {
 ({List<String> chords, List<String> scales}) detectChordsAndScales(
   List<String> notes,
 ) {
-  if (notes.length < 2) return (chords: <String>[], scales: <String>[]);
-  final noteSet = notes.toSet();
-
-  const detectionQualities = [
-    ('', [0, 4, 7]),
-    ('m', [0, 3, 7]),
-    ('7', [0, 4, 7, 10]),
-    ('maj7', [0, 4, 7, 11]),
-    ('m7', [0, 3, 7, 10]),
-    ('dim', [0, 3, 6]),
-    ('aug', [0, 4, 8]),
-    ('sus2', [0, 2, 7]),
-    ('sus4', [0, 5, 7]),
-    ('m7b5', [0, 3, 6, 10]),
-    ('add9', [0, 4, 7, 2]),
-    ('maj9', [0, 4, 7, 11, 2]),
-    ('6', [0, 4, 7, 9]),
-    ('m6', [0, 3, 7, 9]),
-    ('dim7', [0, 3, 6, 9]),
-    ('7sus4', [0, 5, 7, 10]),
-  ];
-
-  const detectionScales = [
-    ('major', [0, 2, 4, 5, 7, 9, 11]),
-    ('minor', [0, 2, 3, 5, 7, 8, 10]),
-    ('major pentatonic', [0, 2, 4, 7, 9]),
-    ('minor pentatonic', [0, 3, 5, 7, 10]),
-    ('blues', [0, 3, 5, 6, 7, 10]),
-    ('dorian', [0, 2, 3, 5, 7, 9, 10]),
-  ];
-
-  final chords = <String>[];
-  for (final root in chromaticNotes) {
-    final rootIdx = noteToPC[root]!;
-    for (final (symbol, intervals) in detectionQualities) {
-      final chordTones = intervals
-          .map((i) => chromaticNotes[(rootIdx + i) % 12])
-          .toSet();
-      if (noteSet.every(chordTones.contains) &&
-          chordTones.every(noteSet.contains)) {
-        chords.add('$root${symbol.isEmpty ? '' : symbol}');
-      }
-    }
-  }
-
-  final scales = <String>[];
-  for (final root in chromaticNotes) {
-    final rootIdx = noteToPC[root]!;
-    for (final (name, intervals) in detectionScales) {
-      final scaleTones = intervals
-          .map((i) => chromaticNotes[(rootIdx + i) % 12])
-          .toSet();
-      if (noteSet.every(scaleTones.contains)) {
-        scales.add('$root $name');
-      }
-    }
-  }
-
-  return (chords: chords.take(8).toList(), scales: scales.take(8).toList());
+  final pitchClasses = notes.toSet();
+  final chordResults = _detectChordResultsFromPitchClasses(pitchClasses);
+  final scaleResults = detectScaleResultsFromExactNotes([
+    for (final note in pitchClasses)
+      ExactSelectionNote(midiNote: noteToPC[note]!, pitchClass: note),
+  ]);
+  return (
+    chords: chordResults
+        .take(8)
+        .map((result) => '${result.root}${result.quality}')
+        .toList(),
+    scales: scaleResults
+        .take(8)
+        .map((result) => '${result.root} ${result.scaleName}')
+        .toList(),
+  );
 }
