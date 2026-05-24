@@ -49,6 +49,12 @@ lib/
 
 ---
 
+## Live Hum to MIDI
+
+The piano roll now includes a mobile-only `Hum to MIDI` recorder. It captures mono microphone input, estimates one stable pitch at a time, lightly quantizes timing after stop, and appends the finalized notes to the current piano roll instead of replacing existing content.
+
+---
+
 ## Store (`lib/store/piano_roll_store.dart`)
 
 Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, PianoRollState>`)
