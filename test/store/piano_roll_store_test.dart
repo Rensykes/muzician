@@ -15,6 +15,19 @@ void main() {
     expect(notifier.suggestedImportAnchorTick(), 6);
   });
 
+  test('setKey(null) clears an existing key', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(pianoRollProvider.notifier);
+    notifier.setKey('C');
+    expect(container.read(pianoRollProvider).config.key, 'C');
+
+    notifier.setKey(null);
+
+    expect(container.read(pianoRollProvider).config.key, isNull);
+  });
+
   test('suggestedImportAnchorTick falls back to the next measure boundary', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -27,6 +40,26 @@ void main() {
 
     expect(notifier.suggestedImportAnchorTick(), 16);
   });
+
+  test(
+    'setTotalMeasures keeps selected tick and suggested import anchor in range',
+    () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pianoRollProvider.notifier);
+      // 4/4, 4 measures -> 64 ticks.
+      notifier.selectColumn(60);
+      expect(container.read(pianoRollProvider).selectedColumnTick, 60);
+
+      // Shrink to 1 measure -> 16 ticks (max valid index = 15).
+      notifier.setTotalMeasures(1);
+
+      final state = container.read(pianoRollProvider);
+      expect(state.selectedColumnTick, 15);
+      expect(notifier.suggestedImportAnchorTick(), 15);
+    },
+  );
 
   test('appendImportedNotes expands the roll and selects imported notes', () {
     final container = ProviderContainer();

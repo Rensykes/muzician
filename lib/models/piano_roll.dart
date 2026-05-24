@@ -67,12 +67,12 @@ class PianoRollConfig {
 
   PianoRollConfig copyWith({
     int? tempo,
-    String? key,
+    String? Function()? key,
     TimeSignature? timeSignature,
     int? totalMeasures,
   }) => PianoRollConfig(
     tempo: tempo ?? this.tempo,
-    key: key ?? this.key,
+    key: key != null ? key() : this.key,
     timeSignature: timeSignature ?? this.timeSignature,
     totalMeasures: totalMeasures ?? this.totalMeasures,
   );
