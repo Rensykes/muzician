@@ -89,7 +89,6 @@ class _PianoScreenV2MockupState extends ConsumerState<PianoScreenV2Mockup> {
                   // MIDI, not by pitch class. Tap C4 → only the C4 row lights
                   // up, not C2/C3/C5.
                   selectedMidis: state.selectedKeys.map((k) => k.midiNote).toSet(),
-                  highlightedNotes: state.highlightedNotes.toSet(),
                   viewMode: state.viewMode,
                   onTapMidi: (midi, name) {
                     HapticFeedback.selectionClick();
@@ -176,11 +175,27 @@ class _PianoTuneSheetContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(pianoProvider);
     final notifier = ref.read(pianoProvider.notifier);
+    final hasFilters = state.selectedKeys.isNotEmpty ||
+        state.highlightedNotes.isNotEmpty ||
+        state.focusedNotes.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (hasFilters) ...[
+            ClearAllButton(
+              onClear: () {
+                HapticFeedback.mediumImpact();
+                notifier.clearSelectedNotes();
+                notifier.setHighlightedNotes([]);
+                ref.read(pianoActiveScaleProvider.notifier).state = null;
+                ref.read(pianoActiveChordProvider.notifier).state = null;
+                Navigator.of(context).maybePop();
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           const _TuneSectionLabel('View mode'),
           ModeSegment<PianoViewMode>(
             current: state.viewMode,
@@ -217,22 +232,16 @@ class _TuneSectionLabel extends StatelessWidget {
   }
 }
 
-// Pitch-class extractor: 'C4' → 'C', 'D#5' → 'D#'.
-String _pitchClassName(String noteWithOctave) =>
-    noteWithOctave.replaceAll(RegExp(r'\d'), '');
-
 // ── Vertical canvas ─────────────────────────────────────────────────────────
 
 class _VerticalPianoCanvas extends StatefulWidget {
   final PianoRangeName range;
   final Set<int> selectedMidis; // exact MIDI pitches (octave-specific).
-  final Set<String> highlightedNotes; // pitch-class names (no octave).
   final PianoViewMode viewMode;
   final void Function(int midi, String name) onTapMidi;
   const _VerticalPianoCanvas({
     required this.range,
     required this.selectedMidis,
-    required this.highlightedNotes,
     required this.viewMode,
     required this.onTapMidi,
   });
@@ -290,15 +299,11 @@ class _VerticalPianoCanvasState extends State<_VerticalPianoCanvas> {
                 // Octave-specific selection: this row matches only if the
                 // EXACT midi was tapped (k.noteName is pitch-class only).
                 final selected = widget.selectedMidis.contains(k.midiNote);
-                // Scale highlight only visible in Exact mode — Solo hides it.
-                final highlighted = widget.viewMode == PianoViewMode.exact &&
-                    widget.highlightedNotes.contains(_pitchClassName(k.noteName));
                 return _PitchRow(
                   midi: k.midiNote,
                   name: k.noteName,
                   isBlack: k.isBlack,
                   selected: selected,
-                  highlighted: highlighted,
                   onTap: () => widget.onTapMidi(k.midiNote, k.noteName),
                 );
               },
@@ -350,14 +355,12 @@ class _PitchRow extends StatelessWidget {
   final String name;
   final bool isBlack;
   final bool selected;
-  final bool highlighted;
   final VoidCallback onTap;
   const _PitchRow({
     required this.midi,
     required this.name,
     required this.isBlack,
     required this.selected,
-    required this.highlighted,
     required this.onTap,
   });
 
@@ -370,25 +373,17 @@ class _PitchRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          // Realistic key colors: whites are nearly white, blacks are nearly
-          // black. Selected adds a cyan overlay; highlighted (scale) adds an
-          // emerald tint applied on top of the base key color.
+          // Realistic key colors. Selected = cyan overlay (production tap).
           color: selected
               ? MuzicianTheme.sky
-              : highlighted
-                  ? (isBlack
-                      ? const Color(0xFF1E3A2E)
-                      : const Color(0xFFBFE8D2))
-                  : isBlack
-                      ? const Color(0xFF18181D)
-                      : const Color(0xFFEDEDE6),
+              : isBlack
+                  ? const Color(0xFF18181D)
+                  : const Color(0xFFEDEDE6),
           border: Border(
             left: BorderSide(
               color: selected
                   ? MuzicianTheme.scaffoldBg
-                  : highlighted
-                      ? MuzicianTheme.emerald
-                      : Colors.transparent,
+                  : Colors.transparent,
               width: 3,
             ),
             bottom: BorderSide(
@@ -405,8 +400,6 @@ class _PitchRow extends StatelessWidget {
               child: Text(
                 '$name$octave',
                 style: TextStyle(
-                  // Dark text on white keys, light text on black keys. C-rows
-                  // bolder/larger as octave landmarks.
                   color: selected
                       ? MuzicianTheme.scaffoldBg
                       : isBlack

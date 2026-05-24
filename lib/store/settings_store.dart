@@ -36,6 +36,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(noteVolume: volume.clamp(0.0, 1.0));
     await _persist();
   }
+
+  Future<void> setShowNoteLabels(bool show) async {
+    state = state.copyWith(showNoteLabels: show);
+    await _persist();
+  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
