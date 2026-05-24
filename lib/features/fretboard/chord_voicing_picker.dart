@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
+import '../../models/harmonic_analysis.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
@@ -283,7 +284,12 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    chordName,
+                    _selectedRoot != null
+                        ? formatChordSymbol(ChordDetectionResult(
+                            root: _selectedRoot!,
+                            quality: _selectedQuality,
+                          ))
+                        : '',
                     style: const TextStyle(
                       color: MuzicianTheme.sky,
                       fontSize: 13,
@@ -331,7 +337,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                     ),
                   ),
                   child: Text(
-                    root,
+                    formatRootChoiceLabel(root),
                     style: TextStyle(
                       color: active
                           ? MuzicianTheme.sky

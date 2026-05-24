@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/harmonic_analysis.dart';
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
@@ -113,7 +114,10 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '$_selectedRoot ${scaleGroups.values.expand((v) => v).firstWhere((s) => s.$1 == _selectedScale, orElse: () => (_selectedScale!, _selectedScale!)).$2}',
+                        formatScaleLabel(ScaleDetectionResult(
+                          root: _selectedRoot!,
+                          scaleName: _selectedScale!,
+                        )),
                         style: const TextStyle(
                           color: MuzicianTheme.sky,
                           fontSize: 12,
@@ -204,7 +208,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                     ),
                   ),
                   child: Text(
-                    note,
+                    formatRootChoiceLabel(note),
                     style: TextStyle(
                       color: active
                           ? MuzicianTheme.sky
