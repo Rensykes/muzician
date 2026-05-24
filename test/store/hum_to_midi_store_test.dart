@@ -171,18 +171,55 @@ void main() {
     },
   );
 
+  test('stopRecording preserves existing selectedColumnTick', () async {
+    final fake = _FakeMicPitchSession();
+    final container = ProviderContainer(
+      overrides: [micPitchSessionProvider.overrideWithValue(fake)],
+    );
+    addTearDown(container.dispose);
+
+    // Pre-select column at tick 8
+    container.read(pianoRollProvider.notifier).selectColumn(8);
+    expect(container.read(pianoRollProvider).selectedColumnTick, 8);
+
+    await container.read(humToMidiProvider.notifier).startRecording();
+    fake.emit(
+      const PitchFrame(
+        timestampMs: 0,
+        frequencyHz: 440,
+        midiNote: 69,
+        centsOffset: 0,
+        amplitude: 0.9,
+        confidence: 0.97,
+        isSilence: false,
+      ),
+    );
+    fake.emit(
+      const PitchFrame(
+        timestampMs: 180,
+        frequencyHz: 440,
+        midiNote: 69,
+        centsOffset: 0,
+        amplitude: 0.9,
+        confidence: 0.97,
+        isSilence: false,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await container.read(humToMidiProvider.notifier).stopRecording();
+
+    // Existing selection should be preserved since there was already a prior selection
+    expect(container.read(pianoRollProvider).selectedColumnTick, 8);
+  });
+
   test(
-    'stopRecording preserves existing selectedColumnTick',
+    'stopRecording stores latestImportedRange after a successful hum import',
     () async {
       final fake = _FakeMicPitchSession();
       final container = ProviderContainer(
         overrides: [micPitchSessionProvider.overrideWithValue(fake)],
       );
       addTearDown(container.dispose);
-
-      // Pre-select column at tick 8
-      container.read(pianoRollProvider.notifier).selectColumn(8);
-      expect(container.read(pianoRollProvider).selectedColumnTick, 8);
 
       await container.read(humToMidiProvider.notifier).startRecording();
       fake.emit(
@@ -208,10 +245,95 @@ void main() {
         ),
       );
       await Future<void>.delayed(Duration.zero);
+
       await container.read(humToMidiProvider.notifier).stopRecording();
 
-      // Existing selection should be preserved since there was already a prior selection
-      expect(container.read(pianoRollProvider).selectedColumnTick, 8);
+      final range = container.read(pianoRollProvider).latestImportedRange;
+      expect(range, isNotNull);
+      expect(range!.startTick, 0);
+      expect(range.endTickExclusive, greaterThan(0));
+    },
+  );
+
+  test(
+    'stopRecording replaces the previous latestImportedRange on a later successful import',
+    () async {
+      final fake = _FakeMicPitchSession();
+      final container = ProviderContainer(
+        overrides: [micPitchSessionProvider.overrideWithValue(fake)],
+      );
+      addTearDown(container.dispose);
+
+      container
+          .read(pianoRollProvider.notifier)
+          .rememberLatestImportedRange(4, 8);
+
+      await container.read(humToMidiProvider.notifier).startRecording();
+      fake.emit(
+        const PitchFrame(
+          timestampMs: 0,
+          frequencyHz: 494,
+          midiNote: 71,
+          centsOffset: 0,
+          amplitude: 0.9,
+          confidence: 0.97,
+          isSilence: false,
+        ),
+      );
+      fake.emit(
+        const PitchFrame(
+          timestampMs: 180,
+          frequencyHz: 494,
+          midiNote: 71,
+          centsOffset: 0,
+          amplitude: 0.9,
+          confidence: 0.97,
+          isSilence: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await container.read(humToMidiProvider.notifier).stopRecording();
+
+      final range = container.read(pianoRollProvider).latestImportedRange;
+      expect(range?.startTick, isNot(4));
+    },
+  );
+
+  test(
+    'stopRecording clears the previous latestImportedRange when no stable note is imported',
+    () async {
+      final fake = _FakeMicPitchSession();
+      final container = ProviderContainer(
+        overrides: [micPitchSessionProvider.overrideWithValue(fake)],
+      );
+      addTearDown(container.dispose);
+
+      container
+          .read(pianoRollProvider.notifier)
+          .rememberLatestImportedRange(24, 32);
+
+      await container.read(humToMidiProvider.notifier).startRecording();
+      fake.emit(
+        const PitchFrame(
+          timestampMs: 0,
+          frequencyHz: 440,
+          midiNote: 69,
+          centsOffset: 0,
+          amplitude: 0.9,
+          confidence: 0.97,
+          isSilence: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await container.read(humToMidiProvider.notifier).stopRecording();
+
+      expect(container.read(pianoRollProvider).latestImportedRange, isNull);
+      expect(
+        container.read(humToMidiProvider).feedbackMessage,
+        'No stable note detected',
+      );
     },
   );
 }
