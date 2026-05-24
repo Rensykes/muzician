@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/harmonic_analysis.dart';
 import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../utils/note_utils.dart';
@@ -220,7 +221,12 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    chordName,
+                    _selectedRoot != null
+                        ? formatChordSymbol(ChordDetectionResult(
+                            root: _selectedRoot!,
+                            quality: _selectedQuality,
+                          ))
+                        : '',
                     style: const TextStyle(
                       color: MuzicianTheme.emerald,
                       fontSize: 13,
@@ -267,7 +273,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                       ),
                     ),
                     child: Text(
-                      root,
+                      formatRootChoiceLabel(root),
                       style: TextStyle(
                         color: active
                             ? MuzicianTheme.emerald
