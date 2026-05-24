@@ -126,4 +126,92 @@ void main() {
 
     expect(container.read(pianoRollScrollToTickProvider), isNotNull);
   });
+
+  test(
+    'stopRecording sets selectedColumnTick when no prior column existed',
+    () async {
+      final fake = _FakeMicPitchSession();
+      final container = ProviderContainer(
+        overrides: [micPitchSessionProvider.overrideWithValue(fake)],
+      );
+      addTearDown(container.dispose);
+
+      // Ensure no column is selected
+      container.read(pianoRollProvider.notifier).selectColumn(null);
+      expect(container.read(pianoRollProvider).selectedColumnTick, isNull);
+
+      await container.read(humToMidiProvider.notifier).startRecording();
+      fake.emit(
+        const PitchFrame(
+          timestampMs: 0,
+          frequencyHz: 440,
+          midiNote: 69,
+          centsOffset: 0,
+          amplitude: 0.9,
+          confidence: 0.97,
+          isSilence: false,
+        ),
+      );
+      fake.emit(
+        const PitchFrame(
+          timestampMs: 180,
+          frequencyHz: 440,
+          midiNote: 69,
+          centsOffset: 0,
+          amplitude: 0.9,
+          confidence: 0.97,
+          isSilence: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await container.read(humToMidiProvider.notifier).stopRecording();
+
+      // The first imported note starts at tick 0, so selectedColumnTick should be 0
+      expect(container.read(pianoRollProvider).selectedColumnTick, 0);
+    },
+  );
+
+  test(
+    'stopRecording preserves existing selectedColumnTick',
+    () async {
+      final fake = _FakeMicPitchSession();
+      final container = ProviderContainer(
+        overrides: [micPitchSessionProvider.overrideWithValue(fake)],
+      );
+      addTearDown(container.dispose);
+
+      // Pre-select column at tick 8
+      container.read(pianoRollProvider.notifier).selectColumn(8);
+      expect(container.read(pianoRollProvider).selectedColumnTick, 8);
+
+      await container.read(humToMidiProvider.notifier).startRecording();
+      fake.emit(
+        const PitchFrame(
+          timestampMs: 0,
+          frequencyHz: 440,
+          midiNote: 69,
+          centsOffset: 0,
+          amplitude: 0.9,
+          confidence: 0.97,
+          isSilence: false,
+        ),
+      );
+      fake.emit(
+        const PitchFrame(
+          timestampMs: 180,
+          frequencyHz: 440,
+          midiNote: 69,
+          centsOffset: 0,
+          amplitude: 0.9,
+          confidence: 0.97,
+          isSilence: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await container.read(humToMidiProvider.notifier).stopRecording();
+
+      // Existing selection should be preserved since there was already a prior selection
+      expect(container.read(pianoRollProvider).selectedColumnTick, 8);
+    },
+  );
 }
