@@ -755,6 +755,22 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
+    ref.listen(pianoRollScrollToTickProvider, (_, tick) {
+      if (tick == null || !_hScroll.hasClients) return;
+      final targetX = tick * _cellW;
+      if (targetX >
+          _hScroll.offset + (_hScroll.position.viewportDimension / 2)) {
+        _hScroll.animateTo(
+          (targetX - _hScroll.position.viewportDimension / 4).clamp(
+            0.0,
+            _hScroll.position.maxScrollExtent,
+          ),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      ref.read(pianoRollScrollToTickProvider.notifier).state = null;
+    });
     final rangeSize = state.pitchRangeEnd - state.pitchRangeStart + 1;
     final totalTicks = rules.totalTicks(
       state.config.timeSignature,

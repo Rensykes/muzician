@@ -69,6 +69,10 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
     final importResult = ref
         .read(pianoRollProvider.notifier)
         .appendImportedNotes(imported);
+    if (imported.isNotEmpty) {
+      final firstTick = imported.first.startTick;
+      ref.read(pianoRollScrollToTickProvider.notifier).state = firstTick;
+    }
     final feedbackMessage = imported.isEmpty
         ? 'No stable note detected'
         : importResult.truncated
