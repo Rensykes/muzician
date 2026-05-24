@@ -664,6 +664,106 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
   }
 }
 
+// ── Toggle row (label + switch, for Tune sheet boolean settings) ───────────
+
+class ToggleRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const ToggleRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onChanged(!value);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          border: Border.all(color: MuzicianTheme.glassBorder),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: MuzicianTheme.textSecondary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Switch.adaptive(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: MuzicianTheme.sky,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Clear-all button (Tune sheet wipe selections + scale + chord) ──────────
+
+class ClearAllButton extends StatelessWidget {
+  final VoidCallback onClear;
+  const ClearAllButton({super.key, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onClear,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: MuzicianTheme.red.withValues(alpha: 0.10),
+          border: Border.all(
+            color: MuzicianTheme.red.withValues(alpha: 0.40),
+            width: 0.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.delete_sweep_rounded,
+              size: 18,
+              color: MuzicianTheme.red,
+            ),
+            SizedBox(width: 10),
+            Text(
+              'Clear all selections',
+              style: TextStyle(
+                color: MuzicianTheme.red,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Widget sheet (host for production widgets in V2 bottom sheets) ─────────
 
 class _WidgetSheet extends StatelessWidget {

@@ -109,36 +109,10 @@ class _FretboardScreenV2MockupState extends ConsumerState<FretboardScreenV2Mocku
               ),
             ),
             DetectionRibbon(detectedLabel: detected),
+            // Dock: Scale + Chord. Tuning + Capo moved to the Tune sheet
+            // (top-right ⚙) since they're set-and-forget, not frequent.
             DockedToolbar(
               children: [
-                DockTab(
-                  icon: Icons.tune_rounded,
-                  label: 'Tuning',
-                  color: MuzicianTheme.sky,
-                  hasValue: state.currentTuning != TuningName.standard,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Tuning',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: TuningSelector(),
-                    ),
-                  ),
-                ),
-                DockTab(
-                  icon: Icons.vertical_align_top_rounded,
-                  label: 'Capo',
-                  color: MuzicianTheme.orange,
-                  hasValue: state.capo > 0,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Capo',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: CapoControl(),
-                    ),
-                  ),
-                ),
                 DockTab(
                   icon: Icons.stacked_line_chart,
                   label: 'Scale',
@@ -199,11 +173,27 @@ class _FretTuneSheetContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
+    final hasFilters = state.selectedCells.isNotEmpty ||
+        state.highlightedNotes.isNotEmpty ||
+        state.focusedNotes.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (hasFilters) ...[
+            ClearAllButton(
+              onClear: () {
+                HapticFeedback.mediumImpact();
+                notifier.clearSelectedNotes();
+                notifier.setHighlightedNotes([]);
+                ref.read(activeScaleProvider.notifier).state = null;
+                ref.read(activeChordProvider.notifier).state = null;
+                Navigator.of(context).maybePop();
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           const _TuneSectionLabel('View mode'),
           ModeSegment<FretboardViewMode>(
             current: state.viewMode,
@@ -214,8 +204,55 @@ class _FretTuneSheetContent extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
+          const _TuneSectionLabel('Tuning'),
+          const TuningSelector(),
+          const SizedBox(height: 16),
+          const _TuneSectionLabel('Capo'),
+          const CapoControl(),
+          const SizedBox(height: 16),
           const _TuneSectionLabel('Note detection'),
-          const NoteDetectionPanel(),
+          if (state.selectedNotes.isEmpty)
+            const _EmptyHint(
+              icon: Icons.touch_app_rounded,
+              text: 'Tap notes on the fretboard to detect chords and scales.',
+            )
+          else
+            const NoteDetectionPanel(),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyHint extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _EmptyHint({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: MuzicianTheme.glassBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: MuzicianTheme.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                height: 1.35,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -350,11 +387,6 @@ class _VFretPainter extends CustomPainter {
     required this.layout,
   });
 
-  /// In exact mode, every scale note shows on the board; in focused mode,
-  /// only the cells the user actually selected are visible.
-  bool get _showHighlights =>
-      viewMode == FretboardViewMode.exact && highlightedNotes.isNotEmpty;
-
   // Wood palette (reverted from midnight — notes pop better against warm wood).
   static const _boardDark = Color(0xFF1A0D00);
   static const _boardMid = Color(0xFF3D1F00);
@@ -378,42 +410,82 @@ class _VFretPainter extends CustomPainter {
     _paintStrings(c, r);
     _paintFretNumbers(c, Offset(0, layout.boardTop), Size(_VFretLayout.leftMarginW, layout.boardH));
     if (capo > 0) _paintCapo(c, r);
-    if (_showHighlights) _paintHighlightedScale(c, r);
     _paintMutedAndOpenMarkers(c, r);
-    _paintSelectedNotes(c, r);
+    _paintAllNoteBubbles(c, r);
   }
 
-  /// Paint every (string, fret) cell whose pitch-class is in [highlightedNotes]
-  /// as a faint outlined circle so the player sees the scale geometry.
-  void _paintHighlightedScale(Canvas c, Rect r) {
+  static const _pcNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  /// Render EVERY (string, fret) position as a colored bubble — production
+  /// parity. Selected = white fill + colored stroke (production tap style).
+  /// In-scale = colored fill + bright white stroke (emphasized). Plain =
+  /// colored fill + faint white stroke. In Solo mode, non-selected
+  /// non-scale positions are hidden. When a scale is active, out-of-key
+  /// positions are also hidden so the user only sees in-key notes.
+  void _paintAllNoteBubbles(Canvas c, Rect r) {
     final rowH = r.height / _VFretLayout.numFrets;
     final colW = r.width / _VFretLayout.stringCount;
-    final pitchClasses = highlightedNotes
+    final scalePcs = highlightedNotes
         .map(_pitchClassFromName)
         .where((pc) => pc >= 0)
         .toSet();
-    if (pitchClasses.isEmpty) return;
-    // Pre-build selected (stringIndex, fret) for skip lookup.
     final selectedKeys = {
       for (final c in selectedCells) (c.stringIndex, c.fret),
     };
+    final inSolo = viewMode == FretboardViewMode.exactFocus &&
+        selectedCells.isNotEmpty;
+
     for (var stringIndex = 0; stringIndex < _VFretLayout.stringCount; stringIndex++) {
       final openMidi = tuning.strings[stringIndex].midiNote;
       final col = 5 - stringIndex;
       final cx = r.left + col * colW + colW / 2;
-      for (var fret = 0; fret <= _VFretLayout.numFrets; fret++) {
-        if ((fret == 0)) continue; // open notes shown above the nut via separate marker
+      for (var fret = 1; fret <= _VFretLayout.numFrets; fret++) {
         final pc = (openMidi + fret) % 12;
-        if (!pitchClasses.contains(pc)) continue;
-        if (selectedKeys.contains((stringIndex, fret))) continue;
+        final pcName = _pcNames[pc];
+        final isSelected = selectedKeys.contains((stringIndex, fret));
+        final isInScale = scalePcs.contains(pc);
+
+        // Solo: only show selected positions (production "exactFocus").
+        if (inSolo && !isSelected) continue;
+
         final cy = r.top + (fret - 0.5) * rowH;
-        c.drawCircle(
+        final isAcc = const {1, 3, 6, 8, 10}.contains(pc);
+        final color = isAcc ? _accidental : _natural;
+
+        if (isSelected) {
+          c.drawCircle(Offset(cx, cy), 12, Paint()..color = Colors.white);
+          c.drawCircle(
+            Offset(cx, cy),
+            12,
+            Paint()
+              ..color = color
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2.5,
+          );
+        } else {
+          c.drawCircle(
+            Offset(cx, cy),
+            11,
+            Paint()..color = color.withValues(alpha: 0.9),
+          );
+          c.drawCircle(
+            Offset(cx, cy),
+            11,
+            Paint()
+              ..color = Colors.white.withValues(alpha: isInScale ? 0.85 : 0.45)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = isInScale ? 1.8 : 1.0,
+          );
+        }
+
+        _drawText(
+          c,
+          pcName,
           Offset(cx, cy),
-          7,
-          Paint()
-            ..color = MuzicianTheme.emerald.withValues(alpha: 0.55)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
+          color: isSelected ? color : MuzicianTheme.scaffoldBg,
+          size: 10,
+          weight: FontWeight.w700,
+          center: true,
         );
       }
     }
@@ -561,45 +633,6 @@ class _VFretPainter extends CustomPainter {
         _drawText(c, '×', Offset(cx, markerY),
             color: MuzicianTheme.textMuted, size: 16, weight: FontWeight.w700, center: true);
       }
-    }
-  }
-
-  /// Render every fretted cell from the real provider state.
-  void _paintSelectedNotes(Canvas c, Rect r) {
-    final rowH = r.height / _VFretLayout.numFrets;
-    final colW = r.width / _VFretLayout.stringCount;
-    for (final cell in selectedCells) {
-      if (cell.fret == 0) continue; // Open string — rendered above the nut.
-      if (cell.fret > _VFretLayout.numFrets) continue;
-      final col = 5 - cell.stringIndex;
-      final cx = r.left + col * colW + colW / 2;
-      final cy = r.top + (cell.fret - 0.5) * rowH;
-      final isAcc = cell.noteName.contains('#') || cell.noteName.contains('b');
-      final color = isAcc ? _accidental : _natural;
-      c.drawCircle(
-        Offset(cx, cy),
-        12,
-        Paint()..color = color.withValues(alpha: 0.95),
-      );
-      c.drawCircle(
-        Offset(cx, cy),
-        12,
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.5)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
-      // Note label (strip any octave digits).
-      final label = cell.noteName.replaceAll(RegExp(r'\d'), '');
-      _drawText(
-        c,
-        label,
-        Offset(cx, cy),
-        color: MuzicianTheme.scaffoldBg,
-        size: 10,
-        weight: FontWeight.w700,
-        center: true,
-      );
     }
   }
 

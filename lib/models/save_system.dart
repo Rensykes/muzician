@@ -439,25 +439,37 @@ class AppSettings {
   // 0.0 (silent) … 1.0 (full volume). Default 0.8.
   final double noteVolume;
 
+  /// Render note-name text inside selected note bubbles / on keyboard rows.
+  /// When false the instrument canvases show shapes and colors only — useful
+  /// for ear-training and a cleaner visual.
+  final bool showNoteLabels;
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
+    this.showNoteLabels = true,
   });
 
-  AppSettings copyWith({bool? suppressOutOfKeyAlert, double? noteVolume}) =>
-      AppSettings(
+  AppSettings copyWith({
+    bool? suppressOutOfKeyAlert,
+    double? noteVolume,
+    bool? showNoteLabels,
+  }) => AppSettings(
         suppressOutOfKeyAlert:
             suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
         noteVolume: noteVolume ?? this.noteVolume,
+        showNoteLabels: showNoteLabels ?? this.showNoteLabels,
       );
 
   Map<String, dynamic> toJson() => {
     'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
     'noteVolume': noteVolume,
+    'showNoteLabels': showNoteLabels,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
     suppressOutOfKeyAlert: json['suppressOutOfKeyAlert'] as bool? ?? false,
     noteVolume: (json['noteVolume'] as num?)?.toDouble() ?? 0.8,
+    showNoteLabels: json['showNoteLabels'] as bool? ?? true,
   );
 }
