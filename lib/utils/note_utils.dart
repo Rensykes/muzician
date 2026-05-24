@@ -1,6 +1,8 @@
 /// Shared music theory utilities used across fretboard and piano features.
 library;
 
+import '../models/harmonic_analysis.dart';
+
 // ─── Note normalization ───────────────────────────────────────────────────────
 
 const Map<String, String> _flatToSharp = {
