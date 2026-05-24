@@ -16,6 +16,21 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   int _clamp(int value, int minV, int maxV) => value.clamp(minV, maxV);
 
+  void rememberLatestImportedRange(int startTick, int endTickExclusive) {
+    state = state.copyWith(
+      latestImportedRange: () => PianoRollImportedRange(
+        startTick: startTick,
+        endTickExclusive: endTickExclusive,
+      ),
+    );
+  }
+
+  void clearLatestImportedRange() =>
+      state = state.copyWith(latestImportedRange: () => null);
+
+  PianoRollImportedRange? Function()? _latestImportedRangeClearForNewNote() =>
+      state.latestImportedRange == null ? null : () => null;
+
   void setTempo(int tempo) => state = state.copyWith(
     config: state.config.copyWith(
       tempo: tempo.clamp(rules.minTempo, rules.maxTempo),
@@ -109,6 +124,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       notes: [...state.notes, note],
       selectedNoteIds: {note.id},
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
   }
 
@@ -130,6 +146,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       notes: [...state.notes, note],
       selectedNoteIds: {note.id},
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
   }
 
@@ -175,6 +192,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       notes: [...state.notes.where((n) => n.id != noteId), left, right],
       selectedNoteIds: {right.id},
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
   }
 
@@ -279,7 +297,10 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
         durationTicks: safe,
       ),
     );
-    state = state.copyWith(notes: [...state.notes, ...created]);
+    state = state.copyWith(
+      notes: [...state.notes, ...created],
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
+    );
   }
 
   void selectColumn(int? tick) =>
@@ -298,6 +319,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     notes: [],
     selectedNoteIds: const <String>{},
     selectedColumnTick: () => null,
+    latestImportedRange: () => null,
   );
 
   void setHighlightedNotes(List<String> notes) =>
@@ -336,10 +358,13 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     }
   }
 
-  ({int createdCount, bool truncated, int? firstStartTick, int? furthestEndTick})
-  appendImportedNotes(
-    List<QuantizedHumNote> imported,
-  ) {
+  ({
+    int createdCount,
+    bool truncated,
+    int? firstStartTick,
+    int? furthestEndTick,
+  })
+  appendImportedNotes(List<QuantizedHumNote> imported) {
     if (imported.isEmpty) {
       return (
         createdCount: 0,
@@ -370,11 +395,10 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       );
     }
 
-    final furthestEndTick = clamped
+    final requestedFurthestEndTick = clamped
         .map((note) => note.startTick + note.durationTicks)
         .reduce(max);
-    final firstStartTick = clamped.map((note) => note.startTick).reduce(min);
-    _ensureTimelineCoversEndTick(furthestEndTick);
+    _ensureTimelineCoversEndTick(requestedFurthestEndTick);
     final maxTick = rules.totalTicks(
       state.config.timeSignature,
       state.config.totalMeasures,
@@ -402,15 +426,23 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       notes: [...state.notes, ...created],
       selectedNoteIds: created.map((note) => note.id).toSet(),
     );
+    final firstCreatedStartTick = created
+        .map((note) => note.startTick)
+        .reduce(min);
+    final furthestCreatedEndTick = created
+        .map((note) => note.startTick + note.durationTicks)
+        .reduce(max);
     return (
       createdCount: created.length,
       truncated: truncated,
-      firstStartTick: firstStartTick,
-      furthestEndTick: furthestEndTick,
+      firstStartTick: firstCreatedStartTick,
+      furthestEndTick: furthestCreatedEndTick,
     );
   }
 
-  void reset() => state = rules.getDefaultPianoRollState();
+  void reset() => state = rules.getDefaultPianoRollState().copyWith(
+    latestImportedRange: () => null,
+  );
 }
 
 final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollState>(
