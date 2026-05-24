@@ -161,7 +161,7 @@ class _PianoScalePickerState extends ConsumerState<PianoScalePicker> {
                       ),
                     ),
                     child: Text(
-                      note,
+                      formatRootChoiceLabel(note),
                       style: TextStyle(
                         color: active
                             ? MuzicianTheme.sky

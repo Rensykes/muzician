@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/harmonic_analysis.dart';
 import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
@@ -35,7 +36,19 @@ class _PianoNoteDetectionPanelState
     });
 
     final hasNotes = state.selectedNotes.isNotEmpty;
-    final detection = detectChordsAndScales(state.selectedNotes);
+    List<ChordDetectionResult> chordResults = const [];
+    List<ScaleDetectionResult> scaleResults = const [];
+
+    if (state.selectedNotes.length >= 2 && state.selectedKeys.isNotEmpty) {
+      final exactNotes = state.selectedKeys.map((key) {
+        return ExactSelectionNote(
+          midiNote: key.midiNote,
+          pitchClass: key.noteName,
+        );
+      }).toList();
+      chordResults = detectChordResultsFromExactNotes(exactNotes);
+      scaleResults = detectScaleResultsFromExactNotes(exactNotes);
+    }
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
@@ -177,7 +190,7 @@ class _PianoNoteDetectionPanelState
                       ),
                     )
                   else ...[
-                    if (detection.chords.isNotEmpty) ...[
+                    if (chordResults.isNotEmpty) ...[
                       Row(
                         children: [
                           const Text(
@@ -203,28 +216,30 @@ class _PianoNoteDetectionPanelState
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: detection.chords
+                          children: chordResults
                               .map(
-                                (c) => GestureDetector(
+                                (result) => GestureDetector(
                                   onTap: () {
                                     HapticFeedback.lightImpact();
-                                    final parsed = (
-                                      root: _parseRoot(c),
-                                      quality: _parseQuality(c),
-                                    );
                                     ref
                                             .read(
                                               pianoPendingChordProvider
                                                   .notifier,
                                             )
                                             .state =
-                                        parsed;
+                                        (
+                                          root: result.root,
+                                          quality: result.quality,
+                                        );
                                     ref
                                             .read(
                                               pianoActiveChordProvider.notifier,
                                             )
                                             .state =
-                                        parsed;
+                                        (
+                                          root: result.root,
+                                          quality: result.quality,
+                                        );
                                     widget.onChordPanelRequested?.call();
                                   },
                                   child: Container(
@@ -246,7 +261,7 @@ class _PianoNoteDetectionPanelState
                                       ),
                                     ),
                                     child: Text(
-                                      c,
+                                      formatChordSymbol(result),
                                       style: const TextStyle(
                                         color: Color(0xFFE2E8F0),
                                         fontSize: 12,
@@ -260,7 +275,7 @@ class _PianoNoteDetectionPanelState
                         ),
                       ),
                     ],
-                    if (detection.scales.isNotEmpty) ...[
+                    if (scaleResults.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Row(
                         children: [
@@ -287,12 +302,15 @@ class _PianoNoteDetectionPanelState
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: detection.scales.map((s) {
-                            final isActive = _activeScaleChip == s;
+                          children: scaleResults.map((result) {
+                            final chipKey =
+                                '${result.root} ${result.scaleName}';
+                            final isActive = _activeScaleChip == chipKey;
                             return GestureDetector(
                               onTap: () {
                                 HapticFeedback.lightImpact();
-                                _tryApplyScale(s);
+                                _tryApplyScale(
+                                    result.root, result.scaleName);
                               },
                               child: Container(
                                 margin: const EdgeInsets.only(right: 8),
@@ -315,7 +333,7 @@ class _PianoNoteDetectionPanelState
                                   ),
                                 ),
                                 child: Text(
-                                  s,
+                                  formatScaleLabel(result),
                                   style: TextStyle(
                                     color: isActive
                                         ? Colors.white
@@ -338,17 +356,14 @@ class _PianoNoteDetectionPanelState
     );
   }
 
-  Future<void> _tryApplyScale(String displayString) async {
-    if (_activeScaleChip == displayString) {
+  Future<void> _tryApplyScale(String root, String scaleName) async {
+    final chipKey = '$root $scaleName';
+    if (_activeScaleChip == chipKey) {
       setState(() => _activeScaleChip = null);
       ref.read(pianoProvider.notifier).setHighlightedNotes([]);
       ref.read(pianoActiveScaleProvider.notifier).state = null;
       return;
     }
-    final parts = displayString.split(' ');
-    if (parts.length < 2) return;
-    final root = toSharp(parts[0]);
-    final scaleName = parts.sublist(1).join(' ');
     final scaleNotes = getScaleNotes(root, scaleName);
     if (scaleNotes.isEmpty) return;
     final conflicts = ref
@@ -357,7 +372,7 @@ class _PianoNoteDetectionPanelState
         .where((n) => !scaleNotes.contains(n))
         .toList();
     if (conflicts.isEmpty) {
-      setState(() => _activeScaleChip = displayString);
+      setState(() => _activeScaleChip = chipKey);
       ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
       ref.read(pianoPendingScaleProvider.notifier).state = (
         root: root,
@@ -376,7 +391,7 @@ class _PianoNoteDetectionPanelState
     );
     if (confirmed == true) {
       ref.read(pianoProvider.notifier).removeNotesByPitchClass(conflicts);
-      setState(() => _activeScaleChip = displayString);
+      setState(() => _activeScaleChip = chipKey);
       ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
       ref.read(pianoPendingScaleProvider.notifier).state = (
         root: root,
@@ -387,15 +402,5 @@ class _PianoNoteDetectionPanelState
         scaleName: scaleName,
       );
     }
-  }
-
-  String _parseRoot(String chord) {
-    if (chord.length > 1 && chord[1] == '#') return chord.substring(0, 2);
-    return chord.substring(0, 1);
-  }
-
-  String _parseQuality(String chord) {
-    if (chord.length > 1 && chord[1] == '#') return chord.substring(2);
-    return chord.substring(1);
   }
 }
