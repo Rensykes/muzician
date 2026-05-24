@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/hum_to_midi.dart';
+import '../models/piano_roll_playback.dart';
 import '../schema/rules/mono_pitch_rules.dart' as rules;
+import '../store/piano_roll_playback_store.dart';
 import '../store/piano_roll_store.dart';
 import '../utils/mic_pitch_session.dart';
 
@@ -18,6 +20,12 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
   HumToMidiState build() => const HumToMidiState();
 
   Future<void> startRecording() async {
+    // Stop active playback before starting a new recording
+    final playbackState = ref.read(pianoRollPlaybackProvider);
+    if (playbackState.status == PianoRollPlaybackStatus.playing) {
+      ref.read(pianoRollPlaybackProvider.notifier).stopPlayback();
+    }
+
     final session = ref.read(micPitchSessionProvider);
     state = state.copyWith(
       status: HumToMidiStatus.requestingPermission,

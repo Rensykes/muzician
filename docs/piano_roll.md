@@ -53,6 +53,50 @@ lib/
 
 The piano roll now includes a mobile-only `Hum to MIDI` recorder. It captures mono microphone input, estimates one stable pitch at a time, lightly quantizes timing after stop, and appends the finalized notes to the current piano roll instead of replacing existing content.
 
+### Timeline growth
+
+- Hum imports expand the **timeline horizontally** (add measures) when the imported phrase extends beyond the current end tick.
+- If the imported phrase ends exactly on the current boundary, no extra measure is added.
+- **No pitch-range auto-growth** in this follow-up — imported notes outside the visible pitch window are clamped.
+
+### Selection handoff
+
+- If no column was selected before recording, `selectedColumnTick` is set to the first imported note's start tick after the take completes.
+- If a column was already selected, the existing selection is **preserved**.
+- Stopping a hum take **stops active playback** first if the transport is already running.
+
+---
+
+## Playback
+
+The piano roll includes a simple onset-sequencer transport that plays notes via the synthesised `NotePlayer` engine.
+
+### Controls
+
+The **Playback** panel in the toolbar shows:
+- **Play / Stop** button — starts or cancels transport.
+- **Status text** — shows the start point and current tick while playing.
+
+| Condition | Behavior |
+|---|---|
+| Idle + column selected | `Start: Selected column (tick N)` — plays from that tick |
+| Idle + no column selected | `Start: Beginning of roll` — plays from tick 0 |
+| Playing | Shows current tick advancing |
+| Hum is recording / processing | Playback button hidden; shows "Playback unavailable while humming" |
+| No notes at or after the start tick | Shows "Nothing to play from the selected column" |
+
+### Scope
+
+| In scope | Out of scope |
+|---|---|
+| Play / Stop | Pause / Resume |
+| Start from selected column | Loop mode |
+| Run to end of timeline | Metronome / count-in |
+| Onset-only sequencing (duration-accurate note-offs deferred) | Animated playhead / auto-scroll |
+| | Multi-track / velocity editing |
+| | MIDI export |
+| | Pitch-range auto-growth |
+
 ---
 
 ## Store (`lib/store/piano_roll_store.dart`)
