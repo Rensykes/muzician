@@ -193,3 +193,50 @@ List<QuantizedHumNote> quantizeNotesToTicks({
     );
   }).toList();
 }
+
+List<QuantizedHumNote> normalizeQuantizedHumNotesMonophonically(
+  List<QuantizedHumNote> notes,
+) {
+  if (notes.isEmpty) return const [];
+
+  final orderedIndexes = List<int>.generate(notes.length, (index) => index)
+    ..sort((a, b) {
+      final startTickCompare = notes[a].startTick.compareTo(notes[b].startTick);
+      if (startTickCompare != 0) return startTickCompare;
+      return a.compareTo(b);
+    });
+
+  final normalized = <QuantizedHumNote>[];
+  for (final index in orderedIndexes) {
+    final note = notes[index];
+    normalized.add(
+      QuantizedHumNote(
+        midiNote: note.midiNote,
+        startTick: note.startTick,
+        durationTicks: note.durationTicks,
+      ),
+    );
+
+    if (normalized.length < 2) continue;
+
+    final previousIndex = normalized.length - 2;
+    final previous = normalized[previousIndex];
+    final current = normalized.last;
+    final previousEnd = previous.startTick + previous.durationTicks;
+
+    if (current.startTick < previousEnd) {
+      final trimmedDuration = current.startTick - previous.startTick;
+      if (trimmedDuration <= 0) {
+        normalized.removeAt(previousIndex);
+      } else {
+        normalized[previousIndex] = QuantizedHumNote(
+          midiNote: previous.midiNote,
+          startTick: previous.startTick,
+          durationTicks: trimmedDuration,
+        );
+      }
+    }
+  }
+
+  return normalized;
+}
