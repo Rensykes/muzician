@@ -537,6 +537,15 @@ class _PianoRollInfoTab extends StatelessWidget {
               color: MuzicianTheme.orange,
             ),
             _Entry(
+              icon: Icons.play_arrow_rounded,
+              label: 'Playback',
+              desc:
+                  'Tap Play to hear the roll from the selected column through '
+                  'the end of the timeline. Tap Stop to cancel. Playback is '
+                  'disabled while humming is active.',
+              color: MuzicianTheme.orange,
+            ),
+            _Entry(
               icon: Icons.delete_sweep_outlined,
               label: 'Clear',
               desc: 'Removes all notes from the entire timeline.',
