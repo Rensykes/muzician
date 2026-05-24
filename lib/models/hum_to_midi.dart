@@ -45,3 +45,39 @@ class QuantizedHumNote {
     required this.durationTicks,
   });
 }
+
+class HumToMidiState {
+  final HumToMidiStatus status;
+  final List<PitchFrame> frames;
+  final int? liveMidiNote;
+  final int? startedAtMs;
+  final String? feedbackMessage;
+  final String? errorMessage;
+
+  const HumToMidiState({
+    this.status = HumToMidiStatus.idle,
+    this.frames = const <PitchFrame>[],
+    this.liveMidiNote,
+    this.startedAtMs,
+    this.feedbackMessage,
+    this.errorMessage,
+  });
+
+  HumToMidiState copyWith({
+    HumToMidiStatus? status,
+    List<PitchFrame>? frames,
+    int? Function()? liveMidiNote,
+    int? Function()? startedAtMs,
+    String? Function()? feedbackMessage,
+    String? Function()? errorMessage,
+  }) {
+    return HumToMidiState(
+      status: status ?? this.status,
+      frames: frames ?? this.frames,
+      liveMidiNote: liveMidiNote != null ? liveMidiNote() : this.liveMidiNote,
+      startedAtMs: startedAtMs != null ? startedAtMs() : this.startedAtMs,
+      feedbackMessage: feedbackMessage != null ? feedbackMessage() : this.feedbackMessage,
+      errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
+    );
+  }
+}
