@@ -141,12 +141,11 @@ class FretboardNotifier extends Notifier<FretboardState> {
     ref.read(fretboardManualEditProvider.notifier).state++;
   }
 
-  void clearSelectedNotes() =>
-      state = state.copyWith(
-        selectedNotes: [],
-        selectedCells: [],
-        focusedNotes: {},
-      );
+  void clearSelectedNotes() => state = state.copyWith(
+    selectedNotes: [],
+    selectedCells: [],
+    focusedNotes: {},
+  );
 
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);

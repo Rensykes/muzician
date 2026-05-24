@@ -63,7 +63,11 @@ class _OutOfKeyDialogState extends State<OutOfKeyDialog> {
                     ),
                   ),
                   child: _suppress
-                      ? const Icon(Icons.check, size: 12, color: MuzicianTheme.sky)
+                      ? const Icon(
+                          Icons.check,
+                          size: 12,
+                          color: MuzicianTheme.sky,
+                        )
                       : null,
                 ),
                 const SizedBox(width: 8),

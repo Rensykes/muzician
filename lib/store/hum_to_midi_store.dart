@@ -56,8 +56,9 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
     await session.stop();
     final segmented = rules.segmentStableNotes(state.frames);
     final pianoRoll = ref.read(pianoRollProvider);
-    final anchorTick =
-        ref.read(pianoRollProvider.notifier).suggestedImportAnchorTick();
+    final anchorTick = ref
+        .read(pianoRollProvider.notifier)
+        .suggestedImportAnchorTick();
     final imported = rules.quantizeNotesToTicks(
       notes: segmented,
       anchorTick: anchorTick,
@@ -65,8 +66,9 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
       timeSignature: pianoRoll.config.timeSignature,
       snapTicks: pianoRoll.snapTicks,
     );
-    final importResult =
-        ref.read(pianoRollProvider.notifier).appendImportedNotes(imported);
+    final importResult = ref
+        .read(pianoRollProvider.notifier)
+        .appendImportedNotes(imported);
     final feedbackMessage = imported.isEmpty
         ? 'No stable note detected'
         : importResult.truncated
@@ -82,5 +84,6 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
   }
 }
 
-final humToMidiProvider =
-    NotifierProvider<HumToMidiNotifier, HumToMidiState>(HumToMidiNotifier.new);
+final humToMidiProvider = NotifierProvider<HumToMidiNotifier, HumToMidiState>(
+  HumToMidiNotifier.new,
+);

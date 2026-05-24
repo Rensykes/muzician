@@ -455,11 +455,10 @@ class AppSettings {
     double? noteVolume,
     bool? showNoteLabels,
   }) => AppSettings(
-        suppressOutOfKeyAlert:
-            suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
-        noteVolume: noteVolume ?? this.noteVolume,
-        showNoteLabels: showNoteLabels ?? this.showNoteLabels,
-      );
+    suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
+    noteVolume: noteVolume ?? this.noteVolume,
+    showNoteLabels: showNoteLabels ?? this.showNoteLabels,
+  );
 
   Map<String, dynamic> toJson() => {
     'suppressOutOfKeyAlert': suppressOutOfKeyAlert,

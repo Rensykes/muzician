@@ -320,13 +320,19 @@ class _MockupLauncher extends StatelessWidget {
           visualDensity: VisualDensity.compact,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          icon: const Icon(Icons.auto_awesome, size: 18, color: MuzicianTheme.sky),
+          icon: const Icon(
+            Icons.auto_awesome,
+            size: 18,
+            color: MuzicianTheme.sky,
+          ),
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: builder, fullscreenDialog: true),
           ),
         ),
         const SizedBox(width: 4),
-        _HelpButton(onTap: () => showAppInfoPanel(context, initialTab: helpTab)),
+        _HelpButton(
+          onTap: () => showAppInfoPanel(context, initialTab: helpTab),
+        ),
       ],
     );
   }

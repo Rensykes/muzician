@@ -23,7 +23,11 @@ import '../theme/muzician_theme.dart';
 class MockupScaffold extends StatelessWidget {
   final Widget child;
   final String activeNavLabel;
-  const MockupScaffold({super.key, required this.child, required this.activeNavLabel});
+  const MockupScaffold({
+    super.key,
+    required this.child,
+    required this.activeNavLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +75,8 @@ class CompactAppBar extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(onClose == null ? 16 : 4, 0, 16, 0),
         child: Row(
           children: [
-            if (onClose != null) IconBtn(icon: Icons.close_rounded, onTap: onClose!),
+            if (onClose != null)
+              IconBtn(icon: Icons.close_rounded, onTap: onClose!),
             if (onClose != null) const SizedBox(width: 4),
             Text(
               title,
@@ -126,7 +131,12 @@ class IconBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final Color? color;
-  const IconBtn({super.key, required this.icon, required this.onTap, this.color});
+  const IconBtn({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +146,11 @@ class IconBtn extends StatelessWidget {
       child: InkResponse(
         onTap: onTap,
         radius: 24,
-        child: Icon(icon, color: color ?? MuzicianTheme.textSecondary, size: 22),
+        child: Icon(
+          icon,
+          color: color ?? MuzicianTheme.textSecondary,
+          size: 22,
+        ),
       ),
     );
   }
@@ -223,13 +237,17 @@ class _Segment extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: selected ? MuzicianTheme.textPrimary : MuzicianTheme.textMuted,
+              color: selected
+                  ? MuzicianTheme.textPrimary
+                  : MuzicianTheme.textMuted,
             ),
             const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
-                color: selected ? MuzicianTheme.textPrimary : MuzicianTheme.textMuted,
+                color: selected
+                    ? MuzicianTheme.textPrimary
+                    : MuzicianTheme.textMuted,
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -384,9 +402,7 @@ class DockTab extends StatelessWidget {
                   Icon(
                     icon,
                     size: 18,
-                    color: hasValue
-                        ? color
-                        : MuzicianTheme.textMuted,
+                    color: hasValue ? color : MuzicianTheme.textMuted,
                   ),
                   if (hasValue)
                     Positioned(
@@ -549,9 +565,8 @@ Future<T?> showPickerSheet<T extends Object>({
     constraints: BoxConstraints(
       maxHeight: MediaQuery.of(context).size.height * 0.7,
     ),
-    builder: (ctx) => _PickerSheet<T>(
-      title: title, options: options, current: current,
-    ),
+    builder: (ctx) =>
+        _PickerSheet<T>(title: title, options: options, current: current),
   );
 }
 
@@ -578,7 +593,11 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
   final String title;
   final List<T> options;
   final T current;
-  const _PickerSheet({required this.title, required this.options, required this.current});
+  const _PickerSheet({
+    required this.title,
+    required this.options,
+    required this.current,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -598,7 +617,8 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
               const SizedBox(height: 12),
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: MuzicianTheme.textMuted,
                     borderRadius: BorderRadius.circular(2),
@@ -607,19 +627,26 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Text(title,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    )),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
               Flexible(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
-                      16, 4, 16, 16 + MediaQuery.of(context).padding.bottom),
+                    16,
+                    4,
+                    16,
+                    16 + MediaQuery.of(context).padding.bottom,
+                  ),
                   child: Wrap(
-                    spacing: 8, runSpacing: 8,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: options.map((o) {
                       final selected = o == current;
                       return GestureDetector(
@@ -628,7 +655,10 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
                           Navigator.of(context).pop(o);
                         },
                         child: Container(
-                          constraints: const BoxConstraints(minWidth: 56, minHeight: 44),
+                          constraints: const BoxConstraints(
+                            minWidth: 56,
+                            minHeight: 44,
+                          ),
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: BoxDecoration(
                             color: selected
@@ -647,7 +677,9 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
                             style: TextStyle(
                               color: MuzicianTheme.textPrimary,
                               fontSize: 14,
-                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
                           ),
                         ),
@@ -789,7 +821,8 @@ class _WidgetSheet extends StatelessWidget {
               const SizedBox(height: 12),
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: MuzicianTheme.textMuted,
                     borderRadius: BorderRadius.circular(2),
@@ -800,12 +833,14 @@ class _WidgetSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(
                   children: [
-                    Text(title,
-                        style: const TextStyle(
-                          color: MuzicianTheme.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        )),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: MuzicianTheme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const Spacer(),
                     IconBtn(
                       icon: Icons.close_rounded,
@@ -848,10 +883,26 @@ class MockBottomNav extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _NavItem(icon: Icons.music_note_rounded, label: 'Fretboard', selected: activeLabel == 'Fretboard'),
-          _NavItem(icon: Icons.piano_rounded, label: 'Piano', selected: activeLabel == 'Piano'),
-          _NavItem(icon: Icons.grid_on_rounded, label: 'Roll', selected: activeLabel == 'Roll'),
-          _NavItem(icon: Icons.settings_rounded, label: 'Settings', selected: activeLabel == 'Settings'),
+          _NavItem(
+            icon: Icons.music_note_rounded,
+            label: 'Fretboard',
+            selected: activeLabel == 'Fretboard',
+          ),
+          _NavItem(
+            icon: Icons.piano_rounded,
+            label: 'Piano',
+            selected: activeLabel == 'Piano',
+          ),
+          _NavItem(
+            icon: Icons.grid_on_rounded,
+            label: 'Roll',
+            selected: activeLabel == 'Roll',
+          ),
+          _NavItem(
+            icon: Icons.settings_rounded,
+            label: 'Settings',
+            selected: activeLabel == 'Settings',
+          ),
         ],
       ),
     );
@@ -862,7 +913,11 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
-  const _NavItem({required this.icon, required this.label, this.selected = false});
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    this.selected = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -873,12 +928,14 @@ class _NavItem extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-              )),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

@@ -58,8 +58,28 @@ void main() {
     addTearDown(container.dispose);
 
     await container.read(humToMidiProvider.notifier).startRecording();
-    fake.emit(const PitchFrame(timestampMs: 0, frequencyHz: 440, midiNote: 69, centsOffset: 0, amplitude: 0.9, confidence: 0.97, isSilence: false));
-    fake.emit(const PitchFrame(timestampMs: 180, frequencyHz: 440, midiNote: 69, centsOffset: 0, amplitude: 0.9, confidence: 0.97, isSilence: false));
+    fake.emit(
+      const PitchFrame(
+        timestampMs: 0,
+        frequencyHz: 440,
+        midiNote: 69,
+        centsOffset: 0,
+        amplitude: 0.9,
+        confidence: 0.97,
+        isSilence: false,
+      ),
+    );
+    fake.emit(
+      const PitchFrame(
+        timestampMs: 180,
+        frequencyHz: 440,
+        midiNote: 69,
+        centsOffset: 0,
+        amplitude: 0.9,
+        confidence: 0.97,
+        isSilence: false,
+      ),
+    );
     await Future<void>.delayed(Duration.zero);
 
     await container.read(humToMidiProvider.notifier).stopRecording();

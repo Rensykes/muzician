@@ -49,8 +49,10 @@ double _scrollOffsetForFret(int fret) {
 enum FretboardPalette {
   /// Original mahogany — warm brown wood + gold strings.
   wood,
+
   /// Dark navy → indigo gradient, silver strings. Matches the V2 theme.
   midnight,
+
   /// Neutral graphite gradient with silver strings.
   graphite,
 }

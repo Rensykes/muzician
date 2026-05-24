@@ -19,10 +19,12 @@ class PianoRollScreenV2Mockup extends ConsumerStatefulWidget {
   const PianoRollScreenV2Mockup({super.key});
 
   @override
-  ConsumerState<PianoRollScreenV2Mockup> createState() => _PianoRollScreenV2MockupState();
+  ConsumerState<PianoRollScreenV2Mockup> createState() =>
+      _PianoRollScreenV2MockupState();
 }
 
-class _PianoRollScreenV2MockupState extends ConsumerState<PianoRollScreenV2Mockup> {
+class _PianoRollScreenV2MockupState
+    extends ConsumerState<PianoRollScreenV2Mockup> {
   bool _playing = false;
   String _root = 'C';
   String _quality = 'maj';
@@ -60,9 +62,7 @@ class _PianoRollScreenV2MockupState extends ConsumerState<PianoRollScreenV2Mocku
               },
               onBpmChange: (d) => notifier.setTempo(state.config.tempo + d),
             ),
-            Expanded(
-              child: GlassFrame(child: const PianoRollGrid()),
-            ),
+            Expanded(child: GlassFrame(child: const PianoRollGrid())),
             DockedToolbar(
               children: [
                 DockField(
@@ -72,8 +72,18 @@ class _PianoRollScreenV2MockupState extends ConsumerState<PianoRollScreenV2Mocku
                       context: context,
                       title: 'Root',
                       options: const [
-                        'C', 'C#', 'D', 'D#', 'E', 'F',
-                        'F#', 'G', 'G#', 'A', 'A#', 'B',
+                        'C',
+                        'C#',
+                        'D',
+                        'D#',
+                        'E',
+                        'F',
+                        'F#',
+                        'G',
+                        'G#',
+                        'A',
+                        'A#',
+                        'B',
                       ],
                       current: _root,
                     );
@@ -87,9 +97,23 @@ class _PianoRollScreenV2MockupState extends ConsumerState<PianoRollScreenV2Mocku
                       context: context,
                       title: 'Quality',
                       options: const [
-                        '5th', 'maj', 'min', 'dom7', 'maj7', 'm7',
-                        'sus2', 'sus4', 'dim', 'aug', 'm7♭5',
-                        'add9', 'maj9', '6', 'm6', 'dim7', '7sus4',
+                        '5th',
+                        'maj',
+                        'min',
+                        'dom7',
+                        'maj7',
+                        'm7',
+                        'sus2',
+                        'sus4',
+                        'dim',
+                        'aug',
+                        'm7♭5',
+                        'add9',
+                        'maj9',
+                        '6',
+                        'm6',
+                        'dim7',
+                        '7sus4',
                       ],
                       current: _quality,
                     );
@@ -226,7 +250,11 @@ class _Readout extends StatelessWidget {
   final String label;
   final String value;
   final bool accent;
-  const _Readout({required this.label, required this.value, this.accent = false});
+  const _Readout({
+    required this.label,
+    required this.value,
+    this.accent = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -234,21 +262,25 @@ class _Readout extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(label,
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.6,
-            )),
+        Text(
+          label,
+          style: const TextStyle(
+            color: MuzicianTheme.textMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.6,
+          ),
+        ),
         const SizedBox(width: 5),
-        Text(value,
-            style: TextStyle(
-              color: MuzicianTheme.textPrimary,
-              fontSize: accent ? 16 : 14,
-              fontWeight: accent ? FontWeight.w700 : FontWeight.w600,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            )),
+        Text(
+          value,
+          style: TextStyle(
+            color: MuzicianTheme.textPrimary,
+            fontSize: accent ? 16 : 14,
+            fontWeight: accent ? FontWeight.w700 : FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
       ],
     );
   }

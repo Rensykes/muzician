@@ -50,15 +50,20 @@ class _PianoRollHumRecorderPanelState
 
     return PianoRollHumRecorderCard(
       status: state.status,
-      liveNoteLabel: state.liveMidiNote == null ? 'No pitch' : rules.midiToNoteLabel(state.liveMidiNote!),
+      liveNoteLabel: state.liveMidiNote == null
+          ? 'No pitch'
+          : rules.midiToNoteLabel(state.liveMidiNote!),
       statusLabel: switch (state.status) {
-        HumToMidiStatus.recording => state.liveMidiNote == null ? 'No pitch' : 'Stable',
+        HumToMidiStatus.recording =>
+          state.liveMidiNote == null ? 'No pitch' : 'Stable',
         HumToMidiStatus.processing => 'Processing',
         HumToMidiStatus.error => state.errorMessage ?? 'Error',
         HumToMidiStatus.completed => state.feedbackMessage ?? 'Imported',
         _ => 'Ready',
       },
-      elapsedLabel: state.status == HumToMidiStatus.recording ? elapsedLabel : 'Idle',
+      elapsedLabel: state.status == HumToMidiStatus.recording
+          ? elapsedLabel
+          : 'Idle',
       onStart: state.status == HumToMidiStatus.idle
           ? () => ref.read(humToMidiProvider.notifier).startRecording()
           : null,
@@ -93,7 +98,14 @@ class PianoRollHumRecorderCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Hum to MIDI', style: TextStyle(color: MuzicianTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w700)),
+        const Text(
+          'Hum to MIDI',
+          style: TextStyle(
+            color: MuzicianTheme.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -101,12 +113,32 @@ class PianoRollHumRecorderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(liveNoteLabel, style: const TextStyle(color: MuzicianTheme.textPrimary, fontSize: 22, fontWeight: FontWeight.w800)),
-                  Text(statusLabel, style: const TextStyle(color: MuzicianTheme.textMuted, fontSize: 11)),
+                  Text(
+                    liveNoteLabel,
+                    style: const TextStyle(
+                      color: MuzicianTheme.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    statusLabel,
+                    style: const TextStyle(
+                      color: MuzicianTheme.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             ),
-            Text(elapsedLabel, style: const TextStyle(color: MuzicianTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+            Text(
+              elapsedLabel,
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(width: 12),
             FilledButton(
               onPressed: isRecording ? onStop : onStart,
