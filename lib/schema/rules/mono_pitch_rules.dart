@@ -12,6 +12,42 @@ const minStableNoteMs = 80;
 const maxMergeGapMs = 180;
 const _yinThreshold = 0.15;
 const minHumAmplitude = 0.02;
+
+enum HumSensitivity { strict, balanced, forgiving }
+
+class HumSensitivityTuning {
+  final int switchFrames;
+  final int deadbandCents;
+  final int minNoteMs;
+  const HumSensitivityTuning({
+    required this.switchFrames,
+    required this.deadbandCents,
+    required this.minNoteMs,
+  });
+
+  static const _strict = HumSensitivityTuning(
+    switchFrames: 2,
+    deadbandCents: 0,
+    minNoteMs: 80,
+  );
+  static const _balanced = HumSensitivityTuning(
+    switchFrames: 4,
+    deadbandCents: 35,
+    minNoteMs: 120,
+  );
+  static const _forgiving = HumSensitivityTuning(
+    switchFrames: 7,
+    deadbandCents: 60,
+    minNoteMs: 180,
+  );
+
+  static HumSensitivityTuning of(HumSensitivity sensitivity) =>
+      switch (sensitivity) {
+        HumSensitivity.strict => _strict,
+        HumSensitivity.balanced => _balanced,
+        HumSensitivity.forgiving => _forgiving,
+      };
+}
 const _noteNames = [
   'C',
   'C#',
@@ -130,9 +166,13 @@ PitchEstimate? estimateDominantFrequencyFromSamples(
 }
 
 
-List<DetectedMonoNote> segmentStableNotes(List<PitchFrame> frames) {
+List<DetectedMonoNote> segmentStableNotes(
+  List<PitchFrame> frames, {
+  HumSensitivity sensitivity = HumSensitivity.strict,
+}) {
   if (frames.isEmpty) return const [];
 
+  final tuning = HumSensitivityTuning.of(sensitivity);
   final frameSpanMs = _estimateMedianFrameSpanMs(frames);
 
   final notes = <DetectedMonoNote>[];
@@ -150,7 +190,7 @@ List<DetectedMonoNote> segmentStableNotes(List<PitchFrame> frames) {
     if (midi == null || start == null) return;
     final rawDuration = lastVoicedMs - start;
     final duration = rawDuration <= 0 ? frameSpanMs : rawDuration;
-    if (duration < minStableNoteMs) return;
+    if (duration < tuning.minNoteMs) return;
     notes.add(
       DetectedMonoNote(
         startMs: start,
@@ -168,19 +208,26 @@ List<DetectedMonoNote> segmentStableNotes(List<PitchFrame> frames) {
         frame.confidence >= minStableConfidence;
     if (isVoiced) {
       final midi = frame.midiNote!;
-      if (activeMidi == null) {
+      final active = activeMidi;
+      final withinDeadband =
+          active != null &&
+          midi != active &&
+          tuning.deadbandCents > 0 &&
+          frame.frequencyHz > 0 &&
+          _absCentsFromMidi(frame.frequencyHz, active) <= tuning.deadbandCents;
+      if (active == null) {
         activeMidi = midi;
         startMs = frame.timestampMs;
         pendingMidi = null;
         pendingFrames = 0;
-      } else if (midi != activeMidi) {
+      } else if (midi != active && !withinDeadband) {
         if (pendingMidi == midi) {
           pendingFrames += 1;
         } else {
           pendingMidi = midi;
           pendingFrames = 1;
         }
-        if (pendingFrames >= 2) {
+        if (pendingFrames >= tuning.switchFrames) {
           emit();
           activeMidi = midi;
           startMs = frame.timestampMs;
@@ -216,6 +263,11 @@ List<DetectedMonoNote> segmentStableNotes(List<PitchFrame> frames) {
   }
 
   return notes;
+}
+
+double _absCentsFromMidi(double frequencyHz, int midiNote) {
+  final reference = 440.0 * pow(2, (midiNote - 69) / 12.0);
+  return (1200 * log(frequencyHz / reference) / ln2).abs();
 }
 
 int _estimateMedianFrameSpanMs(List<PitchFrame> frames) {

@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/hum_to_midi.dart';
 import '../../store/hum_to_midi_store.dart';
 import '../../store/piano_roll_store.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../schema/rules/mono_pitch_rules.dart' as rules;
+import '../../schema/rules/mono_pitch_rules.dart' show HumSensitivity;
 
 class PianoRollHumRecorderPanel extends ConsumerStatefulWidget {
   const PianoRollHumRecorderPanel({super.key});
@@ -52,6 +54,12 @@ class _PianoRollHumRecorderPanelState
     final elapsedLabel =
         '${elapsed.inMinutes.remainder(60).toString().padLeft(2, '0')}:${elapsed.inSeconds.remainder(60).toString().padLeft(2, '0')}';
 
+    final sensitivity = ref.watch(
+      settingsProvider.select((s) => s.humSensitivity),
+    );
+    final canChangeSensitivity = state.status != HumToMidiStatus.recording &&
+        state.status != HumToMidiStatus.processing;
+
     return PianoRollHumRecorderCard(
       status: state.status,
       liveNoteLabel: state.liveMidiNote == null
@@ -83,6 +91,11 @@ class _PianoRollHumRecorderPanelState
               ref.read(pianoRollScrollToTickProvider.notifier).state =
                   latestImportedRange.startTick;
             },
+      sensitivity: sensitivity,
+      onSensitivityChanged: canChangeSensitivity
+          ? (value) =>
+              ref.read(settingsProvider.notifier).setHumSensitivity(value)
+          : null,
     );
   }
 }
@@ -95,6 +108,8 @@ class PianoRollHumRecorderCard extends StatelessWidget {
   final VoidCallback? onStart;
   final VoidCallback? onStop;
   final VoidCallback? onJumpToLatest;
+  final HumSensitivity sensitivity;
+  final ValueChanged<HumSensitivity>? onSensitivityChanged;
 
   const PianoRollHumRecorderCard({
     super.key,
@@ -105,6 +120,8 @@ class PianoRollHumRecorderCard extends StatelessWidget {
     required this.onStart,
     required this.onStop,
     this.onJumpToLatest,
+    this.sensitivity = HumSensitivity.balanced,
+    this.onSensitivityChanged,
   });
 
   @override
@@ -161,6 +178,11 @@ class PianoRollHumRecorderCard extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _HumSensitivitySelector(
+          value: sensitivity,
+          onChanged: onSensitivityChanged,
+        ),
         if (onJumpToLatest != null) ...[
           const SizedBox(height: 8),
           TextButton(
@@ -168,6 +190,58 @@ class PianoRollHumRecorderCard extends StatelessWidget {
             child: const Text('Jump to latest'),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _HumSensitivitySelector extends StatelessWidget {
+  final HumSensitivity value;
+  final ValueChanged<HumSensitivity>? onChanged;
+
+  const _HumSensitivitySelector({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Pitch sensitivity',
+          style: TextStyle(
+            color: MuzicianTheme.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SegmentedButton<HumSensitivity>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: HumSensitivity.strict,
+              label: Text('Strict'),
+            ),
+            ButtonSegment(
+              value: HumSensitivity.balanced,
+              label: Text('Balanced'),
+            ),
+            ButtonSegment(
+              value: HumSensitivity.forgiving,
+              label: Text('Forgiving'),
+            ),
+          ],
+          selected: {value},
+          onSelectionChanged: onChanged == null
+              ? null
+              : (set) => onChanged!(set.first),
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            textStyle: WidgetStateProperty.all(
+              const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
       ],
     );
   }
