@@ -33,6 +33,13 @@ const _noteDurationMs = 700;
 const _decayRate = 5.5;
 const _poolSize = 6;
 
+// Metronome click — short percussive sine with steep decay. Two flavors:
+// the accent fires on the downbeat (beat 1), the weak click on other beats.
+const _clickDurationMs = 35;
+const _clickDecayRate = 140.0;
+const _clickFreqAccent = 2000.0;
+const _clickFreqWeak = 1500.0;
+
 // ── Pure-Dart synthesis ──────────────────────────────────────────────────────
 
 double _midiToFreq(int midi) => 440.0 * math.pow(2.0, (midi - 69) / 12.0);
@@ -50,6 +57,21 @@ Uint8List _renderNote(int midi) {
     v += math.sin(2 * math.pi * freq * 4 * t) * 0.05;
     v += math.sin(2 * math.pi * freq * 6 * t) * 0.03;
     samples[i] = (v * env * 22000).round().clamp(-32767, 32767);
+  }
+  return _encodeWav(samples);
+}
+
+Uint8List _renderClick(double freq) {
+  const numSamples = _sampleRate * _clickDurationMs ~/ 1000;
+  final samples = Int16List(numSamples);
+  // Quick fade-in over the first 1ms to avoid an audible click at sample 0.
+  final attackSamples = (_sampleRate * 0.001).round();
+  for (var i = 0; i < numSamples; i++) {
+    final t = i / _sampleRate;
+    final attack = i < attackSamples ? i / attackSamples : 1.0;
+    final env = math.exp(-t * _clickDecayRate);
+    final v = math.sin(2 * math.pi * freq * t);
+    samples[i] = (v * env * attack * 26000).round().clamp(-32767, 32767);
   }
   return _encodeWav(samples);
 }
@@ -120,12 +142,23 @@ class NotePlayer {
     unawaited(_play(midiNote, volume));
   }
 
+  /// Plays a short metronome click at [volume] (0.0–1.0). [accent] picks the
+  /// brighter downbeat click; otherwise the softer beat click.
+  ///
+  /// Clicks reuse the same audio pool as notes, so a click never blocks a
+  /// concurrent chord. Cache keys live in a reserved negative integer range
+  /// (`-1` / `-2`) so they cannot collide with real MIDI notes.
+  void playClick({bool accent = false, double volume = 0.6}) {
+    if (!_ready) return;
+    unawaited(_playClick(accent, volume));
+  }
+
   Future<void> _play(int midi, double volume) async {
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
     await player.setVolume(volume.clamp(0.0, 1.0));
     if (_needsFile) {
-      final path = await _ensureFile(midi);
+      final path = await _ensureFile(midi, () => _renderNote(midi));
       await player.play(DeviceFileSource(path));
     } else {
       final bytes = _bytesCache.putIfAbsent(midi, () => _renderNote(midi));
@@ -133,14 +166,37 @@ class NotePlayer {
     }
   }
 
-  Future<String> _ensureFile(int midi) {
-    if (_fileCache.containsKey(midi)) return Future.value(_fileCache[midi]);
-    return _pending.putIfAbsent(midi, () async {
-      final path = '${_tempDir!}/note_$midi.wav';
-      final bytes = _bytesCache.putIfAbsent(midi, () => _renderNote(midi));
+  Future<void> _playClick(bool accent, double volume) async {
+    final player = _pool[_poolIndex % _poolSize];
+    _poolIndex++;
+    await player.setVolume(volume.clamp(0.0, 1.0));
+    final cacheKey = accent ? -1 : -2;
+    if (_needsFile) {
+      final path = await _ensureFile(
+        cacheKey,
+        () => _renderClick(accent ? _clickFreqAccent : _clickFreqWeak),
+      );
+      await player.play(DeviceFileSource(path));
+    } else {
+      final bytes = _bytesCache.putIfAbsent(
+        cacheKey,
+        () => _renderClick(accent ? _clickFreqAccent : _clickFreqWeak),
+      );
+      await player.play(BytesSource(bytes));
+    }
+  }
+
+  Future<String> _ensureFile(int cacheKey, Uint8List Function() render) {
+    if (_fileCache.containsKey(cacheKey)) {
+      return Future.value(_fileCache[cacheKey]);
+    }
+    return _pending.putIfAbsent(cacheKey, () async {
+      final name = cacheKey >= 0 ? 'note_$cacheKey' : 'click_${-cacheKey}';
+      final path = '${_tempDir!}/$name.wav';
+      final bytes = _bytesCache.putIfAbsent(cacheKey, render);
       await ioWriteIfAbsent(path, bytes); // resolves via note_player_io.dart
-      _fileCache[midi] = path;
-      _pending.remove(midi);
+      _fileCache[cacheKey] = path;
+      _pending.remove(cacheKey);
       return path;
     });
   }

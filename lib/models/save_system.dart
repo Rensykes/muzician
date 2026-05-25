@@ -576,11 +576,16 @@ class AppSettings {
   /// Stored as the enum's `.name` so adding values stays forward-compatible.
   final HumSensitivity humSensitivity;
 
+  /// Piano-roll transport plays a metronome click on each beat while playing.
+  /// Accent click on the downbeat (beat 1), softer click on other beats.
+  final bool metronomeEnabled;
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
     this.showNoteLabels = true,
     this.humSensitivity = HumSensitivity.balanced,
+    this.metronomeEnabled = true,
   });
 
   AppSettings copyWith({
@@ -588,11 +593,13 @@ class AppSettings {
     double? noteVolume,
     bool? showNoteLabels,
     HumSensitivity? humSensitivity,
+    bool? metronomeEnabled,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
     showNoteLabels: showNoteLabels ?? this.showNoteLabels,
     humSensitivity: humSensitivity ?? this.humSensitivity,
+    metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
   );
 
   Map<String, dynamic> toJson() => {
@@ -600,6 +607,7 @@ class AppSettings {
     'noteVolume': noteVolume,
     'showNoteLabels': showNoteLabels,
     'humSensitivity': humSensitivity.name,
+    'metronomeEnabled': metronomeEnabled,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -607,6 +615,7 @@ class AppSettings {
     noteVolume: (json['noteVolume'] as num?)?.toDouble() ?? 0.8,
     showNoteLabels: json['showNoteLabels'] as bool? ?? true,
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
+    metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,
   );
 }
 

@@ -1,25 +1,37 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/hum_to_midi.dart';
+import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/piano_roll_playback.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/hum_to_midi_store.dart';
 import 'package:muzician/store/piano_roll_playback_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';
+import 'package:muzician/store/settings_store.dart';
 
 /// Creates a [ProviderContainer] configured for playback tests with an
 /// overridden [pianoRollPlaybackSinkProvider] that records calls into
-/// [sinkCalls].
+/// [sinkCalls] and an overridden [pianoRollMetronomeSinkProvider] that
+/// records click `accent` flags into [clickCalls].
 ///
 /// Caller must dispose the container via [addTearDown].
-({ProviderContainer container, List<List<int>> sinkCalls})
+({
+  ProviderContainer container,
+  List<List<int>> sinkCalls,
+  List<bool> clickCalls,
+})
 _createContainer({
   List<(int midiNote, int startTick)> notes = const [],
   int? selectedColumnTick,
   HumToMidiStatus humStatus = HumToMidiStatus.idle,
   int tempo = 300,
   int totalMeasures = 1,
+  // Legacy tests assume metronome OFF so the "Nothing to play" early-return
+  // still fires when notes are empty. New tests opt in.
+  bool metronomeEnabled = false,
 }) {
   final sinkCalls = <List<int>>[];
+  final clickCalls = <bool>[];
 
   final container = ProviderContainer(
     overrides: [
@@ -28,8 +40,17 @@ _createContainer({
           sinkCalls.add(List<int>.unmodifiable(midiNotes));
         },
       ),
+      pianoRollMetronomeSinkProvider.overrideWithValue(
+        ({required bool accent}) async {
+          clickCalls.add(accent);
+        },
+      ),
     ],
   );
+
+  // ignore: invalid_use_of_protected_member
+  container.read(settingsProvider.notifier).state =
+      AppSettings(metronomeEnabled: metronomeEnabled);
 
   final pr = container.read(pianoRollProvider.notifier);
   pr.setTempo(tempo);
@@ -45,7 +66,7 @@ _createContainer({
         HumToMidiState(status: humStatus);
   }
 
-  return (container: container, sinkCalls: sinkCalls);
+  return (container: container, sinkCalls: sinkCalls, clickCalls: clickCalls);
 }
 
 void main() {
@@ -212,6 +233,78 @@ void main() {
           env.container.read(pianoRollPlaybackProvider).status,
           PianoRollPlaybackStatus.completed,
         );
+      },
+    );
+
+    test(
+      'metronome plays a click on each beat with accent on the downbeat '
+      '(4/4, no notes)',
+      () async {
+        final env = _createContainer(
+          selectedColumnTick: 0,
+          notes: const [],
+          totalMeasures: 1,
+          metronomeEnabled: true,
+        );
+
+        final notifier =
+            env.container.read(pianoRollPlaybackProvider.notifier);
+        await notifier.startPlayback();
+
+        // 4/4 1 measure = 16 ticks; beats at ticks 0,4,8,12 → 4 clicks total.
+        // Tick 0 is the downbeat (accent=true); others are weak (accent=false).
+        expect(env.clickCalls, [true, false, false, false]);
+        expect(env.sinkCalls, isEmpty);
+        expect(
+          env.container.read(pianoRollPlaybackProvider).status,
+          PianoRollPlaybackStatus.completed,
+        );
+      },
+    );
+
+    test(
+      'metronome aligns clicks to absolute tick boundaries even when '
+      'playback starts mid-measure',
+      () async {
+        final env = _createContainer(
+          selectedColumnTick: 8,
+          notes: const [],
+          totalMeasures: 1,
+          metronomeEnabled: true,
+        );
+
+        final notifier =
+            env.container.read(pianoRollPlaybackProvider.notifier);
+        await notifier.startPlayback();
+
+        // Start at tick 8 (beat 3 of 4/4). Remaining beats: 8 (weak), 12 (weak).
+        expect(env.clickCalls, [false, false]);
+      },
+    );
+
+    test(
+      'metronome respects the time signature beat unit (6/8 → eighth-note '
+      'beats every 2 ticks)',
+      () async {
+        final env = _createContainer(
+          selectedColumnTick: 0,
+          notes: const [],
+          totalMeasures: 1,
+          metronomeEnabled: true,
+        );
+        env.container
+            .read(pianoRollProvider.notifier)
+            .setTimeSignature(
+              const TimeSignature(beatsPerMeasure: 6, beatUnit: 8),
+            );
+
+        final notifier =
+            env.container.read(pianoRollPlaybackProvider.notifier);
+        await notifier.startPlayback();
+
+        // 6/8 1 measure = 6 beats × 2 ticks = 12 ticks.
+        // Clicks at ticks 0,2,4,6,8,10 → 6 clicks; first is accent.
+        expect(env.clickCalls, [true, false, false, false, false, false]);
       },
     );
 

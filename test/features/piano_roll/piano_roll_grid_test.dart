@@ -5,8 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/piano_roll/piano_roll_grid.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/piano_roll_playback.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/piano_roll_playback_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';
+import 'package:muzician/store/settings_store.dart';
 
 /// Test notifier that tracks mutations so we can assert on state changes.
 class _TrackingNotifier extends PianoRollNotifier {
@@ -247,6 +249,11 @@ void main() {
         ),
       ],
     );
+    // Disable metronome so the empty-notes default takes the early-return
+    // path and we don't leave pending playback timers running past the test.
+    // ignore: invalid_use_of_protected_member
+    container.read(settingsProvider.notifier).state =
+        const AppSettings(metronomeEnabled: false);
     addTearDown(container.dispose);
 
     await tester.pumpWidget(_wrapGrid(container));
