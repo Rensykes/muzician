@@ -4,7 +4,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/hum_to_midi.dart';
 import '../../models/piano_roll.dart';
+import '../../models/piano_roll_playback.dart';
+import '../../store/hum_to_midi_store.dart';
+import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../theme/muzician_theme.dart';
@@ -26,16 +30,24 @@ const _snapOptions = <(int ticks, String label)>[
 
 // ── Playback Config ──────────────────────────────────────────────────────────
 
-/// Tempo, measure count, and time signature.
+/// Transport controls and timeline config (tempo, measures, time signature).
 class PianoRollPlaybackConfig extends ConsumerWidget {
   const PianoRollPlaybackConfig({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(pianoRollProvider);
-    final notifier = ref.read(pianoRollProvider.notifier);
+    final playbackState = ref.watch(pianoRollPlaybackProvider);
+    final prState = ref.watch(pianoRollProvider);
+    final humState = ref.watch(humToMidiProvider);
 
-    final ts = state.config.timeSignature;
+    final isHumActive = humState.status == HumToMidiStatus.recording ||
+        humState.status == HumToMidiStatus.processing ||
+        humState.status == HumToMidiStatus.requestingPermission;
+
+    final isPlaying =
+        playbackState.status == PianoRollPlaybackStatus.playing;
+
+    final ts = prState.config.timeSignature;
     final activeTimeSig =
         _timeSigOptions
             .where((o) => o.$1 == ts.beatsPerMeasure && o.$2 == ts.beatUnit)
@@ -44,33 +56,93 @@ class PianoRollPlaybackConfig extends ConsumerWidget {
         '${ts.beatsPerMeasure}/${ts.beatUnit}';
 
     final totalRollTicks = rules.totalTicks(
-      state.config.timeSignature,
-      state.config.totalMeasures,
+      prState.config.timeSignature,
+      prState.config.totalMeasures,
     );
+
+    final startTick = prState.selectedColumnTick;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader('PLAYBACK'),
+
+        // ── Transport area ──────────────────────────────────────────────────
+        if (isHumActive) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Playback unavailable while humming',
+              style: TextStyle(
+                color: MuzicianTheme.orange,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ] else ...[
+          _TransportButton(
+            isPlaying: isPlaying,
+            onPlay: () =>
+                ref.read(pianoRollPlaybackProvider.notifier).startPlayback(),
+            onStop: () =>
+                ref.read(pianoRollPlaybackProvider.notifier).stopPlayback(),
+          ),
+          const SizedBox(height: 8),
+          if (isPlaying) ...[
+            _InfoText(
+              'Status: Playing from tick '
+              '${(playbackState.startTick ?? startTick ?? 0) + 1}',
+            ),
+            if (playbackState.currentTick != null)
+              _InfoText(
+                'Current: tick ${playbackState.currentTick! + 1}',
+              ),
+          ] else if (playbackState.message != null) ...[
+            _InfoText(playbackState.message!),
+          ] else ...[
+            // Idle start-point info
+            _InfoText(
+              startTick != null
+                  ? 'Start: Selected column (tick ${startTick + 1})'
+                  : 'Start: Beginning of roll',
+            ),
+            _InfoText('Timeline: Plays to end of roll'),
+          ],
+        ],
+
+        const SizedBox(height: 16),
+
+        // ── Timeline config ─────────────────────────────────────────────────
         Row(
           children: [
             Expanded(
               child: _LabeledStepper(
                 label: 'Tempo',
-                value: '${state.config.tempo} BPM',
-                onDecrement: () => notifier.setTempo(state.config.tempo - 1),
-                onIncrement: () => notifier.setTempo(state.config.tempo + 1),
+                value: '${prState.config.tempo} BPM',
+                onDecrement: () =>
+                    ref.read(pianoRollProvider.notifier).setTempo(
+                      prState.config.tempo - 1,
+                    ),
+                onIncrement: () =>
+                    ref.read(pianoRollProvider.notifier).setTempo(
+                      prState.config.tempo + 1,
+                    ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _LabeledStepper(
                 label: 'Measures',
-                value: '${state.config.totalMeasures}',
+                value: '${prState.config.totalMeasures}',
                 onDecrement: () =>
-                    notifier.setTotalMeasures(state.config.totalMeasures - 1),
+                    ref.read(pianoRollProvider.notifier).setTotalMeasures(
+                      prState.config.totalMeasures - 1,
+                    ),
                 onIncrement: () =>
-                    notifier.setTotalMeasures(state.config.totalMeasures + 1),
+                    ref.read(pianoRollProvider.notifier).setTotalMeasures(
+                      prState.config.totalMeasures + 1,
+                    ),
               ),
             ),
           ],
@@ -85,7 +157,7 @@ class PianoRollPlaybackConfig extends ConsumerWidget {
             return _Pill(
               label: o.$3,
               active: activeTimeSig == o.$3,
-              onTap: () => notifier.setTimeSignature(
+              onTap: () => ref.read(pianoRollProvider.notifier).setTimeSignature(
                 TimeSignature(beatsPerMeasure: o.$1, beatUnit: o.$2),
               ),
             );
@@ -400,4 +472,56 @@ class _Pill extends StatelessWidget {
       ),
     ),
   );
+}
+
+// ── Transport Button ──────────────────────────────────────────────────────────
+
+class _TransportButton extends StatelessWidget {
+  final bool isPlaying;
+  final VoidCallback onPlay;
+  final VoidCallback onStop;
+
+  const _TransportButton({
+    required this.isPlaying,
+    required this.onPlay,
+    required this.onStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isPlaying ? MuzicianTheme.red : MuzicianTheme.emerald;
+    return GestureDetector(
+      onTap: isPlaying ? onStop : onPlay,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          border: Border.all(
+            color: color.withValues(alpha: 0.35),
+            width: 0.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              size: 18,
+              color: color,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isPlaying ? 'Stop' : 'Play',
+              style: TextStyle(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

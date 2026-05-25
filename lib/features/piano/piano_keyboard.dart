@@ -29,7 +29,11 @@ double _scrollOffsetForMidi(int midi, PianoRangeName range) {
 }
 
 class PianoKeyboard extends ConsumerStatefulWidget {
-  const PianoKeyboard({super.key});
+  /// When true, suppress the built-in view-mode toolbar. The V2 shell
+  /// renders an equivalent segmented control above the canvas.
+  final bool hideToolbar;
+
+  const PianoKeyboard({super.key, this.hideToolbar = false});
 
   @override
   ConsumerState<PianoKeyboard> createState() => _PianoKeyboardState();
@@ -87,8 +91,10 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
 
     return Column(
       children: [
-        _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
-        const SizedBox(height: 4),
+        if (!widget.hideToolbar) ...[
+          _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
+          const SizedBox(height: 4),
+        ],
         SingleChildScrollView(
           controller: _scrollController,
           scrollDirection: Axis.horizontal,

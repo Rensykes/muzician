@@ -48,12 +48,11 @@ class PianoNotifier extends Notifier<PianoState> {
     ref.read(pianoManualEditProvider.notifier).state++;
   }
 
-  void clearSelectedNotes() =>
-      state = state.copyWith(
-        selectedNotes: [],
-        selectedKeys: [],
-        focusedNotes: {},
-      );
+  void clearSelectedNotes() => state = state.copyWith(
+    selectedNotes: [],
+    selectedKeys: [],
+    focusedNotes: {},
+  );
 
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);
@@ -121,6 +120,14 @@ final pianoPendingChordProvider =
 
 final pianoPendingScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
+
+/// Currently committed scale selection (published by [PianoScalePicker]).
+final pianoActiveScaleProvider =
+    StateProvider<({String root, String scaleName})?>((_) => null);
+
+/// Currently committed chord selection (published by [PianoChordPicker]).
+final pianoActiveChordProvider =
+    StateProvider<({String root, String quality})?>((_) => null);
 
 /// MIDI note the keyboard should animate to (one-shot, cleared after use).
 final pianoScrollToMidiProvider = StateProvider<int?>((_) => null);

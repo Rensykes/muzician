@@ -295,8 +295,7 @@ class _FretboardInfoTab extends StatelessWidget {
               icon: Icons.search,
               label: 'Detection',
               desc:
-                  'Automatically identifies the chord name and scale name from your '
-                  'selected notes. Shown below the fretboard when notes are active.',
+                  'Detection now uses the exact selected notes, so inversions such as C/E and friendlier spellings such as Bb or Eb can appear on the result chips.',
               color: MuzicianTheme.orange,
             ),
             _Entry(
@@ -377,8 +376,7 @@ class _PianoInfoTab extends StatelessWidget {
               icon: Icons.search,
               label: 'Detection',
               desc:
-                  'Identifies the chord name and scale name from currently selected '
-                  'keys, updating in real time.',
+                  'Detection now uses the exact selected notes, so inversions such as C/E and friendlier spellings such as Bb or Eb can appear on the result chips.',
               color: MuzicianTheme.violet,
             ),
             _Entry(
@@ -536,6 +534,17 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Shifts the visible MIDI range up or down by 12 semitones '
                   '(one octave) per tap.',
+              color: MuzicianTheme.orange,
+            ),
+            _Entry(
+              icon: Icons.play_arrow_rounded,
+              label: 'Playback',
+              desc:
+                  'Tap Play to hear the roll from the selected column through '
+                  'the end of the timeline. Tap Stop to cancel. Playback is '
+                  'disabled while humming is active. Hum import expands '
+                  'measures horizontally when needed (no pitch-range '
+                  'auto-growth).',
               color: MuzicianTheme.orange,
             ),
             _Entry(

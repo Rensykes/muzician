@@ -2,6 +2,7 @@
 /// Nested folder tree mirroring Song > Part > State with progression metadata.
 library;
 
+import '../schema/rules/mono_pitch_rules.dart';
 import 'fretboard.dart';
 import 'piano.dart';
 
@@ -439,25 +440,54 @@ class AppSettings {
   // 0.0 (silent) … 1.0 (full volume). Default 0.8.
   final double noteVolume;
 
+  /// Render note-name text inside selected note bubbles / on keyboard rows.
+  /// When false the instrument canvases show shapes and colors only — useful
+  /// for ear-training and a cleaner visual.
+  final bool showNoteLabels;
+
+  /// How tolerant the Hum-to-MIDI segmenter is of brief pitch deviations.
+  /// `strict` switches the active note quickly (best for trained vocalists),
+  /// `forgiving` ignores small wobbles within a wide cents deadband.
+  /// Stored as the enum's `.name` so adding values stays forward-compatible.
+  final HumSensitivity humSensitivity;
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
+    this.showNoteLabels = true,
+    this.humSensitivity = HumSensitivity.balanced,
   });
 
-  AppSettings copyWith({bool? suppressOutOfKeyAlert, double? noteVolume}) =>
-      AppSettings(
-        suppressOutOfKeyAlert:
-            suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
-        noteVolume: noteVolume ?? this.noteVolume,
-      );
+  AppSettings copyWith({
+    bool? suppressOutOfKeyAlert,
+    double? noteVolume,
+    bool? showNoteLabels,
+    HumSensitivity? humSensitivity,
+  }) => AppSettings(
+    suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
+    noteVolume: noteVolume ?? this.noteVolume,
+    showNoteLabels: showNoteLabels ?? this.showNoteLabels,
+    humSensitivity: humSensitivity ?? this.humSensitivity,
+  );
 
   Map<String, dynamic> toJson() => {
     'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
     'noteVolume': noteVolume,
+    'showNoteLabels': showNoteLabels,
+    'humSensitivity': humSensitivity.name,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
     suppressOutOfKeyAlert: json['suppressOutOfKeyAlert'] as bool? ?? false,
     noteVolume: (json['noteVolume'] as num?)?.toDouble() ?? 0.8,
+    showNoteLabels: json['showNoteLabels'] as bool? ?? true,
+    humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
   );
+}
+
+HumSensitivity _humSensitivityFromName(String? raw) {
+  for (final value in HumSensitivity.values) {
+    if (value.name == raw) return value;
+  }
+  return HumSensitivity.balanced;
 }

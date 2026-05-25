@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
+import '../../models/harmonic_analysis.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
@@ -238,6 +239,18 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
     final chordNotes = _selectedRoot != null
         ? getChordNotes(_selectedRoot!, _selectedQuality)
         : <String>[];
+
+    // Publish to active provider so external surfaces (e.g. V2 dock) can show it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final newActive = _selectedRoot != null
+          ? (root: _selectedRoot!, quality: _selectedQuality)
+          : null;
+      final cur = ref.read(activeChordProvider);
+      if (cur?.root != newActive?.root || cur?.quality != newActive?.quality) {
+        ref.read(activeChordProvider.notifier).state = newActive;
+      }
+    });
     final voicings = chordNotes.isNotEmpty
         ? _generateVoicings(chordNotes, stringMidis, capo: state.capo)
         : <ChordVoicing>[];
@@ -271,7 +284,14 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    chordName,
+                    _selectedRoot != null
+                        ? formatChordSymbol(
+                            ChordDetectionResult(
+                              root: _selectedRoot!,
+                              quality: _selectedQuality,
+                            ),
+                          )
+                        : '',
                     style: const TextStyle(
                       color: MuzicianTheme.sky,
                       fontSize: 13,
@@ -319,7 +339,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                     ),
                   ),
                   child: Text(
-                    root,
+                    formatRootChoiceLabel(root),
                     style: TextStyle(
                       color: active
                           ? MuzicianTheme.sky

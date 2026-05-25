@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart';
+import '../../models/piano_roll_playback.dart';
+import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../store/settings_store.dart';
@@ -55,6 +57,7 @@ class _GridPainter extends CustomPainter {
   final TimeSignature timeSig;
   final double cellW;
   final double rowH;
+  final int? playbackTick;
   final double? scissorsCursorX;
 
   _GridPainter({
@@ -63,6 +66,7 @@ class _GridPainter extends CustomPainter {
     required this.timeSig,
     required this.cellW,
     required this.rowH,
+    this.playbackTick,
     this.scissorsCursorX,
   });
 
@@ -116,12 +120,21 @@ class _GridPainter extends CustomPainter {
       canvas.drawLine(Offset(x, 0), Offset(x, rangeSize * rowH), paint);
     }
 
-    // Selected column highlight
-    if (state.selectedColumnTick != null) {
+    // Selected column highlight stays visible only when playback is idle.
+    if (playbackTick == null && state.selectedColumnTick != null) {
       final x = state.selectedColumnTick! * cellW;
       canvas.drawRect(
         Rect.fromLTWH(x, 0, cellW, rangeSize * rowH),
         Paint()..color = MuzicianTheme.sky.withValues(alpha: 0.08),
+      );
+    }
+
+    // Playback column highlight
+    if (playbackTick != null) {
+      final x = playbackTick! * cellW;
+      canvas.drawRect(
+        Rect.fromLTWH(x, 0, cellW, rangeSize * rowH),
+        Paint()..color = MuzicianTheme.orange.withValues(alpha: 0.12),
       );
     }
 
@@ -197,6 +210,18 @@ class _GridPainter extends CustomPainter {
       }
     }
 
+    // Playback playhead
+    if (playbackTick != null) {
+      final x = playbackTick! * cellW + cellW / 2;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, rangeSize * rowH),
+        Paint()
+          ..color = MuzicianTheme.orange
+          ..strokeWidth = 2,
+      );
+    }
+
     // Scissors cut-line cursor
     if (scissorsCursorX != null) {
       canvas.drawLine(
@@ -219,6 +244,7 @@ class _RulerPainter extends CustomPainter {
   final TimeSignature timeSig;
   final int totalTicks;
   final int? selectedColumnTick;
+  final int? playbackTick;
   final double cellW;
 
   _RulerPainter({
@@ -226,6 +252,7 @@ class _RulerPainter extends CustomPainter {
     required this.totalTicks,
     required this.cellW,
     this.selectedColumnTick,
+    this.playbackTick,
   });
 
   @override
@@ -278,12 +305,28 @@ class _RulerPainter extends CustomPainter {
     }
 
     // Selected column marker
-    if (selectedColumnTick != null) {
+    if (playbackTick == null && selectedColumnTick != null) {
       final x = selectedColumnTick! * cellW + cellW / 2;
       canvas.drawCircle(
         Offset(x, _rulerHeight - 4),
         3,
         Paint()..color = MuzicianTheme.sky,
+      );
+    }
+
+    if (playbackTick != null) {
+      final x = playbackTick! * cellW + cellW / 2;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, _rulerHeight),
+        Paint()
+          ..color = MuzicianTheme.orange
+          ..strokeWidth = 2,
+      );
+      canvas.drawCircle(
+        Offset(x, _rulerHeight - 4),
+        3,
+        Paint()..color = MuzicianTheme.orange,
       );
     }
   }
@@ -755,6 +798,51 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
+    final playbackTick = ref.watch(
+      pianoRollPlaybackProvider.select((playbackState) {
+        return playbackState.status == PianoRollPlaybackStatus.playing
+            ? playbackState.currentTick
+            : null;
+      }),
+    );
+    ref.listen(
+      pianoRollPlaybackProvider.select((playbackState) {
+        return playbackState.status == PianoRollPlaybackStatus.playing
+            ? playbackState.currentTick
+            : null;
+      }),
+      (_, tick) {
+        if (tick == null || !_hScroll.hasClients) return;
+        final targetX = tick * _cellW + (_cellW / 2);
+        final viewport = _hScroll.position.viewportDimension;
+        final leftBound = _hScroll.offset + viewport * 0.2;
+        final rightBound = _hScroll.offset + viewport * 0.8;
+
+        if (targetX < leftBound || targetX > rightBound) {
+          final nextOffset = (targetX - viewport * 0.4).clamp(
+            0.0,
+            _hScroll.position.maxScrollExtent,
+          );
+          _hScroll.jumpTo(nextOffset);
+        }
+      },
+    );
+    ref.listen(pianoRollScrollToTickProvider, (_, tick) {
+      if (tick == null || !_hScroll.hasClients) return;
+      final targetX = tick * _cellW;
+      if (targetX >
+          _hScroll.offset + (_hScroll.position.viewportDimension / 2)) {
+        _hScroll.animateTo(
+          (targetX - _hScroll.position.viewportDimension / 4).clamp(
+            0.0,
+            _hScroll.position.maxScrollExtent,
+          ),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      ref.read(pianoRollScrollToTickProvider.notifier).state = null;
+    });
     final rangeSize = state.pitchRangeEnd - state.pitchRangeStart + 1;
     final totalTicks = rules.totalTicks(
       state.config.timeSignature,
@@ -792,12 +880,14 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                       scrollDirection: Axis.horizontal,
                       physics: const NeverScrollableScrollPhysics(),
                       child: CustomPaint(
+                        key: const ValueKey('piano-roll-ruler-paint'),
                         size: Size(gridW, _rulerHeight),
                         painter: _RulerPainter(
                           timeSig: state.config.timeSignature,
                           totalTicks: totalTicks,
                           cellW: _cellW,
                           selectedColumnTick: state.selectedColumnTick,
+                          playbackTick: playbackTick,
                         ),
                       ),
                     ),
@@ -854,6 +944,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                               physics: const NeverScrollableScrollPhysics(),
                               child: RepaintBoundary(
                                 child: CustomPaint(
+                                  key: const ValueKey('piano-roll-grid-paint'),
                                   size: Size(gridW, gridH),
                                   painter: _GridPainter(
                                     state: state,
@@ -861,6 +952,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                                     timeSig: state.config.timeSignature,
                                     cellW: _cellW,
                                     rowH: _rowH,
+                                    playbackTick: playbackTick,
                                     scissorsCursorX: _scissorsCursorX,
                                   ),
                                 ),

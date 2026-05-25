@@ -3,6 +3,7 @@ library;
 
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/hum_to_midi.dart';
 import '../models/piano_roll.dart';
 import '../schema/rules/piano_roll_rules.dart' as rules;
 
@@ -15,6 +16,21 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   int _clamp(int value, int minV, int maxV) => value.clamp(minV, maxV);
 
+  void rememberLatestImportedRange(int startTick, int endTickExclusive) {
+    state = state.copyWith(
+      latestImportedRange: () => PianoRollImportedRange(
+        startTick: startTick,
+        endTickExclusive: endTickExclusive,
+      ),
+    );
+  }
+
+  void clearLatestImportedRange() =>
+      state = state.copyWith(latestImportedRange: () => null);
+
+  PianoRollImportedRange? Function()? _latestImportedRangeClearForNewNote() =>
+      state.latestImportedRange == null ? null : () => null;
+
   void setTempo(int tempo) => state = state.copyWith(
     config: state.config.copyWith(
       tempo: tempo.clamp(rules.minTempo, rules.maxTempo),
@@ -22,7 +38,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
   );
 
   void setKey(String? key) =>
-      state = state.copyWith(config: state.config.copyWith(key: key));
+      state = state.copyWith(config: state.config.copyWith(key: () => key));
 
   void setTimeSignature(TimeSignature ts) {
     final maxTick = rules.totalTicks(ts, state.config.totalMeasures);
@@ -57,6 +73,11 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       config: state.config.copyWith(totalMeasures: nextMeasures),
       notes: notes,
+      selectedColumnTick: () {
+        final selectedTick = state.selectedColumnTick;
+        if (selectedTick == null) return null;
+        return min(selectedTick, maxTick - 1);
+      },
     );
   }
 
@@ -108,6 +129,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       notes: [...state.notes, note],
       selectedNoteIds: {note.id},
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
   }
 
@@ -129,6 +151,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       notes: [...state.notes, note],
       selectedNoteIds: {note.id},
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
   }
 
@@ -174,6 +197,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     state = state.copyWith(
       notes: [...state.notes.where((n) => n.id != noteId), left, right],
       selectedNoteIds: {right.id},
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
   }
 
@@ -278,7 +302,10 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
         durationTicks: safe,
       ),
     );
-    state = state.copyWith(notes: [...state.notes, ...created]);
+    state = state.copyWith(
+      notes: [...state.notes, ...created],
+      latestImportedRange: _latestImportedRangeClearForNewNote(),
+    );
   }
 
   void selectColumn(int? tick) =>
@@ -297,6 +324,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     notes: [],
     selectedNoteIds: const <String>{},
     selectedColumnTick: () => null,
+    latestImportedRange: () => null,
   );
 
   void setHighlightedNotes(List<String> notes) =>
@@ -313,7 +341,119 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
   }
 
-  void reset() => state = rules.getDefaultPianoRollState();
+  int suggestedImportAnchorTick() {
+    final selectedTick = state.selectedColumnTick;
+    if (selectedTick != null) {
+      final maxTick = rules.totalTicks(
+        state.config.timeSignature,
+        state.config.totalMeasures,
+      );
+      return selectedTick.clamp(0, maxTick - 1).toInt();
+    }
+    if (state.notes.isEmpty) return 0;
+    final measureTicks = rules.ticksPerMeasure(state.config.timeSignature);
+    final latestEndTick = state.notes
+        .map((note) => note.startTick + note.durationTicks)
+        .reduce(max);
+    return ((latestEndTick + measureTicks - 1) ~/ measureTicks) * measureTicks;
+  }
+
+  void _ensureTimelineCoversEndTick(int endTickExclusive) {
+    final measureTicks = rules.ticksPerMeasure(state.config.timeSignature);
+    final requiredMeasures = max(
+      1,
+      (endTickExclusive + measureTicks - 1) ~/ measureTicks,
+    );
+    if (requiredMeasures > state.config.totalMeasures) {
+      setTotalMeasures(requiredMeasures);
+    }
+  }
+
+  ({
+    int createdCount,
+    bool truncated,
+    int? firstStartTick,
+    int? furthestEndTick,
+  })
+  appendImportedNotes(List<QuantizedHumNote> imported) {
+    if (imported.isEmpty) {
+      return (
+        createdCount: 0,
+        truncated: false,
+        firstStartTick: null,
+        furthestEndTick: null,
+      );
+    }
+    final clamped = imported
+        .where((note) => note.durationTicks > 0)
+        .map(
+          (note) => QuantizedHumNote(
+            midiNote: note.midiNote.clamp(
+              state.pitchRangeStart,
+              state.pitchRangeEnd,
+            ),
+            startTick: note.startTick,
+            durationTicks: note.durationTicks,
+          ),
+        )
+        .toList();
+    if (clamped.isEmpty) {
+      return (
+        createdCount: 0,
+        truncated: false,
+        firstStartTick: null,
+        furthestEndTick: null,
+      );
+    }
+
+    final requestedFurthestEndTick = clamped
+        .map((note) => note.startTick + note.durationTicks)
+        .reduce(max);
+    _ensureTimelineCoversEndTick(requestedFurthestEndTick);
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    var truncated = false;
+
+    final created = clamped.map((note) {
+      final boundedStart = note.startTick.clamp(0, maxTick - 1);
+      final boundedDuration = min(note.durationTicks, maxTick - boundedStart);
+      if (boundedStart != note.startTick ||
+          boundedDuration != note.durationTicks) {
+        truncated = true;
+      }
+      return PianoRollNote(
+        id: _makeId(),
+        midiNote: note.midiNote,
+        pitchClass: rules.midiToPitchClass(note.midiNote),
+        noteWithOctave: rules.midiToNoteWithOctave(note.midiNote),
+        startTick: boundedStart,
+        durationTicks: max(1, boundedDuration),
+      );
+    }).toList();
+
+    state = state.copyWith(
+      notes: [...state.notes, ...created],
+      selectedNoteIds: created.map((note) => note.id).toSet(),
+    );
+    final firstCreatedStartTick = created
+        .map((note) => note.startTick)
+        .reduce(min);
+    final furthestCreatedEndTick = created
+        .map((note) => note.startTick + note.durationTicks)
+        .reduce(max);
+    return (
+      createdCount: created.length,
+      truncated: truncated,
+      firstStartTick: firstCreatedStartTick,
+      furthestEndTick: furthestCreatedEndTick,
+    );
+  }
+
+  void reset() => state = rules.getDefaultPianoRollState().copyWith(
+    latestImportedRange: () => null,
+  );
 }
 
 final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollState>(
@@ -322,3 +462,5 @@ final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollState>(
 
 final pianoRollPendingScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
+
+final pianoRollScrollToTickProvider = StateProvider<int?>((_) => null);

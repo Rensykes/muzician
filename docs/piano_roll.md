@@ -49,6 +49,123 @@ lib/
 
 ---
 
+## Live Hum to MIDI
+
+The piano roll now includes a mobile-only `Hum to MIDI` recorder. It captures mono microphone input, estimates one stable pitch at a time, lightly quantizes timing after stop, and appends the finalized notes to the current piano roll instead of replacing existing content.
+
+### Timeline growth
+
+- Hum imports expand the **timeline horizontally** (add measures) when the imported phrase extends beyond the current end tick.
+- If the imported phrase ends exactly on the current boundary, no extra measure is added.
+- **No pitch-range auto-growth** in this follow-up — imported notes outside the visible pitch window are clamped.
+
+### Selection handoff
+
+- If no column was selected before recording, `selectedColumnTick` is set to the first imported note's start tick after the take completes.
+- If a column was already selected, the existing selection is **preserved**.
+- Stopping a hum take **stops active playback** first if the transport is already running.
+
+### Latest import navigation
+
+- After a successful hum import that creates notes, the `Hum to MIDI` card shows a `Jump to latest` button.
+- `Jump to latest` scrolls horizontally to the start tick of the most recent hum-imported range.
+- The action is navigation-only: it does not change playback state, selected notes, or `selectedColumnTick`.
+- The button tracks only the latest hum import target. A later successful hum import replaces it, and non-import note-add actions clear it.
+
+### Post-quantization monophonic normalization
+
+- Quantized hum notes are normalized before append so the final import remains monophonic.
+- If two neighboring imported notes overlap after quantization, the earlier note is trimmed to end at the later note's start tick.
+- If trimming would reduce that earlier note to zero length, that earlier note is dropped.
+
+### Detection pipeline
+
+The hum-to-MIDI capture splits into four stages. Stages 1–2 run while recording; stages 3–4 run on stop.
+
+| Stage | Code | Responsibility |
+|---|---|---|
+| 1. PCM capture & windowing | `lib/utils/mic_pitch_session.dart` | Buffer raw 16 kHz mono PCM, slide a 1024-sample window with 512-sample hop, emit ~31 `PitchFrame`/sec |
+| 2. Pitch estimation | `lib/schema/rules/mono_pitch_rules.dart` (`estimateDominantFrequencyFromSamples`) | YIN with CMNDF, local-minimum descent, parabolic interpolation → `(frequencyHz, confidence)` |
+| 3. Segmentation | `lib/schema/rules/mono_pitch_rules.dart` (`segmentStableNotes`) | Group consecutive same-MIDI frames into `DetectedMonoNote { startMs, endMs, midiNote, confidence }` with 1-frame hysteresis |
+| 4. Quantization & monophonic normalization | `quantizeNotesToTicks` + `normalizeQuantizedHumNotesMonophonically` | Map ms → ticks against the current tempo, snap to `snapTicks`, drop overlaps |
+
+**Why windowing is internal.** iOS's `record` plugin delivers PCM chunks at the rate the audio session decides (often ~250 ms). One chunk per hummed eighth/quarter note meant the segmenter saw a single frame and computed 0 ms duration, so the note was dropped. Sliding a fixed window over the raw bytes decouples the frame rate from the platform's buffer size.
+
+**Why parabolic interpolation.** Pure integer-lag YIN buckets the frequency by 1-sample steps. Around a semitone boundary the rounded MIDI flips between adjacent notes from frame to frame, fragmenting one sustained note into many sub-notes. Parabolic interpolation on the CMNDF local minimum gives sub-sample lag → stable MIDI.
+
+**Why 1-frame hysteresis.** Even with parabolic refinement, vibrato or a single transient frame can briefly land in the neighbouring semitone. The segmenter requires **two consecutive** off-pitch frames before switching `activeMidi`; a lone deviation is folded back into the active note.
+
+### Tunable parameters
+
+All in `lib/schema/rules/mono_pitch_rules.dart`:
+
+| Constant | Value | Effect of raising it |
+|---|---|---|
+| `minHumFrequencyHz` / `maxHumFrequencyHz` | 80 / 1000 | Sets the YIN lag search range and rejects out-of-range pitches |
+| `minHumAmplitude` | 0.02 | Higher → more aggressive silence gate, fewer breath/noise false positives |
+| `_yinThreshold` | 0.15 | Higher → accept weaker pitches (more recall, less precision) |
+| `minStableConfidence` | 0.6 | Confidence = `1 − cmndf[bestLag]`. Higher → drop borderline frames |
+| `minStableNoteMs` | 80 | Floor on note duration even at the most permissive sensitivity preset |
+| `maxMergeGapMs` | 180 | Silence within a note merges if shorter than this |
+
+### User-facing pitch sensitivity
+
+The Hum panel exposes a three-way `SegmentedButton` (Strict / Balanced / Forgiving) that selects how aggressively the segmenter switches notes. The choice persists via `SettingsNotifier.setHumSensitivity` and is read at `stopRecording` time.
+
+Each preset overrides three knobs (in `HumSensitivityTuning`):
+
+| Preset | `switchFrames` | `deadbandCents` | `minNoteMs` |
+|---|---|---|---|
+| Strict | 2 | 0 | 80 |
+| Balanced (default) | 4 | 35 | 120 |
+| Forgiving | 7 | 60 | 180 |
+
+- **`switchFrames`** — number of consecutive off-pitch frames required before the segmenter abandons the active MIDI note. Higher absorbs more wobble.
+- **`deadbandCents`** — even when a frame's rounded MIDI differs from the active note, if its actual frequency is within this many cents of the active note's reference frequency it is folded back into the active note (so a singer hovering 40 cents sharp of A4 stays as A4 in Forgiving but switches to A#4 in Strict).
+- **`minNoteMs`** — minimum emitted note duration for the preset; shorter candidates are dropped.
+
+The selector is disabled while a recording or processing is in flight so the value can't change mid-take.
+
+### Edge cases handled
+
+- **Single-frame notes**: when only one voiced frame falls inside `[startMs, endMs]`, the segmenter assigns the note the **median observed inter-frame delta** as its duration (instead of 0 ms).
+- **Absolute vs. relative timestamps**: `PitchFrame.timestampMs` is **ms since recording start**, not epoch ms. Producers (`RecordMicPitchSession`) must subtract the recording's start time before emitting.
+- **Silence gate before YIN**: windows below `minHumAmplitude` skip pitch estimation entirely and emit an `isSilence: true` frame. This prevents YIN from latching onto low-amplitude room noise and producing phantom notes.
+
+---
+
+## Playback
+
+The piano roll includes a simple onset-sequencer transport that plays notes via the synthesised `NotePlayer` engine.
+
+### Controls
+
+The **Playback** panel in the toolbar shows:
+- **Play / Stop** button — starts or cancels transport.
+- **Status text** — shows the start point and current tick while playing.
+
+| Condition | Behavior |
+|---|---|
+| Idle + column selected | `Start: Selected column (tick N)` — plays from that tick |
+| Idle + no column selected | `Start: Beginning of roll` — plays from tick 0 |
+| Playing | Shows current tick advancing |
+| Hum is recording / processing | Playback button hidden; shows "Playback unavailable while humming" |
+| No notes at or after the start tick | Shows "Nothing to play from the selected column" |
+
+### Scope
+
+| In scope | Out of scope |
+|---|---|
+| Play / Stop | Pause / Resume |
+| Start from selected column | Loop mode |
+| Run to end of timeline | Metronome / count-in |
+| Onset-only sequencing (duration-accurate note-offs deferred) | Animated playhead / auto-scroll |
+| | Multi-track / velocity editing |
+| | MIDI export |
+| | Pitch-range auto-growth |
+
+---
+
 ## Store (`lib/store/piano_roll_store.dart`)
 
 Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, PianoRollState>`)

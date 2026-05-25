@@ -98,65 +98,64 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (suggestions.isNotEmpty) ...
-                [
-                  const Text(
-                    'SUGGESTIONS',
-                    style: TextStyle(
-                      color: MuzicianTheme.textDim,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                    ),
+              if (suggestions.isNotEmpty) ...[
+                const Text(
+                  'SUGGESTIONS',
+                  style: TextStyle(
+                    color: MuzicianTheme.textDim,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
                   ),
-                  const SizedBox(height: 6),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: suggestions.map((s) {
-                        final isSelected = controller.text.trim() == s;
-                        return GestureDetector(
-                          onTap: () {
-                            controller.text = s;
-                            setDialogState(() => value = s);
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
+                ),
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: suggestions.map((s) {
+                      final isSelected = controller.text.trim() == s;
+                      return GestureDetector(
+                        onTap: () {
+                          controller.text = s;
+                          setDialogState(() => value = s);
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: isSelected
+                                ? MuzicianTheme.teal.withValues(alpha: 0.18)
+                                : Colors.white.withValues(alpha: 0.06),
+                            border: Border.all(
                               color: isSelected
-                                  ? MuzicianTheme.teal.withValues(alpha: 0.18)
-                                  : Colors.white.withValues(alpha: 0.06),
-                              border: Border.all(
-                                color: isSelected
-                                    ? MuzicianTheme.teal.withValues(alpha: 0.5)
-                                    : Colors.white.withValues(alpha: 0.12),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Text(
-                              s,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? MuzicianTheme.teal
-                                    : const Color(0xFF94A3B8),
-                                fontSize: 12,
-                                fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
+                                  ? MuzicianTheme.teal.withValues(alpha: 0.5)
+                                  : Colors.white.withValues(alpha: 0.12),
+                              width: 0.5,
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
+                          child: Text(
+                            s,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? MuzicianTheme.teal
+                                  : const Color(0xFF94A3B8),
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
-                  const SizedBox(height: 10),
-                ],
+                ),
+                const SizedBox(height: 10),
+              ],
               TextField(
                 controller: controller,
                 autofocus: suggestions.isEmpty,
@@ -245,10 +244,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, value.trim()),
-            child: const Text(
-              'OK',
-              style: TextStyle(color: MuzicianTheme.sky),
-            ),
+            child: const Text('OK', style: TextStyle(color: MuzicianTheme.sky)),
           ),
         ],
       ),
@@ -345,9 +341,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           final toneSet = highlightedNotes.toSet();
           if (scaleTones.length == toneSet.length &&
               scaleTones.every(toneSet.contains)) {
-            result.add(
-              '${selectedNotes.join(' ')} | $root ${entry.key}',
-            );
+            result.add('${selectedNotes.join(' ')} | $root ${entry.key}');
             break;
           }
         }
@@ -545,8 +539,9 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                     hasPrev: isSelected && hasPrev,
                     hasNext: isSelected && hasNext,
                     onTap: () => setState(() {
-                      _selectedSaveId =
-                          _selectedSaveId == save.id ? null : save.id;
+                      _selectedSaveId = _selectedSaveId == save.id
+                          ? null
+                          : save.id;
                     }),
                     onRename: () => _handleRenameSave(save),
                     onDelete: () => _handleDeleteSave(save),
@@ -935,9 +930,7 @@ class _SaveRowState extends State<_SaveRow>
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, -0.1),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     if (widget.isSelected) _controller.value = 1.0;
   }
 
@@ -959,14 +952,13 @@ class _SaveRowState extends State<_SaveRow>
     super.dispose();
   }
 
-  String get _icon =>
-      widget.save.snapshot.instrument == 'piano' ? '🎹' : '🎸';
+  String get _icon => widget.save.snapshot.instrument == 'piano' ? '🎹' : '🎸';
 
   Color get _accentColor => widget.isActiveSession
       ? MuzicianTheme.emerald
       : widget.isSelected
-          ? MuzicianTheme.sky
-          : MuzicianTheme.textSecondary;
+      ? MuzicianTheme.sky
+      : MuzicianTheme.textSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -980,15 +972,15 @@ class _SaveRowState extends State<_SaveRow>
             color: widget.isSelected && !widget.editMode
                 ? MuzicianTheme.sky.withValues(alpha: 0.08 + 0.07 * t)
                 : widget.isActiveSession && !widget.editMode
-                    ? MuzicianTheme.emerald.withValues(alpha: 0.08)
-                    : Colors.transparent,
+                ? MuzicianTheme.emerald.withValues(alpha: 0.08)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(8 + 4 * t),
             border: Border.all(
               color: widget.isSelected && !widget.editMode
                   ? MuzicianTheme.sky.withValues(alpha: 0.25 + 0.25 * t)
                   : widget.isActiveSession
-                      ? MuzicianTheme.emerald.withValues(alpha: 0.15)
-                      : Colors.transparent,
+                  ? MuzicianTheme.emerald.withValues(alpha: 0.15)
+                  : Colors.transparent,
               width: widget.isSelected && !widget.editMode
                   ? 0.5 + 0.5 * t
                   : 0.5,
@@ -1039,8 +1031,8 @@ class _SaveRowState extends State<_SaveRow>
                                 fontSize: 13,
                                 fontWeight:
                                     widget.isSelected || widget.isActiveSession
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                                 decoration: widget.editMode
                                     ? TextDecoration.underline
                                     : null,
@@ -1066,8 +1058,9 @@ class _SaveRowState extends State<_SaveRow>
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: MuzicianTheme.emerald
-                                .withValues(alpha: 0.15),
+                            color: MuzicianTheme.emerald.withValues(
+                              alpha: 0.15,
+                            ),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
@@ -1101,10 +1094,10 @@ class _SaveRowState extends State<_SaveRow>
                                 : Icons.keyboard_arrow_down,
                             size: 16,
                             color: widget.isSelected
-                                ? MuzicianTheme.sky
-                                    .withValues(alpha: 0.8 + 0.2 * t)
-                                : MuzicianTheme.textDim
-                                    .withValues(alpha: 0.5),
+                                ? MuzicianTheme.sky.withValues(
+                                    alpha: 0.8 + 0.2 * t,
+                                  )
+                                : MuzicianTheme.textDim.withValues(alpha: 0.5),
                           ),
                         ),
                     ],
@@ -1192,11 +1185,7 @@ class _SaveExpandedDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Divider(
-            color: MuzicianTheme.glassBorder,
-            height: 12,
-            thickness: 0.5,
-          ),
+          Divider(color: MuzicianTheme.glassBorder, height: 12, thickness: 0.5),
           if (save.snapshot.selectedNotes.isNotEmpty) ...[
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,

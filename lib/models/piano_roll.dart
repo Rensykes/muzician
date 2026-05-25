@@ -67,18 +67,28 @@ class PianoRollConfig {
 
   PianoRollConfig copyWith({
     int? tempo,
-    String? key,
+    String? Function()? key,
     TimeSignature? timeSignature,
     int? totalMeasures,
   }) => PianoRollConfig(
     tempo: tempo ?? this.tempo,
-    key: key ?? this.key,
+    key: key != null ? key() : this.key,
     timeSignature: timeSignature ?? this.timeSignature,
     totalMeasures: totalMeasures ?? this.totalMeasures,
   );
 }
 
 enum PianoRollTool { draw, scissors }
+
+class PianoRollImportedRange {
+  final int startTick;
+  final int endTickExclusive;
+
+  const PianoRollImportedRange({
+    required this.startTick,
+    required this.endTickExclusive,
+  });
+}
 
 class PianoRollState {
   final PianoRollConfig config;
@@ -90,6 +100,7 @@ class PianoRollState {
   final PianoRollTool activeTool;
   final int snapTicks;
   final List<String> highlightedNotes;
+  final PianoRollImportedRange? latestImportedRange;
 
   const PianoRollState({
     required this.config,
@@ -101,6 +112,7 @@ class PianoRollState {
     this.activeTool = PianoRollTool.draw,
     this.snapTicks = 1,
     this.highlightedNotes = const <String>[],
+    this.latestImportedRange,
   });
 
   PianoRollState copyWith({
@@ -113,6 +125,7 @@ class PianoRollState {
     PianoRollTool? activeTool,
     int? snapTicks,
     List<String>? highlightedNotes,
+    PianoRollImportedRange? Function()? latestImportedRange,
   }) => PianoRollState(
     config: config ?? this.config,
     notes: notes ?? this.notes,
@@ -125,5 +138,8 @@ class PianoRollState {
     activeTool: activeTool ?? this.activeTool,
     snapTicks: snapTicks ?? this.snapTicks,
     highlightedNotes: highlightedNotes ?? this.highlightedNotes,
+    latestImportedRange: latestImportedRange != null
+        ? latestImportedRange()
+        : this.latestImportedRange,
   );
 }
