@@ -7,6 +7,7 @@ import '../models/piano_roll_playback.dart';
 import '../schema/rules/mono_pitch_rules.dart' as rules;
 import '../store/piano_roll_playback_store.dart';
 import '../store/piano_roll_store.dart';
+import '../store/settings_store.dart';
 import '../utils/mic_pitch_session.dart';
 
 final micPitchSessionProvider = Provider<MicPitchSession>(
@@ -62,7 +63,11 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
     state = state.copyWith(status: HumToMidiStatus.processing);
     await _framesSub?.cancel();
     await session.stop();
-    final segmented = rules.segmentStableNotes(state.frames);
+    final sensitivity = ref.read(settingsProvider).humSensitivity;
+    final segmented = rules.segmentStableNotes(
+      state.frames,
+      sensitivity: sensitivity,
+    );
     final pianoRoll = ref.read(pianoRollProvider);
     final anchorTick = ref
         .read(pianoRollProvider.notifier)

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/save_system.dart';
+import '../schema/rules/mono_pitch_rules.dart';
 
 const _settingsKey = '@muzician/settings/v1';
 
@@ -39,6 +40,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setShowNoteLabels(bool show) async {
     state = state.copyWith(showNoteLabels: show);
+    await _persist();
+  }
+
+  Future<void> setHumSensitivity(HumSensitivity sensitivity) async {
+    state = state.copyWith(humSensitivity: sensitivity);
     await _persist();
   }
 }

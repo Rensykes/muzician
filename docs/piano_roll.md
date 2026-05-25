@@ -105,8 +105,26 @@ All in `lib/schema/rules/mono_pitch_rules.dart`:
 | `minHumAmplitude` | 0.02 | Higher → more aggressive silence gate, fewer breath/noise false positives |
 | `_yinThreshold` | 0.15 | Higher → accept weaker pitches (more recall, less precision) |
 | `minStableConfidence` | 0.6 | Confidence = `1 − cmndf[bestLag]`. Higher → drop borderline frames |
-| `minStableNoteMs` | 80 | Minimum note duration; lower catches faster notes but admits glitches |
+| `minStableNoteMs` | 80 | Floor on note duration even at the most permissive sensitivity preset |
 | `maxMergeGapMs` | 180 | Silence within a note merges if shorter than this |
+
+### User-facing pitch sensitivity
+
+The Hum panel exposes a three-way `SegmentedButton` (Strict / Balanced / Forgiving) that selects how aggressively the segmenter switches notes. The choice persists via `SettingsNotifier.setHumSensitivity` and is read at `stopRecording` time.
+
+Each preset overrides three knobs (in `HumSensitivityTuning`):
+
+| Preset | `switchFrames` | `deadbandCents` | `minNoteMs` |
+|---|---|---|---|
+| Strict | 2 | 0 | 80 |
+| Balanced (default) | 4 | 35 | 120 |
+| Forgiving | 7 | 60 | 180 |
+
+- **`switchFrames`** — number of consecutive off-pitch frames required before the segmenter abandons the active MIDI note. Higher absorbs more wobble.
+- **`deadbandCents`** — even when a frame's rounded MIDI differs from the active note, if its actual frequency is within this many cents of the active note's reference frequency it is folded back into the active note (so a singer hovering 40 cents sharp of A4 stays as A4 in Forgiving but switches to A#4 in Strict).
+- **`minNoteMs`** — minimum emitted note duration for the preset; shorter candidates are dropped.
+
+The selector is disabled while a recording or processing is in flight so the value can't change mid-take.
 
 ### Edge cases handled
 

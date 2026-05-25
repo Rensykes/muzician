@@ -148,6 +148,129 @@ void main() {
     );
 
     test(
+      'forgiving sensitivity merges a brief wobble back into the active note',
+      () {
+        // 12 voiced frames at 32ms intervals: mostly midi 69, with two brief
+        // single-frame excursions to midi 70. Strict mode (default) would
+        // close the active note on the second excursion; forgiving requires
+        // 7 consecutive off-pitch frames before switching, so it should
+        // collapse the run into a single midi 69 note.
+        final frames = <PitchFrame>[
+          for (var i = 0; i < 12; i++)
+            PitchFrame(
+              timestampMs: i * 32,
+              frequencyHz: (i == 4 || i == 8) ? 466 : 440,
+              midiNote: (i == 4 || i == 8) ? 70 : 69,
+              centsOffset: 0,
+              amplitude: 0.8,
+              confidence: 0.95,
+              isSilence: false,
+            ),
+        ];
+
+        final notes = rules.segmentStableNotes(
+          frames,
+          sensitivity: rules.HumSensitivity.forgiving,
+        );
+
+        expect(notes, hasLength(1));
+        expect(notes.single.midiNote, 69);
+      },
+    );
+
+    test(
+      'forgiving sensitivity ignores deviations within the cents deadband',
+      () {
+        // 8 frames near A4. Frame 3's frequency (450 Hz ≈ 38.9 cents above
+        // A4) rounds to midi 69; frame 4 (455 Hz ≈ 58.2 cents above A4)
+        // rounds to midi 70 but is still inside the 60-cent forgiving
+        // deadband, so it should not start a new note.
+        const frames = <PitchFrame>[
+          PitchFrame(
+            timestampMs: 0,
+            frequencyHz: 440,
+            midiNote: 69,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+          PitchFrame(
+            timestampMs: 32,
+            frequencyHz: 440,
+            midiNote: 69,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+          PitchFrame(
+            timestampMs: 64,
+            frequencyHz: 442,
+            midiNote: 69,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+          PitchFrame(
+            timestampMs: 96,
+            frequencyHz: 450,
+            midiNote: 69,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+          PitchFrame(
+            timestampMs: 128,
+            frequencyHz: 455,
+            midiNote: 70,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+          PitchFrame(
+            timestampMs: 160,
+            frequencyHz: 442,
+            midiNote: 69,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+          PitchFrame(
+            timestampMs: 192,
+            frequencyHz: 440,
+            midiNote: 69,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+          PitchFrame(
+            timestampMs: 224,
+            frequencyHz: 440,
+            midiNote: 69,
+            centsOffset: 0,
+            amplitude: 0.8,
+            confidence: 0.95,
+            isSilence: false,
+          ),
+        ];
+
+        final notes = rules.segmentStableNotes(
+          frames,
+          sensitivity: rules.HumSensitivity.forgiving,
+        );
+
+        expect(notes, hasLength(1));
+        expect(notes.single.midiNote, 69);
+      },
+    );
+
+    test(
       'sorts imported hum notes by start tick before monophonic normalization',
       () {
         final imported = [
