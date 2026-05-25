@@ -125,11 +125,13 @@ void main() {
       reason: 'Grid should be visible in portrait layout',
     );
 
-    // Collapsible panel area should exist.
+    // Portrait action bar (chips + selection status) must exist below the
+    // grid. The previous inline expander stack was replaced by modal sheets,
+    // so the panels container key was renamed.
     expect(
-      find.byKey(const ValueKey('v2-portrait-panels')),
+      find.byKey(const ValueKey('v2-portrait-actionbar')),
       findsOneWidget,
-      reason: 'Portrait panels container should exist',
+      reason: 'Portrait action bar should exist below the grid',
     );
   });
 
