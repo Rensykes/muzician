@@ -36,7 +36,11 @@ void main() {
 
   group('contextual spelling', () {
     test('formats common flat harmonic labels musically', () {
-      const chord = ChordDetectionResult(root: 'A#', quality: 'maj7', bass: 'D');
+      const chord = ChordDetectionResult(
+        root: 'A#',
+        quality: 'maj7',
+        bass: 'D',
+      );
       const scale = ScaleDetectionResult(root: 'D#', scaleName: 'dorian');
 
       expect(formatChordSymbol(chord), 'Bbmaj7/D');

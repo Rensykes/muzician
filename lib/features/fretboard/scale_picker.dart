@@ -114,10 +114,12 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        formatScaleLabel(ScaleDetectionResult(
-                          root: _selectedRoot!,
-                          scaleName: _selectedScale!,
-                        )),
+                        formatScaleLabel(
+                          ScaleDetectionResult(
+                            root: _selectedRoot!,
+                            scaleName: _selectedScale!,
+                          ),
+                        ),
                         style: const TextStyle(
                           color: MuzicianTheme.sky,
                           fontSize: 12,

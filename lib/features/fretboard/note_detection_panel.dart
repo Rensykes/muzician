@@ -298,7 +298,8 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: scaleResults.map((result) {
-                            final chipKey = '${result.root} ${result.scaleName}';
+                            final chipKey =
+                                '${result.root} ${result.scaleName}';
                             final isActive = _activeScaleChip == chipKey;
                             return GestureDetector(
                               onTap: () {

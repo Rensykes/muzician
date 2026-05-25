@@ -222,10 +222,12 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker> {
                   ),
                   child: Text(
                     _selectedRoot != null
-                        ? formatChordSymbol(ChordDetectionResult(
-                            root: _selectedRoot!,
-                            quality: _selectedQuality,
-                          ))
+                        ? formatChordSymbol(
+                            ChordDetectionResult(
+                              root: _selectedRoot!,
+                              quality: _selectedQuality,
+                            ),
+                          )
                         : '',
                     style: const TextStyle(
                       color: MuzicianTheme.emerald,

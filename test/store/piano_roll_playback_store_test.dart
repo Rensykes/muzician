@@ -214,5 +214,33 @@ void main() {
         );
       },
     );
+
+    test(
+      'currentTick advances during silent spans before the next note event',
+      () async {
+        final env = _createContainer(
+          selectedColumnTick: 0,
+          notes: [(60, 4)],
+          tempo: 300,
+        );
+
+        final notifier =
+            env.container.read(pianoRollPlaybackProvider.notifier);
+
+        final playbackFuture = notifier.startPlayback();
+
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+
+        final playingState = env.container.read(pianoRollPlaybackProvider);
+        expect(playingState.status, PianoRollPlaybackStatus.playing);
+        expect(playingState.currentTick, isNotNull);
+        expect(playingState.currentTick, greaterThan(0));
+        expect(playingState.currentTick, lessThan(4));
+        expect(env.sinkCalls, isEmpty);
+
+        notifier.stopPlayback();
+        await playbackFuture;
+      },
+    );
   });
 }

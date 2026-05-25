@@ -7,10 +7,7 @@ class ExactSelectionNote {
   final int midiNote;
   final String pitchClass;
 
-  const ExactSelectionNote({
-    required this.midiNote,
-    required this.pitchClass,
-  });
+  const ExactSelectionNote({required this.midiNote, required this.pitchClass});
 }
 
 class ChordDetectionResult {
@@ -29,8 +26,5 @@ class ScaleDetectionResult {
   final String root;
   final String scaleName;
 
-  const ScaleDetectionResult({
-    required this.root,
-    required this.scaleName,
-  });
+  const ScaleDetectionResult({required this.root, required this.scaleName});
 }
