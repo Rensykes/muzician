@@ -1,6 +1,21 @@
 # Piano Roll
 
-A quantized, timeline-based note editor rendered with `CustomPainter`. Supports tap-to-toggle notes, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, and live chord/scale detection per selected column.
+A quantized, timeline-based note editor rendered with `CustomPainter`. Supports tap-to-toggle notes, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, and adaptive landscape/portrait layout.
+
+---
+
+## V2 Architecture
+
+Piano Roll exists in two shells that share the same domain logic:
+
+| Shell | File | Role |
+|---|---|---|
+| V1 | `lib/main.dart` (inline composition) | Compatibility shell and regression harness; renders the same providers as V2. |
+| V2 | `lib/features/piano_roll/piano_roll_screen_v2.dart` | Target product surface with adaptive landscape/portrait layout, inspector rail, and collapsible panels. |
+
+Both shells read from the same set of Riverpod providers — there is no widget-local fake state in V2. The implementation follows the design spec: shared logic in models, rules, and providers; two renderers.
+
+V2 is the default surface; V1 stays in the codebase until explicitly removed.
 
 ---
 
@@ -8,16 +23,43 @@ A quantized, timeline-based note editor rendered with `CustomPainter`. Supports 
 
 ```
 lib/
-  models/piano_roll.dart                  ← data types
-  schema/rules/piano_roll_rules.dart      ← tick math, MIDI helpers, defaults
-  store/piano_roll_store.dart             ← Riverpod NotifierProvider
+  models/
+    piano_roll.dart                       ← canonical editor state
+    piano_roll_composer.dart              ← shared chord-stack composer state
+    piano_roll_playback.dart              ← playback transport state
+    save_system.dart                      ← PianoRollSnapshot (persistence)
+  schema/rules/
+    piano_roll_rules.dart                 ← tick math, MIDI helpers, defaults
+    piano_roll_import_rules.dart          ← stack building, snapshot-import mapping
+    piano_roll_playback_rules.dart        ← playback sequencing
+    mono_pitch_rules.dart                 ← hum-to-MIDI pitch estimation
+  store/
+    piano_roll_store.dart                 ← Riverpod NotifierProvider
+    piano_roll_composer_store.dart        ← shared composer provider
+    piano_roll_playback_store.dart        ← playback transport provider
+    hum_to_midi_store.dart                ← hum recording provider
   features/piano_roll/
     piano_roll_grid.dart                  ← main editor canvas (PianoRollGrid)
+    piano_roll_screen_v2.dart             ← V2 adaptive layout shell
     piano_roll_toolbar.dart               ← tempo, measures, time sig, key, pitch window
     piano_roll_stack_selector.dart        ← chord root + quality → add note stack
+    piano_roll_scale_picker.dart          ← scale-highlight picker
     piano_roll_save_stack_loader.dart     ← load stacks from saved progressions
+    piano_roll_save_panel.dart            ← first-class piano-roll save/load
     piano_roll_detection_panel.dart       ← detect chord/scale at selected column
+    piano_roll_hum_recorder.dart          ← mobile-only hum → MIDI
 ```
+
+### Shared Providers
+
+| Provider | State type | Purpose |
+|---|---|---|
+| `pianoRollProvider` | `PianoRollState` | Canonical editor: notes, config, range, selection, tool, snap, highlights |
+| `pianoRollComposerProvider` | `PianoRollComposerState` | Root, quality, duration for chord-stack building |
+| `pianoRollPlaybackProvider` | `PianoRollPlaybackState` | Playback transport: status, current tick, start point |
+| `humToMidiProvider` | `HumToMidiState` | Mobile-only recording pipeline |
+| `pianoRollPendingScaleProvider` | `({String root, String scaleName})?` | Temp scale preview |
+| `pianoRollScrollToTickProvider` | `int?` | One-shot scroll-to-tick signal |
 
 ---
 
@@ -28,7 +70,19 @@ lib/
 | `PianoRollNote` | One note: `id`, `midiNote`, `pitchClass`, `noteWithOctave`, `startTick`, `durationTicks` |
 | `TimeSignature` | `beatsPerMeasure` + `beatUnit` (4 or 8) |
 | `PianoRollConfig` | `tempo` (BPM), `key`, `timeSignature`, `totalMeasures` |
-| `PianoRollState` | Full state: `config`, `notes`, `pitchRangeStart`, `pitchRangeEnd`, `selectedColumnTick`, `selectedNoteId` |
+| `PianoRollTool` | Enum: `draw`, `scissors` |
+| `PianoRollImportedRange` | `startTick`, `endTickExclusive` — tracks latest hum import range |
+| `PianoRollState` | Full state: `config`, `notes`, `pitchRangeStart`, `pitchRangeEnd`, `selectedColumnTick`, `selectedNoteIds`, `activeTool`, `snapTicks`, `highlightedNotes`, `latestImportedRange` |
+
+### Composer State (`lib/models/piano_roll_composer.dart`)
+
+| Field | Default | Purpose |
+|---|---|---|
+| `root` | `"C"` | Root note of the chord to build |
+| `quality` | `""` (major) | Chord quality symbol |
+| `durationTicks` | `4` (quarter) | Note duration for each stack note |
+
+Quality symbols: `''` (maj), `'m'`, `'7'`, `'maj7'`, `'m7'`, `'dim'`, `'aug'`, `'sus2'`, `'sus4'`, `'m7b5'`, `'add9'`, `'maj9'`, `'6'`, `'m6'`, `'dim7'`, `'7sus4'`
 
 ---
 
@@ -47,53 +101,135 @@ lib/
 | `validateTimeSignature(ts)` | Returns `({bool valid, List<String> errors})` |
 | `getDefaultPianoRollState()` | 120 BPM, 4/4, 4 measures, C3–C6 window |
 
+### Import Rules (`lib/schema/rules/piano_roll_import_rules.dart`)
+
+| Export | Description |
+|---|---|
+| `bestMidiInRangeForPitchClass(pc, lo, hi)` | Finds the MIDI note in range closest to range center |
+| `buildChordStackMidis(root, quality, anchor, lo, hi)` | Builds a chord stack of MIDI notes from root + quality |
+| `extractSnapshotImportMidis(snapshot, ...)` | Extracts MIDI notes from instrument snapshots for import |
+
+Import rules handle `FretboardSnapshot` (tuning + fret → MIDI) and `PianoSnapshot` (direct MIDI). `PianoRollSnapshot` returns empty from this path — full roll load uses the dedicated save panel.
+
 ---
 
-## Live Hum to MIDI
+## PianoRollSnapshot (`lib/models/save_system.dart`)
 
-The piano roll now includes a mobile-only `Hum to MIDI` recorder. It captures mono microphone input, estimates one stable pitch at a time, lightly quantizes timing after stop, and appends the finalized notes to the current piano roll instead of replacing existing content.
+First-class piano-roll persistence. Saves the full session for later resume.
 
-### Timeline growth
+### Persisted fields
 
-- Hum imports expand the **timeline horizontally** (add measures) when the imported phrase extends beyond the current end tick.
-- If the imported phrase ends exactly on the current boundary, no extra measure is added.
-- **No pitch-range auto-growth** in this follow-up — imported notes outside the visible pitch window are clamped.
+| Field | Purpose |
+|---|---|
+| `tempo` | BPM |
+| `key` | Key string (e.g. "C major") or `null` |
+| `numerator` / `denominator` | Time signature (e.g. 4/4) |
+| `totalMeasures` | Timeline length |
+| `notes` | List of `{midiNote, startTick, durationTicks}` maps |
+| `pitchRangeStart` / `pitchRangeEnd` | Visible MIDI window |
+| `selectedColumnTick` | Detection column anchor |
+| `snapTicks` | Snap granularity |
+| `highlightedNotes` | Pitch-class list for scale highlighting |
 
-### Selection handoff
+### NOT persisted
 
-- If no column was selected before recording, `selectedColumnTick` is set to the first imported note's start tick after the take completes.
-- If a column was already selected, the existing selection is **preserved**.
-- Stopping a hum take **stops active playback** first if the transport is already running.
+| Field | Reason |
+|---|---|
+| `selectedNoteIds` | Transient note selection |
+| Playback transport state | Not part of the session |
+| `latestImportedRange` | Import navigation is ephemeral |
 
-### Latest import navigation
+### Derivable fields
 
-- After a successful hum import that creates notes, the `Hum to MIDI` card shows a `Jump to latest` button.
-- `Jump to latest` scrolls horizontally to the start tick of the most recent hum-imported range.
-- The action is navigation-only: it does not change playback state, selected notes, or `selectedColumnTick`.
-- The button tracks only the latest hum import target. A later successful hum import replaces it, and non-import note-add actions clear it.
+- `selectedNotes`: pitch classes at the saved `selectedColumnTick` (or all unique PCs if none)
+- `pendingChord`: first detected chord from `selectedNotes`
+- `pendingScale`: first detected scale from `selectedNotes`
 
-### Post-quantization monophonic normalization
+### Save/load flow
 
-- Quantized hum notes are normalized before append so the final import remains monophonic.
-- If two neighboring imported notes overlap after quantization, the earlier note is trimmed to end at the later note's start tick.
-- If trimming would reduce that earlier note to zero length, that earlier note is dropped.
+```
+PianoRollSavePanel → SaveBrowserPanel (filter: 'piano_roll')
+  ├── Save: captureSnapshot() → PianoRollSnapshot → saveSystemProvider
+  └── Load: loadSnapshot(snap) → pianoRollProvider.loadSnapshot()
+```
 
-### Detection pipeline
+The stack-import loader (`PianoRollSaveStackLoader`) ignores `PianoRollSnapshot` entries — use the dedicated save panel for full-roll persistence.
 
-The hum-to-MIDI capture splits into four stages. Stages 1–2 run while recording; stages 3–4 run on stop.
+---
+
+## Store (`lib/store/piano_roll_store.dart`)
+
+Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, PianoRollState>`)
+
+### Key actions
+
+| Method | Description |
+|---|---|
+| `setTempo(bpm)` | Update BPM, clamped to 20–300 |
+| `setKey(key)` | Set key string (e.g. `"C major"`) or `null` |
+| `setTimeSignature(ts)` | Update signature, trims out-of-range notes |
+| `setTotalMeasures(n)` | Expand / shrink timeline, trims notes |
+| `toggleCellNote(midi, tick, duration)` | Add note if absent; remove if present at same position |
+| `addNote(midi, tick, duration)` | Add unconditionally |
+| `removeNote(id)` | Delete by ID |
+| `moveNote(id, newTick, newMidi)` | Reposition (beat-snapped by the grid) |
+| `resizeNote(id, durationTicks)` | Change note length (1/16th minimum) |
+| `splitNote(id, tick)` | Split a note at a tick position into two notes |
+| `addNoteStack(midiList, tick, duration)` | Add multiple notes at the same tick (chord) |
+| `selectColumn(tick)` | Set `selectedColumnTick` for detection panel |
+| `selectNote(id)` | Highlight a specific note |
+| `setSelection(ids)` | Replace all selected note IDs at once |
+| `setPitchRange(start, end)` | Shift the visible MIDI window |
+| `shiftPitchRange(semitones)` | Scroll the pitch window ± semitones |
+| `setActiveTool(tool)` | Switch between `draw` and `scissors` |
+| `setSnapTicks(n)` | Set snap granularity (1, 2, 4, 8, 16, 32) |
+| `setHighlightedNotes(pcs)` | Set pitch classes to highlight on the grid |
+| `clearHighlightedNotes()` | Remove all highlights |
+| `clearNotes()` | Remove all notes |
+| `loadSnapshot(snap)` | Restore full session from a `PianoRollSnapshot` |
+| `reset()` | Revert to default state |
+
+### Composer store (`lib/store/piano_roll_composer_store.dart`)
+
+Provider: `pianoRollComposerProvider` — shared composer state used by both V1 stack selector and V2 dock.
+
+| Method | Description |
+|---|---|
+| `setRoot(root)` | Set root note (e.g. `"C"`, `"F#"`) |
+| `setQuality(quality)` | Set chord quality symbol |
+| `setDuration(ticks)` | Set note duration in ticks |
+| `addStack()` | Build chord stack from current state and place on roll at `selectedColumnTick` |
+
+---
+
+## Hum to MIDI & Web Support
+
+The Hum to MIDI recorder is **mobile-only**. On web the card shows a friendly "not supported" message with no record/stop controls.
+
+### Web capability split
+
+| Supported on web | NOT supported on web |
+|---|---|
+| Editor grid (all gestures) | Hum to MIDI capture |
+| Playback transport | |
+| Stack composer | |
+| Save/load (PianoRollSnapshot) | |
+| Stack import from Fretboard/Piano | |
+| Detection panel | |
+| Scale/highlight tools | |
+| Keyboard shortcuts | |
+| Ctrl+wheel / Alt+wheel zoom | |
+
+### Recording on mobile
+
+The full capture pipeline runs on mobile (iOS/Android):
 
 | Stage | Code | Responsibility |
 |---|---|---|
 | 1. PCM capture & windowing | `lib/utils/mic_pitch_session.dart` | Buffer raw 16 kHz mono PCM, slide a 1024-sample window with 512-sample hop, emit ~31 `PitchFrame`/sec |
 | 2. Pitch estimation | `lib/schema/rules/mono_pitch_rules.dart` (`estimateDominantFrequencyFromSamples`) | YIN with CMNDF, local-minimum descent, parabolic interpolation → `(frequencyHz, confidence)` |
-| 3. Segmentation | `lib/schema/rules/mono_pitch_rules.dart` (`segmentStableNotes`) | Group consecutive same-MIDI frames into `DetectedMonoNote { startMs, endMs, midiNote, confidence }` with 1-frame hysteresis |
-| 4. Quantization & monophonic normalization | `quantizeNotesToTicks` + `normalizeQuantizedHumNotesMonophonically` | Map ms → ticks against the current tempo, snap to `snapTicks`, drop overlaps |
-
-**Why windowing is internal.** iOS's `record` plugin delivers PCM chunks at the rate the audio session decides (often ~250 ms). One chunk per hummed eighth/quarter note meant the segmenter saw a single frame and computed 0 ms duration, so the note was dropped. Sliding a fixed window over the raw bytes decouples the frame rate from the platform's buffer size.
-
-**Why parabolic interpolation.** Pure integer-lag YIN buckets the frequency by 1-sample steps. Around a semitone boundary the rounded MIDI flips between adjacent notes from frame to frame, fragmenting one sustained note into many sub-notes. Parabolic interpolation on the CMNDF local minimum gives sub-sample lag → stable MIDI.
-
-**Why 1-frame hysteresis.** Even with parabolic refinement, vibrato or a single transient frame can briefly land in the neighbouring semitone. The segmenter requires **two consecutive** off-pitch frames before switching `activeMidi`; a lone deviation is folded back into the active note.
+| 3. Segmentation | `lib/schema/rules/mono_pitch_rules.dart` (`segmentStableNotes`) | Group consecutive same-MIDI frames into `DetectedMonoNote { startMs, endMs, midiNote, confidence }` with hysteresis |
+| 4. Quantization & normalization | `quantizeNotesToTicks` + `normalizeQuantizedHumNotesMonophonically` | Map ms → ticks, snap, drop overlaps |
 
 ### Tunable parameters
 
@@ -110,9 +246,7 @@ All in `lib/schema/rules/mono_pitch_rules.dart`:
 
 ### User-facing pitch sensitivity
 
-The Hum panel exposes a three-way `SegmentedButton` (Strict / Balanced / Forgiving) that selects how aggressively the segmenter switches notes. The choice persists via `SettingsNotifier.setHumSensitivity` and is read at `stopRecording` time.
-
-Each preset overrides three knobs (in `HumSensitivityTuning`):
+The Hum panel exposes a three-way `SegmentedButton` (Strict / Balanced / Forgiving). Each preset overrides three knobs:
 
 | Preset | `switchFrames` | `deadbandCents` | `minNoteMs` |
 |---|---|---|---|
@@ -120,27 +254,16 @@ Each preset overrides three knobs (in `HumSensitivityTuning`):
 | Balanced (default) | 4 | 35 | 120 |
 | Forgiving | 7 | 60 | 180 |
 
-- **`switchFrames`** — number of consecutive off-pitch frames required before the segmenter abandons the active MIDI note. Higher absorbs more wobble.
-- **`deadbandCents`** — even when a frame's rounded MIDI differs from the active note, if its actual frequency is within this many cents of the active note's reference frequency it is folded back into the active note (so a singer hovering 40 cents sharp of A4 stays as A4 in Forgiving but switches to A#4 in Strict).
-- **`minNoteMs`** — minimum emitted note duration for the preset; shorter candidates are dropped.
-
-The selector is disabled while a recording or processing is in flight so the value can't change mid-take.
-
-### Edge cases handled
-
-- **Single-frame notes**: when only one voiced frame falls inside `[startMs, endMs]`, the segmenter assigns the note the **median observed inter-frame delta** as its duration (instead of 0 ms).
-- **Absolute vs. relative timestamps**: `PitchFrame.timestampMs` is **ms since recording start**, not epoch ms. Producers (`RecordMicPitchSession`) must subtract the recording's start time before emitting.
-- **Silence gate before YIN**: windows below `minHumAmplitude` skip pitch estimation entirely and emit an `isSilence: true` frame. This prevents YIN from latching onto low-amplitude room noise and producing phantom notes.
+The selector is disabled while recording or processing.
 
 ---
 
 ## Playback
 
-The piano roll includes a simple onset-sequencer transport that plays notes via the synthesised `NotePlayer` engine.
+Onset-sequencer transport that plays notes via the synthesised `NotePlayer` engine.
 
 ### Controls
 
-The **Playback** panel in the toolbar shows:
 - **Play / Stop** button — starts or cancels transport.
 - **Status text** — shows the start point and current tick while playing.
 
@@ -166,29 +289,36 @@ The **Playback** panel in the toolbar shows:
 
 ---
 
-## Store (`lib/store/piano_roll_store.dart`)
+## Layout: Landscape & Portrait
 
-Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, PianoRollState>`)
+### V2 Landscape (width > 600 px)
 
-### Key actions
+- **Grid**: 3× flex on the left — primary editing surface.
+- **Inspector rail**: 1× flex on the right — scrollable utility panel containing:
+  - Composer (root / quality / duration pickers + "Add Stack" button)
+  - Selection status
+  - Edit & Pitch controls (tool + snap pills, pitch range ± octave)
+  - Stack Selector
+  - Scale picker
+  - Detection panel (when column selected)
+  - Hum Recorder (mobile) / unsupported card (web)
+  - Save / Load panel
+  - Import from Saves
+- **Transport strip**: compact row with BPM, bar/beat readout, time signature, play/stop.
 
-| Method | Description |
-|---|---|
-| `setTempo(bpm)` | Update BPM, clamped to 20–300 |
-| `setKey(key)` | Set key string (e.g. `"C major"`) or `null` |
-| `setTimeSignature(ts)` | Update signature, trims out-of-range notes |
-| `setTotalMeasures(n)` | Expand / shrink timeline, trims notes |
-| `toggleCellNote(midi, tick, duration)` | Add note if absent; remove if present at same position |
-| `addNote(midi, tick, duration)` | Add unconditionally |
-| `removeNote(id)` | Delete by ID |
-| `moveNote(id, newTick, newMidi)` | Reposition (beat-snapped by the grid) |
-| `resizeNote(id, durationTicks)` | Change note length (1/16th minimum) |
-| `addNoteStack(midiList, tick, duration)` | Add multiple notes at the same tick (chord) |
-| `selectColumn(tick)` | Set `selectedColumnTick` for detection panel |
-| `selectNote(id)` | Highlight a specific note |
-| `setPitchRange(start, end)` | Shift the visible MIDI window |
-| `shiftPitchRange(semitones)` | Scroll the pitch window ± semitones |
-| `clearNotes()` | Remove all notes |
+### V2 Portrait (width ≤ 600 px)
+
+- **Transport strip**: same compact row.
+- **Grid**: full-width primary surface.
+- **Bottom dock**: collapsible expanders for each tool surface:
+  - Quick action chips (Add Stack, Scale, Import, Record, Save, Compose)
+  - Collapsible panels: Scale, Hum, Save, Import, Compose, Detection
+- Only one panel expanded at a time (accordion-style).
+
+### V1
+
+- Vertical card layout composed in `lib/main.dart` — same provider-backed widgets.
+- Toolbar above the grid, panels below.
 
 ---
 
@@ -206,12 +336,14 @@ The core editor. Three `CustomPainter` layers rendered inside synchronized scrol
 **Scroll architecture:**
 - Four `ScrollController`s: `_hScroll` + `_vScroll` (grid), `_rulerHScroll` (ruler synced to `_hScroll`), `_sidebarVScroll` (sidebar synced to `_vScroll`)
 - All scroll views use `NeverScrollableScrollPhysics` — scroll is driven programmatically via `_manualScroll(delta)` in pointer move
-- A `GestureDetector` wrapping the card (in `main.dart`) claims the gesture arena to block the parent `ListView` from stealing touches
 
 **Pinch-to-zoom:**
 - Tracked via raw `Listener` + `_pointers` map (pointer ID → position)
 - When 2 fingers are down, horizontal spread scales `_cellW` (10–80 px), vertical spread scales `_rowH` (10–40 px)
-- All painters and hit-test math use the live `_cellW`/`_rowH` values
+
+**Wheel zoom (desktop/web):**
+- `Ctrl`/`Cmd` + wheel: horizontal zoom (`_cellW` scaled by `delta * 0.5`, clamped 10–80)
+- `Alt`/`Option` + wheel: vertical zoom (`_rowH` scaled by `delta * 0.5`, clamped 10–40)
 
 **Gesture state machine (raw `Listener`):**
 
@@ -226,24 +358,28 @@ The core editor. Three `CustomPainter` layers rendered inside synchronized scrol
 
 | Action | How to trigger |
 |---|---|
-| **Add note** | Tap on empty cell |
-| **Select note** | Tap on existing note |
+| **Add note (1 tick)** | Tap on empty cell |
+| **Add note (snap length)** | Double-tap on empty cell — inserts note at current snap duration |
+| **Select note** | Tap on existing note (double-tap toggles multi-select) |
 | **Move note** | Drag note body (horizontal = beat-snapped tick, vertical = semitone pitch) |
 | **Resize note** | Drag right-edge handle (rightmost 16 px, snaps to 1/16th minimum) |
+| **Split note** | Tap note with scissors tool active — splits at tapped position |
 | **Delete note** | Long-press (500 ms) on note |
+| **Delete selected notes** | `Delete` or `Backspace` key (desktop/web) |
+| **Play / Stop** | `Space` key (desktop/web) |
 
 **Beat snapping (move):**
 - Beat ticks = 4 (quarter note) for 4/4; = 2 (eighth) for 4/8 time signatures
 - Snaps: `round(rawTick / beatTicks) * beatTicks`
-- `_grabOffsetTicks` ensures the note doesn't jump to cursor's left edge
 
-**Ruler tap:**
-- Tap anywhere on the ruler row to set `selectedColumnTick` → triggers detection panel
+**Ruler interactions:**
+- **Tap** anywhere on the ruler row to set `selectedColumnTick` → triggers detection panel
+- **Drag** across the ruler to scrub `selectedColumnTick` continuously — updates the column marker and detection panel in real time
 
 ---
 
 ### `PianoRollToolbar`
-Controls bar at the top of the screen:
+Controls bar at the top of the screen (V1). V2 uses the inspector rail instead.
 
 | Control | Type | Provider action |
 |---|---|---|
@@ -257,7 +393,7 @@ Controls bar at the top of the screen:
 ---
 
 ### `PianoRollStackSelector`
-Chord root (12 chromatic) + quality (major, minor, 7, maj7, m7, dim, aug) + duration (1–4 beats) picker. Tapping "Add Stack" calls `addNoteStack()` at `selectedColumnTick` (or tick 0 if none). Notes are voice-led to the closest MIDI range within the current pitch window.
+Chord root (12 chromatic) + quality (17 chords) + duration (1–4 beats) picker. Tapping "Add Stack" calls `addStack()` on the composer provider, which builds the chord via shared import rules and places notes at `selectedColumnTick` (or tick 0 if none). Notes are voice-led to the closest MIDI range within the current pitch window.
 
 ---
 
@@ -265,22 +401,52 @@ Chord root (12 chromatic) + quality (major, minor, 7, maj7, m7, dim, aug) + dura
 Connects the save system to the piano roll. Lets the user browse saved progressions and place their notes into the timeline:
 
 - **Folder browser** with breadcrumb navigation via `saveSystemProvider`
-- **Placement mode toggle**: "Exact MIDI" (loads original MIDI values) vs "Pitch Class" (transposes to fit current pitch window using `_bestMidiInRange`)
+- **Placement mode toggle**: "Exact MIDI" (loads original MIDI values) vs "Pitch Class" (transposes to fit current pitch window using `bestMidiInRangeForPitchClass`)
 - **"Add Stack" button**: calls `addNoteStack()` at current column
+- **Filtered to Fretboard and Piano snapshots only** — `PianoRollSnapshot` entries are hidden from this loader (use the dedicated save panel for full-roll persistence)
 
-Supports fretboard snapshots (`FretboardSnapshot` → extracts MIDI via note name parsing) and piano snapshots (`PianoSnapshot` → uses `midiNote` directly).
+Supports `FretboardSnapshot` (MIDI via tuning + string + fret) and `PianoSnapshot` (MIDI directly from selected keys).
+
+---
+
+### `PianoRollScalePicker`
+Scale-highlight picker: choose a root note and scale type (major, minor, pentatonic major/minor, blues, chromatic). Highlights all matching pitch-class rows on the grid in teal. The selection is stored as `highlightedNotes` in `PianoRollState`.
 
 ---
 
 ### `PianoRollDetectionPanel`
-Shows at selected column (`selectedColumnTick`). Displays:
+Shows at selected column (`selectedColumnTick`). Uses shared exact-note detection APIs from `lib/utils/note_utils.dart`:
 
+- `detectChordResultsFromExactNotes(...)` — chord matches
+- `detectScaleResultsFromExactNotes(...)` — scale matches
+- `formatChordSymbol(...)` / `formatScaleLabel(...)` — display labels
+
+Displays:
 - **Note chips** — one per active note. Each chip: tap to select, `×` button to delete.
-- **Chords** — detected chord names (max 8), matching exact pitch-class set
-- **Scales** — detected scale names (max 8), where all selected PCs are subset of scale
-- **Delete Selected Note** — red button present when a note is selected
+- **Chords** — detected chord names, matching exact pitch-class set
+- **Scales** — detected scale names, where all selected PCs are subset of scale
+- **Delete Selected Note** — button present when a note is selected
 
-Detection is local to the widget (no external library) using hardcoded interval sets for 9 chord qualities and 4 scale types.
+---
+
+### `PianoRollSavePanel`
+First-class piano-roll save/load UI. Wraps `SaveBrowserPanel` with `instrumentFilter: 'piano_roll'`:
+
+- **Save**: captures current `PianoRollState` as a `PianoRollSnapshot`
+- **Load**: applies a snapshot to restore tempo, signature, notes, range, selection, snap, and highlights
+- **Update**: overwrites an existing save with current state
+
+Separate from the stack-import loader — this is for full piano roll sessions.
+
+---
+
+### `PianoRollHumRecorderPanel`
+Mobile-only hum-to-MIDI recording panel. On web renders a static unsupported-state card. On mobile:
+
+- Record / Stop buttons (disabled while processing)
+- Live pitch readout during recording
+- "Jump to latest" button after successful import
+- Pitch sensitivity selector (Strict / Balanced / Forgiving)
 
 ---
 
@@ -302,15 +468,18 @@ Row height in pixels: `_rowH` (default 18 px, zoom range 10–40 px)
 ## State Flow
 
 ```
-PianoRollToolbar → pianoRollProvider.setTempo() / setTimeSignature() / …
-                              │
-               PianoRollGrid repaints via ref.watch
-                              │
-    User taps cell → pianoRollProvider.toggleCellNote(midi, tick)
-                              │
-    User taps ruler → pianoRollProvider.selectColumn(tick)
-                              │
-    PianoRollDetectionPanel shows chords/scales at that column
+PianoRollToolbar / V2 Inspector → pianoRollProvider.setTempo() / setTimeSignature() / …
+                                │
+                 PianoRollGrid repaints via ref.watch
+                                │
+     User taps cell → pianoRollProvider.toggleCellNote(midi, tick)
+                                │
+     User taps/drags ruler → pianoRollProvider.selectColumn(tick)
+                                │
+     PianoRollDetectionPanel shows chords/scales at that column
+                                │
+     Composer dock → pianoRollComposerProvider.setRoot/Quality/Duration
+                  → addStack() → import_rules.buildChordStackMidis() → addNoteStack()
 ```
 
 ---
@@ -339,15 +508,6 @@ Rendered as a modal bottom sheet at 88 % of screen height with a drag handle.
 | `_TabBar` | Three tabs: Fretboard / Piano / Piano Roll |
 | `_FretboardInfoTab` | Gesture + mode + tool entries for the fretboard |
 | `_PianoInfoTab` | Gesture + tool + behaviour entries for the piano |
-| `_PianoRollInfoTab` | Gesture + toolbar + panel + timeline-math entries |
+| `_PianoRollInfoTab` | Gesture + toolbar + panel + layout + shortcut + timeline-math entries |
 | `_Section` | Section header (icon + uppercase label) + card container |
 | `_Entry` | Icon badge + bold label + description text |
-
-### Piano Roll tab sections
-
-| Section | Content |
-|---|---|
-| **Gestures** | Tap to add/select, drag body to move (beat-snapped + semitone), drag edge to resize, long-press to delete, ruler tap to set column, pinch to zoom, single-finger drag to scroll |
-| **Toolbar Controls** | Tempo (20–300), Measures, Time signature, Key, Pitch window (▲/▼ ±12 semitones), Clear |
-| **Panels** | Stack selector, Save stack loader (Exact MIDI vs Pitch Class), Detection panel (note chips + chords + scales) |
-| **Timeline Math** | 1 tick = 1/16th note, beat snapping rules |
