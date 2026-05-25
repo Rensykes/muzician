@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hum_to_midi.dart';
 import '../models/piano_roll.dart';
+import '../models/save_system.dart' show PianoRollSnapshot;
 import '../schema/rules/piano_roll_rules.dart' as rules;
 
 class PianoRollNotifier extends Notifier<PianoRollState> {
@@ -448,6 +449,40 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       truncated: truncated,
       firstStartTick: firstCreatedStartTick,
       furthestEndTick: furthestCreatedEndTick,
+    );
+  }
+
+  void loadSnapshot(PianoRollSnapshot snap) {
+    final config = PianoRollConfig(
+      tempo: snap.tempo,
+      key: snap.key,
+      timeSignature: TimeSignature(
+        beatsPerMeasure: snap.numerator,
+        beatUnit: snap.denominator,
+      ),
+      totalMeasures: snap.totalMeasures,
+    );
+    final notes = snap.notes.map((n) {
+      final midiNote = n['midiNote'] as int? ?? 60;
+      return PianoRollNote(
+        id: _makeId(),
+        midiNote: midiNote,
+        pitchClass: rules.midiToPitchClass(midiNote),
+        noteWithOctave: rules.midiToNoteWithOctave(midiNote),
+        startTick: n['startTick'] as int? ?? 0,
+        durationTicks: n['durationTicks'] as int? ?? 480,
+      );
+    }).toList();
+    state = PianoRollState(
+      config: config,
+      notes: notes,
+      pitchRangeStart: snap.pitchRangeStart,
+      pitchRangeEnd: snap.pitchRangeEnd,
+      selectedColumnTick: snap.selectedColumnTick,
+      selectedNoteIds: const <String>{},
+      snapTicks: snap.snapTicks,
+      highlightedNotes: List<String>.from(snap.highlightedNotes),
+      latestImportedRange: null,
     );
   }
 

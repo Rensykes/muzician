@@ -3,6 +3,8 @@
 library;
 
 import '../schema/rules/mono_pitch_rules.dart';
+import '../schema/rules/piano_roll_rules.dart' as pr_rules;
+import '../utils/note_utils.dart';
 import 'fretboard.dart';
 import 'piano.dart';
 
@@ -57,7 +59,11 @@ sealed class InstrumentSnapshot {
   Map<String, dynamic> toJson();
 
   static InstrumentSnapshot fromJson(Map<String, dynamic> json) {
+    final type = json['type'] as String?;
     final instrument = json['instrument'] as String? ?? 'fretboard';
+    if (type == 'piano_roll' || instrument == 'piano_roll') {
+      return PianoRollSnapshot.fromJson(json);
+    }
     if (instrument == 'piano') {
       return PianoSnapshot.fromJson(json);
     }
@@ -209,6 +215,125 @@ class PianoSnapshot extends InstrumentSnapshot {
       pendingScale: json['pendingScale'] != null
           ? PendingScale.fromJson(json['pendingScale'] as Map<String, dynamic>)
           : null,
+    );
+  }
+}
+
+class PianoRollSnapshot extends InstrumentSnapshot {
+  @override
+  String get instrument => 'piano_roll';
+
+  final int tempo;
+  final String? key;
+  final int numerator;
+  final int denominator;
+  final int totalMeasures;
+  final List<Map<String, dynamic>> notes;
+  final int pitchRangeStart;
+  final int pitchRangeEnd;
+  final int? selectedColumnTick;
+  final int snapTicks;
+  final List<String> highlightedNotes;
+
+  PianoRollSnapshot({
+    required this.tempo,
+    this.key,
+    required this.numerator,
+    required this.denominator,
+    required this.totalMeasures,
+    required this.notes,
+    required this.pitchRangeStart,
+    required this.pitchRangeEnd,
+    this.selectedColumnTick,
+    required this.snapTicks,
+    required this.highlightedNotes,
+  });
+
+  /// Pitch classes of notes at the selected column (or all notes if none).
+  @override
+  List<String> get selectedNotes {
+    final relevantMaps = selectedColumnTick != null
+        ? notes
+              .where((n) => (n['startTick'] as int?) == selectedColumnTick)
+              .toList()
+        : notes;
+    if (relevantMaps.isEmpty && selectedColumnTick != null) {
+      // Fall back to all unique pitch classes when no notes at the column.
+      final allPcs = notes
+          .map((n) => pr_rules.midiToPitchClass(n['midiNote'] as int))
+          .toSet();
+      return allPcs.toList();
+    }
+    final pcs = relevantMaps
+        .map((n) => pr_rules.midiToPitchClass(n['midiNote'] as int))
+        .toSet();
+    return pcs.toList();
+  }
+
+  /// Detected chord from pitch classes at the saved selected column.
+  @override
+  PendingChord? get pendingChord {
+    final sc = selectedNotes;
+    if (sc.isEmpty) return null;
+    final result = detectFirstChord(sc);
+    if (result == null) return null;
+    return PendingChord(
+      root: result.root,
+      quality: result.quality,
+      symbol: '${result.root}${result.quality}',
+    );
+  }
+
+  /// First detected scale from pitch classes at the saved selected column.
+  @override
+  PendingScale? get pendingScale {
+    final sc = selectedNotes;
+    if (sc.isEmpty) return null;
+    final detected = detectChordsAndScales(sc);
+    if (detected.scales.isEmpty) return null;
+    final parts = detected.scales.first.split(' ');
+    if (parts.length < 2) return null;
+    return PendingScale(root: parts[0], scaleName: parts.sublist(1).join(' '));
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'piano_roll',
+    'instrument': 'piano_roll',
+    'tempo': tempo,
+    'key': key,
+    'numerator': numerator,
+    'denominator': denominator,
+    'totalMeasures': totalMeasures,
+    'notes': notes,
+    'pitchRangeStart': pitchRangeStart,
+    'pitchRangeEnd': pitchRangeEnd,
+    'selectedColumnTick': selectedColumnTick,
+    'snapTicks': snapTicks,
+    'highlightedNotes': highlightedNotes,
+  };
+
+  factory PianoRollSnapshot.fromJson(Map<String, dynamic> json) {
+    return PianoRollSnapshot(
+      tempo: json['tempo'] as int? ?? 120,
+      key: json['key'] as String?,
+      numerator: json['numerator'] as int? ?? 4,
+      denominator: json['denominator'] as int? ?? 4,
+      totalMeasures: json['totalMeasures'] as int? ?? 4,
+      notes:
+          (json['notes'] as List?)
+              ?.map((n) => Map<String, dynamic>.from(n as Map<String, dynamic>))
+              .toList() ??
+          [],
+      pitchRangeStart: json['pitchRangeStart'] as int? ?? 48,
+      pitchRangeEnd: json['pitchRangeEnd'] as int? ?? 84,
+      selectedColumnTick: json['selectedColumnTick'] as int?,
+      snapTicks: json['snapTicks'] as int? ?? 1,
+      highlightedNotes:
+          (json['highlightedNotes'] as List?)
+              ?.map((n) => n as String)
+              .toList() ??
+          [],
     );
   }
 }
