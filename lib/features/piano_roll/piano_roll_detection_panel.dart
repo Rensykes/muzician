@@ -4,75 +4,32 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/harmonic_analysis.dart';
+import '../../models/piano_roll.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
+import '../../utils/note_utils.dart';
 import '../../theme/muzician_theme.dart';
 
-const _chromatic = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
-
 ({List<String> chords, List<String> scales}) _detect(
-  List<String> pitchClasses,
+  List<PianoRollNote> notes,
 ) {
-  if (pitchClasses.length < 2) return (chords: <String>[], scales: <String>[]);
-  final noteSet = pitchClasses.toSet();
+  if (notes.length < 2) return (chords: <String>[], scales: <String>[]);
 
-  final chords = <String>[];
-  const qualities = [
-    ('', [0, 4, 7]),
-    ('m', [0, 3, 7]),
-    ('7', [0, 4, 7, 10]),
-    ('maj7', [0, 4, 7, 11]),
-    ('m7', [0, 3, 7, 10]),
-    ('dim', [0, 3, 6]),
-    ('aug', [0, 4, 8]),
-    ('sus2', [0, 2, 7]),
-    ('sus4', [0, 5, 7]),
-  ];
-  for (final root in _chromatic) {
-    final rootIdx = _chromatic.indexOf(root);
-    for (final (symbol, intervals) in qualities) {
-      final chordTones = intervals
-          .map((i) => _chromatic[(rootIdx + i) % 12])
-          .toSet();
-      if (noteSet.every(chordTones.contains) &&
-          chordTones.every(noteSet.contains)) {
-        chords.add('$root${symbol.isEmpty ? '' : symbol}');
-      }
-    }
-  }
+  final exactNotes = notes
+      .map(
+        (n) =>
+            ExactSelectionNote(midiNote: n.midiNote, pitchClass: n.pitchClass),
+      )
+      .toList();
 
-  final scales = <String>[];
-  const scaleTypes = [
-    ('major', [0, 2, 4, 5, 7, 9, 11]),
-    ('minor', [0, 2, 3, 5, 7, 8, 10]),
-    ('major pentatonic', [0, 2, 4, 7, 9]),
-    ('minor pentatonic', [0, 3, 5, 7, 10]),
-  ];
-  for (final root in _chromatic) {
-    final rootIdx = _chromatic.indexOf(root);
-    for (final (name, intervals) in scaleTypes) {
-      final scaleTones = intervals
-          .map((i) => _chromatic[(rootIdx + i) % 12])
-          .toSet();
-      if (noteSet.every(scaleTones.contains)) {
-        scales.add('$root $name');
-      }
-    }
-  }
-  return (chords: chords.take(8).toList(), scales: scales.take(8).toList());
+  final chordResults = detectChordResultsFromExactNotes(exactNotes);
+  final scaleResults = detectScaleResultsFromExactNotes(exactNotes);
+
+  return (
+    chords: chordResults.take(8).map(formatChordSymbol).toList(),
+    scales: scaleResults.take(8).map(formatScaleLabel).toList(),
+  );
 }
 
 class PianoRollDetectionPanel extends ConsumerWidget {
@@ -91,8 +48,7 @@ class PianoRollDetectionPanel extends ConsumerWidget {
     );
     if (notesAtTick.isEmpty) return const SizedBox.shrink();
 
-    final uniquePCs = notesAtTick.map((n) => n.pitchClass).toSet().toList();
-    final detection = _detect(uniquePCs);
+    final detection = _detect(notesAtTick);
 
     return Container(
       decoration: BoxDecoration(
