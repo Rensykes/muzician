@@ -4,22 +4,13 @@ A quantized, timeline-based note editor rendered with `CustomPainter`. Supports 
 
 ---
 
-## V2 Architecture
-
-Piano Roll exists in two shells that share the same domain logic:
-
-| Shell | File | Role |
-|---|---|---|
-| V1 | `lib/main.dart` (inline composition) | Compatibility shell and regression harness; renders the same providers as V2. |
-| V2 | `lib/features/piano_roll/piano_roll_screen_v2.dart` | Target product surface with adaptive landscape/portrait layout, inspector rail, and collapsible panels. |
-
-Both shells read from the same set of Riverpod providers — there is no widget-local fake state in V2. The implementation follows the design spec: shared logic in models, rules, and providers; two renderers.
-
-V2 is the default surface; V1 stays in the codebase until explicitly removed.
-
----
-
 ## Architecture
+
+`PianoRollScreenV2` is the only piano-roll shell. The previous V1 composition
+inline in `lib/main.dart` (with `PianoRollPlaybackConfig` / `PianoRollEditConfig`
+/ `PianoRollPitchConfig` panel cards) and the unused `piano_roll_screen_v2_mockup.dart`
+have been removed. The Roll tab in the bottom navigation mounts
+`PianoRollScreenV2` directly.
 
 ```
 lib/
@@ -40,8 +31,7 @@ lib/
     hum_to_midi_store.dart                ← hum recording provider
   features/piano_roll/
     piano_roll_grid.dart                  ← main editor canvas (PianoRollGrid)
-    piano_roll_screen_v2.dart             ← V2 adaptive layout shell
-    piano_roll_toolbar.dart               ← tempo, measures, time sig, key, pitch window
+    piano_roll_screen_v2.dart             ← adaptive layout shell (Roll tab body)
     piano_roll_stack_selector.dart        ← chord root + quality → add note stack
     piano_roll_scale_picker.dart          ← scale-highlight picker
     piano_roll_save_stack_loader.dart     ← load stacks from saved progressions
@@ -191,7 +181,7 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 
 ### Composer store (`lib/store/piano_roll_composer_store.dart`)
 
-Provider: `pianoRollComposerProvider` — shared composer state used by both V1 stack selector and V2 dock.
+Provider: `pianoRollComposerProvider` — shared composer state behind the `_ComposerSheet`, the `_AddPresetSplitChip` preset label, and the landscape inspector rail's composer fields.
 
 | Method | Description |
 |---|---|
@@ -262,7 +252,7 @@ The selector is disabled while recording or processing.
 
 Onset-sequencer transport that plays notes via the synthesised `NotePlayer` engine.
 
-### Transport bar (V2)
+### Transport bar
 
 | Control | Action |
 |---|---|
@@ -311,7 +301,7 @@ Configurable via the Roll Settings sheet ([Settings](#roll-settings)). When `App
 
 ## Roll Settings
 
-Per-page settings sheet opened via the gear icon in the V2 `CompactAppBar`. Currently exposes a single toggle:
+Per-page settings sheet opened via the gear icon in the `CompactAppBar`. Currently exposes a single toggle:
 
 | Setting | Persistence | Default | Effect |
 |---|---|---|---|
@@ -323,7 +313,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 ## Tool Modes
 
-`PianoRollState.activeTool` drives the grid's tap behaviour. All four modes are reachable from the V2 portrait tool segment (icon-only segmented control in the action bar) or directly via `pianoRollProvider.setActiveTool(...)`.
+`PianoRollState.activeTool` drives the grid's tap behaviour. All four modes are reachable from the portrait action-bar tool segment (icon-only segmented control) or directly via `pianoRollProvider.setActiveTool(...)`.
 
 | Tool | Icon | Tap on empty cell | Tap on note | Drag |
 |---|---|---|---|---|
@@ -338,7 +328,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 |---|---|
 | Enum | `lib/models/piano_roll.dart` |
 | Tap/drag wiring | `lib/features/piano_roll/piano_roll_grid.dart` (`_DragMode.paintBrush`, `_DragMode.deleteBrush`, `_paintAt`, `_deleteAt`, brushed-cell/id sets) |
-| V2 segmented control | `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_ToolModeSegment`, `_ToolSegmentItem`) |
+| Tool segmented control (portrait action bar) | `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_ToolModeSegment`, `_ToolSegmentItem`) |
 
 ### Continuous-tool guarantees
 
@@ -357,7 +347,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 ## Layout: Landscape & Portrait
 
-### V2 Landscape (width > 600 px)
+### Landscape (width > 600 px)
 
 - **Grid**: 3× flex on the left — primary editing surface.
 - **Inspector rail**: 1× flex on the right — scrollable utility panel containing:
@@ -372,7 +362,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
   - Import from Saves
 - **Transport strip**: compact row with BPM, bar/beat readout, time signature, play/stop.
 
-### V2 Portrait (width ≤ 600 px)
+### Portrait (width ≤ 600 px)
 
 The portrait shell is minimal-by-design: the grid is `Expanded` and the chrome below it is **fixed-height**, so opening a panel never resizes the grid. Every utility surface opens as a modal bottom sheet on top of the grid via `showWidgetSheet(...)` rather than as an inline expander.
 
@@ -408,11 +398,6 @@ Each chip opens the corresponding panel as a glass `showWidgetSheet`:
 | `Save` | `PianoRollSavePanel` |
 | `Import` | `PianoRollSaveStackLoader` |
 | Gear icon | `_SettingsSheet` (see [Roll Settings](#roll-settings)) |
-
-### V1
-
-- Vertical card layout composed in `lib/main.dart` — same provider-backed widgets.
-- Toolbar above the grid, panels below.
 
 ---
 
@@ -476,20 +461,6 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 **Ruler interactions:**
 - **Tap** anywhere on the ruler row to set `selectedColumnTick` → triggers detection panel
 - **Drag** across the ruler to scrub `selectedColumnTick` continuously — updates the column marker and detection panel in real time
-
----
-
-### `PianoRollToolbar`
-Controls bar at the top of the screen (V1). V2 uses the inspector rail instead.
-
-| Control | Type | Provider action |
-|---|---|---|
-| Tempo | `−` / `+` stepper | `setTempo()` |
-| Measures | `−` / `+` stepper | `setTotalMeasures()` |
-| Time signature | Pill selector (4/4, 3/4, 6/8…) | `setTimeSignature()` |
-| Key | Dropdown (major / minor / none) | `setKey()` |
-| Pitch window | `▲` / `▼` buttons (±12 semitones) | `shiftPitchRange()` |
-| Clear | Button | `clearNotes()` |
 
 ---
 
@@ -569,7 +540,7 @@ Row height in pixels: `_rowH` (default 18 px, zoom range 10–40 px)
 ## State Flow
 
 ```
-PianoRollToolbar / V2 Inspector → pianoRollProvider.setTempo() / setTimeSignature() / …
+Transport strip / inspector rail → pianoRollProvider.setTempo() / setTimeSignature() / …
                                 │
                  PianoRollGrid repaints via ref.watch
                                 │
