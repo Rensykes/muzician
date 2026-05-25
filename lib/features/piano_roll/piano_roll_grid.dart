@@ -235,7 +235,14 @@ class _GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _GridPainter old) => true;
+  bool shouldRepaint(covariant _GridPainter old) =>
+      old.state != state ||
+      old.totalTicks != totalTicks ||
+      old.timeSig != timeSig ||
+      old.cellW != cellW ||
+      old.rowH != rowH ||
+      old.playbackTick != playbackTick ||
+      old.scissorsCursorX != scissorsCursorX;
 }
 
 // ── Ruler Painter ───────────────────────────────────────────────────────────
@@ -332,7 +339,12 @@ class _RulerPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _RulerPainter old) => true;
+  bool shouldRepaint(covariant _RulerPainter old) =>
+      old.timeSig != timeSig ||
+      old.totalTicks != totalTicks ||
+      old.cellW != cellW ||
+      old.selectedColumnTick != selectedColumnTick ||
+      old.playbackTick != playbackTick;
 }
 
 // ── Pitch Sidebar Painter ───────────────────────────────────────────────────
@@ -437,6 +449,17 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   String? _lastTapNoteId;
   Set<String> _preTapSelection = const {};
 
+  // Empty-cell double-tap detection (snap-length insertion)
+  int? _pendingEmptyTick;
+  int? _pendingEmptyMidi;
+  Timer? _emptyTapTimer;
+
+  // Ruler drag state
+  bool _rulerDragging = false;
+
+  // Keyboard focus node
+  final FocusNode _focusNode = FocusNode();
+
   // Multi-note drag: original positions snapshot keyed by note id
   Map<String, ({int startTick, int midiNote})> _multiDragOriginals = {};
 
@@ -464,6 +487,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   @override
   void dispose() {
     _longPressTimer?.cancel();
+    _emptyTapTimer?.cancel();
+    _focusNode.dispose();
     _vScroll.removeListener(_syncVertical);
     _hScroll.removeListener(_syncHorizontal);
     _hScroll.dispose();
@@ -522,6 +547,72 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     if (tick >= 0 && tick < maxTick) {
       ref.read(pianoRollProvider.notifier).selectColumn(tick);
       HapticFeedback.selectionClick();
+    }
+  }
+
+  void _onRulerDragStart(DragStartDetails details) {
+    _rulerDragging = true;
+  }
+
+  void _onRulerDragUpdate(DragUpdateDetails details, PianoRollState state) {
+    if (!_rulerDragging) return;
+    final absX = details.localPosition.dx;
+    final tick = ((absX + _rulerHScroll.offset) / _cellW).floor();
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    if (tick >= 0 && tick < maxTick) {
+      ref.read(pianoRollProvider.notifier).selectColumn(tick);
+    }
+  }
+
+  void _onRulerDragEnd(DragEndDetails details) {
+    _rulerDragging = false;
+    HapticFeedback.selectionClick();
+  }
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────
+
+  void _togglePlayback() {
+    final playbackState = ref.read(pianoRollPlaybackProvider);
+    if (playbackState.status == PianoRollPlaybackStatus.playing) {
+      ref.read(pianoRollPlaybackProvider.notifier).stopPlayback();
+    } else {
+      ref.read(pianoRollPlaybackProvider.notifier).startPlayback();
+    }
+  }
+
+  void _deleteSelectedNotes() {
+    final state = ref.read(pianoRollProvider);
+    if (state.selectedNoteIds.isEmpty) return;
+    final ids = state.selectedNoteIds.toList();
+    for (final id in ids) {
+      ref.read(pianoRollProvider.notifier).removeNote(id);
+    }
+    HapticFeedback.mediumImpact();
+  }
+
+  // ── Wheel zoom (desktop / web) ────────────────────────────────────────
+
+  void _onPointerSignal(PointerSignalEvent event, PianoRollState state) {
+    if (event is! PointerScrollEvent) return;
+    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+    final isCtrl =
+        keys.contains(LogicalKeyboardKey.control) ||
+        keys.contains(LogicalKeyboardKey.meta);
+    final isAlt = keys.contains(LogicalKeyboardKey.alt);
+    final delta = event.scrollDelta.dy;
+
+    if (isCtrl && mounted) {
+      setState(() {
+        _cellW = (_cellW + delta * 0.5).clamp(10.0, 80.0);
+      });
+    }
+    if (isAlt && mounted) {
+      setState(() {
+        _rowH = (_rowH + delta * 0.5).clamp(10.0, 40.0);
+      });
     }
   }
 
@@ -603,6 +694,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       final positions = _pointers.values.toList();
       final hDist = max(1.0, (positions[0].dx - positions[1].dx).abs());
       final vDist = max(1.0, (positions[0].dy - positions[1].dy).abs());
+      if (!mounted) return;
       setState(() {
         _cellW = (_pinchInitCellW * (hDist / _pinchInitHDist)).clamp(
           10.0,
@@ -733,9 +825,34 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
               coord.midi,
               volume: ref.read(settingsProvider).noteVolume,
             );
-            notifier.toggleCellNote(coord.midi, coord.tick, 1);
+            // Double-tap detection on empty cell for snap-length insertion.
+            final isDoubleTap =
+                _pendingEmptyTick == coord.tick &&
+                _pendingEmptyMidi == coord.midi;
+            if (isDoubleTap) {
+              // Cancel the deferred 1-tick creation and create snap-tick.
+              _emptyTapTimer?.cancel();
+              _emptyTapTimer = null;
+              _pendingEmptyTick = null;
+              _pendingEmptyMidi = null;
+              notifier.toggleCellNote(coord.midi, coord.tick, state.snapTicks);
+              HapticFeedback.mediumImpact();
+            } else {
+              // Cancel any previous pending tap, then start deferred timer.
+              _emptyTapTimer?.cancel();
+              _pendingEmptyTick = coord.tick;
+              _pendingEmptyMidi = coord.midi;
+              _emptyTapTimer = Timer(const Duration(milliseconds: 300), () {
+                if (!mounted) return;
+                ref
+                    .read(pianoRollProvider.notifier)
+                    .toggleCellNote(coord.midi, coord.tick, 1);
+                _pendingEmptyTick = null;
+                _pendingEmptyMidi = null;
+              });
+              HapticFeedback.lightImpact();
+            }
             notifier.selectColumn(coord.tick);
-            HapticFeedback.lightImpact();
           }
         }
       }
@@ -781,7 +898,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
           : SystemMouseCursors.move;
     }
     final newScissorX = (isScissors && hit != null) ? pos.dx : null;
-    if (next != _cursor || newScissorX != _scissorsCursorX) {
+    if ((next != _cursor || newScissorX != _scissorsCursorX) && mounted) {
       setState(() {
         _cursor = next;
         _scissorsCursorX = newScissorX;
@@ -851,162 +968,183 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     final gridW = totalTicks * _cellW;
     final gridH = rangeSize * _rowH;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Column(
-        children: [
-          // ── Top row: corner + ruler ──
-          SizedBox(
-            height: _rulerHeight,
-            child: Row(
-              children: [
-                // Corner
-                Container(
-                  width: _pitchLabelWidth,
-                  color: MuzicianTheme.surface,
-                ),
-                // Ruler (synced horizontally) — tap to select column
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapUp: (d) => _onRulerTap(d, state),
-                    child: SingleChildScrollView(
-                      controller: _rulerHScroll,
-                      scrollDirection: Axis.horizontal,
-                      physics: const NeverScrollableScrollPhysics(),
-                      child: CustomPaint(
-                        key: const ValueKey('piano-roll-ruler-paint'),
-                        size: Size(gridW, _rulerHeight),
-                        painter: _RulerPainter(
-                          timeSig: state.config.timeSignature,
-                          totalTicks: totalTicks,
-                          cellW: _cellW,
-                          selectedColumnTick: state.selectedColumnTick,
-                          playbackTick: playbackTick,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        LogicalKeySet(LogicalKeyboardKey.space): _togglePlayback,
+        LogicalKeySet(LogicalKeyboardKey.delete): _deleteSelectedNotes,
+        LogicalKeySet(LogicalKeyboardKey.backspace): _deleteSelectedNotes,
+      },
+      child: Focus(
+        autofocus: true,
+        focusNode: _focusNode,
+        child: Container(
+          decoration: BoxDecoration(
+            color: MuzicianTheme.glassBg,
+            border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
+            borderRadius: BorderRadius.circular(16),
           ),
-
-          // ── Main area: sidebar + grid ──
-          Expanded(
-            child: Row(
-              children: [
-                // Pitch sidebar (synced vertically)
-                SizedBox(
-                  width: _pitchLabelWidth,
-                  child: SingleChildScrollView(
-                    controller: _sidebarVScroll,
-                    physics: const NeverScrollableScrollPhysics(),
-                    child: CustomPaint(
-                      size: Size(_pitchLabelWidth, gridH),
-                      painter: _PitchSidebarPainter(
-                        rangeStart: state.pitchRangeStart,
-                        rangeEnd: state.pitchRangeEnd,
-                        rowH: _rowH,
-                      ),
+          clipBehavior: Clip.hardEdge,
+          child: Column(
+            children: [
+              // ── Top row: corner + ruler ──
+              SizedBox(
+                height: _rulerHeight,
+                child: Row(
+                  children: [
+                    // Corner
+                    Container(
+                      width: _pitchLabelWidth,
+                      color: MuzicianTheme.surface,
                     ),
-                  ),
-                ),
-
-                // Grid — raw Listener bypasses gesture arena for reliable touch
-                Expanded(
-                  child: MouseRegion(
-                    cursor: _cursor,
-                    onHover: (e) => _onHover(e, state),
-                    onExit: (_) {
-                      if (_scissorsCursorX != null) {
-                        setState(() => _scissorsCursorX = null);
-                      }
-                    },
-                    child: Stack(
-                      children: [
-                        Listener(
-                          behavior: HitTestBehavior.opaque,
-                          onPointerDown: (e) => _onPointerDown(e, state),
-                          onPointerMove: (e) => _onPointerMove(e, state),
-                          onPointerUp: (e) => _onPointerUp(e, state),
-                          child: SingleChildScrollView(
-                            controller: _vScroll,
-                            physics: const NeverScrollableScrollPhysics(),
-                            child: SingleChildScrollView(
-                              controller: _hScroll,
-                              scrollDirection: Axis.horizontal,
-                              physics: const NeverScrollableScrollPhysics(),
-                              child: RepaintBoundary(
-                                child: CustomPaint(
-                                  key: const ValueKey('piano-roll-grid-paint'),
-                                  size: Size(gridW, gridH),
-                                  painter: _GridPainter(
-                                    state: state,
-                                    totalTicks: totalTicks,
-                                    timeSig: state.config.timeSignature,
-                                    cellW: _cellW,
-                                    rowH: _rowH,
-                                    playbackTick: playbackTick,
-                                    scissorsCursorX: _scissorsCursorX,
-                                  ),
-                                ),
-                              ),
+                    // Ruler (synced horizontally) — tap/drag to select column
+                    Expanded(
+                      child: GestureDetector(
+                        key: const ValueKey('piano-roll-ruler-drag-area'),
+                        behavior: HitTestBehavior.opaque,
+                        onTapUp: (d) => _onRulerTap(d, state),
+                        onHorizontalDragStart: _onRulerDragStart,
+                        onHorizontalDragUpdate: (d) =>
+                            _onRulerDragUpdate(d, state),
+                        onHorizontalDragEnd: _onRulerDragEnd,
+                        child: SingleChildScrollView(
+                          controller: _rulerHScroll,
+                          scrollDirection: Axis.horizontal,
+                          physics: const NeverScrollableScrollPhysics(),
+                          child: CustomPaint(
+                            key: const ValueKey('piano-roll-ruler-paint'),
+                            size: Size(gridW, _rulerHeight),
+                            painter: _RulerPainter(
+                              timeSig: state.config.timeSignature,
+                              totalTicks: totalTicks,
+                              cellW: _cellW,
+                              selectedColumnTick: state.selectedColumnTick,
+                              playbackTick: playbackTick,
                             ),
                           ),
                         ),
-                        if (state.selectedNoteIds.length > 1)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: GestureDetector(
-                              onTap: () {
-                                ref
-                                    .read(pianoRollProvider.notifier)
-                                    .selectNote(null);
-                                HapticFeedback.selectionClick();
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: MuzicianTheme.violet.withValues(
-                                    alpha: 0.25,
-                                  ),
-                                  border: Border.all(
-                                    color: MuzicianTheme.violet.withValues(
-                                      alpha: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Main area: sidebar + grid ──
+              Expanded(
+                child: Row(
+                  children: [
+                    // Pitch sidebar (synced vertically)
+                    SizedBox(
+                      width: _pitchLabelWidth,
+                      child: SingleChildScrollView(
+                        controller: _sidebarVScroll,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: CustomPaint(
+                          size: Size(_pitchLabelWidth, gridH),
+                          painter: _PitchSidebarPainter(
+                            rangeStart: state.pitchRangeStart,
+                            rangeEnd: state.pitchRangeEnd,
+                            rowH: _rowH,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Grid — raw Listener bypasses gesture arena
+                    Expanded(
+                      child: MouseRegion(
+                        cursor: _cursor,
+                        onHover: (e) => _onHover(e, state),
+                        onExit: (_) {
+                          if (_scissorsCursorX != null && mounted) {
+                            setState(() => _scissorsCursorX = null);
+                          }
+                        },
+                        child: Stack(
+                          children: [
+                            Listener(
+                              key: const ValueKey('piano-roll-grid-listener'),
+                              behavior: HitTestBehavior.opaque,
+                              onPointerDown: (e) => _onPointerDown(e, state),
+                              onPointerMove: (e) => _onPointerMove(e, state),
+                              onPointerUp: (e) => _onPointerUp(e, state),
+                              onPointerSignal: (e) =>
+                                  _onPointerSignal(e, state),
+                              child: SingleChildScrollView(
+                                controller: _vScroll,
+                                physics: const NeverScrollableScrollPhysics(),
+                                child: SingleChildScrollView(
+                                  controller: _hScroll,
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  child: RepaintBoundary(
+                                    child: CustomPaint(
+                                      key: const ValueKey(
+                                        'piano-roll-grid-paint',
+                                      ),
+                                      size: Size(gridW, gridH),
+                                      painter: _GridPainter(
+                                        state: state,
+                                        totalTicks: totalTicks,
+                                        timeSig: state.config.timeSignature,
+                                        cellW: _cellW,
+                                        rowH: _rowH,
+                                        playbackTick: playbackTick,
+                                        scissorsCursorX: _scissorsCursorX,
+                                      ),
                                     ),
-                                    width: 1,
-                                  ),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  '${state.selectedNoteIds.length} selected  ×',
-                                  style: const TextStyle(
-                                    color: MuzicianTheme.violet,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                            if (state.selectedNoteIds.length > 1)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    ref
+                                        .read(pianoRollProvider.notifier)
+                                        .selectNote(null);
+                                    HapticFeedback.selectionClick();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: MuzicianTheme.violet.withValues(
+                                        alpha: 0.25,
+                                      ),
+                                      border: Border.all(
+                                        color: MuzicianTheme.violet.withValues(
+                                          alpha: 0.6,
+                                        ),
+                                        width: 1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '${state.selectedNoteIds.length} selected  ×',
+                                      style: const TextStyle(
+                                        color: MuzicianTheme.violet,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -8,7 +8,7 @@ import 'features/fretboard/fretboard_screen_v2_mockup.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano/piano_screen_v2_mockup.dart';
 import 'features/piano_roll/piano_roll_feature.dart';
-import 'features/piano_roll/piano_roll_screen_v2_mockup.dart';
+import 'features/piano_roll/piano_roll_screen_v2.dart';
 import 'models/fretboard.dart' show TuningName;
 import 'models/piano.dart' show PianoRangeName;
 import 'store/fretboard_store.dart';
@@ -790,7 +790,7 @@ class _PianoRollScreenState extends ConsumerState<_PianoRollScreen> {
       title: 'Piano Roll',
       subtitle: 'Build quantized note stacks by beat and time signature',
       trailing: _MockupLauncher(
-        builder: (_) => const PianoRollScreenV2Mockup(),
+        builder: (_) => const PianoRollScreenV2(),
         helpTab: 2,
       ),
       children: [
