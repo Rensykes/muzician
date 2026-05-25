@@ -72,8 +72,10 @@ List<int> buildChordStackMidis(
 /// `selectedNotes` are mapped to their nearest MIDI notes within [lo]…[hi]
 /// (centred on the middle of the range).
 ///
-/// Full [PianoRoll] snapshots are not handled here — they will be handled
-/// separately in a later task.
+/// PianoRollSnapshot, FretboardSnapshot, and PianoSnapshot are all handled
+/// here: PianoRollSnapshot returns an empty list (users should restore it via
+/// the dedicated save/load panel), while FretboardSnapshot and PianoSnapshot
+/// are mapped to MIDI notes for stack import.
 List<int>? extractSnapshotImportMidis(
   InstrumentSnapshot snapshot, {
   bool? exactPitchClassMode,
@@ -85,6 +87,11 @@ List<int>? extractSnapshotImportMidis(
   final rangeEnd = hi ?? 108;
 
   if (exact) {
+    if (snapshot is PianoRollSnapshot) {
+      // Full piano roll snapshots are not stack-importable — use the
+      // dedicated save/load panel instead.
+      return [];
+    }
     if (snapshot is FretboardSnapshot) {
       final tuning = fret_rules.tunings[snapshot.tuning];
       if (tuning == null) return [];

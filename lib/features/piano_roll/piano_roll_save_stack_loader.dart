@@ -53,8 +53,14 @@ class _PianoRollSaveStackLoaderState
     final saves = getSavesInFolder(ssState.saves, _currentFolderId ?? '')
       ..sort((a, b) => a.order.compareTo(b.order));
 
+    // Filter out full piano roll snapshots — this loader only imports
+    // fretboard + piano snapshots as note stacks.
+    final filteredSaves = saves
+        .where((s) => s.snapshot is! PianoRollSnapshot)
+        .toList();
+
     // Resolve saves at root when no folder selected
-    final rootSaves = _currentFolderId == null ? <SaveEntry>[] : saves;
+    final rootSaves = _currentFolderId == null ? <SaveEntry>[] : filteredSaves;
 
     final selectedSave = _selectedSaveId != null
         ? ssState.saves.where((s) => s.id == _selectedSaveId).firstOrNull

@@ -1,0 +1,59 @@
+/// PianoRollSavePanel – save/load panel for the Piano Roll screen.
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../models/save_system.dart';
+import '../../store/piano_roll_store.dart';
+import '../../ui/save_browser_panel.dart';
+
+/// A panel that lets the user save and load piano roll snapshots.
+///
+/// Only piano roll saves are shown. Mounting this widget inside a card
+/// in the piano roll screen gives it the correct glassmorphism styling.
+class PianoRollSavePanel extends ConsumerWidget {
+  const PianoRollSavePanel({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SaveBrowserPanel(
+      instrumentFilter: 'piano_roll',
+      captureSnapshot: () => _captureSnapshot(ref),
+      onLoad: (snap) => _loadSnapshot(ref, snap),
+    );
+  }
+
+  /// Builds a [PianoRollSnapshot] from the current store state.
+  PianoRollSnapshot _captureSnapshot(WidgetRef ref) {
+    final prState = ref.read(pianoRollProvider);
+
+    return PianoRollSnapshot(
+      tempo: prState.config.tempo,
+      key: prState.config.key,
+      numerator: prState.config.timeSignature.beatsPerMeasure,
+      denominator: prState.config.timeSignature.beatUnit,
+      totalMeasures: prState.config.totalMeasures,
+      notes: prState.notes
+          .map(
+            (n) => <String, dynamic>{
+              'midiNote': n.midiNote,
+              'startTick': n.startTick,
+              'durationTicks': n.durationTicks,
+            },
+          )
+          .toList(),
+      pitchRangeStart: prState.pitchRangeStart,
+      pitchRangeEnd: prState.pitchRangeEnd,
+      selectedColumnTick: prState.selectedColumnTick,
+      snapTicks: prState.snapTicks,
+      highlightedNotes: List<String>.from(prState.highlightedNotes),
+    );
+  }
+
+  /// Restores piano roll state from a snapshot.
+  void _loadSnapshot(WidgetRef ref, InstrumentSnapshot snap) {
+    if (snap is! PianoRollSnapshot) return;
+    ref.read(pianoRollProvider.notifier).loadSnapshot(snap);
+  }
+}

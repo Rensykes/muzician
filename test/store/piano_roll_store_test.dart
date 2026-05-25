@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/hum_to_midi.dart';
 import 'package:muzician/models/piano_roll.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/piano_roll_store.dart';
 
 void main() {
@@ -210,4 +211,95 @@ void main() {
       expect(result.furthestEndTick, 512);
     },
   );
+
+  group('loadSnapshot', () {
+    test('restores config, notes, pitch window, snap, and selected column', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pianoRollProvider.notifier);
+      final snap = PianoRollSnapshot(
+        tempo: 90,
+        key: 'A',
+        numerator: 6,
+        denominator: 8,
+        totalMeasures: 12,
+        notes: [
+          {'midiNote': 69, 'startTick': 0, 'durationTicks': 4}, // A4
+          {'midiNote': 73, 'startTick': 8, 'durationTicks': 4}, // C#5
+          {'midiNote': 76, 'startTick': 16, 'durationTicks': 8}, // E5
+        ],
+        pitchRangeStart: 40,
+        pitchRangeEnd: 88,
+        selectedColumnTick: 8,
+        snapTicks: 4,
+        highlightedNotes: ['A', 'C#', 'E'],
+      );
+
+      notifier.loadSnapshot(snap);
+
+      final state = container.read(pianoRollProvider);
+
+      // Config
+      expect(state.config.tempo, 90);
+      expect(state.config.key, 'A');
+      expect(state.config.timeSignature.beatsPerMeasure, 6);
+      expect(state.config.timeSignature.beatUnit, 8);
+      expect(state.config.totalMeasures, 12);
+
+      // Notes
+      expect(state.notes, hasLength(3));
+      expect(state.notes[0].midiNote, 69);
+      expect(state.notes[0].startTick, 0);
+      expect(state.notes[0].durationTicks, 4);
+      expect(state.notes[1].midiNote, 73);
+      expect(state.notes[1].startTick, 8);
+      expect(state.notes[2].midiNote, 76);
+      expect(state.notes[2].startTick, 16);
+
+      // Pitch range
+      expect(state.pitchRangeStart, 40);
+      expect(state.pitchRangeEnd, 88);
+
+      // Selected column
+      expect(state.selectedColumnTick, 8);
+
+      // Snap
+      expect(state.snapTicks, 4);
+
+      // Highlighted notes
+      expect(state.highlightedNotes, ['A', 'C#', 'E']);
+
+      // Transient fields are reset
+      expect(state.selectedNoteIds, isEmpty);
+      expect(state.latestImportedRange, isNull);
+    });
+
+    test('loadSnapshot handles empty notes and null selected column', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pianoRollProvider.notifier);
+      final snap = PianoRollSnapshot(
+        tempo: 120,
+        key: null,
+        numerator: 4,
+        denominator: 4,
+        totalMeasures: 4,
+        notes: [],
+        pitchRangeStart: 48,
+        pitchRangeEnd: 84,
+        selectedColumnTick: null,
+        snapTicks: 1,
+        highlightedNotes: [],
+      );
+
+      notifier.loadSnapshot(snap);
+
+      final state = container.read(pianoRollProvider);
+      expect(state.notes, isEmpty);
+      expect(state.selectedColumnTick, isNull);
+      expect(state.highlightedNotes, isEmpty);
+    });
+  });
 }

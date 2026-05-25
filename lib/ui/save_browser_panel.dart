@@ -7,9 +7,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/fretboard_store.dart';
+import '../store/piano_roll_store.dart';
 import '../store/piano_store.dart';
 import '../store/save_system_store.dart';
 import '../theme/muzician_theme.dart';
@@ -317,6 +319,19 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     } else if (widget.instrumentFilter == 'piano') {
       final s = ref.read(pianoProvider);
       selectedNotes = s.selectedNotes;
+      highlightedNotes = s.highlightedNotes;
+    } else if (widget.instrumentFilter == 'piano_roll') {
+      // For piano roll, derive suggestions from notes at the selected column.
+      final s = ref.read(pianoRollProvider);
+      final colTick = s.selectedColumnTick;
+      final colNotes = colTick != null
+          ? s.notes
+                .where((n) => n.startTick == colTick)
+                .map((n) => n.pitchClass)
+                .toSet()
+                .toList()
+          : s.notes.map((n) => n.pitchClass).toSet().toList();
+      selectedNotes = colNotes;
       highlightedNotes = s.highlightedNotes;
     } else {
       return [];
@@ -952,7 +967,11 @@ class _SaveRowState extends State<_SaveRow>
     super.dispose();
   }
 
-  String get _icon => widget.save.snapshot.instrument == 'piano' ? '🎹' : '🎸';
+  String get _icon => widget.save.snapshot.instrument == 'piano'
+      ? '🎹'
+      : widget.save.snapshot.instrument == 'piano_roll'
+      ? '🎶'
+      : '🎸';
 
   Color get _accentColor => widget.isActiveSession
       ? MuzicianTheme.emerald
