@@ -257,19 +257,21 @@ List<ScaleDetectionResult> detectScaleResultsFromExactNotes(
 
 /// Formats a canonical sharp root as a flat label for display (e.g. `A#` → `Bb`).
 String formatRootChoiceLabel(String canonicalRoot) => switch (canonicalRoot) {
-      'A#' => 'Bb',
-      'C#' => 'Db',
-      'D#' => 'Eb',
-      'G#' => 'Ab',
-      _ => canonicalRoot,
-    };
+  'A#' => 'Bb',
+  'C#' => 'Db',
+  'D#' => 'Eb',
+  'G#' => 'Ab',
+  _ => canonicalRoot,
+};
 
 /// Formats a [ChordDetectionResult] as a human-readable chord symbol
 /// (e.g. `Cmaj7` or `C/E`).
 String formatChordSymbol(ChordDetectionResult result) {
   final root = formatRootChoiceLabel(result.root);
   final bass = result.bass == null ? null : formatRootChoiceLabel(result.bass!);
-  return bass == null ? '$root${result.quality}' : '$root${result.quality}/$bass';
+  return bass == null
+      ? '$root${result.quality}'
+      : '$root${result.quality}/$bass';
 }
 
 /// Formats a [ScaleDetectionResult] as a human-readable label

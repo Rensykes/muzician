@@ -73,6 +73,7 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
     final events = rules.groupPlaybackEvents(prState.notes, startTick);
     final tempo = prState.config.tempo;
     final volume = settings.noteVolume;
+    final tickDuration = rules.durationForTickDelta(1, tempo);
 
     if (events.isEmpty) {
       state = state.copyWith(
@@ -94,26 +95,31 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
       errorMessage: () => null,
     );
 
-    // ── Iterate events with timing ─────────────────────────────────────────
-    var previousTick = startTick;
-    for (final event in events) {
+    final eventsByTick = <int, List<int>>{
+      for (final event in events) event.tick: event.midiNotes,
+    };
+
+    // ── Advance the playhead one tick at a time ────────────────────────────
+    for (var tick = startTick; tick < endTick; tick++) {
       if (_playbackVersion != version) return;
 
-      final delay = rules.durationForTickDelta(event.tick - previousTick, tempo);
-      await Future<void>.delayed(delay);
+      if (tick > startTick) {
+        await Future<void>.delayed(tickDuration);
+      }
 
       if (_playbackVersion != version) return;
 
-      await sink(event.midiNotes, volume);
-      state = state.copyWith(currentTick: () => event.tick);
-      previousTick = event.tick;
+      state = state.copyWith(currentTick: () => tick);
+
+      final midiNotes = eventsByTick[tick];
+      if (midiNotes != null) {
+        await sink(midiNotes, volume);
+      }
     }
 
-    // ── Wait out remaining silent span ─────────────────────────────────────
+    // ── Advance from the last audible/visible tick to the exclusive end ────
     if (_playbackVersion != version) return;
-
-    final remaining = rules.durationForTickDelta(endTick - previousTick, tempo);
-    await Future<void>.delayed(remaining);
+    await Future<void>.delayed(tickDuration);
 
     // ── Transition to completed ────────────────────────────────────────────
     if (_playbackVersion != version) return;

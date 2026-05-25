@@ -15,7 +15,9 @@ class FakeFretboardNotifier extends FretboardNotifier {
 }
 
 void main() {
-  testWidgets('shows slash chord label but writes canonical pending chord', (tester) async {
+  testWidgets('shows slash chord label but writes canonical pending chord', (
+    tester,
+  ) async {
     final container = ProviderContainer(
       overrides: [
         fretboardProvider.overrideWith(

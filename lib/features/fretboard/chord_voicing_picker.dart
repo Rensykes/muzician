@@ -285,10 +285,12 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
                   ),
                   child: Text(
                     _selectedRoot != null
-                        ? formatChordSymbol(ChordDetectionResult(
-                            root: _selectedRoot!,
-                            quality: _selectedQuality,
-                          ))
+                        ? formatChordSymbol(
+                            ChordDetectionResult(
+                              root: _selectedRoot!,
+                              quality: _selectedQuality,
+                            ),
+                          )
                         : '',
                     style: const TextStyle(
                       color: MuzicianTheme.sky,

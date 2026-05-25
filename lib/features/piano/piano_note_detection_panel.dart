@@ -222,24 +222,19 @@ class _PianoNoteDetectionPanelState
                                   onTap: () {
                                     HapticFeedback.lightImpact();
                                     ref
-                                            .read(
-                                              pianoPendingChordProvider
-                                                  .notifier,
-                                            )
-                                            .state =
-                                        (
-                                          root: result.root,
-                                          quality: result.quality,
-                                        );
+                                        .read(
+                                          pianoPendingChordProvider.notifier,
+                                        )
+                                        .state = (
+                                      root: result.root,
+                                      quality: result.quality,
+                                    );
                                     ref
-                                            .read(
-                                              pianoActiveChordProvider.notifier,
-                                            )
-                                            .state =
-                                        (
-                                          root: result.root,
-                                          quality: result.quality,
-                                        );
+                                        .read(pianoActiveChordProvider.notifier)
+                                        .state = (
+                                      root: result.root,
+                                      quality: result.quality,
+                                    );
                                     widget.onChordPanelRequested?.call();
                                   },
                                   child: Container(
@@ -309,8 +304,7 @@ class _PianoNoteDetectionPanelState
                             return GestureDetector(
                               onTap: () {
                                 HapticFeedback.lightImpact();
-                                _tryApplyScale(
-                                    result.root, result.scaleName);
+                                _tryApplyScale(result.root, result.scaleName);
                               },
                               child: Container(
                                 margin: const EdgeInsets.only(right: 8),

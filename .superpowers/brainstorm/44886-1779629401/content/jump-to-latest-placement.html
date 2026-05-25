@@ -1,0 +1,94 @@
+<h2>Where should "Jump to latest" live?</h2>
+<p class="subtitle">
+  Scope for this feature: only notes added by hum/import flows, not general
+  manual editing.
+</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. In the Hum to MIDI card</div>
+        <div class="mockup-body">
+          <div style="padding:16px;border-radius:18px;background:#1e2746;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-size:12px;letter-spacing:.08em;color:#9fb1d8;font-weight:700;">HUM TO MIDI</div>
+                <div style="margin-top:6px;font-size:22px;font-weight:800;">Imported take</div>
+                <div style="margin-top:4px;color:#8ca0ca;">12 notes added at measure 9</div>
+              </div>
+              <div style="padding:10px 18px;border-radius:999px;background:#7fc7f7;color:#12334d;font-weight:800;">Record</div>
+            </div>
+            <div style="display:flex;justify-content:flex-start;">
+              <div style="padding:10px 16px;border-radius:999px;background:#2b4b7e;border:1px solid rgba(127,199,247,.45);color:#bde7ff;font-weight:700;">Jump to latest</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Attached to the import result</h3>
+      <p>The action appears exactly where the user gets hum feedback, so the meaning is obvious.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. Floating over the piano roll</div>
+        <div class="mockup-body">
+          <div style="padding:16px;border-radius:18px;background:#1e2746;border:1px solid rgba(255,255,255,.08);position:relative;min-height:220px;">
+            <div style="position:absolute;top:18px;right:18px;padding:10px 16px;border-radius:999px;background:#2b4b7e;border:1px solid rgba(127,199,247,.45);color:#bde7ff;font-weight:700;">Jump to latest</div>
+            <div style="position:absolute;left:18px;right:18px;bottom:18px;height:120px;border-radius:16px;background:linear-gradient(180deg,#33476e,#2a3c60);border:1px solid rgba(255,255,255,.08);"></div>
+            <div style="position:absolute;left:62%;bottom:18px;width:32px;height:120px;background:rgba(255,170,89,.18);border-left:3px solid #ff9a47;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Closest to the destination</h3>
+      <p>The button sits on the grid itself, which makes the navigation intent visually direct.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. In the top control row</div>
+        <div class="mockup-body">
+          <div style="padding:16px;border-radius:18px;background:#1e2746;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:14px;">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+              <div style="padding:16px 8px;border-radius:18px;background:#24355a;border:1px solid rgba(127,199,247,.35);text-align:center;font-weight:700;color:#a9dfff;">Playback</div>
+              <div style="padding:16px 8px;border-radius:18px;background:#2a2f4d;border:1px solid rgba(255,255,255,.08);text-align:center;color:#98a6ca;">Edit</div>
+              <div style="padding:16px 8px;border-radius:18px;background:#2a2f4d;border:1px solid rgba(255,255,255,.08);text-align:center;color:#98a6ca;">Pitch</div>
+              <div style="padding:16px 8px;border-radius:18px;background:#2a2f4d;border:1px solid rgba(255,255,255,.08);text-align:center;color:#98a6ca;">Scale</div>
+            </div>
+            <div style="display:flex;justify-content:flex-start;">
+              <div style="padding:10px 16px;border-radius:999px;background:#2b4b7e;border:1px solid rgba(127,199,247,.45);color:#bde7ff;font-weight:700;">Jump to latest</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Always in a stable place</h3>
+      <p>The control is easy to find, but it is less obviously connected to hum/import feedback.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>Recommendation</h4>
+    <ul>
+      <li><strong>A</strong> is my recommended default because it keeps the action attached to the hum/import workflow that creates the notes.</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>What to decide</h4>
+    <ul>
+      <li>Pick the placement that feels most natural to you.</li>
+      <li>If helpful, tell me whether the button should appear only right after import or stay visible while the latest import target exists.</li>
+    </ul>
+  </div>
+</div>

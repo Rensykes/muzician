@@ -15,7 +15,9 @@ class FakePianoNotifier extends PianoNotifier {
 }
 
 void main() {
-  testWidgets('shows contextual flat label for a detected scale', (tester) async {
+  testWidgets('shows contextual flat label for a detected scale', (
+    tester,
+  ) async {
     final container = ProviderContainer(
       overrides: [
         pianoProvider.overrideWith(
@@ -44,16 +46,18 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: Scaffold(body: PianoNoteDetectionPanel())),
+        child: const MaterialApp(
+          home: Scaffold(body: PianoNoteDetectionPanel()),
+        ),
       ),
     );
 
     expect(find.text('Eb dorian'), findsOneWidget);
     await tester.tap(find.text('Eb dorian'));
     await tester.pump();
-    expect(
-      container.read(pianoPendingScaleProvider),
-      (root: 'D#', scaleName: 'dorian'),
-    );
+    expect(container.read(pianoPendingScaleProvider), (
+      root: 'D#',
+      scaleName: 'dorian',
+    ));
   });
 }
