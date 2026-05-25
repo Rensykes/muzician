@@ -416,7 +416,18 @@ class _PortraitActionBar extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _SelectionStatus(state: state, compact: true),
+          // Status (left, ellipsis-safe) + tool segment (right, fixed width).
+          // Sharing the row keeps the action bar at 3 rows total and the grid
+          // height untouched.
+          Row(
+            children: [
+              Expanded(
+                child: _SelectionStatus(state: state, compact: true),
+              ),
+              const SizedBox(width: 8),
+              const _ToolModeSegment(),
+            ],
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1134,13 +1145,17 @@ class _SelectionStatus extends StatelessWidget {
                   color: MuzicianTheme.sky,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  'Col $barBeat  •  $noteCount notes',
-                  style: const TextStyle(
-                    color: MuzicianTheme.sky,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [FontFeature.tabularFigures()],
+                Flexible(
+                  child: Text(
+                    'Col $barBeat  •  $noteCount notes',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: MuzicianTheme.sky,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
               ],
@@ -1496,6 +1511,104 @@ class _AddStackButton extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Icon-only segmented control for the four piano-roll tap modes.
+///
+/// Sits inside the action bar's status row (left = status, right = segment)
+/// so the grid height is not affected. Stays in sync with
+/// [PianoRollState.activeTool] — selection persists across panel sheets.
+///
+/// Grid wiring currently honours only Draw and Split; Paint and Delete are
+/// surfaced here so the placement can be reviewed before binding them to
+/// gesture handlers in `piano_roll_grid.dart`.
+class _ToolModeSegment extends ConsumerWidget {
+  const _ToolModeSegment();
+
+  static const _entries = <(PianoRollTool, IconData, String)>[
+    (PianoRollTool.draw, Icons.edit_rounded, 'Draw'),
+    (PianoRollTool.scissors, Icons.content_cut_rounded, 'Split'),
+    (PianoRollTool.paint, Icons.brush_rounded, 'Paint'),
+    (PianoRollTool.delete, Icons.delete_outline_rounded, 'Delete'),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tool = ref.watch(
+      pianoRollProvider.select((s) => s.activeTool),
+    );
+    final notifier = ref.read(pianoRollProvider.notifier);
+
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: MuzicianTheme.glassBorder),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < _entries.length; i++) ...[
+              if (i > 0)
+                Container(width: 1, color: MuzicianTheme.glassBorder),
+              _ToolSegmentItem(
+                icon: _entries[i].$2,
+                label: _entries[i].$3,
+                active: tool == _entries[i].$1,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  notifier.setActiveTool(_entries[i].$1);
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolSegmentItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ToolSegmentItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      button: true,
+      selected: active,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          color: active
+              ? MuzicianTheme.sky.withValues(alpha: 0.18)
+              : Colors.transparent,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: 16,
+            color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted,
+          ),
         ),
       ),
     );

@@ -78,7 +78,12 @@ class PianoRollConfig {
   );
 }
 
-enum PianoRollTool { draw, scissors }
+/// Tap behaviour mode for the piano roll grid.
+///
+/// Grid wiring currently honours [draw] and [scissors]; [paint] and [delete]
+/// are surfaced in the V2 tool segment but not yet bound to grid gestures —
+/// see TODO in `piano_roll_grid.dart` for the next pass.
+enum PianoRollTool { draw, scissors, paint, delete }
 
 class PianoRollImportedRange {
   final int startTick;
