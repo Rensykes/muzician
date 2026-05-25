@@ -7,85 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
-import '../../schema/rules/fretboard_rules.dart' as fretRules;
 import '../../store/save_system_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
+import '../../schema/rules/piano_roll_import_rules.dart' as import_rules;
 import '../../schema/rules/save_system_rules.dart';
 import '../../theme/muzician_theme.dart';
-
-// ── MIDI helpers ────────────────────────────────────────────────────────────
-
-const _noteToPC = <String, int>{
-  'C': 0,
-  'C#': 1,
-  'D': 2,
-  'D#': 3,
-  'E': 4,
-  'F': 5,
-  'F#': 6,
-  'G': 7,
-  'G#': 8,
-  'A': 9,
-  'A#': 10,
-  'B': 11,
-};
-
-int? _bestMidiInRange(
-  String pitchClass,
-  int rangeStart,
-  int rangeEnd,
-  int anchor,
-) {
-  final pc = _noteToPC[pitchClass];
-  if (pc == null) return null;
-  int? best;
-  var bestDist = 9999;
-  for (var midi = rangeStart; midi <= rangeEnd; midi++) {
-    if (((midi % 12) + 12) % 12 != pc) continue;
-    final dist = (midi - anchor).abs();
-    if (dist < bestDist) {
-      best = midi;
-      bestDist = dist;
-    }
-  }
-  return best;
-}
-
-List<int> _extractMidis(
-  InstrumentSnapshot snap,
-  String mode,
-  int rangeStart,
-  int rangeEnd,
-) {
-  if (mode == 'exact') {
-    if (snap is FretboardSnapshot) {
-      // Compute MIDI from the saved tuning + string + fret; noteName is a
-      // pitch class only (no octave) so it cannot be parsed into a MIDI number.
-      final tuning = fretRules.tunings[snap.tuning];
-      if (tuning == null) return [];
-      return snap.selectedCells
-          .where((c) => c.stringIndex < tuning.strings.length)
-          .map((c) => tuning.strings[c.stringIndex].midiNote + c.fret)
-          .where((m) => m >= rangeStart && m <= rangeEnd)
-          .toList();
-    } else if (snap is PianoSnapshot) {
-      return snap.selectedKeys
-          .map((k) => k.midiNote)
-          .where((m) => m >= rangeStart && m <= rangeEnd)
-          .toList();
-    }
-    return [];
-  }
-  // pitch-class mode: map each unique pitch class to nearest MIDI in range
-  final pcs = snap.selectedNotes.toSet();
-  if (pcs.isEmpty) return [];
-  final anchor = ((rangeStart + rangeEnd) / 2).round();
-  return pcs
-      .map((pc) => _bestMidiInRange(pc, rangeStart, rangeEnd, anchor))
-      .whereType<int>()
-      .toList();
-}
 
 // ── Widget ──────────────────────────────────────────────────────────────────
 
@@ -134,12 +61,13 @@ class _PianoRollSaveStackLoaderState
         : null;
 
     final previewMidis = selectedSave != null
-        ? _extractMidis(
-            selectedSave.snapshot,
-            _placementMode,
-            prState.pitchRangeStart,
-            prState.pitchRangeEnd,
-          )
+        ? import_rules.extractSnapshotImportMidis(
+                selectedSave.snapshot,
+                exactPitchClassMode: _placementMode == 'exact',
+                lo: prState.pitchRangeStart,
+                hi: prState.pitchRangeEnd,
+              ) ??
+              <int>[]
         : <int>[];
 
     Future<void> handleAddStack() async {

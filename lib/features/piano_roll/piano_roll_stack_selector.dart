@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
+import '../../schema/rules/piano_roll_import_rules.dart' as import_rules;
+import '../../utils/note_utils.dart';
 import '../../theme/muzician_theme.dart';
 
 const _roots = [
@@ -52,78 +54,6 @@ const _durationOptions = <(String label, int ticks)>[
   ('1/1', 16),
 ];
 
-// note normalization provided by lib/utils/note_utils.dart
-
-const _noteToPC = <String, int>{
-  'C': 0,
-  'C#': 1,
-  'D': 2,
-  'D#': 3,
-  'E': 4,
-  'F': 5,
-  'F#': 6,
-  'G': 7,
-  'G#': 8,
-  'A': 9,
-  'A#': 10,
-  'B': 11,
-};
-
-// Chord intervals for each quality
-const _chordIntervals = <String, List<int>>{
-  '5': [0, 7],
-  '': [0, 4, 7],
-  'm': [0, 3, 7],
-  '7': [0, 4, 7, 10],
-  'maj7': [0, 4, 7, 11],
-  'm7': [0, 3, 7, 10],
-  'sus2': [0, 2, 7],
-  'sus4': [0, 5, 7],
-  'dim': [0, 3, 6],
-  'aug': [0, 4, 8],
-  'm7b5': [0, 3, 6, 10],
-  'add9': [0, 4, 7, 2],
-  'maj9': [0, 4, 7, 11, 2],
-  '6': [0, 4, 7, 9],
-  'm6': [0, 3, 7, 9],
-  'dim7': [0, 3, 6, 9],
-  '7sus4': [0, 5, 7, 10],
-};
-
-// use toSharp from utils
-
-List<String> _chordNotes(String root, String quality) {
-  final intervals = _chordIntervals[quality];
-  if (intervals == null) return [];
-  final rootPc = _noteToPC[root];
-  if (rootPc == null) return [];
-  return intervals.map((i) {
-    final pc = (rootPc + i) % 12;
-    return _roots[pc];
-  }).toList();
-}
-
-int? _bestMidiInRange(
-  String pitchClass,
-  int rangeStart,
-  int rangeEnd,
-  int anchor,
-) {
-  final pc = _noteToPC[pitchClass];
-  if (pc == null) return null;
-  int? best;
-  var bestDist = 9999;
-  for (var midi = rangeStart; midi <= rangeEnd; midi++) {
-    if (((midi % 12) + 12) % 12 != pc) continue;
-    final dist = (midi - anchor).abs();
-    if (dist < bestDist) {
-      best = midi;
-      bestDist = dist;
-    }
-  }
-  return best;
-}
-
 class PianoRollStackSelector extends ConsumerStatefulWidget {
   const PianoRollStackSelector({super.key});
 
@@ -144,7 +74,7 @@ class _PianoRollStackSelectorState
     final notifier = ref.read(pianoRollProvider.notifier);
 
     final chordSymbol = '$_root$_quality';
-    final notes = _chordNotes(_root, _quality);
+    final notes = getChordNotes(_root, _quality);
 
     void handleAddStack() {
       if (notes.isEmpty) return;
@@ -162,17 +92,13 @@ class _PianoRollStackSelectorState
       final startTick = state.selectedColumnTick ?? fallbackStart;
       final anchor = ((state.pitchRangeStart + state.pitchRangeEnd) / 2)
           .round();
-      final midiStack = notes
-          .map(
-            (pc) => _bestMidiInRange(
-              pc,
-              state.pitchRangeStart,
-              state.pitchRangeEnd,
-              anchor,
-            ),
-          )
-          .whereType<int>()
-          .toList();
+      final midiStack = import_rules.buildChordStackMidis(
+        _root,
+        _quality,
+        anchor,
+        state.pitchRangeStart,
+        state.pitchRangeEnd,
+      );
       if (midiStack.isEmpty) return;
       notifier.addNoteStack(midiStack, startTick, _durationTicks);
       notifier.selectColumn(startTick);
