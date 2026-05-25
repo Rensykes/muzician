@@ -298,6 +298,160 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // ── Paint tool ──────────────────────────────────────────────────────────
+
+  testWidgets('paint tool inserts a note on tap at snap-length', (
+    tester,
+  ) async {
+    final initial = _defaultPRState.copyWith(
+      activeTool: PianoRollTool.paint,
+      snapTicks: 4,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    await tester.tapAt(tester.getCenter(gridFinder));
+    await tester.pump();
+
+    final state = container.read(pianoRollProvider);
+    expect(
+      state.notes,
+      hasLength(1),
+      reason: 'Paint-tap on empty cell should insert exactly one note',
+    );
+    expect(
+      state.notes.first.durationTicks,
+      4,
+      reason: 'Painted note should use snapTicks duration',
+    );
+  });
+
+  testWidgets('paint tool does not re-insert when dwelling on the same cell', (
+    tester,
+  ) async {
+    final initial = _defaultPRState.copyWith(
+      activeTool: PianoRollTool.paint,
+      snapTicks: 4,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final center = tester.getCenter(gridFinder);
+
+    // Tap twice on the same cell — second tap is a separate drag so the
+    // brushed-cell set resets, but the cell is already occupied and paint
+    // does not toggle. Should still result in exactly one note.
+    await tester.tapAt(center);
+    await tester.pump();
+    await tester.tapAt(center);
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).notes,
+      hasLength(1),
+      reason: 'Paint must skip cells that already host a note',
+    );
+  });
+
+  // ── Delete tool ─────────────────────────────────────────────────────────
+
+  testWidgets('delete tool removes the tapped note', (tester) async {
+    final note = PianoRollNote(
+      id: 'd-note',
+      midiNote: 66,
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
+      startTick: 4,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      notes: [note],
+      activeTool: PianoRollTool.delete,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gridRect = tester.getRect(gridFinder);
+
+    // The note is at midiNote=66, startTick=4, durationTicks=4.
+    // pitchRangeEnd=84 → row = 84-66 = 18 → y centre = 18*rowH + rowH/2
+    // with rowH=18 → y ≈ 333. cellW=28 → x range 4*28..8*28 = 112..224,
+    // centre ≈ 168.
+    await tester.tapAt(gridRect.topLeft + const Offset(168, 333));
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).notes,
+      isEmpty,
+      reason: 'Delete-tap on a note must remove it',
+    );
+  });
+
+  testWidgets('delete tap on empty cell is a no-op', (tester) async {
+    final initial = _defaultPRState.copyWith(
+      activeTool: PianoRollTool.delete,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    await tester.tapAt(tester.getCenter(gridFinder));
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).notes,
+      isEmpty,
+      reason: 'Delete-tap on empty cell must not insert anything',
+    );
+  });
 }
 
 // Keep the old fake notifier for the playback playhead test.

@@ -403,7 +403,7 @@ class _PitchSidebarPainter extends CustomPainter {
 
 // ── Main Widget ─────────────────────────────────────────────────────────────
 
-enum _DragMode { none, moveNote, resizeNote }
+enum _DragMode { none, moveNote, resizeNote, paintBrush, deleteBrush }
 
 class PianoRollGrid extends ConsumerStatefulWidget {
   const PianoRollGrid({super.key});
@@ -462,6 +462,14 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
 
   // Multi-note drag: original positions snapshot keyed by note id
   Map<String, ({int startTick, int midiNote})> _multiDragOriginals = {};
+
+  // Paint brush — cells already painted during the active drag, encoded as
+  // `midi * 10000 + tick`. Prevents re-toggling a cell when the finger
+  // dwells. Null when not painting.
+  Set<int>? _paintBrushedCells;
+  // Delete brush — note ids removed during the active drag. Null when not
+  // deleting.
+  Set<String>? _deleteBrushedNoteIds;
 
   @override
   void initState() {
@@ -527,6 +535,57 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     final rowIdx = (pos.dy / _rowH).floor();
     final midi = state.pitchRangeEnd - rowIdx;
     return (tick: tick, midi: midi);
+  }
+
+  // ── Paint / Delete brush helpers ─────────────────────────────────────────
+
+  /// Paints (= inserts) a note at the snap-aligned cell under [pos] if no
+  /// note already occupies that exact (midi, snappedTick). Records the cell
+  /// in [_paintBrushedCells] so the same cell is not re-painted while the
+  /// finger dwells. No-op outside the timeline / pitch window.
+  void _paintAt(Offset pos, PianoRollState state) {
+    final brushed = _paintBrushedCells;
+    if (brushed == null) return;
+    final coord = _posToTickMidi(pos, state);
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    if (coord.tick < 0 || coord.tick >= maxTick) return;
+    if (coord.midi < state.pitchRangeStart ||
+        coord.midi > state.pitchRangeEnd) {
+      return;
+    }
+    final snapped = _snapToBeat(coord.tick, state.snapTicks);
+    final key = coord.midi * 10000 + snapped;
+    if (brushed.contains(key)) return;
+    brushed.add(key);
+    // Skip the cell if a note is already anchored there — paint never
+    // removes; that's what the Delete tool is for.
+    final exists = state.notes.any(
+      (n) => n.midiNote == coord.midi && n.startTick == snapped,
+    );
+    if (exists) return;
+    ref.read(pianoRollProvider.notifier).addNote(
+      coord.midi,
+      snapped,
+      state.snapTicks,
+    );
+    NotePlayer.instance.previewNote(
+      coord.midi,
+      volume: ref.read(settingsProvider).noteVolume,
+    );
+  }
+
+  /// Removes the note under [pos] (if any) unless it was already removed
+  /// during this drag. Tracks removed ids in [_deleteBrushedNoteIds].
+  void _deleteAt(Offset pos, PianoRollState state) {
+    final brushed = _deleteBrushedNoteIds;
+    if (brushed == null) return;
+    final hit = _hitTestNote(pos, state);
+    if (hit == null || brushed.contains(hit.id)) return;
+    brushed.add(hit.id);
+    ref.read(pianoRollProvider.notifier).removeNote(hit.id);
   }
 
   // ── Beat-grid snapping ────────────────────────────────────────────────
@@ -644,6 +703,30 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     _movedBeyondSlop = false;
     _longPressConsumed = false;
 
+    // ── Paint / Delete brush tools ────────────────────────────────────────
+    // These act immediately on pointer-down and continue painting/deleting
+    // as the finger drags. No long-press, no multi-select, no scroll-on-drag.
+    if (state.activeTool == PianoRollTool.paint) {
+      _paintBrushedCells = <int>{};
+      _deleteBrushedNoteIds = null;
+      _dragMode = _DragMode.paintBrush;
+      _dragNoteId = null;
+      _paintAt(pos, state);
+      HapticFeedback.selectionClick();
+      return;
+    }
+    if (state.activeTool == PianoRollTool.delete) {
+      _deleteBrushedNoteIds = <String>{};
+      _paintBrushedCells = null;
+      _dragMode = _DragMode.deleteBrush;
+      _dragNoteId = null;
+      if (hit != null) {
+        _deleteAt(pos, state);
+        HapticFeedback.selectionClick();
+      }
+      return;
+    }
+
     if (hit != null) {
       _dragNoteId = hit.id;
       if (state.activeTool == PianoRollTool.scissors) {
@@ -706,6 +789,18 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     }
 
     _totalPointerDelta += event.delta;
+
+    // Paint / Delete brushes respond on every move regardless of slop —
+    // they're "continuous" tools, not move-or-tap.
+    if (_dragMode == _DragMode.paintBrush) {
+      _paintAt(_localToGrid(event.localPosition), state);
+      return;
+    }
+    if (_dragMode == _DragMode.deleteBrush) {
+      _deleteAt(_localToGrid(event.localPosition), state);
+      return;
+    }
+
     if (!_movedBeyondSlop && _totalPointerDelta.distance > 8.0) {
       _movedBeyondSlop = true;
       _longPressTimer?.cancel();
@@ -768,6 +863,19 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       _totalPointerDelta = Offset.zero;
       return;
     }
+    // Paint/Delete brushes already acted on down/move — finalise and skip
+    // the tap-handling branch below.
+    if (_dragMode == _DragMode.paintBrush ||
+        _dragMode == _DragMode.deleteBrush) {
+      _paintBrushedCells = null;
+      _deleteBrushedNoteIds = null;
+      _dragMode = _DragMode.none;
+      _dragNoteId = null;
+      _movedBeyondSlop = false;
+      _totalPointerDelta = Offset.zero;
+      return;
+    }
+
     if (!_movedBeyondSlop && !_longPressConsumed) {
       final pos = _localToGrid(event.localPosition);
       final hit = _hitTestNote(pos, state);
@@ -886,9 +994,16 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   void _onHover(PointerHoverEvent event, PianoRollState state) {
     final pos = _localToGrid(event.localPosition);
     final hit = _hitTestNote(pos, state);
-    final isScissors = state.activeTool == PianoRollTool.scissors;
+    final tool = state.activeTool;
+    final isScissors = tool == PianoRollTool.scissors;
     final SystemMouseCursor next;
-    if (hit == null) {
+    if (tool == PianoRollTool.paint) {
+      next = SystemMouseCursors.precise;
+    } else if (tool == PianoRollTool.delete) {
+      next = hit != null
+          ? SystemMouseCursors.precise
+          : SystemMouseCursors.forbidden;
+    } else if (hit == null) {
       next = SystemMouseCursors.basic;
     } else if (isScissors) {
       next = SystemMouseCursors.precise;
