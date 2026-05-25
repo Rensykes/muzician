@@ -2,8 +2,8 @@
 ///
 /// Embeds the real [PianoRollGrid] so the mockup shows actual cell density
 /// and scroll behavior. The transport strip is UI-only; BPM updates real
-/// [pianoRollProvider] state. Chord composer fields (root/qual/dur) are
-/// local-only — wiring them to a real notifier API is Phase 4 work.
+/// [pianoRollProvider] state. Chord composer controls are wired to the shared
+/// [pianoRollComposerProvider].
 library;
 
 import 'package:flutter/material.dart';
@@ -11,6 +11,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../_mockup_shell.dart';
+import '../../models/piano_roll_composer.dart';
+import '../../store/piano_roll_composer_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'piano_roll_grid.dart';
@@ -26,14 +28,17 @@ class PianoRollScreenV2Mockup extends ConsumerStatefulWidget {
 class _PianoRollScreenV2MockupState
     extends ConsumerState<PianoRollScreenV2Mockup> {
   bool _playing = false;
-  String _root = 'C';
-  String _quality = 'maj';
-  String _duration = '1/4';
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
     final notifier = ref.read(pianoRollProvider.notifier);
+    final composerState = ref.watch(pianoRollComposerProvider);
+    final composerNotifier = ref.read(pianoRollComposerProvider.notifier);
+
+    final qualityLabel = qualityLabelBySymbol[composerState.quality] ?? 'maj';
+    final durationLabel =
+        durationTicksToLabel[composerState.durationTicks] ?? '1/4';
 
     return Theme(
       data: MuzicianTheme.dark(),
@@ -43,7 +48,7 @@ class _PianoRollScreenV2MockupState
           children: [
             CompactAppBar(
               title: 'Roll',
-              chipLabel: '$_root ionian',
+              chipLabel: '${composerState.root} ionian',
               onClose: () => Navigator.of(context).pop(),
               actions: [
                 IconBtn(icon: Icons.bookmark_border_rounded, onTap: () {}),
@@ -66,7 +71,7 @@ class _PianoRollScreenV2MockupState
             DockedToolbar(
               children: [
                 DockField(
-                  value: _root,
+                  value: composerState.root,
                   onTap: () async {
                     final picked = await showPickerSheet<String>(
                       context: context,
@@ -85,13 +90,13 @@ class _PianoRollScreenV2MockupState
                         'A#',
                         'B',
                       ],
-                      current: _root,
+                      current: composerState.root,
                     );
-                    if (picked != null) setState(() => _root = picked);
+                    if (picked != null) composerNotifier.setRoot(picked);
                   },
                 ),
                 DockField(
-                  value: _quality,
+                  value: qualityLabel,
                   onTap: () async {
                     final picked = await showPickerSheet<String>(
                       context: context,
@@ -115,35 +120,36 @@ class _PianoRollScreenV2MockupState
                         'dim7',
                         '7sus4',
                       ],
-                      current: _quality,
+                      current: qualityLabel,
                     );
-                    if (picked != null) setState(() => _quality = picked);
+                    if (picked != null) {
+                      composerNotifier.setQuality(
+                        qualitySymbolByLabel[picked] ?? '',
+                      );
+                    }
                   },
                 ),
                 DockField(
-                  value: _duration,
+                  value: durationLabel,
                   onTap: () async {
                     final picked = await showPickerSheet<String>(
                       context: context,
                       title: 'Duration',
                       options: const ['1/16', '1/8', '1/4', '1/2', '1/1'],
-                      current: _duration,
+                      current: durationLabel,
                     );
-                    if (picked != null) setState(() => _duration = picked);
+                    if (picked != null) {
+                      composerNotifier.setDuration(
+                        labelToDurationTicks[picked] ?? 4,
+                      );
+                    }
                   },
                 ),
                 DockPrimaryButton(
                   icon: Icons.add_rounded,
                   onTap: () {
                     HapticFeedback.mediumImpact();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('+ Stack: $_root$_quality ($_duration)'),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: MuzicianTheme.surface,
-                        duration: const Duration(milliseconds: 900),
-                      ),
-                    );
+                    composerNotifier.addStack();
                   },
                 ),
               ],
