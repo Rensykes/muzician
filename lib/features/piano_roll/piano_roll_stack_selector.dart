@@ -1,13 +1,10 @@
 /// PianoRollStackSelector – chord root/quality/duration picker to add stacks.
 library;
 
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../store/piano_roll_store.dart';
-import '../../schema/rules/piano_roll_rules.dart' as rules;
-import '../../schema/rules/piano_roll_import_rules.dart' as import_rules;
+import '../../store/piano_roll_composer_store.dart';
 import '../../utils/note_utils.dart';
 import '../../theme/muzician_theme.dart';
 
@@ -54,54 +51,19 @@ const _durationOptions = <(String label, int ticks)>[
   ('1/1', 16),
 ];
 
-class PianoRollStackSelector extends ConsumerStatefulWidget {
+class PianoRollStackSelector extends ConsumerWidget {
   const PianoRollStackSelector({super.key});
 
   @override
-  ConsumerState<PianoRollStackSelector> createState() =>
-      _PianoRollStackSelectorState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final composerState = ref.watch(pianoRollComposerProvider);
+    final composerNotifier = ref.read(pianoRollComposerProvider.notifier);
 
-class _PianoRollStackSelectorState
-    extends ConsumerState<PianoRollStackSelector> {
-  String _root = 'C';
-  String _quality = '';
-  int _durationTicks = 4;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(pianoRollProvider);
-    final notifier = ref.read(pianoRollProvider.notifier);
-
-    final chordSymbol = '$_root$_quality';
-    final notes = getChordNotes(_root, _quality);
+    final chordSymbol = '${composerState.root}${composerState.quality}';
+    final notes = getChordNotes(composerState.root, composerState.quality);
 
     void handleAddStack() {
-      if (notes.isEmpty) return;
-      final maxTicks = rules.totalTicks(
-        state.config.timeSignature,
-        state.config.totalMeasures,
-      );
-      final fallbackStart = min(
-        maxTicks - 1,
-        state.notes.fold<int>(
-          0,
-          (acc, n) => max(acc, n.startTick + n.durationTicks),
-        ),
-      ).clamp(0, maxTicks - 1);
-      final startTick = state.selectedColumnTick ?? fallbackStart;
-      final anchor = ((state.pitchRangeStart + state.pitchRangeEnd) / 2)
-          .round();
-      final midiStack = import_rules.buildChordStackMidis(
-        _root,
-        _quality,
-        anchor,
-        state.pitchRangeStart,
-        state.pitchRangeEnd,
-      );
-      if (midiStack.isEmpty) return;
-      notifier.addNoteStack(midiStack, startTick, _durationTicks);
-      notifier.selectColumn(startTick);
+      composerNotifier.addStack();
       HapticFeedback.mediumImpact();
     }
 
@@ -141,13 +103,13 @@ class _PianoRollStackSelectorState
             scrollDirection: Axis.horizontal,
             child: Row(
               children: _roots.map((r) {
-                final active = _root == r;
+                final active = composerState.root == r;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: _Pill(
                     label: r,
                     active: active,
-                    onTap: () => setState(() => _root = r),
+                    onTap: () => composerNotifier.setRoot(r),
                   ),
                 );
               }).toList(),
@@ -170,13 +132,13 @@ class _PianoRollStackSelectorState
             scrollDirection: Axis.horizontal,
             child: Row(
               children: _qualities.map((q) {
-                final active = _quality == q.$1;
+                final active = composerState.quality == q.$1;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: _Pill(
                     label: q.$2,
                     active: active,
-                    onTap: () => setState(() => _quality = q.$1),
+                    onTap: () => composerNotifier.setQuality(q.$1),
                   ),
                 );
               }).toList(),
@@ -197,13 +159,13 @@ class _PianoRollStackSelectorState
           const SizedBox(height: 6),
           Row(
             children: _durationOptions.map((d) {
-              final active = _durationTicks == d.$2;
+              final active = composerState.durationTicks == d.$2;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: _Pill(
                   label: d.$1,
                   active: active,
-                  onTap: () => setState(() => _durationTicks = d.$2),
+                  onTap: () => composerNotifier.setDuration(d.$2),
                 ),
               );
             }).toList(),
