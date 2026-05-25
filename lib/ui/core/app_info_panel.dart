@@ -426,6 +426,71 @@ class _PianoRollInfoTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: const [
+        // ── V2 Layout ───────────────────────────────────────────────────
+        _Section(
+          icon: Icons.dashboard_outlined,
+          title: 'V2 Layout',
+          color: MuzicianTheme.emerald,
+          entries: [
+            _Entry(
+              icon: Icons.smartphone_outlined,
+              label: 'Portrait (phone)',
+              desc:
+                  'Transport strip at top, grid as the primary surface, '
+                  'collapsible quick-action dock at bottom. Expand panels '
+                  'one at a time: Scale, Hum, Save, Import, Compose, Detection.',
+              color: MuzicianTheme.emerald,
+            ),
+            _Entry(
+              icon: Icons.tablet_android_outlined,
+              label: 'Landscape (width > 600 px)',
+              desc:
+                  'Grid on the left (3× width), persistent inspector rail on '
+                  'the right (1× width). The rail holds Composer, Selection, '
+                  'Edit & Pitch, Stack Selector, Scale, Detection, Hum Recorder, '
+                  'Save/Load, and Import — all scrollable.',
+              color: MuzicianTheme.emerald,
+            ),
+            _Entry(
+              icon: Icons.compare_arrows_outlined,
+              label: 'V1 & V2 share the same logic',
+              desc:
+                  'Both shells read from the same Riverpod providers. V1 composes '
+                  'widgets inline; V2 arranges them adaptively. V2 is the default '
+                  'product surface; V1 remains as a compatibility shell.',
+              color: MuzicianTheme.emerald,
+            ),
+          ],
+        ),
+        SizedBox(height: 16),
+        // ── Web Support ─────────────────────────────────────────────────
+        _Section(
+          icon: Icons.web_outlined,
+          title: 'Web Support',
+          color: MuzicianTheme.orange,
+          entries: [
+            _Entry(
+              icon: Icons.check_circle_outline,
+              label: 'Fully supported on web',
+              desc:
+                  'Editor grid, playback, stack composer, save/load, import, '
+                  'detection, scale highlighting, keyboard shortcuts, and '
+                  'Ctrl/Alt + wheel zoom all work in the browser.',
+              color: MuzicianTheme.orange,
+            ),
+            _Entry(
+              icon: Icons.mic_off_outlined,
+              label: 'Hum to MIDI is mobile-only',
+              desc:
+                  'Microphone recording is not available on web. The Hum '
+                  'Recorder card shows "Hum to MIDI not supported on web" '
+                  'instead of record controls.',
+              color: MuzicianTheme.orange,
+            ),
+          ],
+        ),
+        SizedBox(height: 16),
+        // ── Gestures ────────────────────────────────────────────────────
         _Section(
           icon: Icons.touch_app_outlined,
           title: 'Gestures',
@@ -434,7 +499,17 @@ class _PianoRollInfoTab extends StatelessWidget {
             _Entry(
               icon: Icons.touch_app,
               label: 'Tap an empty cell',
-              desc: 'Adds a new note at that pitch and beat position.',
+              desc:
+                  'Adds a new note of 1 tick (1/16th note) at that pitch and '
+                  'beat position.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
+              icon: Icons.touch_app_outlined,
+              label: 'Double-tap an empty cell',
+              desc:
+                  'Inserts a note at the current snap duration (e.g. 1/4 note). '
+                  'Uses the active snap value from the toolbar.',
               color: MuzicianTheme.sky,
             ),
             _Entry(
@@ -442,7 +517,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               label: 'Tap an existing note',
               desc:
                   'Selects the note. The detection panel then shows note chips for '
-                  'that column. Tap the same note again to deselect.',
+                  'that column. Double‑tap on a note toggles multi-select.',
               color: MuzicianTheme.sky,
             ),
             _Entry(
@@ -477,6 +552,15 @@ class _PianoRollInfoTab extends StatelessWidget {
               color: MuzicianTheme.sky,
             ),
             _Entry(
+              icon: Icons.drag_handle_outlined,
+              label: 'Drag the ruler (scrub)',
+              desc:
+                  'Drag horizontally across the ruler to scrub the selected '
+                  'column continuously. The detection panel updates in real '
+                  'time as you drag. Ideal for scanning a timeline.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
               icon: Icons.pinch_outlined,
               label: 'Pinch with two fingers',
               desc:
@@ -490,9 +574,54 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc: 'Scrolls the grid both horizontally and vertically.',
               color: MuzicianTheme.sky,
             ),
+            _Entry(
+              icon: Icons.content_cut_outlined,
+              label: 'Scissors tool',
+              desc:
+                  'Tap a note to split it at the tapped position into two notes. '
+                  'Long‑press still deletes in scissors mode. Switch between '
+                  'Draw and Scissors in the toolbar.',
+              color: MuzicianTheme.sky,
+            ),
           ],
         ),
         SizedBox(height: 16),
+        // ── Keyboard Shortcuts ──────────────────────────────────────────
+        _Section(
+          icon: Icons.keyboard_outlined,
+          title: 'Keyboard Shortcuts (desktop/web)',
+          color: MuzicianTheme.teal,
+          entries: [
+            _Entry(
+              icon: Icons.space_bar_outlined,
+              label: 'Space',
+              desc: 'Start or stop playback.',
+              color: MuzicianTheme.teal,
+            ),
+            _Entry(
+              icon: Icons.backspace_outlined,
+              label: 'Delete / Backspace',
+              desc: 'Delete all currently selected notes.',
+              color: MuzicianTheme.teal,
+            ),
+            _Entry(
+              icon: Icons.zoom_in_outlined,
+              label: 'Ctrl / Cmd + scroll wheel',
+              desc:
+                  'Horizontal zoom — scales cell width (10–80 px range).',
+              color: MuzicianTheme.teal,
+            ),
+            _Entry(
+              icon: Icons.zoom_out_map_outlined,
+              label: 'Alt / Option + scroll wheel',
+              desc:
+                  'Vertical zoom — scales row height (10–40 px range).',
+              color: MuzicianTheme.teal,
+            ),
+          ],
+        ),
+        SizedBox(height: 16),
+        // ── Toolbar & Controls ──────────────────────────────────────────
         _Section(
           icon: Icons.settings_outlined,
           title: 'Toolbar Controls',
@@ -502,6 +631,14 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.speed_outlined,
               label: 'Tempo',
               desc: 'Set BPM with − and + steppers. Range: 20–300 BPM.',
+              color: MuzicianTheme.orange,
+            ),
+            _Entry(
+              icon: Icons.edit_outlined,
+              label: 'Tool & Snap',
+              desc:
+                  'Draw tool: add, move, and resize notes. Scissors tool: split '
+                  'notes with a tap. Snap presets: 1t (1/16) through 32t (2 bars).',
               color: MuzicianTheme.orange,
             ),
             _Entry(
@@ -533,7 +670,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               label: 'Pitch window (▲ / ▼)',
               desc:
                   'Shifts the visible MIDI range up or down by 12 semitones '
-                  '(one octave) per tap.',
+                  '(one octave) per tap. Also shows current C3–C6 range.',
               color: MuzicianTheme.orange,
             ),
             _Entry(
@@ -542,9 +679,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Tap Play to hear the roll from the selected column through '
                   'the end of the timeline. Tap Stop to cancel. Playback is '
-                  'disabled while humming is active. Hum import expands '
-                  'measures horizontally when needed (no pitch-range '
-                  'auto-growth).',
+                  'disabled while humming is active. Also triggered by Space key.',
               color: MuzicianTheme.orange,
             ),
             _Entry(
@@ -556,6 +691,7 @@ class _PianoRollInfoTab extends StatelessWidget {
           ],
         ),
         SizedBox(height: 16),
+        // ── Panels ──────────────────────────────────────────────────────
         _Section(
           icon: Icons.layers_outlined,
           title: 'Panels',
@@ -563,35 +699,67 @@ class _PianoRollInfoTab extends StatelessWidget {
           entries: [
             _Entry(
               icon: Icons.library_music_outlined,
-              label: 'Stack selector',
+              label: 'Stack selector (Composer)',
               desc:
-                  'Choose a chord root + quality + note duration, then tap "Add '
-                  'Stack" to place all chord notes at the selected column tick. '
-                  'Notes are voice-led into the current pitch window.',
+                  'Choose a chord root + quality (17 types) + note duration, '
+                  'then tap "Add Stack" to place all chord notes at the selected '
+                  'column tick. Notes are voice-led into the current pitch window '
+                  'using shared composer state used by both V1 and V2.',
+              color: MuzicianTheme.violet,
+            ),
+            _Entry(
+              icon: Icons.stacked_line_chart_outlined,
+              label: 'Scale picker',
+              desc:
+                  'Highlight scale tones (major, minor, pentatonic, blues, '
+                  'chromatic) across the grid in teal. The root note is highlighted '
+                  'in emerald green.',
               color: MuzicianTheme.violet,
             ),
             _Entry(
               icon: Icons.folder_open_outlined,
-              label: 'Save stack loader',
+              label: 'Import from saves',
               desc:
-                  'Browse saved progressions and place their notes at the current '
-                  'column. Toggle "Exact MIDI" vs "Pitch Class" to control whether '
-                  'notes are placed at their original MIDI values or transposed to '
-                  'fit the pitch window.',
+                  'Browse saved fretboard and piano progressions, then place '
+                  'their notes at the current column. Toggle "Exact MIDI" vs '
+                  '"Pitch Class" placement mode. Piano Roll session snapshots '
+                  'are excluded — use the dedicated save panel to restore full rolls.',
+              color: MuzicianTheme.violet,
+            ),
+            _Entry(
+              icon: Icons.save_outlined,
+              label: 'Piano Roll save / load',
+              desc:
+                  'Save the entire piano roll session (notes, tempo, signature, '
+                  'pitch range, selection, snap value, scale highlights) and '
+                  'restore it later. Piano roll saves are separate from the '
+                  'cross‑instrument stack import loader.',
+              color: MuzicianTheme.violet,
+            ),
+            _Entry(
+              icon: Icons.mic_outlined,
+              label: 'Hum to MIDI (mobile only)',
+              desc:
+                  'Record yourself humming and have it converted to MIDI notes '
+                  'on the timeline. Not available on web. Includes pitch '
+                  'sensitivity setting (Strict / Balanced / Forgiving) and a '
+                  '"Jump to latest" button for navigation.',
               color: MuzicianTheme.violet,
             ),
             _Entry(
               icon: Icons.search,
               label: 'Detection panel',
               desc:
-                  'Shows note chips, up to 8 matching chords, and up to 8 matching '
-                  'scales for all notes active at the selected column. Tap × on a '
-                  'chip to delete that note.',
+                  'Shows note chips, matching chords (up to 8), and matching '
+                  'scales (up to 8) for all notes active at the selected column. '
+                  'Uses shared exact‑note detection APIs from note_utils.dart. '
+                  'Tap × on a chip to delete that note.',
               color: MuzicianTheme.violet,
             ),
           ],
         ),
         SizedBox(height: 16),
+        // ── Timeline Math ───────────────────────────────────────────────
         _Section(
           icon: Icons.calculate_outlined,
           title: 'Timeline Math',
@@ -610,7 +778,8 @@ class _PianoRollInfoTab extends StatelessWidget {
               label: 'Beat snapping',
               desc:
                   'Dragged notes snap to the nearest quarter-note tick in 4/4 time '
-                  'and to the nearest eighth-note tick in 4/8 time.',
+                  'and to the nearest eighth-note tick in 4/8 time. Active snap '
+                  'preset (1t–32t) also controls double‑tap insertion length.',
               color: MuzicianTheme.teal,
             ),
           ],
