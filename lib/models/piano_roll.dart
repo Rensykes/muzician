@@ -80,9 +80,10 @@ class PianoRollConfig {
 
 /// Tap behaviour mode for the piano roll grid.
 ///
-/// Grid wiring currently honours [draw] and [scissors]; [paint] and [delete]
-/// are surfaced in the V2 tool segment but not yet bound to grid gestures —
-/// see TODO in `piano_roll_grid.dart` for the next pass.
+///   * [draw]     — tap to insert, drag to move/resize, long-press to delete.
+///   * [scissors] — tap on a note splits it at the tap position.
+///   * [paint]    — drag inserts notes along the path at snap-length.
+///   * [delete]   — tap or drag over a note removes it.
 enum PianoRollTool { draw, scissors, paint, delete }
 
 class PianoRollImportedRange {
