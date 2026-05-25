@@ -78,6 +78,42 @@ The piano roll now includes a mobile-only `Hum to MIDI` recorder. It captures mo
 - If two neighboring imported notes overlap after quantization, the earlier note is trimmed to end at the later note's start tick.
 - If trimming would reduce that earlier note to zero length, that earlier note is dropped.
 
+### Detection pipeline
+
+The hum-to-MIDI capture splits into four stages. Stages 1–2 run while recording; stages 3–4 run on stop.
+
+| Stage | Code | Responsibility |
+|---|---|---|
+| 1. PCM capture & windowing | `lib/utils/mic_pitch_session.dart` | Buffer raw 16 kHz mono PCM, slide a 1024-sample window with 512-sample hop, emit ~31 `PitchFrame`/sec |
+| 2. Pitch estimation | `lib/schema/rules/mono_pitch_rules.dart` (`estimateDominantFrequencyFromSamples`) | YIN with CMNDF, local-minimum descent, parabolic interpolation → `(frequencyHz, confidence)` |
+| 3. Segmentation | `lib/schema/rules/mono_pitch_rules.dart` (`segmentStableNotes`) | Group consecutive same-MIDI frames into `DetectedMonoNote { startMs, endMs, midiNote, confidence }` with 1-frame hysteresis |
+| 4. Quantization & monophonic normalization | `quantizeNotesToTicks` + `normalizeQuantizedHumNotesMonophonically` | Map ms → ticks against the current tempo, snap to `snapTicks`, drop overlaps |
+
+**Why windowing is internal.** iOS's `record` plugin delivers PCM chunks at the rate the audio session decides (often ~250 ms). One chunk per hummed eighth/quarter note meant the segmenter saw a single frame and computed 0 ms duration, so the note was dropped. Sliding a fixed window over the raw bytes decouples the frame rate from the platform's buffer size.
+
+**Why parabolic interpolation.** Pure integer-lag YIN buckets the frequency by 1-sample steps. Around a semitone boundary the rounded MIDI flips between adjacent notes from frame to frame, fragmenting one sustained note into many sub-notes. Parabolic interpolation on the CMNDF local minimum gives sub-sample lag → stable MIDI.
+
+**Why 1-frame hysteresis.** Even with parabolic refinement, vibrato or a single transient frame can briefly land in the neighbouring semitone. The segmenter requires **two consecutive** off-pitch frames before switching `activeMidi`; a lone deviation is folded back into the active note.
+
+### Tunable parameters
+
+All in `lib/schema/rules/mono_pitch_rules.dart`:
+
+| Constant | Value | Effect of raising it |
+|---|---|---|
+| `minHumFrequencyHz` / `maxHumFrequencyHz` | 80 / 1000 | Sets the YIN lag search range and rejects out-of-range pitches |
+| `minHumAmplitude` | 0.02 | Higher → more aggressive silence gate, fewer breath/noise false positives |
+| `_yinThreshold` | 0.15 | Higher → accept weaker pitches (more recall, less precision) |
+| `minStableConfidence` | 0.6 | Confidence = `1 − cmndf[bestLag]`. Higher → drop borderline frames |
+| `minStableNoteMs` | 80 | Minimum note duration; lower catches faster notes but admits glitches |
+| `maxMergeGapMs` | 180 | Silence within a note merges if shorter than this |
+
+### Edge cases handled
+
+- **Single-frame notes**: when only one voiced frame falls inside `[startMs, endMs]`, the segmenter assigns the note the **median observed inter-frame delta** as its duration (instead of 0 ms).
+- **Absolute vs. relative timestamps**: `PitchFrame.timestampMs` is **ms since recording start**, not epoch ms. Producers (`RecordMicPitchSession`) must subtract the recording's start time before emitting.
+- **Silence gate before YIN**: windows below `minHumAmplitude` skip pitch estimation entirely and emit an `isSilence: true` frame. This prevents YIN from latching onto low-amplitude room noise and producing phantom notes.
+
 ---
 
 ## Playback
