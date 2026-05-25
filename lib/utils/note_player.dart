@@ -107,7 +107,9 @@ class NotePlayer {
       _tempDir = await ioTempDir(); // resolves via note_player_io.dart
     }
     for (var i = 0; i < _poolSize; i++) {
-      _pool.add(AudioPlayer());
+      final player = AudioPlayer();
+      await player.setReleaseMode(ReleaseMode.stop);
+      _pool.add(player);
     }
     _ready = true;
   }
