@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,7 +13,8 @@ import '../../schema/rules/mono_pitch_rules.dart' as rules;
 import '../../schema/rules/mono_pitch_rules.dart' show HumSensitivity;
 
 class PianoRollHumRecorderPanel extends ConsumerStatefulWidget {
-  const PianoRollHumRecorderPanel({super.key});
+  final bool isWeb;
+  const PianoRollHumRecorderPanel({super.key, this.isWeb = kIsWeb});
 
   @override
   ConsumerState<PianoRollHumRecorderPanel> createState() =>
@@ -31,6 +33,20 @@ class _PianoRollHumRecorderPanelState
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isWeb) {
+      return const PianoRollHumRecorderCard(
+        status: HumToMidiStatus.idle,
+        liveNoteLabel: 'No pitch',
+        statusLabel: 'Hum to MIDI not supported on web',
+        elapsedLabel: 'N/A',
+        onStart: null,
+        onStop: null,
+        onJumpToLatest: null,
+        sensitivity: HumSensitivity.balanced,
+        onSensitivityChanged: null,
+      );
+    }
+
     final ref = this.ref;
     final state = ref.watch(humToMidiProvider);
     final latestImportedRange = ref.watch(
@@ -57,7 +73,8 @@ class _PianoRollHumRecorderPanelState
     final sensitivity = ref.watch(
       settingsProvider.select((s) => s.humSensitivity),
     );
-    final canChangeSensitivity = state.status != HumToMidiStatus.recording &&
+    final canChangeSensitivity =
+        state.status != HumToMidiStatus.recording &&
         state.status != HumToMidiStatus.processing;
 
     return PianoRollHumRecorderCard(
@@ -94,7 +111,7 @@ class _PianoRollHumRecorderPanelState
       sensitivity: sensitivity,
       onSensitivityChanged: canChangeSensitivity
           ? (value) =>
-              ref.read(settingsProvider.notifier).setHumSensitivity(value)
+                ref.read(settingsProvider.notifier).setHumSensitivity(value)
           : null,
     );
   }
@@ -172,10 +189,11 @@ class PianoRollHumRecorderCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            FilledButton(
-              onPressed: isRecording ? onStop : onStart,
-              child: Text(isRecording ? 'Stop' : 'Record'),
-            ),
+            if (onStart != null || onStop != null)
+              FilledButton(
+                onPressed: isRecording ? onStop : onStart,
+                child: Text(isRecording ? 'Stop' : 'Record'),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -218,10 +236,7 @@ class _HumSensitivitySelector extends StatelessWidget {
         SegmentedButton<HumSensitivity>(
           showSelectedIcon: false,
           segments: const [
-            ButtonSegment(
-              value: HumSensitivity.strict,
-              label: Text('Strict'),
-            ),
+            ButtonSegment(value: HumSensitivity.strict, label: Text('Strict')),
             ButtonSegment(
               value: HumSensitivity.balanced,
               label: Text('Balanced'),

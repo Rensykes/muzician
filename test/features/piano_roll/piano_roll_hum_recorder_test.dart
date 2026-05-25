@@ -154,7 +154,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
           body: PianoRollHumRecorderCard(
             status: HumToMidiStatus.recording,
@@ -162,7 +162,7 @@ void main() {
             statusLabel: 'Stable',
             elapsedLabel: '00:03',
             onStart: null,
-            onStop: null,
+            onStop: () {},
           ),
         ),
       ),
