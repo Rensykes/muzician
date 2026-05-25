@@ -124,11 +124,22 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
     final size = MediaQuery.of(context).size;
     final isLandscape = size.width > _landscapeWidthThreshold;
 
+    // V2 is hosted as a top-level tab body — the parent app scaffold owns
+    // the bottom navigation, so we render only the gradient surface here.
     return Theme(
       data: MuzicianTheme.dark(),
-      child: MockupScaffold(
-        activeNavLabel: 'Roll',
-        child: isLandscape ? _buildLandscape() : _buildPortrait(),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: MuzicianTheme.gradientColors,
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: isLandscape ? _buildLandscape() : _buildPortrait(),
+        ),
       ),
     );
   }
@@ -201,7 +212,6 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
         CompactAppBar(
           title: 'Roll',
           chipLabel: _headerChipLabel(state),
-          onClose: () => Navigator.of(context).maybePop(),
           actions: [
             IconBtn(
               icon: Icons.settings_outlined,
@@ -351,7 +361,6 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
         CompactAppBar(
           title: 'Roll',
           chipLabel: _headerChipLabel(state),
-          onClose: () => Navigator.of(context).maybePop(),
           actions: [
             IconBtn(
               icon: Icons.settings_outlined,
