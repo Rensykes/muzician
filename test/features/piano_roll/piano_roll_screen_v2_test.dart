@@ -15,6 +15,29 @@ class _FakePianoRollNotifier extends PianoRollNotifier {
   PianoRollState build() => _initial;
 }
 
+class _SpyPianoRollNotifier extends PianoRollNotifier {
+  _SpyPianoRollNotifier(this._initial);
+  final PianoRollState _initial;
+  int? selectedTickCall;
+
+  @override
+  PianoRollState build() => _initial;
+
+  @override
+  void selectNotesAtTick(int tick) {
+    selectedTickCall = tick;
+    final ids = state.notes
+        .where(
+          (note) =>
+              note.startTick <= tick &&
+              tick < note.startTick + note.durationTicks,
+        )
+        .map((note) => note.id)
+        .toSet();
+    state = state.copyWith(selectedNoteIds: ids);
+  }
+}
+
 class _FakePlaybackNotifier extends PianoRollPlaybackNotifier {
   _FakePlaybackNotifier(this._initial);
   final PianoRollPlaybackState _initial;
@@ -31,6 +54,14 @@ const _defaultPRState = PianoRollState(
   notes: [],
   pitchRangeStart: 48,
   pitchRangeEnd: 84,
+);
+const _columnNote = PianoRollNote(
+  id: 'n1',
+  midiNote: 60,
+  pitchClass: 'C',
+  noteWithOctave: 'C4',
+  startTick: 0,
+  durationTicks: 4,
 );
 
 Widget _wrapV2(ProviderContainer container, {Size? surfaceSize}) {
@@ -90,6 +121,11 @@ void main() {
       findsOneWidget,
       reason: 'Utility panel should be visible in landscape layout',
     );
+    expect(
+      find.text('Select @ Col'),
+      findsNothing,
+      reason: 'Selection actions should not show without selected notes/column',
+    );
   });
 
   // ── Portrait layout test ───────────────────────────────────────────────
@@ -133,6 +169,147 @@ void main() {
       findsOneWidget,
       reason: 'Portrait action bar should exist below the grid',
     );
+    expect(
+      find.byIcon(Icons.help_outline_rounded),
+      findsOneWidget,
+      reason: 'Portrait shell should expose a local help action',
+    );
+  });
+
+  testWidgets('portrait help action opens shared help on Piano Roll tab', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(
+          () => _FakePianoRollNotifier(_defaultPRState),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(500, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_wrapV2(container));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.help_outline_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gestures & Features'), findsOneWidget);
+    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBar.controller?.index, 2);
+  });
+
+  testWidgets('portrait status prioritizes selected note count', (
+    tester,
+  ) async {
+    final selectedState = _defaultPRState.copyWith(
+      notes: const [_columnNote],
+      selectedColumnTick: () => 0,
+      selectedNoteIds: const {'n1'},
+    );
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(
+          () => _FakePianoRollNotifier(selectedState),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(500, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_wrapV2(container));
+    await tester.pump();
+
+    expect(find.text('Selected  •  1 note'), findsOneWidget);
+    expect(find.byIcon(Icons.deselect_rounded), findsAtLeastNWidgets(1));
+    expect(find.byIcon(Icons.delete_outline_rounded), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('landscape utility panel exposes selection management section', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(
+          () => _FakePianoRollNotifier(_defaultPRState),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(1200, 400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_wrapV2(container));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('v2-utility-panel')), findsOneWidget);
+    expect(find.text('No column selected'), findsOneWidget);
+    expect(find.byIcon(Icons.help_outline_rounded), findsOneWidget);
+  });
+
+  testWidgets('portrait compact select-at-column action updates selection', (
+    tester,
+  ) async {
+    final initialState = _defaultPRState.copyWith(
+      notes: const [_columnNote],
+      selectedColumnTick: () => 0,
+    );
+    final spyNotifier = _SpyPianoRollNotifier(initialState);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => spyNotifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(500, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_wrapV2(container));
+    await tester.pump();
+
+    final selectColumnFinder = find.bySemanticsLabel('Select notes at column');
+    expect(selectColumnFinder, findsOneWidget);
+
+    await tester.tap(selectColumnFinder);
+    await tester.pump();
+
+    expect(spyNotifier.selectedTickCall, 0);
+    expect(find.text('Selected  •  1 note'), findsOneWidget);
   });
 
   // ── Hum recorder web gating test ───────────────────────────────────────

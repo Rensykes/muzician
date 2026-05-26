@@ -513,18 +513,37 @@ class _PianoRollInfoTab extends StatelessWidget {
               color: MuzicianTheme.sky,
             ),
             _Entry(
+              icon: Icons.view_column_outlined,
+              label: 'Selected column vs selected notes',
+              desc:
+                  'The selected column is a timeline position used for detection '
+                  'and playback start. Selected notes are the notes you are '
+                  'actively editing. They are related, but separate.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
               icon: Icons.mouse_outlined,
               label: 'Tap an existing note',
               desc:
-                  'Selects the note. The detection panel then shows note chips for '
-                  'that column. Double‑tap on a note toggles multi-select.',
+                  'Solo-selects that note (replaces the current note selection). '
+                  'Also previews that pitch. Use double-tap to add or remove '
+                  'that note from a multi-selection.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
+              icon: Icons.playlist_add_check_circle_outlined,
+              label: 'Select notes at current column',
+              desc:
+                  'Use the selection action to select all notes active at the '
+                  'currently selected column tick.',
               color: MuzicianTheme.sky,
             ),
             _Entry(
               icon: Icons.open_with_outlined,
-              label: 'Drag note body',
+              label: 'Drag selected note(s)',
               desc:
-                  'Moves the note. Horizontal drag snaps to the nearest beat '
+                  'Drags the selected note group together. Horizontal drag snaps '
+                  'to the nearest beat '
                   '(quarter note in 4/4, eighth note in 4/8). Vertical drag '
                   'shifts pitch one semitone per row.',
               color: MuzicianTheme.sky,
@@ -533,8 +552,10 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.swap_horiz_outlined,
               label: 'Drag right edge of a note',
               desc:
-                  'Resizes the note duration. Minimum duration is one 1/16th note '
-                  '(1 tick). The resize handle is the rightmost 16 px of the note.',
+                  'Resizes note duration. If the note is selected, the current '
+                  'multi-selection resizes together. Minimum duration is one '
+                  '1/16th note (1 tick). The resize handle is the rightmost 16 px '
+                  'of the note.',
               color: MuzicianTheme.sky,
             ),
             _Entry(
@@ -578,9 +599,10 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.content_cut_outlined,
               label: 'Scissors tool',
               desc:
-                  'Tap a note to split it at the tapped position into two notes. '
-                  'Long‑press still deletes in scissors mode. Switch between '
-                  'Draw and Scissors in the toolbar.',
+                  'Tap a note to split at the tapped position. If that note is '
+                  'selected, the current multi-selection splits at the same tick. '
+                  'Long‑press still deletes in scissors mode. Switch between Draw '
+                  'and Scissors in the toolbar.',
               color: MuzicianTheme.sky,
             ),
           ],
@@ -601,21 +623,21 @@ class _PianoRollInfoTab extends StatelessWidget {
             _Entry(
               icon: Icons.backspace_outlined,
               label: 'Delete / Backspace',
-              desc: 'Delete all currently selected notes.',
+              desc:
+                  'Delete all currently selected notes (same as the UI delete '
+                  'selection action).',
               color: MuzicianTheme.teal,
             ),
             _Entry(
               icon: Icons.zoom_in_outlined,
               label: 'Ctrl / Cmd + scroll wheel',
-              desc:
-                  'Horizontal zoom — scales cell width (10–80 px range).',
+              desc: 'Horizontal zoom — scales cell width (10–80 px range).',
               color: MuzicianTheme.teal,
             ),
             _Entry(
               icon: Icons.zoom_out_map_outlined,
               label: 'Alt / Option + scroll wheel',
-              desc:
-                  'Vertical zoom — scales row height (10–40 px range).',
+              desc: 'Vertical zoom — scales row height (10–40 px range).',
               color: MuzicianTheme.teal,
             ),
           ],
