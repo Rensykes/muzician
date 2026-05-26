@@ -86,10 +86,24 @@ This duplicates UX without supporting more advanced voicing needs such as:
 - Those views do not own separate note lists. They edit the same final stack.
 - Canonical stack creation remains available, including inversion control.
 - Advanced stack creation supports:
-  - note duplicates
+  - repeated chord tones across different octaves
   - free octave choice
   - up to 10 notes total
-  - editing by both absolute notes and chord-degree shortcuts
+  - editing by both absolute note + octave pickers and chord-degree shortcuts
+- Exact duplicate notes are not allowed inside one stack:
+  - `C4` + `C4` is invalid
+  - `C3` + `C4` remains valid
+- Advanced note rows no longer expose `copy` / `duplicate` as primary actions:
+  - users must be able to add a new note
+  - users must be able to edit an existing note
+  - users must be able to remove an existing note
+- Add/edit note flows in `Avanzato` must stay inside the drawer:
+  - no modal dialog layered above the Piano Roll drawer
+  - no separate floating picker that obscures the current stack context
+- Piano Roll also needs a fast reuse path:
+  - if one or more notes are selected, `Quick` acts as a copy/paste of the
+    current selection
+  - if nothing is selected, `Quick` repeats the latest successfully added stack
 - The views must remain interscambiable:
   - switching tabs never resets the stack
   - advanced edits remain readable from canonical view when possible
@@ -235,22 +249,88 @@ Advanced view is the lossless editor for the final stack.
 ### Capabilities
 
 - add note
+- edit existing note
 - remove note
 - reorder note
-- duplicate note
-- choose absolute note with octave
+- choose note and octave separately
 - insert via chord-degree shortcuts
 - hard cap at 10 notes
+- show a validation error when the target exact note already exists in the stack
+- run add/edit through an inline drawer wizard rather than a modal
 
 ### Supported input modes
 
 Both are allowed:
 
-- absolute note entry, e.g. `G2`, `C3`, `E3`
+- absolute note selection via note picker + octave picker, e.g. `G` + `2`
 - chord-degree shortcuts, e.g. `1`, `3`, `5`, `7`, `9`
 
 Degree shortcuts resolve into absolute notes relative to the currently
 recognized or selected chord context, then write into the same `notes` list.
+
+### Validation rule
+
+The builder must reject exact duplicate absolute notes within one stack.
+
+Examples:
+
+- trying to add `C4` when `C4` is already present shows an error
+- changing `E4` into `C4` when `C4` is already present shows an error
+- `C3` and `C4` together remain valid because they are different absolute
+  notes
+
+### Inline wizard behavior
+
+When the user taps `Add note` or edits an existing row in `Avanzato`, the
+drawer enters an inline editing mode.
+
+The inline wizard should:
+
+- live inside the current drawer section
+- preserve visibility of the stack being edited
+- avoid covering the whole Roll UI with a modal
+- present one focused editor at a time
+- replace the normal advanced-body content while active
+- never appear as an extra component appended below the note list
+
+Recommended flow:
+
+1. identify whether the action is `Add` or `Edit`
+2. choose the note name
+3. choose the octave
+4. show a live absolute-note preview, e.g. `C4`
+5. confirm or cancel
+
+To keep the drawer readable on compact devices:
+
+- only one inline wizard can be open at a time
+- while the wizard is active, the normal advanced content is replaced by the
+  step flow rather than remaining fully visible underneath
+- the note list may remain visible only as a compact summary or breadcrumb, not
+  as the full editable list with another component appended below it
+- secondary controls such as degree shortcuts may collapse or hide while the
+  wizard is active
+- the wizard should visually read as part of the `Stack Builder`, not as a
+  detached popup
+
+### Wizard structure
+
+The preferred structure is a true in-drawer step flow:
+
+1. `Avanzato` default state:
+   - note list
+   - row actions
+   - `Add note`
+   - degree shortcuts
+2. `Avanzato` wizard state:
+   - contextual title, e.g. `Add note` or `Edit C4`
+   - note-step picker
+   - octave-step picker
+   - live preview
+   - confirm / cancel
+
+This means the wizard is a mode of the advanced tab, not a supplemental block
+rendered below the existing list.
 
 ## 6. Interchangeability Rules
 
@@ -300,7 +380,7 @@ Recognition is rule-based and deterministic.
 From final `notes`:
 
 - derive unique pitch classes
-- ignore duplicates for chord identity
+- ignore repeated chord tones across octaves for chord identity
 - keep the lowest absolute note for inversion detection
 
 ### Recognition outputs
@@ -309,7 +389,7 @@ From final `notes`:
 - recognized quality, if the pitch-class set matches a supported quality
 - inversion from the lowest pitch class
 - `isCustomVoicing = true` when:
-  - duplicates exist, or
+  - repeated chord tones across octaves exist, or
   - note distribution differs from normalized canonical generation, or
   - octave layout is non-standard while identity remains recognized
 
@@ -334,6 +414,46 @@ It always:
 - use the builder's shared `durationTicks`
 - keep the existing pitch-range safety and insertion semantics already expected
   by Piano Roll
+
+Every successful add also updates the remembered "latest stack" payload used by
+the quick-add path.
+
+## 8A. Quick Reuse Behavior
+
+Piano Roll needs a fast path that works without reopening or reauthoring a
+stack.
+
+### Selected-notes quick copy
+
+If there is a current note selection:
+
+- `Quick` builds a transient payload from the selected notes
+- the payload preserves:
+  - MIDI note
+  - relative tick offset from the earliest selected note
+  - per-note duration
+- pasting aligns the earliest selected note to the destination column
+
+This allows copying an existing stack or short voicing fragment already present
+in the roll.
+
+### Latest-stack quick repeat
+
+If there is no current note selection:
+
+- `Quick` reuses the latest successfully added stack payload
+- this payload is updated after:
+  - `Add Stack` from the builder
+  - a successful quick copy/paste from a selected stack
+
+### Destination anchor
+
+Quick insertion targets:
+
+- `selectedColumnTick` when available
+- tick `0` as fallback
+
+The quick path should not silently change the current builder draft.
 
 ## 9. Architecture
 
@@ -369,9 +489,11 @@ multiple UI components.
 ### Stack builder rules coverage
 
 - canonical generation supports inversion output
-- advanced voicing with duplicates remains valid up to 10 notes
+- advanced voicing with repeated tones across octaves remains valid up to 10
+  notes
 - `G2 C3 E3 G3 C4` recognizes as `C maj`, second inversion, custom voicing
-- duplicate notes do not break root/quality recognition
+- exact duplicate absolute notes are rejected
+- repeated chord tones across octaves do not break root/quality recognition
 - note-count hard cap prevents the 11th note
 - canonical edits after advanced customization preserve count and keep a
   continuous register-near result
@@ -384,6 +506,13 @@ multiple UI components.
 - landscape shows one unified builder section
 - canonical and advanced tabs display the same final stack preview
 - active scale pill persists on drawer reopen
+- advanced add uses an inline note picker + octave picker, not free-text note entry
+- advanced rows expose edit + remove, not duplicate
+- advanced add/edit stays inside the drawer and does not open a modal dialog
+- advanced add/edit uses a wizard state that replaces the normal advanced body,
+  not a component appended below the note list
+- quick action copies the current selection when one exists
+- quick action repeats the latest stack when nothing is selected
 
 ## 11. Risks And Guardrails
 
@@ -418,4 +547,12 @@ The feature is successful when:
 - canonical and advanced editing remain interscambiable on the same stack
 - custom voicings such as `G2 C3 E3 G3 C4` remain recognized as their parent
   chord where possible
+- exact duplicate absolute notes inside one stack are prevented with clear
+  feedback
+- advanced editing uses an inline in-drawer wizard with note + octave pickers
+  for add and edit
+- that wizard is a dedicated advanced-tab state, not a block rendered under the
+  note list
+- a selected stack can be copied quickly to the current destination
+- when nothing is selected, the latest added stack can be reinserted quickly
 - all stack operations respect the 10-note limit

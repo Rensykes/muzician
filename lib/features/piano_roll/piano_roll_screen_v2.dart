@@ -9,12 +9,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/piano_roll.dart';
-import '../../models/piano_roll_composer.dart';
 import '../../models/piano_roll_playback.dart';
 import '../../models/save_system.dart' show AppSettings;
 import '../../schema/rules/piano_roll_rules.dart' as rules;
-import '../../store/piano_roll_composer_store.dart';
 import '../../store/piano_roll_playback_store.dart';
+import '../../store/piano_roll_stack_builder_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
@@ -27,52 +26,10 @@ import 'piano_roll_hum_recorder.dart';
 import 'piano_roll_save_panel.dart';
 import 'piano_roll_save_stack_loader.dart';
 import 'piano_roll_scale_picker.dart';
-import 'piano_roll_stack_selector.dart';
+import 'piano_roll_stack_builder.dart';
 
 const _landscapeWidthThreshold = 600.0;
-const _roots = <String>[
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-];
-const _qualityLabels = <String>[
-  '5th',
-  'maj',
-  'm',
-  '7',
-  'maj7',
-  'm7',
-  'dim',
-  'aug',
-  'sus2',
-  'sus4',
-  'm7b5',
-  'add9',
-  'maj9',
-  '6',
-  'm6',
-  'dim7',
-  '7sus4',
-];
-const _durationLabels = <String>[
-  '1/16',
-  '1/8',
-  '3/16',
-  '1/4',
-  '3/8',
-  '1/2',
-  '3/4',
-  '1/1',
-];
+
 const _snapOptions = <int>[1, 2, 4, 8, 16, 32];
 const _snapLabels = <String>['1t', '2t', '4t', '8t', '16t', '32t'];
 
@@ -172,11 +129,11 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           title: 'Import from Saves',
           child: const PianoRollSaveStackLoader(),
         );
-      case 'compose':
+      case 'stack_builder':
         showWidgetSheet(
           context: context,
-          title: 'Stack Composer',
-          child: const _ComposerSheet(),
+          title: 'Stack Builder',
+          child: const PianoRollStackBuilder(),
         );
       case 'detection':
         showWidgetSheet(
@@ -199,11 +156,6 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
 
   Widget _buildLandscape() {
     final state = ref.watch(pianoRollProvider);
-    final composerState = ref.watch(pianoRollComposerProvider);
-    final composerNotifier = ref.read(pianoRollComposerProvider.notifier);
-    final qualityLabel = qualityLabelBySymbol[composerState.quality] ?? 'maj';
-    final durationLabel =
-        durationTicksToLabel[composerState.durationTicks] ?? '1/4';
     final barBeat = _tickToBarBeatDisplay(
       state.selectedColumnTick,
       state.config.timeSignature.beatsPerMeasure,
@@ -251,62 +203,11 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                   child: ListView(
                     padding: const EdgeInsets.all(8),
                     children: [
-                      const _PanelSectionHeader('Composer'),
-                      Divider(color: MuzicianTheme.glassBorder),
-                      _InspectorField(
-                        label: 'Root',
-                        value: composerState.root,
-                        onTap: () async {
-                          final v = await showPickerSheet<String>(
-                            context: context,
-                            title: 'Root',
-                            options: _roots,
-                            current: composerState.root,
-                          );
-                          if (v != null) composerNotifier.setRoot(v);
-                        },
-                      ),
-                      _InspectorField(
-                        label: 'Quality',
-                        value: qualityLabel,
-                        onTap: () async {
-                          final v = await showPickerSheet<String>(
-                            context: context,
-                            title: 'Quality',
-                            options: _qualityLabels,
-                            current: qualityLabel,
-                          );
-                          if (v != null) {
-                            composerNotifier.setQuality(
-                              qualitySymbolByLabel[v] ?? 'maj',
-                            );
-                          }
-                        },
-                      ),
-                      _InspectorField(
-                        label: 'Duration',
-                        value: durationLabel,
-                        onTap: () async {
-                          final v = await showPickerSheet<String>(
-                            context: context,
-                            title: 'Duration',
-                            options: _durationLabels,
-                            current: durationLabel,
-                          );
-                          if (v != null) {
-                            composerNotifier.setDuration(
-                              labelToDurationTicks[v] ?? 4,
-                            );
-                          }
-                        },
-                      ),
+                      const _PanelSectionHeader('Stack Builder'),
+                      const SizedBox(height: 4),
+                      const PianoRollStackBuilder(),
                       const SizedBox(height: 8),
-                      _AddStackButton(
-                        onTap: () {
-                          HapticFeedback.mediumImpact();
-                          composerNotifier.addStack();
-                        },
-                      ),
+                      _QuickButton(),
                       const SizedBox(height: 12),
                       const _PanelSectionHeader('Selection'),
                       Divider(color: MuzicianTheme.glassBorder),
@@ -316,10 +217,6 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                       const _PanelSectionHeader('Edit & Pitch'),
                       Divider(color: MuzicianTheme.glassBorder),
                       _EditPitchControls(state: state),
-                      const SizedBox(height: 12),
-                      const _PanelSectionHeader('Stack Selector'),
-                      Divider(color: MuzicianTheme.glassBorder),
-                      const PianoRollStackSelector(),
                       const SizedBox(height: 12),
                       const _PanelSectionHeader('Scale'),
                       Divider(color: MuzicianTheme.glassBorder),
@@ -389,10 +286,6 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
         _PortraitActionBar(
           state: state,
           hasSelection: state.selectedColumnTick != null,
-          onAddStack: () {
-            HapticFeedback.mediumImpact();
-            ref.read(pianoRollComposerProvider.notifier).addStack();
-          },
           onOpenPanel: _openPanel,
         ),
       ],
@@ -406,24 +299,16 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
 class _PortraitActionBar extends ConsumerWidget {
   final PianoRollState state;
   final bool hasSelection;
-  final VoidCallback onAddStack;
   final ValueChanged<String> onOpenPanel;
 
   const _PortraitActionBar({
     required this.state,
     required this.hasSelection,
-    required this.onAddStack,
     required this.onOpenPanel,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final composerState = ref.watch(pianoRollComposerProvider);
-    final qualityLabel = qualityLabelBySymbol[composerState.quality] ?? 'maj';
-    final durationLabel =
-        durationTicksToLabel[composerState.durationTicks] ?? '1/4';
-    final presetLabel = '${composerState.root}$qualityLabel $durationLabel';
-
     return Container(
       key: const ValueKey('v2-portrait-actionbar'),
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -450,10 +335,23 @@ class _PortraitActionBar extends ConsumerWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              _AddPresetSplitChip(
-                presetLabel: presetLabel,
-                onAdd: onAddStack,
-                onCompose: () => onOpenPanel('compose'),
+              _QuickChip(
+                label: 'Stack Builder',
+                icon: Icons.add_rounded,
+                color: MuzicianTheme.violet,
+                onTap: () => onOpenPanel('stack_builder'),
+              ),
+              const SizedBox(width: 6),
+              _QuickChip(
+                label: 'Quick',
+                icon: Icons.content_paste_rounded,
+                color: MuzicianTheme.emerald,
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  ref
+                      .read(pianoRollStackBuilderProvider.notifier)
+                      .quickAddStack();
+                },
               ),
               const SizedBox(width: 6),
               _QuickChip(
@@ -500,186 +398,6 @@ class _PortraitActionBar extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Split CTA chip combining the primary "Add stack with current preset"
-/// action with a chevron that opens the [_ComposerSheet] to edit the preset
-/// or pick from the stack library.
-///
-/// Layout (single chip):
-///   [ +  Cmaj 1/4 ][ ⌄ ]
-///   |  main tap  | chevron tap |
-class _AddPresetSplitChip extends StatelessWidget {
-  final String presetLabel;
-  final VoidCallback onAdd;
-  final VoidCallback onCompose;
-
-  const _AddPresetSplitChip({
-    required this.presetLabel,
-    required this.onAdd,
-    required this.onCompose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const accent = MuzicianTheme.violet;
-    return Expanded(
-      flex: 2,
-      child: Container(
-        decoration: BoxDecoration(
-          color: accent.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: accent.withValues(alpha: 0.4)),
-        ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onAdd,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 7,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.add_rounded, size: 14, color: accent),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            presetLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: accent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              fontFeatures: [FontFeature.tabularFigures()],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Container(width: 1, color: accent.withValues(alpha: 0.35)),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  onCompose();
-                },
-                child: const SizedBox(
-                  width: 32,
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 18,
-                    color: accent,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Bottom-sheet body that bundles composer fields + add stack + stack list.
-/// Used by the 'compose' / 'Stacks' chip in portrait so users can configure
-/// chord parameters without crowding the action bar.
-class _ComposerSheet extends ConsumerWidget {
-  const _ComposerSheet();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final composerState = ref.watch(pianoRollComposerProvider);
-    final composerNotifier = ref.read(pianoRollComposerProvider.notifier);
-    final qualityLabel = qualityLabelBySymbol[composerState.quality] ?? 'maj';
-    final durationLabel =
-        durationTicksToLabel[composerState.durationTicks] ?? '1/4';
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _InspectorField(
-                label: 'Root',
-                value: composerState.root,
-                onTap: () async {
-                  final v = await showPickerSheet<String>(
-                    context: context,
-                    title: 'Root',
-                    options: _roots,
-                    current: composerState.root,
-                  );
-                  if (v != null) composerNotifier.setRoot(v);
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _InspectorField(
-                label: 'Quality',
-                value: qualityLabel,
-                onTap: () async {
-                  final v = await showPickerSheet<String>(
-                    context: context,
-                    title: 'Quality',
-                    options: _qualityLabels,
-                    current: qualityLabel,
-                  );
-                  if (v != null) {
-                    composerNotifier.setQuality(
-                      qualitySymbolByLabel[v] ?? 'maj',
-                    );
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _InspectorField(
-                label: 'Duration',
-                value: durationLabel,
-                onTap: () async {
-                  final v = await showPickerSheet<String>(
-                    context: context,
-                    title: 'Duration',
-                    options: _durationLabels,
-                    current: durationLabel,
-                  );
-                  if (v != null) {
-                    composerNotifier.setDuration(labelToDurationTicks[v] ?? 4);
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _AddStackButton(
-          onTap: () {
-            HapticFeedback.mediumImpact();
-            composerNotifier.addStack();
-          },
-        ),
-        const SizedBox(height: 16),
-        const _PanelSectionHeader('Stacks'),
-        Divider(color: MuzicianTheme.glassBorder, height: 8),
-        const PianoRollStackSelector(),
-      ],
     );
   }
 }
@@ -1572,105 +1290,6 @@ class _PanelSectionHeader extends StatelessWidget {
   }
 }
 
-class _InspectorField extends StatelessWidget {
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-  const _InspectorField({
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          GestureDetector(
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: MuzicianTheme.glassBorder),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value,
-                      style: const TextStyle(
-                        color: MuzicianTheme.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                    color: MuzicianTheme.textMuted,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddStackButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _AddStackButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: MuzicianTheme.violet.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: MuzicianTheme.violet.withValues(alpha: 0.4),
-          ),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_rounded, size: 16, color: MuzicianTheme.violet),
-            SizedBox(width: 6),
-            Text(
-              'Add Stack',
-              style: TextStyle(
-                color: MuzicianTheme.violet,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Icon-only segmented control for the four piano-roll tap modes.
 ///
 /// Sits inside the action bar's status row (left = status, right = segment)
@@ -1760,6 +1379,51 @@ class _ToolSegmentItem extends StatelessWidget {
             size: 16,
             color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Landscape quick-add button. Renders as a compact bar below the stack
+/// builder section in the utility panel.
+class _QuickButton extends ConsumerWidget {
+  const _QuickButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        ref.read(pianoRollStackBuilderProvider.notifier).quickAddStack();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: MuzicianTheme.emerald.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: MuzicianTheme.emerald.withValues(alpha: 0.35),
+          ),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.content_paste_rounded,
+              size: 14,
+              color: MuzicianTheme.emerald,
+            ),
+            SizedBox(width: 6),
+            Text(
+              'Quick — paste selected or repeat last stack',
+              style: TextStyle(
+                color: MuzicianTheme.emerald,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );
