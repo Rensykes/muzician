@@ -39,7 +39,8 @@ have been removed. The Roll tab in the bottom navigation mounts
 lib/
   models/
     piano_roll.dart                       ← canonical editor state
-    piano_roll_composer.dart              ← shared chord-stack composer state
+    piano_roll_composer.dart              ← quality/duration label maps (constants)
+    piano_roll_stack_builder.dart         ← stack builder state model
     piano_roll_playback.dart              ← playback transport state
     hum_to_midi.dart                      ← hum recording types (PitchFrame, etc.)
     harmonic_analysis.dart                ← shared chord/scale detection types
@@ -48,17 +49,18 @@ lib/
     piano_roll_rules.dart                 ← tick math, MIDI helpers, defaults
     piano_roll_import_rules.dart          ← stack building, snapshot-import mapping
     piano_roll_playback_rules.dart        ← playback sequencing
+    piano_roll_stack_builder_rules.dart   ← canonical generation, recognition, retargeting
     mono_pitch_rules.dart                 ← hum-to-MIDI pitch estimation
   store/
     piano_roll_store.dart                 ← Riverpod NotifierProvider
-    piano_roll_composer_store.dart        ← shared composer provider
     piano_roll_playback_store.dart        ← playback transport provider
+    piano_roll_stack_builder_store.dart   ← builder state transitions
     hum_to_midi_store.dart                ← hum recording provider
     settings_store.dart                   ← metronome + app-wide preferences
   features/piano_roll/
     piano_roll_grid.dart                  ← main editor canvas (PianoRollGrid)
     piano_roll_screen_v2.dart             ← adaptive layout shell (Roll tab body)
-    piano_roll_stack_selector.dart        ← chord root + quality → add note stack
+    piano_roll_stack_builder.dart         ← unified Stack Builder (Canonico/Avanzato)
     piano_roll_scale_picker.dart          ← scale-highlight picker
     piano_roll_save_stack_loader.dart     ← load stacks from saved progressions
     piano_roll_save_panel.dart            ← first-class piano-roll save/load
@@ -71,10 +73,11 @@ lib/
 | Provider | State type | Purpose |
 |---|---|---|
 | `pianoRollProvider` | `PianoRollState` | Canonical editor: notes, config, range, selection, tool, snap, highlights |
-| `pianoRollComposerProvider` | `PianoRollComposerState` | Root, quality, duration for chord-stack building |
+| `pianoRollStackBuilderProvider` | `PianoRollStackBuilderState` | Stack Builder: MIDI notes, duration, view mode, recognition |
 | `pianoRollPlaybackProvider` | `PianoRollPlaybackState` | Playback transport: status, current tick, start point |
 | `humToMidiProvider` | `HumToMidiState` | Mobile-only recording pipeline |
-| `pianoRollPendingScaleProvider` | `({String root, String scaleName})?` | Temp scale preview |
+| `pianoRollPendingScaleProvider` | `({String root, String scaleName})?` | Temp scale preview (detection panel) |
+| `pianoRollActiveScaleProvider` | `({String root, String scaleName})?` | Committed scale selection (persists across drawer) |
 | `pianoRollScrollToTickProvider` | `int?` | One-shot scroll-to-tick signal |
 
 ---
@@ -90,15 +93,18 @@ lib/
 | `PianoRollImportedRange` | `startTick`, `endTickExclusive` — tracks latest hum import range |
 | `PianoRollState` | Full state: `config`, `notes`, `pitchRangeStart`, `pitchRangeEnd`, `selectedColumnTick`, `selectedNoteIds`, `activeTool`, `snapTicks`, `highlightedNotes`, `latestImportedRange` |
 
-### Composer State (`lib/models/piano_roll_composer.dart`)
+### Stack Builder State (`lib/models/piano_roll_stack_builder.dart`)
 
 | Field | Default | Purpose |
 |---|---|---|
-| `root` | `"C"` | Root note of the chord to build |
-| `quality` | `""` (major) | Chord quality symbol |
+| `midiNotes` | `[60, 64, 67]` (C4, E4, G4) | Final stack notes (max 10) |
 | `durationTicks` | `4` (quarter) | Note duration for each stack note |
+| `activeView` | `canonical` | `canonical` or `advanced` editing mode |
+| `recognition` | — | Derived: `recognizedRoot`, `recognizedQuality`, `recognizedInversionIndex`, `isCustomVoicing` |
 
-Quality symbols: `''` (maj), `'m'`, `'7'`, `'maj7'`, `'m7'`, `'dim'`, `'aug'`, `'sus2'`, `'sus4'`, `'m7b5'`, `'add9'`, `'maj9'`, `'6'`, `'m6'`, `'dim7'`, `'7sus4'`
+### Composer State (`lib/models/piano_roll_composer.dart`)
+
+Legacy state type kept for its quality/duration label maps. The store and widget have been replaced by the unified Stack Builder.
 
 ---
 
@@ -210,16 +216,24 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 | `loadSnapshot(snap)` | Restore full session from a `PianoRollSnapshot` |
 | `reset()` | Revert to default state |
 
-### Composer store (`lib/store/piano_roll_composer_store.dart`)
+### Stack builder store (`lib/store/piano_roll_stack_builder_store.dart`)
 
-Provider: `pianoRollComposerProvider` — shared composer state behind the `_ComposerSheet`, the `_AddPresetSplitChip` preset label, and the landscape inspector rail's composer fields.
+Provider: `pianoRollStackBuilderProvider` — single source of truth for the unified Stack Builder widget. Replaces the old `pianoRollComposerProvider`.
 
 | Method | Description |
 |---|---|
-| `setRoot(root)` | Set root note (e.g. `"C"`, `"F#"`) |
-| `setQuality(quality)` | Set chord quality symbol |
-| `setDuration(ticks)` | Set note duration in ticks |
-| `addStack()` | Build chord stack from current state and place on roll at `selectedColumnTick` |
+| `switchView(view)` | Toggle between Canonico / Avanzato (preserves notes) |
+| `setCanonicalRoot(root)` | Retarget stack to new root via rules layer |
+| `setCanonicalQuality(quality)` | Retarget stack to new quality |
+| `setCanonicalInversion(index)` | Change inversion (0=Root, 1=1st, 2=2nd, 3=3rd) |
+| `setDurationTicks(ticks)` | Update note duration |
+| `addAbsoluteNote(midi)` | Add a MIDI note to the stack (advanced view) |
+| `duplicateNoteAt(index)` | Duplicate note at index (advanced view) |
+| `removeNoteAt(index)` | Remove note at index (advanced view) |
+| `reorderNotes(oldIdx, newIdx)` | Reorder notes (advanced view) |
+| `replaceNoteAt(index, midi)` | Replace a note (advanced view) |
+| `insertDegreeShortcut(degree)` | Insert note by chord degree number (1–9) |
+| `addStack()` | Insert current builder notes into the piano roll at `selectedColumnTick` |
 
 ---
 
@@ -382,10 +396,9 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 - **Grid**: 3× flex on the left — primary editing surface.
 - **Inspector rail**: 1× flex on the right — scrollable utility panel containing:
-  - Composer (root / quality / duration pickers + "Add Stack" button)
+  - Stack Builder (unified Canonico/Avanzato chord stack editor)
   - Selection status
   - Edit & Pitch controls (tool + snap pills, pitch range ± octave)
-  - Stack Selector
   - Scale picker
   - Detection panel (when column selected)
   - Hum Recorder (mobile) / unsupported card (web)
@@ -402,19 +415,8 @@ The portrait shell is minimal-by-design: the grid is `Expanded` and the chrome b
 - **Grid**: full-width `PianoRollGrid` inside `Expanded` — never shrinks.
 - **`_PortraitActionBar`** (3 fixed rows under the grid):
   1. `_SelectionStatus(compact)` (left, ellipsis-safe) + `_ToolModeSegment` (right, fixed 4-icon segmented control).
-  2. `_AddPresetSplitChip` (Add + chord-preset label + chevron, flex 2) · `Scale` · `Detect`.
+  2. `Stack Builder` · `Scale` · `Detect`.
   3. `Record` · `Save` · `Import`.
-
-#### Add-preset split chip
-
-A single chip combining the most-frequent action with the configuration entry point:
-
-| Region | Action |
-|---|---|
-| Main area (icon + `Cmaj 1/4` preset label) | `composerNotifier.addStack()` — adds the current composer preset to the roll. |
-| Trailing chevron | Opens `_ComposerSheet` (Root / Quality / Duration pickers + Add Stack + stack list). |
-
-The label is reactive on `pianoRollComposerProvider` so the user always sees what they are about to add.
 
 #### Bottom sheets
 
@@ -422,7 +424,7 @@ Each chip opens the corresponding panel as a glass `showWidgetSheet`:
 
 | Chip | Sheet body |
 |---|---|
-| `Compose` chevron | `_ComposerSheet` — root/quality/duration fields + Add Stack + `PianoRollStackSelector` |
+| `Stack Builder` | `PianoRollStackBuilder` — unified Canonico/Avanzato chord stack editor |
 | `Scale` | `PianoRollScalePicker` |
 | `Detect` | `PianoRollDetectionPanel` (chip disabled when no column is selected) |
 | `Record` | `PianoRollHumRecorderPanel` |
@@ -497,8 +499,13 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 
 ---
 
-### `PianoRollStackSelector`
-Chord root (12 chromatic) + quality (17 chords) + duration (1–4 beats) picker. Tapping "Add Stack" calls `addStack()` on the composer provider, which builds the chord via shared import rules and places notes at `selectedColumnTick` (or tick 0 if none). Notes are voice-led to the closest MIDI range within the current pitch window.
+### `PianoRollStackBuilder`
+Unified chord stack editor replacing the old `Stack Selector` and `Stack Composer` flows. Provides two views on the same final note list:
+
+- **Canonico**: Quick path — pick root, quality (17 types), inversion, and duration. Changes transform the current stack.
+- **Avanzato**: Lossless editor — add, remove, duplicate, reorder individual notes; insert by absolute note name (e.g. `G#4`) or chord degree shortcut (1–9). Hard cap at 10 notes.
+
+The builder recognises custom voicings (e.g. `G2 C3 E3 G3 C4` displays as "C maj • 2nd inv • Custom voicing"). Unrecognised stacks show "Unrecognized custom stack". Canonical and advanced views remain synchronised — switching tabs never resets the stack.
 
 ---
 
@@ -583,8 +590,8 @@ Transport strip / inspector rail → pianoRollProvider.setTempo() / setTimeSigna
                                 │
      PianoRollDetectionPanel shows chords/scales at that column
                                 │
-     Composer dock → pianoRollComposerProvider.setRoot/Quality/Duration
-                  → addStack() → import_rules.buildChordStackMidis() → addNoteStack()
+     Stack Builder → pianoRollStackBuilderProvider.setCanonicalRoot/Quality/Inversion
+                  → addStack() → addNoteStack(current builder notes)
 ```
 
 ---

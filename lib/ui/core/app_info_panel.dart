@@ -446,8 +446,8 @@ class _PianoRollInfoTab extends StatelessWidget {
               label: 'Landscape (width > 600 px)',
               desc:
                   'Grid on the left (3× width), persistent inspector rail on '
-                  'the right (1× width). The rail holds Composer, Selection, '
-                  'Edit & Pitch, Stack Selector, Scale, Detection, Hum Recorder, '
+                  'the right (1× width). The rail holds Stack Builder, Selection, '
+                  'Edit & Pitch, Scale, Detection, Hum Recorder, '
                   'Save/Load, and Import — all scrollable.',
               color: MuzicianTheme.emerald,
             ),
@@ -721,12 +721,14 @@ class _PianoRollInfoTab extends StatelessWidget {
           entries: [
             _Entry(
               icon: Icons.library_music_outlined,
-              label: 'Stack selector (Composer)',
+              label: 'Stack Builder',
               desc:
-                  'Choose a chord root + quality (17 types) + note duration, '
-                  'then tap "Add Stack" to place all chord notes at the selected '
-                  'column tick. Notes are voice-led into the current pitch window '
-                  'using shared composer state used by both V1 and V2.',
+                  'Unified chord stack editor with two views on the same final '
+                  'note list. Canonico: pick root + quality + inversion + duration '
+                  'for quick entry. Avanzato: add, remove, duplicate, or reorder '
+                  'individual notes; insert by chord degree shortcut (1–9). '
+                  'Supports custom voicings up to 10 notes. Tapping "Add Stack" '
+                  'places all notes at the selected column tick.',
               color: MuzicianTheme.violet,
             ),
             _Entry(

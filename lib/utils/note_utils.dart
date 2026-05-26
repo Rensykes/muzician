@@ -264,6 +264,14 @@ String formatRootChoiceLabel(String canonicalRoot) => switch (canonicalRoot) {
   _ => canonicalRoot,
 };
 
+/// Formats a MIDI note as a display label with octave, preserving the same
+/// accidental style used by root-choice UI (e.g. `61` -> `Db4`).
+String formatMidiNoteLabel(int midi) {
+  final pitchClass = chromaticNotes[((midi % 12) + 12) % 12];
+  final octave = (midi ~/ 12) - 1;
+  return '${formatRootChoiceLabel(pitchClass)}$octave';
+}
+
 /// Formats a [ChordDetectionResult] as a human-readable chord symbol
 /// (e.g. `Cmaj7` or `C/E`).
 String formatChordSymbol(ChordDetectionResult result) {
