@@ -21,7 +21,9 @@ const _durationOptions = <(String label, int ticks)>[
 ];
 
 class PianoRollStackBuilder extends ConsumerStatefulWidget {
-  const PianoRollStackBuilder({super.key});
+  final bool dismissOnAdd;
+
+  const PianoRollStackBuilder({super.key, this.dismissOnAdd = false});
 
   @override
   ConsumerState<PianoRollStackBuilder> createState() =>
@@ -720,7 +722,10 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.mediumImpact();
-        notifier.addStack();
+        final added = notifier.addStack();
+        if (added && widget.dismissOnAdd) {
+          Navigator.of(context).maybePop();
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

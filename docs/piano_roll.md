@@ -478,7 +478,7 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 | **Add note (snap length)** | `draw` tool: double-tap on empty cell — inserts note at current snap duration |
 | **Solo-select note + audition pitch** | `draw` tool: tap on existing note |
 | **Add/remove note in selection** | `draw` tool: double-tap on existing note |
-| **Select notes at current column** | Selection action: selects all notes active at `selectedColumnTick` |
+| **Select notes at current column** | Selection action: use **Multi-select** in the Selection area (landscape) or the top-left selection icon in the portrait action bar to select all notes active at `selectedColumnTick` |
 | **Move selected group** | `draw` tool: drag body of any selected note (horizontal = beat-snapped tick, vertical = semitone pitch) |
 | **Resize selected group** | `draw` tool: drag the right-edge handle of a selected note (rightmost 16 px, snaps to 1/16th minimum) |
 | **Split selected group** | `scissors` tool: tap a selected note — splits the current selection at the tapped position |
@@ -503,9 +503,9 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 Unified chord stack editor replacing the old `Stack Selector` and `Stack Composer` flows. Provides two views on the same final note list:
 
 - **Canonico**: Quick path — pick root, quality (17 types), inversion, and duration. Changes transform the current stack.
-- **Avanzato**: Lossless editor — add, remove, duplicate, reorder individual notes; insert by absolute note name (e.g. `G#4`) or chord degree shortcut (1–9). Hard cap at 10 notes.
+- **Avanzato**: Lossless editor — add, edit, remove, and reorder individual notes; insert by note + octave picker or chord degree shortcut (1–9). Hard cap at 10 notes. Exact duplicates (e.g. `C4` + `C4`) are rejected; octave doublings (e.g. `C3` + `C4`) are allowed.
 
-The builder recognises custom voicings (e.g. `G2 C3 E3 G3 C4` displays as "C maj • 2nd inv • Custom voicing"). Unrecognised stacks show "Unrecognized custom stack". Canonical and advanced views remain synchronised — switching tabs never resets the stack.
+The builder recognises custom voicings (e.g. `G2 C3 E3 G3 C4` displays as "C maj • 2nd inv • Custom voicing"). Unrecognised stacks show "Unrecognized custom stack". Canonical and advanced views remain synchronised — switching tabs never resets the stack. In portrait, tapping **Add Stack** inserts the stack at the current column and dismisses the drawer immediately.
 
 ---
 
@@ -523,6 +523,11 @@ Supports `FretboardSnapshot` (MIDI via tuning + string + fret) and `PianoSnapsho
 
 ### `PianoRollScalePicker`
 Scale-highlight picker: choose a root note and scale type (major, minor, pentatonic major/minor, blues, chromatic). Highlights all matching pitch-class rows on the grid in teal. The selection is stored as `highlightedNotes` in `PianoRollState`.
+
+When a scale is active:
+- existing out-of-scale notes are checked before applying the scale and can be removed via the confirmation flow
+- new notes, pasted stacks, and pitch moves that would land outside the active scale are blocked
+- the active scale pill can be cleared back to `null` with `✕` to return to full chromatic note entry
 
 ---
 

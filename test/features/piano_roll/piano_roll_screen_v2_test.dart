@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/piano_roll/piano_roll_screen_v2.dart';
+import 'package:muzician/features/piano_roll/piano_roll_stack_builder.dart';
 import 'package:muzician/features/piano_roll/piano_roll_hum_recorder.dart';
 import 'package:muzician/store/piano_roll_store.dart';
 import 'package:muzician/store/piano_roll_playback_store.dart';
@@ -122,7 +123,7 @@ void main() {
       reason: 'Utility panel should be visible in landscape layout',
     );
     expect(
-      find.text('Select @ Col'),
+      find.text('Multi-select'),
       findsNothing,
       reason: 'Selection actions should not show without selected notes/column',
     );
@@ -302,7 +303,9 @@ void main() {
     await tester.pumpWidget(_wrapV2(container));
     await tester.pump();
 
-    final selectColumnFinder = find.bySemanticsLabel('Select notes at column');
+    final selectColumnFinder = find.bySemanticsLabel(
+      'Multi-select notes at column',
+    );
     expect(selectColumnFinder, findsOneWidget);
 
     await tester.tap(selectColumnFinder);
@@ -310,6 +313,44 @@ void main() {
 
     expect(spyNotifier.selectedTickCall, 0);
     expect(find.text('Selected  •  1 note'), findsOneWidget);
+  });
+
+  testWidgets('portrait stack builder sheet dismisses after adding a stack', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(
+          () => _FakePianoRollNotifier(_defaultPRState),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(500, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_wrapV2(container));
+    await tester.pump();
+
+    await tester.tap(find.text('Stack Builder'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PianoRollStackBuilder), findsOneWidget);
+    expect(find.text('Add Stack'), findsOneWidget);
+
+    await tester.tap(find.text('Add Stack'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PianoRollStackBuilder), findsNothing);
+    expect(container.read(pianoRollProvider).notes, isNotEmpty);
   });
 
   // ── Hum recorder web gating test ───────────────────────────────────────
