@@ -13,11 +13,13 @@ lib/
   store/piano_store.dart          ← Riverpod NotifierProvider
   features/piano/
     piano_keyboard.dart           ← CustomPainter keyboard (PianoKeyboard)
+    piano_feature.dart            ← Piano tab screen shell
+    piano_screen_v2_mockup.dart   ← landscape-optimized mockup variant
+    piano_save_panel.dart         ← save/load panel (wraps SaveBrowserPanel)
     piano_chord_picker.dart       ← chord root + quality → highlight keys
     piano_scale_picker.dart       ← scale root + type → highlight keys
     piano_note_detection_panel.dart ← detect chord/scale from selected keys
     piano_range_selector.dart     ← 49 / 61 / 88 range pill picker
-    landscape_piano_modal.dart    ← full-screen landscape view
 ```
 
 ---
@@ -31,7 +33,7 @@ lib/
 | `PianoKeyCell` | One key: `midiNote`, `pitchClass`, `octave`, `isBlack`, `isSelected`, `isHighlighted`, `isRoot` |
 | `PianoCoordinate` | A selected key: `midiNote`, `pitchClass`, `octave` |
 | `PianoState` | Full state: `currentRange`, `keys`, `selectedKeys`, `highlightedKeys`, `rootNote`, `viewMode` |
-| `PianoViewMode` | Enum — standard / chords / scales / intervals |
+| `PianoViewMode` | Enum — `exact`, `exactFocus` |
 
 ---
 
@@ -62,7 +64,6 @@ Auxiliary providers:
 | `toggleKey(midiNote)` | Select / deselect a piano key |
 | `setRange(rangeName)` | Switch to 49 / 61 / 88 key layout |
 | `setViewMode(mode)` | Switch display mode |
-| `setPianoFavouriteViewMode(mode)` | Persist favourite view mode to settings |
 | `highlightChord(root, quality)` | Mark chord tones as highlighted, set root note |
 | `highlightScale(root, scaleName)` | Mark scale tones as highlighted, set root note |
 | `clearHighlights()` | Remove all highlights and root marker |
@@ -116,11 +117,6 @@ Reading `pianoPendingChordProvider` and `pianoPendingScaleProvider`, displays th
 
 ---
 
-### `LandscapePianoModal`
-A full-screen modal that forces landscape orientation (`SystemChrome.setPreferredOrientations`) and renders `PianoKeyboard`. Restores orientation on pop.
-
----
-
 ## State Flow
 
 ```
@@ -137,7 +133,7 @@ PianoRangeSelector → pianoProvider.setRange()
 
 - Out-of-key confirmation: When a scale highlight is active and the user tries to add a key outside that scale, the app shows an out-of-key confirmation dialog with a "Don't show again" option persisted to settings. See implementation: [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
 
-- View-mode initialization & local override: The piano initializes its view mode from app settings and provides an in-page view-mode control for local overrides; chord/scale tools do not force the view mode. Relevant files: [lib/main.dart](lib/main.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
+- View-mode control: The piano provides an in-page view-mode control (`exact` / `exactFocus`) for local display preference; chord/scale tools do not force the view mode. Relevant files: [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
 
 - Scale highlight & conflicts: Applying a scale highlights pitch classes and will prompt to remove conflicting selected keys if necessary. See: [lib/features/piano/piano_scale_picker.dart](lib/features/piano/piano_scale_picker.dart).
 
