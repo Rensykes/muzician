@@ -217,6 +217,61 @@ void main() {
   });
 
   test(
+    'active scale blocks adding notes outside highlighted pitch classes',
+    () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pianoRollProvider.notifier);
+      notifier.setHighlightedNotes(['C', 'E', 'G']);
+
+      notifier.addNote(61, 0, 1);
+
+      expect(container.read(pianoRollProvider).notes, isEmpty);
+
+      notifier.addNote(60, 0, 1);
+
+      final state = container.read(pianoRollProvider);
+      expect(state.notes, hasLength(1));
+      expect(state.notes.single.pitchClass, 'C');
+    },
+  );
+
+  test('active scale blocks moving a note to an out-of-scale pitch', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(pianoRollProvider.notifier);
+    notifier.addNote(60, 2, 2);
+    final original = container.read(pianoRollProvider).notes.single;
+    notifier.setHighlightedNotes(['C', 'E', 'G']);
+
+    notifier.moveNote(original.id, 6, 61);
+
+    final moved = container.read(pianoRollProvider).notes.single;
+    expect(moved.midiNote, 60);
+    expect(moved.startTick, 2);
+  });
+
+  test('active scale rejects stacks containing out-of-scale notes', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(pianoRollProvider.notifier);
+    notifier.setHighlightedNotes(['C', 'E', 'G']);
+
+    notifier.addNoteStack([60, 64, 70], 4, 2);
+
+    expect(container.read(pianoRollProvider).notes, isEmpty);
+
+    notifier.addNoteStack([60, 64, 67], 4, 2);
+
+    final state = container.read(pianoRollProvider);
+    expect(state.notes, hasLength(3));
+    expect(state.notes.map((note) => note.pitchClass).toSet(), {'C', 'E', 'G'});
+  });
+
+  test(
     'addNote clears latestImportedRange because it creates a new manual note',
     () {
       final container = ProviderContainer();

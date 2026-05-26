@@ -172,17 +172,39 @@ class PianoRollStackBuilderNotifier
 
   // ── Add Stack → Piano Roll ─────────────────────────────────────────────
 
-  void addStack() {
+  bool addStack() {
     final prState = ref.read(pianoRollProvider);
     final prNotifier = ref.read(pianoRollProvider.notifier);
     final startTick = prState.selectedColumnTick ?? 0;
-    prNotifier.addNoteStack(state.midiNotes, startTick, state.durationTicks);
+    final createdCount = prNotifier.addNoteStack(
+      state.midiNotes,
+      startTick,
+      state.durationTicks,
+    );
+    if (createdCount == 0) {
+      final activeScale = ref.read(pianoRollActiveScaleProvider);
+      final scaleLabel = activeScale == null
+          ? null
+          : scaleGroups.values
+                .expand((group) => group)
+                .firstWhere(
+                  (entry) => entry.$1 == activeScale.scaleName,
+                  orElse: () => (activeScale.scaleName, activeScale.scaleName),
+                )
+                .$2;
+      final error = activeScale == null
+          ? 'Unable to add this stack at the current position'
+          : 'Stack contains notes outside ${formatRootChoiceLabel(activeScale.root)} $scaleLabel. Clear the scale pill to add chromatic notes.';
+      state = state.copyWith(errorMessage: () => error);
+      return false;
+    }
     prNotifier.selectColumn(startTick);
     state = state.copyWith(
       lastAddedNotes: List.of(state.midiNotes),
       lastAddedDurationTicks: state.durationTicks,
       errorMessage: () => null,
     );
+    return true;
   }
 
   void quickAddStack() {

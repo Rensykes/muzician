@@ -133,7 +133,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
         showWidgetSheet(
           context: context,
           title: 'Stack Builder',
-          child: const PianoRollStackBuilder(),
+          child: const PianoRollStackBuilder(dismissOnAdd: true),
         );
       case 'detection':
         showWidgetSheet(
@@ -961,7 +961,7 @@ class _SelectionActions extends ConsumerWidget {
           if (showSelectColumnAction)
             _SelectionActionIcon(
               icon: Icons.select_all_rounded,
-              label: 'Select notes at column',
+              label: 'Multi-select notes at column',
               color: MuzicianTheme.sky,
               onTap: selectColumnNotes,
             ),
@@ -988,7 +988,7 @@ class _SelectionActions extends ConsumerWidget {
       children: [
         if (hasColumnNotes)
           _QuickChip(
-            label: 'Select @ Col',
+            label: 'Multi-select',
             icon: Icons.select_all_rounded,
             color: MuzicianTheme.sky,
             onTap: selectColumnNotes,

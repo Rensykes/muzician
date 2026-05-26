@@ -17,6 +17,12 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   int _clamp(int value, int minV, int maxV) => value.clamp(minV, maxV);
 
+  bool _isAllowedByActiveScale(int midiNote) {
+    final highlightedNotes = state.highlightedNotes;
+    if (highlightedNotes.isEmpty) return true;
+    return highlightedNotes.contains(rules.midiToPitchClass(midiNote));
+  }
+
   void rememberLatestImportedRange(int startTick, int endTickExclusive) {
     state = state.copyWith(
       latestImportedRange: () => PianoRollImportedRange(
@@ -119,6 +125,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       state.config.totalMeasures,
     );
     if (startTick < 0 || startTick >= maxTick) return;
+    if (!_isAllowedByActiveScale(midiNote)) return;
     final note = PianoRollNote(
       id: _makeId(),
       midiNote: midiNote,
@@ -140,6 +147,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       state.config.totalMeasures,
     );
     if (startTick < 0 || startTick >= maxTick) return;
+    if (!_isAllowedByActiveScale(midiNote)) return;
     final safeDuration = durationTicks.clamp(1, maxTick - startTick);
     final note = PianoRollNote(
       id: _makeId(),
@@ -321,6 +329,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       state.pitchRangeStart,
       state.pitchRangeEnd,
     );
+    if (!_isAllowedByActiveScale(midi)) return;
     final maxDuration = max<int>(1, maxTick - boundedStart);
     state = state.copyWith(
       notes: state.notes
@@ -360,6 +369,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
           state.pitchRangeStart,
           state.pitchRangeEnd,
         );
+        if (!_isAllowedByActiveScale(midi)) return n;
         final maxDuration = max<int>(1, maxTick - boundedStart);
         return n.copyWith(
           midiNote: midi,
@@ -372,17 +382,18 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
   }
 
-  void addNoteStack(List<int> midiNotes, int startTick, int durationTicks) {
+  int addNoteStack(List<int> midiNotes, int startTick, int durationTicks) {
     final maxTick = rules.totalTicks(
       state.config.timeSignature,
       state.config.totalMeasures,
     );
-    if (startTick < 0 || startTick >= maxTick) return;
+    if (startTick < 0 || startTick >= maxTick) return 0;
     final safe = durationTicks.clamp(1, maxTick - startTick);
     final unique = midiNotes.toSet().where(
       (m) => m >= state.pitchRangeStart && m <= state.pitchRangeEnd,
     );
-    if (unique.isEmpty) return;
+    if (unique.isEmpty) return 0;
+    if (unique.any((midi) => !_isAllowedByActiveScale(midi))) return 0;
     final created = unique.map(
       (midi) => PianoRollNote(
         id: _makeId(),
@@ -397,6 +408,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       notes: [...state.notes, ...created],
       latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
+    return unique.length;
   }
 
   void selectColumn(int? tick) =>

@@ -534,8 +534,9 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.playlist_add_check_circle_outlined,
               label: 'Select notes at current column',
               desc:
-                  'Use the selection action to select all notes active at the '
-                  'currently selected column tick.',
+                  'Use the Multi-select control in the Selection area, or the '
+                  'selection icon at the top-left of the portrait action bar, '
+                  'to select all notes active at the current column tick.',
               color: MuzicianTheme.sky,
             ),
             _Entry(
@@ -725,10 +726,11 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Unified chord stack editor with two views on the same final '
                   'note list. Canonico: pick root + quality + inversion + duration '
-                  'for quick entry. Avanzato: add, remove, duplicate, or reorder '
-                  'individual notes; insert by chord degree shortcut (1–9). '
-                  'Supports custom voicings up to 10 notes. Tapping "Add Stack" '
-                  'places all notes at the selected column tick.',
+                  'for quick entry. Avanzato: add, edit, remove, or reorder '
+                  'individual notes; insert by note + octave picker or chord '
+                  'degree shortcut (1–9). Supports custom voicings up to 10 '
+                  'notes, rejects exact duplicate notes, and closes the drawer '
+                  'after a successful "Add Stack" in portrait.',
               color: MuzicianTheme.violet,
             ),
             _Entry(
@@ -736,8 +738,10 @@ class _PianoRollInfoTab extends StatelessWidget {
               label: 'Scale picker',
               desc:
                   'Highlight scale tones (major, minor, pentatonic, blues, '
-                  'chromatic) across the grid in teal. The root note is highlighted '
-                  'in emerald green.',
+                  'chromatic) across the grid in teal. Applying a scale checks '
+                  'existing notes first, then blocks new notes, stack inserts, '
+                  'and pitch moves that would fall outside the active scale. '
+                  'Clear the scale pill with × to return to chromatic entry.',
               color: MuzicianTheme.violet,
             ),
             _Entry(
