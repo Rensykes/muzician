@@ -462,6 +462,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
 
   // Multi-note drag: original positions snapshot keyed by note id
   Map<String, ({int startTick, int midiNote})> _multiDragOriginals = {};
+  // Multi-note resize: original durations snapshot keyed by note id.
+  Map<String, int> _multiResizeOriginalDurations = {};
 
   // Paint brush — cells already painted during the active drag, encoded as
   // `midi * 10000 + tick`. Prevents re-toggling a cell when the finger
@@ -566,11 +568,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       (n) => n.midiNote == coord.midi && n.startTick == snapped,
     );
     if (exists) return;
-    ref.read(pianoRollProvider.notifier).addNote(
-      coord.midi,
-      snapped,
-      state.snapTicks,
-    );
+    ref
+        .read(pianoRollProvider.notifier)
+        .addNote(coord.midi, snapped, state.snapTicks);
     NotePlayer.instance.previewNote(
       coord.midi,
       volume: ref.read(settingsProvider).noteVolume,
@@ -645,10 +645,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   void _deleteSelectedNotes() {
     final state = ref.read(pianoRollProvider);
     if (state.selectedNoteIds.isEmpty) return;
-    final ids = state.selectedNoteIds.toList();
-    for (final id in ids) {
-      ref.read(pianoRollProvider.notifier).removeNote(id);
-    }
+    ref.read(pianoRollProvider.notifier).deleteSelectedNotes();
     HapticFeedback.mediumImpact();
   }
 
@@ -686,6 +683,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       _longPressTimer?.cancel();
       _dragMode = _DragMode.none;
       _dragNoteId = null;
+      _multiDragOriginals = {};
+      _multiResizeOriginalDurations = {};
       _movedBeyondSlop = false;
       final positions = _pointers.values.toList();
       _pinchInitHDist = max(1.0, (positions[0].dx - positions[1].dx).abs());
@@ -741,16 +740,25 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
         _dragMode = _isResizeHit(pos, hit, state)
             ? _DragMode.resizeNote
             : _DragMode.moveNote;
-        if (_dragMode == _DragMode.moveNote &&
-            state.selectedNoteIds.contains(hit.id) &&
+        if (state.selectedNoteIds.contains(hit.id) &&
             state.selectedNoteIds.length > 1) {
-          _multiDragOriginals = {
-            for (final n in state.notes)
-              if (state.selectedNoteIds.contains(n.id))
-                n.id: (startTick: n.startTick, midiNote: n.midiNote),
-          };
+          if (_dragMode == _DragMode.moveNote) {
+            _multiDragOriginals = {
+              for (final n in state.notes)
+                if (state.selectedNoteIds.contains(n.id))
+                  n.id: (startTick: n.startTick, midiNote: n.midiNote),
+            };
+            _multiResizeOriginalDurations = {};
+          } else if (_dragMode == _DragMode.resizeNote) {
+            _multiResizeOriginalDurations = {
+              for (final n in state.notes)
+                if (state.selectedNoteIds.contains(n.id)) n.id: n.durationTicks,
+            };
+            _multiDragOriginals = {};
+          }
         } else {
           _multiDragOriginals = {};
+          _multiResizeOriginalDurations = {};
         }
       }
       _longPressTimer?.cancel();
@@ -766,6 +774,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     } else {
       _dragMode = _DragMode.none;
       _dragNoteId = null;
+      _multiDragOriginals = {};
+      _multiResizeOriginalDurations = {};
     }
   }
 
@@ -806,7 +816,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       _longPressTimer?.cancel();
       if (_dragNoteId != null &&
           state.activeTool != PianoRollTool.scissors &&
-          _multiDragOriginals.isEmpty) {
+          _multiDragOriginals.isEmpty &&
+          _multiResizeOriginalDurations.isEmpty) {
         ref.read(pianoRollProvider.notifier).selectNote(_dragNoteId!);
       }
     }
@@ -845,7 +856,17 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     } else if (_dragMode == _DragMode.resizeNote) {
       final cursorTick = (pos.dx / _cellW).floor();
       final newDuration = max(1, cursorTick - _noteOriginalStartTick + 1);
-      notifier.resizeNote(_dragNoteId!, newDuration);
+      if (_multiResizeOriginalDurations.length > 1 &&
+          _multiResizeOriginalDurations.containsKey(_dragNoteId)) {
+        final anchorOriginal = _multiResizeOriginalDurations[_dragNoteId!]!;
+        final durationDelta = newDuration - anchorOriginal;
+        notifier.resizeNotesBatch([
+          for (final entry in _multiResizeOriginalDurations.entries)
+            (id: entry.key, durationTicks: max(1, entry.value + durationDelta)),
+        ]);
+      } else {
+        notifier.resizeNote(_dragNoteId!, newDuration);
+      }
     }
   }
 
@@ -859,6 +880,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       // Don't fire tap after a pinch gesture.
       _dragMode = _DragMode.none;
       _dragNoteId = null;
+      _multiDragOriginals = {};
+      _multiResizeOriginalDurations = {};
       _movedBeyondSlop = false;
       _totalPointerDelta = Offset.zero;
       return;
@@ -871,6 +894,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       _deleteBrushedNoteIds = null;
       _dragMode = _DragMode.none;
       _dragNoteId = null;
+      _multiDragOriginals = {};
+      _multiResizeOriginalDurations = {};
       _movedBeyondSlop = false;
       _totalPointerDelta = Offset.zero;
       return;
@@ -883,7 +908,12 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
       if (hit != null) {
         if (state.activeTool == PianoRollTool.scissors) {
           final coord = _posToTickMidi(pos, state);
-          notifier.splitNote(hit.id, coord.tick);
+          if (state.selectedNoteIds.length > 1 &&
+              state.selectedNoteIds.contains(hit.id)) {
+            notifier.splitSelectedNotesAtTick(coord.tick);
+          } else {
+            notifier.splitNote(hit.id, coord.tick);
+          }
           HapticFeedback.lightImpact();
         } else {
           NotePlayer.instance.previewNote(
@@ -970,6 +1000,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     _dragMode = _DragMode.none;
     _dragNoteId = null;
     _multiDragOriginals = {};
+    _multiResizeOriginalDurations = {};
     _movedBeyondSlop = false;
     _totalPointerDelta = Offset.zero;
   }
@@ -1215,38 +1246,71 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                               Positioned(
                                 top: 8,
                                 right: 8,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    ref
-                                        .read(pianoRollProvider.notifier)
-                                        .selectNote(null);
-                                    HapticFeedback.selectionClick();
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: MuzicianTheme.violet.withValues(
+                                      alpha: 0.2,
                                     ),
-                                    decoration: BoxDecoration(
+                                    border: Border.all(
                                       color: MuzicianTheme.violet.withValues(
-                                        alpha: 0.25,
+                                        alpha: 0.6,
                                       ),
-                                      border: Border.all(
-                                        color: MuzicianTheme.violet.withValues(
-                                          alpha: 0.6,
+                                      width: 1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${state.selectedNoteIds.length} selected',
+                                        style: const TextStyle(
+                                          color: MuzicianTheme.violet,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
                                         ),
-                                        width: 1,
                                       ),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '${state.selectedNoteIds.length} selected  ×',
-                                      style: const TextStyle(
-                                        color: MuzicianTheme.violet,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
+                                      const SizedBox(width: 8),
+                                      TextButton(
+                                        onPressed: () {
+                                          ref
+                                              .read(pianoRollProvider.notifier)
+                                              .clearSelection();
+                                          HapticFeedback.selectionClick();
+                                        },
+                                        style: TextButton.styleFrom(
+                                          minimumSize: const Size(64, 40),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 8,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Clear',
+                                          style: TextStyle(fontSize: 11),
+                                        ),
                                       ),
-                                    ),
+                                      TextButton(
+                                        onPressed: () {
+                                          _deleteSelectedNotes();
+                                        },
+                                        style: TextButton.styleFrom(
+                                          minimumSize: const Size(64, 40),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 8,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Delete',
+                                          style: TextStyle(fontSize: 11),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),

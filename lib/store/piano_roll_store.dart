@@ -177,6 +177,31 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
   void setSelection(Set<String> ids) =>
       state = state.copyWith(selectedNoteIds: ids);
 
+  void clearSelection() =>
+      state = state.copyWith(selectedNoteIds: const <String>{});
+
+  void deleteSelectedNotes() {
+    final selectedIds = state.selectedNoteIds;
+    if (selectedIds.isEmpty) return;
+    state = state.copyWith(
+      notes: state.notes
+          .where((note) => !selectedIds.contains(note.id))
+          .toList(),
+      selectedNoteIds: const <String>{},
+    );
+  }
+
+  void selectNotesAtTick(int tick) {
+    final idsAtTick = rules
+        .getNotesAtTick(state.notes, tick)
+        .map((note) => note.id)
+        .toSet();
+    state = state.copyWith(
+      selectedNoteIds: idsAtTick,
+      selectedColumnTick: () => tick,
+    );
+  }
+
   void splitNote(String noteId, int splitTick) {
     final target = state.notes.where((n) => n.id == noteId).firstOrNull;
     if (target == null) return;
@@ -216,6 +241,71 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       notes: state.notes
           .map((n) => n.id == noteId ? n.copyWith(durationTicks: safe) : n)
           .toList(),
+    );
+  }
+
+  void resizeNotesBatch(List<({String id, int durationTicks})> updates) {
+    if (updates.isEmpty) return;
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    final updateMap = <String, int>{
+      for (final u in updates) u.id: u.durationTicks,
+    };
+    state = state.copyWith(
+      notes: state.notes.map((note) {
+        final nextDuration = updateMap[note.id];
+        if (nextDuration == null) return note;
+        final safeDuration = nextDuration
+            .clamp(1, max(1, maxTick - note.startTick))
+            .toInt();
+        return note.copyWith(durationTicks: safeDuration);
+      }).toList(),
+    );
+  }
+
+  void splitSelectedNotesAtTick(int splitTick) {
+    final selectedIds = state.selectedNoteIds;
+    if (selectedIds.isEmpty) return;
+
+    final splittable = state.notes
+        .where(
+          (note) =>
+              selectedIds.contains(note.id) &&
+              splitTick > note.startTick &&
+              splitTick < note.startTick + note.durationTicks,
+        )
+        .toList();
+    if (splittable.isEmpty) return;
+
+    final splitIds = splittable.map((note) => note.id).toSet();
+    final rightSelection = <String>{};
+    final splitNotes = <PianoRollNote>[];
+    for (final note in splittable) {
+      final leftDuration = splitTick - note.startTick;
+      final rightDuration = (note.startTick + note.durationTicks) - splitTick;
+      final right = PianoRollNote(
+        id: _makeId(),
+        midiNote: note.midiNote,
+        pitchClass: note.pitchClass,
+        noteWithOctave: note.noteWithOctave,
+        startTick: splitTick,
+        durationTicks: rightDuration,
+      );
+      splitNotes.add(note.copyWith(durationTicks: leftDuration));
+      splitNotes.add(right);
+      rightSelection.add(right.id);
+    }
+
+    final untouchedSelection = selectedIds.difference(splitIds);
+    state = state.copyWith(
+      notes: [
+        ...state.notes.where((note) => !splitIds.contains(note.id)),
+        ...splitNotes,
+      ],
+      selectedNoteIds: {...rightSelection, ...untouchedSelection},
+      latestImportedRange: () => null,
     );
   }
 

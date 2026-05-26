@@ -18,6 +18,7 @@ import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/app_info_panel.dart';
 import '../../utils/note_utils.dart';
 import '../_mockup_shell.dart';
 import 'piano_roll_detection_panel.dart';
@@ -189,6 +190,8 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           title: 'Roll Settings',
           child: const _SettingsSheet(),
         );
+      case 'help':
+        showAppInfoPanel(context, initialTab: 2);
     }
   }
 
@@ -213,6 +216,10 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           title: 'Roll',
           chipLabel: _headerChipLabel(state),
           actions: [
+            IconBtn(
+              icon: Icons.help_outline_rounded,
+              onTap: () => _openPanel('help'),
+            ),
             IconBtn(
               icon: Icons.settings_outlined,
               onTap: () => _openPanel('settings'),
@@ -304,6 +311,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                       const _PanelSectionHeader('Selection'),
                       Divider(color: MuzicianTheme.glassBorder),
                       _SelectionStatus(state: state),
+                      _SelectionActions(state: state),
                       const SizedBox(height: 12),
                       const _PanelSectionHeader('Edit & Pitch'),
                       Divider(color: MuzicianTheme.glassBorder),
@@ -363,6 +371,10 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           chipLabel: _headerChipLabel(state),
           actions: [
             IconBtn(
+              icon: Icons.help_outline_rounded,
+              onTap: () => _openPanel('help'),
+            ),
+            IconBtn(
               icon: Icons.settings_outlined,
               onTap: () => _openPanel('settings'),
             ),
@@ -410,8 +422,7 @@ class _PortraitActionBar extends ConsumerWidget {
     final qualityLabel = qualityLabelBySymbol[composerState.quality] ?? 'maj';
     final durationLabel =
         durationTicksToLabel[composerState.durationTicks] ?? '1/4';
-    final presetLabel =
-        '${composerState.root}$qualityLabel $durationLabel';
+    final presetLabel = '${composerState.root}$qualityLabel $durationLabel';
 
     return Container(
       key: const ValueKey('v2-portrait-actionbar'),
@@ -430,9 +441,8 @@ class _PortraitActionBar extends ConsumerWidget {
           // height untouched.
           Row(
             children: [
-              Expanded(
-                child: _SelectionStatus(state: state, compact: true),
-              ),
+              Expanded(child: _SelectionStatus(state: state, compact: true)),
+              _SelectionActions(state: state, compact: true),
               const SizedBox(width: 8),
               const _ToolModeSegment(),
             ],
@@ -651,9 +661,7 @@ class _ComposerSheet extends ConsumerWidget {
                     current: durationLabel,
                   );
                   if (v != null) {
-                    composerNotifier.setDuration(
-                      labelToDurationTicks[v] ?? 4,
-                    );
+                    composerNotifier.setDuration(labelToDurationTicks[v] ?? 4);
                   }
                 },
               ),
@@ -713,8 +721,7 @@ class _BpmSheetState extends ConsumerState<_BpmSheet> {
     final text = clamped.toString();
     if (_controller.text != text) {
       _controller.text = text;
-      _controller.selection =
-          TextSelection.collapsed(offset: text.length);
+      _controller.selection = TextSelection.collapsed(offset: text.length);
     }
   }
 
@@ -730,8 +737,7 @@ class _BpmSheetState extends ConsumerState<_BpmSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tempo =
-        ref.watch(pianoRollProvider.select((s) => s.config.tempo));
+    final tempo = ref.watch(pianoRollProvider.select((s) => s.config.tempo));
     // Sync controller when tempo changes externally (e.g. via step button),
     // but skip while the user is actively composing input.
     if (!_focusNode.hasFocus && _controller.text != tempo.toString()) {
@@ -1017,9 +1023,7 @@ class _TransportStrip extends ConsumerWidget {
                   // (±1 BPM per ~4px of vertical drag).
                   onVerticalDragUpdate: (d) {
                     if (d.delta.dy.abs() > 4) {
-                      prNotifier.setTempo(
-                        bpm + (d.delta.dy < 0 ? 1 : -1),
-                      );
+                      prNotifier.setTempo(bpm + (d.delta.dy < 0 ? 1 : -1));
                     }
                   },
                 ),
@@ -1134,46 +1138,60 @@ class _SelectionStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sc = state.selectedColumnTick;
+    final selectedCount = state.selectedNoteIds.length;
+    final hasSelectedNotes = selectedCount > 0;
     final barBeat = _tickToBarBeatDisplay(
       sc,
       state.config.timeSignature.beatsPerMeasure,
       state.config.timeSignature.beatUnit,
     );
-    final noteCount = sc != null
+    final noteCount = hasSelectedNotes
+        ? selectedCount
+        : sc != null
         ? rules.getNotesAtTick(state.notes, sc).length
         : state.notes.length;
+    final statusLabel = hasSelectedNotes
+        ? 'Selected  •  $noteCount note${noteCount == 1 ? '' : 's'}'
+        : 'Col $barBeat  •  $noteCount notes';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: compact
-          ? Row(
-              children: [
-                Icon(
-                  Icons.my_location_rounded,
-                  size: 14,
-                  color: MuzicianTheme.sky,
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Col $barBeat  •  $noteCount notes',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MuzicianTheme.sky,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: [FontFeature.tabularFigures()],
+          ? LayoutBuilder(
+              builder: (context, constraints) {
+                final showLeadingIcon = constraints.maxWidth >= 28;
+                return Row(
+                  children: [
+                    if (showLeadingIcon) ...[
+                      Icon(
+                        Icons.my_location_rounded,
+                        size: 14,
+                        color: MuzicianTheme.sky,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Expanded(
+                      child: Text(
+                        statusLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MuzicianTheme.sky,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Column: $barBeat',
+                  hasSelectedNotes ? 'Selection' : 'Column: $barBeat',
                   style: const TextStyle(
                     color: MuzicianTheme.textMuted,
                     fontSize: 11,
@@ -1192,6 +1210,133 @@ class _SelectionStatus extends StatelessWidget {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _SelectionActions extends ConsumerWidget {
+  final PianoRollState state;
+  final bool compact;
+  const _SelectionActions({required this.state, this.compact = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(pianoRollProvider.notifier);
+    final columnTick = state.selectedColumnTick;
+    final hasSelectedNotes = state.selectedNoteIds.isNotEmpty;
+    final hasColumnNotes =
+        columnTick != null &&
+        rules.getNotesAtTick(state.notes, columnTick).isNotEmpty;
+
+    void selectColumnNotes() {
+      if (columnTick == null) return;
+      notifier.selectNotesAtTick(columnTick);
+    }
+
+    if (!hasSelectedNotes && !hasColumnNotes) return const SizedBox.shrink();
+
+    if (compact) {
+      final showSelectColumnAction = hasColumnNotes && !hasSelectedNotes;
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showSelectColumnAction)
+            _SelectionActionIcon(
+              icon: Icons.select_all_rounded,
+              label: 'Select notes at column',
+              color: MuzicianTheme.sky,
+              onTap: selectColumnNotes,
+            ),
+          if (hasSelectedNotes)
+            _SelectionActionIcon(
+              icon: Icons.deselect_rounded,
+              label: 'Clear note selection',
+              color: MuzicianTheme.teal,
+              onTap: notifier.clearSelection,
+            ),
+          if (hasSelectedNotes)
+            _SelectionActionIcon(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete selected notes',
+              color: MuzicianTheme.orange,
+              onTap: notifier.deleteSelectedNotes,
+            ),
+          const SizedBox(width: 8),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        if (hasColumnNotes)
+          _QuickChip(
+            label: 'Select @ Col',
+            icon: Icons.select_all_rounded,
+            color: MuzicianTheme.sky,
+            onTap: selectColumnNotes,
+          ),
+        if (hasColumnNotes && hasSelectedNotes) const SizedBox(width: 6),
+        if (hasSelectedNotes)
+          _QuickChip(
+            label: 'Clear',
+            icon: Icons.deselect_rounded,
+            color: MuzicianTheme.teal,
+            onTap: notifier.clearSelection,
+          ),
+        if (hasSelectedNotes) const SizedBox(width: 6),
+        if (hasSelectedNotes)
+          _QuickChip(
+            label: 'Delete',
+            icon: Icons.delete_outline_rounded,
+            color: MuzicianTheme.orange,
+            onTap: notifier.deleteSelectedNotes,
+          ),
+      ],
+    );
+  }
+}
+
+class _SelectionActionIcon extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SelectionActionIcon({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Tooltip(
+          message: label,
+          child: Material(
+            color: Colors.transparent,
+            child: InkResponse(
+              onTap: onTap,
+              radius: 20,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1547,9 +1692,7 @@ class _ToolModeSegment extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tool = ref.watch(
-      pianoRollProvider.select((s) => s.activeTool),
-    );
+    final tool = ref.watch(pianoRollProvider.select((s) => s.activeTool));
     final notifier = ref.read(pianoRollProvider.notifier);
 
     return Container(
@@ -1565,8 +1708,7 @@ class _ToolModeSegment extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (var i = 0; i < _entries.length; i++) ...[
-              if (i > 0)
-                Container(width: 1, color: MuzicianTheme.glassBorder),
+              if (i > 0) Container(width: 1, color: MuzicianTheme.glassBorder),
               _ToolSegmentItem(
                 icon: _entries[i].$2,
                 label: _entries[i].$3,
@@ -1677,4 +1819,3 @@ class _QuickChip extends StatelessWidget {
     );
   }
 }
-

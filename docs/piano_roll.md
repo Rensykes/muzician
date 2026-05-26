@@ -4,6 +4,29 @@ A quantized, timeline-based note editor rendered with `CustomPainter`. Supports 
 
 ---
 
+## Selection Model
+
+### Selected column vs selected notes
+
+- **Selected column** (`selectedColumnTick`) is a timeline anchor used for detection and playback start.
+- **Selected notes** (`selectedNoteIds`) are the notes currently targeted for edit actions.
+- They often overlap in practice, but they are separate concepts.
+
+### Explicit selection actions
+
+- **Tap a note**: solo-select that note (replace current note selection).
+- **Double-tap a note**: add/remove that note from the current selection.
+- Existing-note taps also audition the tapped pitch through `NotePlayer`.
+- **Select notes at the current column**: use the selection action to select all notes active at `selectedColumnTick`.
+- **Move a selected group**: drag a selected note body to move all selected notes together.
+- **Resize a selected group**: drag the right edge of a selected note to resize the whole current selection.
+- **Split a selected group**: in scissors mode, split on a selected note to split the whole current selection at that tick.
+- **Delete selected notes**: use the UI delete-selection action or `Delete` / `Backspace` (desktop/web).
+
+This iteration intentionally does not include marquee/lasso selection.
+
+---
+
 ## Architecture
 
 `PianoRollScreenV2` is the only piano-roll shell. The previous V1 composition
@@ -18,6 +41,8 @@ lib/
     piano_roll.dart                       ← canonical editor state
     piano_roll_composer.dart              ← shared chord-stack composer state
     piano_roll_playback.dart              ← playback transport state
+    hum_to_midi.dart                      ← hum recording types (PitchFrame, etc.)
+    harmonic_analysis.dart                ← shared chord/scale detection types
     save_system.dart                      ← PianoRollSnapshot (persistence)
   schema/rules/
     piano_roll_rules.dart                 ← tick math, MIDI helpers, defaults
@@ -29,6 +54,7 @@ lib/
     piano_roll_composer_store.dart        ← shared composer provider
     piano_roll_playback_store.dart        ← playback transport provider
     hum_to_midi_store.dart                ← hum recording provider
+    settings_store.dart                   ← metronome + app-wide preferences
   features/piano_roll/
     piano_roll_grid.dart                  ← main editor canvas (PianoRollGrid)
     piano_roll_screen_v2.dart             ← adaptive layout shell (Roll tab body)
@@ -169,6 +195,11 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 | `selectColumn(tick)` | Set `selectedColumnTick` for detection panel |
 | `selectNote(id)` | Highlight a specific note |
 | `setSelection(ids)` | Replace all selected note IDs at once |
+| `clearSelection()` | Clear note selection without touching `selectedColumnTick` |
+| `deleteSelectedNotes()` | Remove the whole current note selection |
+| `selectNotesAtTick(tick)` | Select all notes active at a given tick and sync `selectedColumnTick` |
+| `resizeNotesBatch(updates)` | Apply per-note duration updates to a selected group |
+| `splitSelectedNotesAtTick(tick)` | Split every selected note that spans the given absolute tick |
 | `setPitchRange(start, end)` | Shift the visible MIDI window |
 | `shiftPitchRange(semitones)` | Scroll the pitch window ± semitones |
 | `setActiveTool(tool)` | Switch between `draw` / `scissors` / `paint` / `delete` |
@@ -443,15 +474,17 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 |---|---|
 | **Add note (1 tick)** | `draw` tool: tap on empty cell |
 | **Add note (snap length)** | `draw` tool: double-tap on empty cell — inserts note at current snap duration |
-| **Select note** | `draw` tool: tap on existing note (double-tap toggles multi-select) |
-| **Move note** | `draw` tool: drag note body (horizontal = beat-snapped tick, vertical = semitone pitch) |
-| **Resize note** | `draw` tool: drag right-edge handle (rightmost 16 px, snaps to 1/16th minimum) |
-| **Split note** | `scissors` tool: tap note — splits at tapped position |
+| **Solo-select note + audition pitch** | `draw` tool: tap on existing note |
+| **Add/remove note in selection** | `draw` tool: double-tap on existing note |
+| **Select notes at current column** | Selection action: selects all notes active at `selectedColumnTick` |
+| **Move selected group** | `draw` tool: drag body of any selected note (horizontal = beat-snapped tick, vertical = semitone pitch) |
+| **Resize selected group** | `draw` tool: drag the right-edge handle of a selected note (rightmost 16 px, snaps to 1/16th minimum) |
+| **Split selected group** | `scissors` tool: tap a selected note — splits the current selection at the tapped position |
 | **Paint notes along a path** | `paint` tool: drag — inserts snap-length notes on every cell touched (skips occupied cells) |
 | **Delete a note by tap** | `delete` tool: tap on the note |
 | **Sweep-delete** | `delete` tool: drag — removes every note touched |
 | **Long-press delete** | `draw` tool: long-press (500 ms) on note |
-| **Delete selected notes** | `Delete` or `Backspace` key (desktop/web) |
+| **Delete selected notes** | UI delete-selection action, or `Delete` / `Backspace` key (desktop/web) |
 | **Play / Stop** | `Space` key (desktop/web) |
 
 **Beat snapping (move):**
