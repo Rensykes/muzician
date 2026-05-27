@@ -59,6 +59,7 @@ class _GridPainter extends CustomPainter {
   final double rowH;
   final int? playbackTick;
   final double? scissorsCursorX;
+  final Set<String> previewSelectedNoteIds;
 
   _GridPainter({
     required this.state,
@@ -68,6 +69,7 @@ class _GridPainter extends CustomPainter {
     required this.rowH,
     this.playbackTick,
     this.scissorsCursorX,
+    this.previewSelectedNoteIds = const <String>{},
   });
 
   @override
@@ -147,11 +149,14 @@ class _GridPainter extends CustomPainter {
       final y = rowIdx * rowH;
       final w = note.durationTicks * cellW;
 
-      final isSelected = state.selectedNoteIds.contains(note.id);
-      final isMulti = isSelected && state.selectedNoteIds.length > 1;
+      final effectiveSelectedIds = previewSelectedNoteIds.isNotEmpty
+          ? previewSelectedNoteIds
+          : state.selectedNoteIds;
+      final isSelected = effectiveSelectedIds.contains(note.id);
+      final isMulti = isSelected && effectiveSelectedIds.length > 1;
       final color = _noteColor(
         note,
-        state.selectedNoteIds,
+        effectiveSelectedIds,
         state.selectedColumnTick,
       );
       final rrect = RRect.fromRectAndRadius(
@@ -242,7 +247,8 @@ class _GridPainter extends CustomPainter {
       old.cellW != cellW ||
       old.rowH != rowH ||
       old.playbackTick != playbackTick ||
-      old.scissorsCursorX != scissorsCursorX;
+      old.scissorsCursorX != scissorsCursorX ||
+      old.previewSelectedNoteIds != previewSelectedNoteIds;
 }
 
 // ── Ruler Painter ───────────────────────────────────────────────────────────
@@ -403,7 +409,14 @@ class _PitchSidebarPainter extends CustomPainter {
 
 // ── Main Widget ─────────────────────────────────────────────────────────────
 
-enum _DragMode { none, moveNote, resizeNote, paintBrush, deleteBrush }
+enum _DragMode {
+  none,
+  moveNote,
+  resizeNote,
+  paintBrush,
+  deleteBrush,
+  marqueeSelect,
+}
 
 class PianoRollGrid extends ConsumerStatefulWidget {
   const PianoRollGrid({super.key});
@@ -439,6 +452,12 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   double _pinchInitVDist = 1.0;
   double _pinchInitCellW = _cellWidth;
   double _pinchInitRowH = _rowHeight;
+
+  // Marquee selection state (Select tool)
+  Offset? _marqueeStart;
+  Offset? _marqueeCurrent;
+  Rect? _marqueeRect;
+  Set<String> _marqueePreviewIds = const <String>{};
 
   // Mouse cursor (desktop)
   SystemMouseCursor _cursor = SystemMouseCursors.basic;
@@ -538,6 +557,23 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     final midi = state.pitchRangeEnd - rowIdx;
     return (tick: tick, midi: midi);
   }
+
+  Rect _noteRect(PianoRollNote note, PianoRollState state) {
+    final rowIdx = state.pitchRangeEnd - note.midiNote;
+    return Rect.fromLTWH(
+      note.startTick * _cellW + 1,
+      rowIdx * _rowH + 1,
+      note.durationTicks * _cellW - 2,
+      _rowH - 2,
+    );
+  }
+
+  Rect _marqueeFromPoints(Offset a, Offset b) => Rect.fromPoints(a, b);
+
+  Set<String> _intersectedNoteIds(Rect marquee, PianoRollState state) => {
+    for (final note in state.notes)
+      if (_noteRect(note, state).overlaps(marquee)) note.id,
+  };
 
   // ── Paint / Delete brush helpers ─────────────────────────────────────────
 
@@ -677,6 +713,21 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   void _onPointerDown(PointerDownEvent event, PianoRollState state) {
     _pointers[event.pointer] = event.localPosition;
 
+    if (state.activeTool == PianoRollTool.select && _pointers.length < 2) {
+      _pinching = false;
+      _longPressTimer?.cancel();
+      _dragMode = _DragMode.marqueeSelect;
+      _dragNoteId = null;
+      _multiDragOriginals = {};
+      _multiResizeOriginalDurations = {};
+      _movedBeyondSlop = false;
+      _marqueeStart = _localToGrid(event.localPosition);
+      _marqueeCurrent = _marqueeStart;
+      _marqueeRect = Rect.fromPoints(_marqueeStart!, _marqueeCurrent!);
+      _marqueePreviewIds = const <String>{};
+      return;
+    }
+
     if (_pointers.length >= 2) {
       // Second finger down — switch to pinch-zoom mode.
       _pinching = true;
@@ -800,6 +851,17 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
 
     _totalPointerDelta += event.delta;
 
+    if (_dragMode == _DragMode.marqueeSelect) {
+      final gridPos = _localToGrid(event.localPosition);
+      final rect = _marqueeFromPoints(_marqueeStart!, gridPos);
+      setState(() {
+        _marqueeCurrent = gridPos;
+        _marqueeRect = rect;
+        _marqueePreviewIds = _intersectedNoteIds(rect, state);
+      });
+      return;
+    }
+
     // Paint / Delete brushes respond on every move regardless of slop —
     // they're "continuous" tools, not move-or-tap.
     if (_dragMode == _DragMode.paintBrush) {
@@ -874,6 +936,21 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     final wasPinching = _pinching;
     _pointers.remove(event.pointer);
     _longPressTimer?.cancel();
+
+    if (_dragMode == _DragMode.marqueeSelect) {
+      ref.read(pianoRollProvider.notifier).setSelection(_marqueePreviewIds);
+      HapticFeedback.selectionClick();
+      setState(() {
+        _marqueeStart = null;
+        _marqueeCurrent = null;
+        _marqueeRect = null;
+        _marqueePreviewIds = const <String>{};
+      });
+      _dragMode = _DragMode.none;
+      _movedBeyondSlop = false;
+      _totalPointerDelta = Offset.zero;
+      return;
+    }
 
     if (wasPinching) {
       if (_pointers.isEmpty) _pinching = false;
@@ -1023,6 +1100,12 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   }
 
   void _onHover(PointerHoverEvent event, PianoRollState state) {
+    if (state.activeTool == PianoRollTool.select) {
+      if (_cursor != SystemMouseCursors.precise && mounted) {
+        setState(() => _cursor = SystemMouseCursors.precise);
+      }
+      return;
+    }
     final pos = _localToGrid(event.localPosition);
     final hit = _hitTestNote(pos, state);
     final tool = state.activeTool;
@@ -1236,12 +1319,44 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                                         rowH: _rowH,
                                         playbackTick: playbackTick,
                                         scissorsCursorX: _scissorsCursorX,
+                                        previewSelectedNoteIds:
+                                            _marqueePreviewIds,
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
+                            if (_marqueeRect != null)
+                              Positioned(
+                                key: const ValueKey(
+                                  'piano-roll-select-marquee',
+                                ),
+                                left: _marqueeRect!.left - _hScroll.offset,
+                                top: _marqueeRect!.top - _vScroll.offset,
+                                width: _marqueeRect!.width,
+                                height: _marqueeRect!.height,
+                                child: IgnorePointer(
+                                  child: Semantics(
+                                    label:
+                                        '${_marqueePreviewIds.length} ${_marqueePreviewIds.length == 1 ? "note" : "notes"} selected',
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: MuzicianTheme.sky.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        border: Border.all(
+                                          color: MuzicianTheme.sky.withValues(
+                                            alpha: 0.85,
+                                          ),
+                                          width: 1.5,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             if (state.selectedNoteIds.length > 1)
                               Positioned(
                                 top: 8,

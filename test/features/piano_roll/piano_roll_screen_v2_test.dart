@@ -303,9 +303,7 @@ void main() {
     await tester.pumpWidget(_wrapV2(container));
     await tester.pump();
 
-    final selectColumnFinder = find.bySemanticsLabel(
-      'Multi-select notes at column',
-    );
+    final selectColumnFinder = find.bySemanticsLabel('Select column');
     expect(selectColumnFinder, findsOneWidget);
 
     await tester.tap(selectColumnFinder);
@@ -403,5 +401,56 @@ void main() {
       findsOneWidget,
       reason: 'Record button should be visible on mobile',
     );
+  });
+
+  testWidgets('tool segment exposes Select mode', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(
+          () => _FakePianoRollNotifier(_defaultPRState),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(500, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_wrapV2(container));
+    await tester.pump();
+
+    expect(find.bySemanticsLabel('Select'), findsOneWidget);
+  });
+
+  testWidgets('column selection action uses secondary wording', (tester) async {
+    final initial = _defaultPRState.copyWith(selectedColumnTick: () => 0);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => _FakePianoRollNotifier(initial)),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(1200, 400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_wrapV2(container));
+    await tester.pump();
+
+    expect(find.text('Multi-select'), findsNothing);
   });
 }

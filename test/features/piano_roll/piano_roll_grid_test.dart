@@ -665,6 +665,218 @@ void main() {
       expect(leftB!.durationTicks, 2);
     },
   );
+
+  // ── Select tool marquee ──────────────────────────────────────────────────
+
+  testWidgets(
+    'select tool marquee replaces current selection with intersected notes',
+    (tester) async {
+      final noteA = PianoRollNote(
+        id: 'box-a',
+        midiNote: 80,
+        pitchClass: 'G#',
+        noteWithOctave: 'G#5',
+        startTick: 0,
+        durationTicks: 4,
+      );
+      final noteB = PianoRollNote(
+        id: 'box-b',
+        midiNote: 78,
+        pitchClass: 'F#',
+        noteWithOctave: 'F#5',
+        startTick: 6,
+        durationTicks: 4,
+      );
+      final noteC = PianoRollNote(
+        id: 'box-c',
+        midiNote: 70,
+        pitchClass: 'A#',
+        noteWithOctave: 'A#4',
+        startTick: 14,
+        durationTicks: 4,
+      );
+      final initial = _defaultPRState.copyWith(
+        activeTool: PianoRollTool.select,
+        notes: [noteA, noteB, noteC],
+        selectedNoteIds: {'box-c'},
+      );
+      final notifier = _TrackingNotifier(initial);
+      final container = ProviderContainer(
+        overrides: [
+          pianoRollProvider.overrideWith(() => notifier),
+          pianoRollPlaybackProvider.overrideWith(
+            () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(_wrapGrid(container));
+      await tester.pump();
+
+      final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+      final gridRect = tester.getRect(gridFinder);
+
+      // Drag a marquee starting near noteA (tick 0, midiNote 80) down to cover
+      // noteB (tick 6, midiNote 78).
+      // noteA at tick 0: x = 44 + 0*28 = 44, y from top: (84-80)*18 = 4*18 = 72
+      // noteB at tick 6: x = 44 + 6*28 = 212, y from top: (84-78)*18 = 6*18 = 108
+      final start = Offset(gridRect.left + 50, gridRect.top + 74);
+      final end = Offset(gridRect.left + 220, gridRect.top + 112);
+
+      final gesture = await tester.startGesture(start);
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      expect(container.read(pianoRollProvider).selectedNoteIds, {
+        'box-a',
+        'box-b',
+      });
+    },
+  );
+
+  testWidgets('select tool marquee includes notes touched only partially', (
+    tester,
+  ) async {
+    final note = PianoRollNote(
+      id: 'partial-a',
+      midiNote: 80,
+      pitchClass: 'G#',
+      noteWithOctave: 'G#5',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      activeTool: PianoRollTool.select,
+      notes: [note],
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gridRect = tester.getRect(gridFinder);
+
+    // note at tick 0, midiNote 80.
+    // In grid-local coords: x = 44 + 0*28..44 + 4*28-1 = 44..155,
+    // y = (84-80)*18..(84-80+1)*18-1 = 72..89.
+    // Start drag outside the note (x=165 is beyond right edge) so tap-to-select
+    // does not fire; only marquee intersection should select it.
+    final start = Offset(gridRect.left + 165, gridRect.top + 75);
+    final end = Offset(gridRect.left + 50, gridRect.top + 85);
+
+    final gesture = await tester.startGesture(start);
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(container.read(pianoRollProvider).selectedNoteIds, {'partial-a'});
+  });
+
+  testWidgets('select tool drag does not move selected notes', (tester) async {
+    final note = PianoRollNote(
+      id: 'no-move',
+      midiNote: 70,
+      pitchClass: 'A#',
+      noteWithOctave: 'A#4',
+      startTick: 4,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      activeTool: PianoRollTool.select,
+      notes: [note],
+      selectedNoteIds: {'no-move'},
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gridRect = tester.getRect(gridFinder);
+
+    // note at tick 4, midiNote 70.
+    // x: 4*28..7*28-1 = 112..195, y: (84-70)*18..(84-70+1)*18-1 = 252..269
+    // Start the drag ON the note
+    final start = Offset(gridRect.left + 126, gridRect.top + 260);
+    final end = Offset(gridRect.left + 180, gridRect.top + 300);
+
+    final gesture = await tester.startGesture(start);
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    // The note should NOT have moved (Select mode, no move behavior)
+    final updated = container.read(pianoRollProvider).notes.single;
+    expect(updated.startTick, 4);
+    expect(updated.midiNote, 70);
+  });
+
+  testWidgets(
+    'draw tool drag on empty space does not leave marquee overlay behind',
+    (tester) async {
+      final initial = _defaultPRState.copyWith(
+        activeTool: PianoRollTool.draw,
+        notes: [],
+      );
+      final notifier = _TrackingNotifier(initial);
+      final container = ProviderContainer(
+        overrides: [
+          pianoRollProvider.overrideWith(() => notifier),
+          pianoRollPlaybackProvider.overrideWith(
+            () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(_wrapGrid(container));
+      await tester.pump();
+
+      final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+      final gridRect = tester.getRect(gridFinder);
+
+      final start = Offset(gridRect.left + 100, gridRect.top + 200);
+      final end = Offset(gridRect.left + 300, gridRect.top + 300);
+
+      final gesture = await tester.startGesture(start);
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      // No marquee overlay should be rendered in Draw mode
+      expect(
+        find.byKey(const ValueKey('piano-roll-select-marquee')),
+        findsNothing,
+      );
+      // No selection should have been committed
+      expect(container.read(pianoRollProvider).selectedNoteIds, isEmpty);
+    },
+  );
 }
 
 // Keep the old fake notifier for the playback playhead test.

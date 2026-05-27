@@ -1,6 +1,6 @@
 # Piano Roll
 
-A quantized, timeline-based note editor rendered with `CustomPainter`. Supports four tap-mode tools (Draw / Split / Paint / Delete), drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and adaptive landscape/portrait layout.
+A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and adaptive landscape/portrait layout.
 
 ---
 
@@ -12,18 +12,16 @@ A quantized, timeline-based note editor rendered with `CustomPainter`. Supports 
 - **Selected notes** (`selectedNoteIds`) are the notes currently targeted for edit actions.
 - They often overlap in practice, but they are separate concepts.
 
-### Explicit selection actions
+### Selection workflows
 
+- **Select tool (primary)**: Switch to `Select`, then drag a marquee rectangle across the grid. All notes the box touches (partial overlap) are selected. Each new marquee replaces the previous selection.
+- **Double-tap (refinement)**: In any mode, double-tap a note to add or remove it from the current selection.
 - **Tap a note**: solo-select that note (replace current note selection).
-- **Double-tap a note**: add/remove that note from the current selection.
-- Existing-note taps also audition the tapped pitch through `NotePlayer`.
-- **Select notes at the current column**: use the selection action to select all notes active at `selectedColumnTick`.
+- **Select column (secondary shortcut)**: Use the selection action to select all notes active at `selectedColumnTick` — kept as a quick legacy alternative to the Select tool.
 - **Move a selected group**: drag a selected note body to move all selected notes together.
 - **Resize a selected group**: drag the right edge of a selected note to resize the whole current selection.
 - **Split a selected group**: in scissors mode, split on a selected note to split the whole current selection at that tick.
 - **Delete selected notes**: use the UI delete-selection action or `Delete` / `Backspace` (desktop/web).
-
-This iteration intentionally does not include marquee/lasso selection.
 
 ---
 
@@ -89,7 +87,7 @@ lib/
 | `PianoRollNote` | One note: `id`, `midiNote`, `pitchClass`, `noteWithOctave`, `startTick`, `durationTicks` |
 | `TimeSignature` | `beatsPerMeasure` + `beatUnit` (4 or 8) |
 | `PianoRollConfig` | `tempo` (BPM), `key`, `timeSignature`, `totalMeasures` |
-| `PianoRollTool` | Enum: `draw`, `scissors`, `paint`, `delete` (see [Tool Modes](#tool-modes)) |
+| `PianoRollTool` | Enum: `draw`, `select`, `scissors`, `paint`, `delete`. `draw` = add/move/resize · `select` = marquee area selection · `scissors` = split · `paint` = brush insert · `delete` = brush remove (see [Tool Modes](#tool-modes)) |
 | `PianoRollImportedRange` | `startTick`, `endTickExclusive` — tracks latest hum import range |
 | `PianoRollState` | Full state: `config`, `notes`, `pitchRangeStart`, `pitchRangeEnd`, `selectedColumnTick`, `selectedNoteIds`, `activeTool`, `snapTicks`, `highlightedNotes`, `latestImportedRange` |
 
@@ -200,7 +198,7 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 | `addNoteStack(midiList, tick, duration)` | Add multiple notes at the same tick (chord) |
 | `selectColumn(tick)` | Set `selectedColumnTick` for detection panel |
 | `selectNote(id)` | Highlight a specific note |
-| `setSelection(ids)` | Replace all selected note IDs at once |
+| `setSelection(ids)` | Replace current selection (used by Select tool marquee commit and double-tap refinement) |
 | `clearSelection()` | Clear note selection without touching `selectedColumnTick` |
 | `deleteSelectedNotes()` | Remove the whole current note selection |
 | `selectNotesAtTick(tick)` | Select all notes active at a given tick and sync `selectedColumnTick` |
@@ -208,7 +206,7 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 | `splitSelectedNotesAtTick(tick)` | Split every selected note that spans the given absolute tick |
 | `setPitchRange(start, end)` | Shift the visible MIDI window |
 | `shiftPitchRange(semitones)` | Scroll the pitch window ± semitones |
-| `setActiveTool(tool)` | Switch between `draw` / `scissors` / `paint` / `delete` |
+| `setActiveTool(tool)` | Switch between `draw` / `select` / `scissors` / `paint` / `delete` |
 | `setSnapTicks(n)` | Set snap granularity (1, 2, 4, 8, 16, 32) |
 | `setHighlightedNotes(pcs)` | Set pitch classes to highlight on the grid |
 | `clearHighlightedNotes()` | Remove all highlights |
@@ -358,11 +356,12 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 ## Tool Modes
 
-`PianoRollState.activeTool` drives the grid's tap behaviour. All four modes are reachable from the portrait action-bar tool segment (icon-only segmented control) or directly via `pianoRollProvider.setActiveTool(...)`.
+`PianoRollState.activeTool` drives the grid's tap behaviour. All five modes are reachable from the portrait action-bar tool segment (icon-only segmented control) or directly via `pianoRollProvider.setActiveTool(...)`.
 
 | Tool | Icon | Tap on empty cell | Tap on note | Drag |
 |---|---|---|---|---|
 | `draw` | ✏ `edit_rounded` | Insert 1-tick note (or snap-length on double-tap). | Select / multi-select (double-tap). Long-press (500 ms) deletes. | Move / resize the note. |
+| `select` | Ⓢ `select_all_rounded` | Draws a marquee to select notes in area. | Double-tap to add/remove from selection. | Draws marquee; on release, all intersected notes are selected. |
 | `scissors` | ✂ `content_cut_rounded` | No-op. | Split the note at the tap position. | No-op (no move/resize in this mode). |
 | `paint` | 🖌 `brush_rounded` | Insert a note at `snapTicks` duration. | No-op (cell already occupied). | Continues inserting notes along the drag path, snap-aligned; cells already occupied are skipped. |
 | `delete` | 🗑 `delete_outline_rounded` | No-op. | Remove the note. | Removes every note touched along the drag path. |
@@ -384,6 +383,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 | Tool | Empty cell | Over a note |
 |---|---|---|
 | `draw` | basic | move / resize-right (last 16 px) |
+| `select` | crosshair | basic (double-tap to add/remove) |
 | `scissors` | basic | precise (with scissors x-position painted) |
 | `paint` | precise | precise |
 | `delete` | forbidden | precise |
@@ -445,6 +445,8 @@ The core editor. Three `CustomPainter` layers rendered inside synchronized scrol
 | `_RulerPainter` | Measure numbers, beat dots, tick marks, selected-column marker |
 | `_GridPainter` | Row backgrounds, grid lines, column highlight, note rectangles, resize handles |
 
+The select marquee overlay is rendered as a `Positioned` widget in the grid `Stack` with Key `piano-roll-select-marquee`. It appears as a blue rectangle with translucent fill and a high-contrast border only during an active `Select`-tool drag.
+
 **Scroll architecture:**
 - Four `ScrollController`s: `_hScroll` + `_vScroll` (grid), `_rulerHScroll` (ruler synced to `_hScroll`), `_sidebarVScroll` (sidebar synced to `_vScroll`)
 - All scroll views use `NeverScrollableScrollPhysics` — scroll is driven programmatically via `_manualScroll(delta)` in pointer move
@@ -459,14 +461,14 @@ The core editor. Three `CustomPainter` layers rendered inside synchronized scrol
 
 **Gesture state machine (raw `Listener`):**
 
-The state machine below applies to `draw` and `scissors`. `paint` and `delete` are continuous tools and short-circuit the slop/long-press logic — see [Tool Modes](#tool-modes).
+The state machine below applies to `draw`, `select`, and `scissors`. `paint` and `delete` are continuous tools and short-circuit the slop/long-press logic — see [Tool Modes](#tool-modes).
 
-| Event | Single finger (`draw` / `scissors`) | Two fingers |
+| Event | Single finger (`draw` / `select` / `scissors`) | Two fingers |
 |---|---|---|
-| `onPointerDown` | Record hit, start 500 ms long-press timer | Enter pinch mode, record initial spread |
-| `onPointerMove` (< 8 px) | No-op (inside slop threshold) | Scale `_cellW` / `_rowH` |
-| `onPointerMove` (≥ 8 px) | If on note: move/resize; else: scroll | Scale `_cellW` / `_rowH` |
-| `onPointerUp` | If no movement: tap (add/select/split); if timer fired: already deleted | Exit pinch if last finger lifted |
+| `onPointerDown` | Record hit, start 500 ms long-press timer (skipped for `select`) | Enter pinch mode, record initial spread |
+| `onPointerMove` (< 8 px) | No-op (inside slop threshold); `select` also no-op until slop is exceeded | Scale `_cellW` / `_rowH` |
+| `onPointerMove` (≥ 8 px) | `draw`/`scissors`: if on note → move/resize; else → scroll. `select`: draw marquee rectangle, intersect notes | Scale `_cellW` / `_rowH` |
+| `onPointerUp` | `draw`/`scissors`: if no movement → tap (add/select/split); if timer fired → already deleted. `select`: commit marquee selection via `setSelection(ids)` | Exit pinch if last finger lifted |
 
 **Note interactions:**
 
@@ -488,6 +490,16 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 | **Long-press delete** | `draw` tool: long-press (500 ms) on note |
 | **Delete selected notes** | UI delete-selection action, or `Delete` / `Backspace` key (desktop/web) |
 | **Play / Stop** | `Space` key (desktop/web) |
+
+### Explicit selection actions
+
+| Action | How to trigger |
+|---|---|
+| **Select tool** | Switch to `Select`, then drag a box across the grid. All notes the box touches are selected. |
+| **Replace selection** | Every new marquee replaces the previous selection. |
+| **Refine selection** | Double-tap a note to add or remove it from the current selection. |
+| **Select column** | Secondary shortcut — selects all notes active at the current column tick. |
+| **Edit after selection** | Switch back to `Draw` to move/resize, or `Scissors` to split the selected group. |
 
 **Beat snapping (move):**
 - Beat ticks = 4 (quarter note) for 4/4; = 2 (eighth) for 4/8 time signatures
@@ -594,6 +606,11 @@ Transport strip / inspector rail → pianoRollProvider.setTempo() / setTimeSigna
      User taps/drags ruler → pianoRollProvider.selectColumn(tick)
                                 │
      PianoRollDetectionPanel shows chords/scales at that column
+                                │
+     User switches to Select → drag marquee → _onPointerUp
+                                │       → pianoRollProvider.setSelection(ids)
+                                │
+     User switches to Draw/Scissors → edits the selected group
                                 │
      Stack Builder → pianoRollStackBuilderProvider.setCanonicalRoot/Quality/Inversion
                   → addStack() → addNoteStack(current builder notes)
