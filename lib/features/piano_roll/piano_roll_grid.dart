@@ -632,9 +632,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   // ── Gesture Handlers ──────────────────────────────────────────────────
 
   void _onRulerTap(TapUpDetails details, PianoRollState state) {
-    final tick =
-        ((details.localPosition.dx + _rulerHScroll.offset) / _cellWidth)
-            .floor();
+    final tick = ((details.localPosition.dx + _rulerHScroll.offset) / _cellW)
+        .floor();
     final maxTick = rules.totalTicks(
       state.config.timeSignature,
       state.config.totalMeasures,

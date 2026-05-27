@@ -360,24 +360,32 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       for (final u in updates)
         u.id: (startTick: u.startTick, midiNote: u.midiNote),
     };
+    final nextNotesById = <String, PianoRollNote>{};
+    for (final note in state.notes) {
+      final update = updateMap[note.id];
+      if (update == null) continue;
+      final boundedStart = update.startTick
+          .clamp(0, max(0, maxTick - 1))
+          .toInt();
+      final midi = update.midiNote.clamp(
+        state.pitchRangeStart,
+        state.pitchRangeEnd,
+      );
+      if (!_isAllowedByActiveScale(midi)) {
+        return;
+      }
+      final maxDuration = max<int>(1, maxTick - boundedStart);
+      nextNotesById[note.id] = note.copyWith(
+        midiNote: midi,
+        pitchClass: rules.midiToPitchClass(midi),
+        noteWithOctave: rules.midiToNoteWithOctave(midi),
+        startTick: boundedStart,
+        durationTicks: min(note.durationTicks, maxDuration),
+      );
+    }
     state = state.copyWith(
       notes: state.notes.map((n) {
-        final u = updateMap[n.id];
-        if (u == null) return n;
-        final boundedStart = u.startTick.clamp(0, max(0, maxTick - 1)).toInt();
-        final midi = u.midiNote.clamp(
-          state.pitchRangeStart,
-          state.pitchRangeEnd,
-        );
-        if (!_isAllowedByActiveScale(midi)) return n;
-        final maxDuration = max<int>(1, maxTick - boundedStart);
-        return n.copyWith(
-          midiNote: midi,
-          pitchClass: rules.midiToPitchClass(midi),
-          noteWithOctave: rules.midiToNoteWithOctave(midi),
-          startTick: boundedStart,
-          durationTicks: min(n.durationTicks, maxDuration),
-        );
+        return nextNotesById[n.id] ?? n;
       }).toList(),
     );
   }

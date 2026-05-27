@@ -30,6 +30,12 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
   ScaleCategory _activeCategory = ScaleCategory.common;
   bool _initialSyncDone = false;
 
+  bool _samePitchClassSet(List<String> a, List<String> b) {
+    final left = a.toSet();
+    final right = b.toSet();
+    return left.length == right.length && left.containsAll(right);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
@@ -39,9 +45,22 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
 
     // Restore from committed active state once per widget lifecycle.
     if (!_initialSyncDone && activeScale != null && pendingScale == null) {
+      final notes = getScaleNotes(activeScale.root, activeScale.scaleName);
+      final highlightLooksStale =
+          state.highlightedNotes.isNotEmpty &&
+          notes.isNotEmpty &&
+          !_samePitchClassSet(state.highlightedNotes, notes);
       _initialSyncDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        if (highlightLooksStale) {
+          ref.read(pianoRollActiveScaleProvider.notifier).state = null;
+          setState(() {
+            _selectedRoot = null;
+            _selectedScale = null;
+          });
+          return;
+        }
         var cat = ScaleCategory.common;
         for (final entry in scaleGroups.entries) {
           if (entry.value.any((s) => s.$1 == activeScale.scaleName)) {
@@ -54,7 +73,6 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
           _selectedScale = activeScale.scaleName;
           _activeCategory = cat;
         });
-        final notes = getScaleNotes(activeScale.root, activeScale.scaleName);
         if (notes.isNotEmpty) {
           ref.read(pianoRollProvider.notifier).setHighlightedNotes(notes);
         }
