@@ -13,6 +13,7 @@ import '../models/song_playback.dart';
 import '../models/song_project.dart';
 import '../schema/rules/song_playback_rules.dart' as pb_rules;
 import '../schema/rules/song_rules.dart' as song_rules;
+import '../utils/note_player.dart';
 import 'song_project_store.dart';
 
 /// Signature for a function that plays [midiNotes] as a chord at [volume].
@@ -23,16 +24,21 @@ typedef SongNotePlaybackSink =
 typedef SongDrumPlaybackSink =
     Future<void> Function(List<DrumLaneId> lanes, double volume);
 
-/// Injected note playback sink.  Defaults to throwing so that it must be
-/// overridden in the widget tree; tests override it with a recorder.
+/// Note playback sink backed by [NotePlayer]. Override in tests to capture events.
 final songNotePlaybackSinkProvider = Provider<SongNotePlaybackSink>((ref) {
-  throw UnimplementedError('Song note sink must be overridden');
+  return (midiNotes, volume) async {
+    for (final midi in midiNotes) {
+      NotePlayer.instance.previewNote(midi, volume: volume);
+    }
+  };
 });
 
-/// Injected drum playback sink.  Defaults to throwing so that it must be
-/// overridden in the widget tree; tests override it with a recorder.
 final songDrumPlaybackSinkProvider = Provider<SongDrumPlaybackSink>((ref) {
-  throw UnimplementedError('Song drum sink must be overridden');
+  return (lanes, volume) async {
+    for (final lane in lanes) {
+      NotePlayer.instance.playDrumLane(lane, volume: volume);
+    }
+  };
 });
 
 /// Riverpod notifier for the song playback transport.
