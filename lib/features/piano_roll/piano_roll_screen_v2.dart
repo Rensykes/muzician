@@ -18,6 +18,7 @@ import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/transport_strip.dart' as transport;
 import '../../utils/note_utils.dart';
 import '../_mockup_shell.dart';
 import 'piano_roll_detection_panel.dart';
@@ -75,28 +76,9 @@ const _durationLabels = <String>[
 const _snapOptions = <int>[1, 2, 4, 8, 16, 32];
 const _snapLabels = <String>['1t', '2t', '4t', '8t', '16t', '32t'];
 
-const _timeSignatureOptions = <String>[
-  '2/4',
-  '3/4',
-  '4/4',
-  '5/4',
-  '6/8',
-  '7/8',
-  '12/8',
-];
-const _minBpm = 40;
-const _maxBpm = 300;
-
-String _tickToBarBeatDisplay(int? tick, int beatsPerMeasure, int beatUnit) {
-  if (tick == null) return '--.--.--';
-  final beatTicks = beatUnit == 8 ? 2 : 4;
-  final measureTicks = beatTicks * beatsPerMeasure;
-  final bar = (tick ~/ measureTicks) + 1;
-  final remainder = tick % measureTicks;
-  final beat = (remainder ~/ beatTicks) + 1;
-  final subTick = remainder % beatTicks;
-  return '$bar.$beat.$subTick';
-}
+// TransportStrip helpers (kTimeSignatureOptions, tickToBarBeatDisplay,
+// kMinBpm/kMaxBpm) live in lib/ui/transport_strip.dart and are imported as
+// `transport`.
 
 String _headerChipLabel(PianoRollState state) {
   final sc = state.selectedColumnTick;
@@ -201,10 +183,9 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
     final qualityLabel = qualityLabelBySymbol[composerState.quality] ?? 'maj';
     final durationLabel =
         durationTicksToLabel[composerState.durationTicks] ?? '1/4';
-    final barBeat = _tickToBarBeatDisplay(
+    final barBeat = transport.tickToBarBeatDisplay(
       state.selectedColumnTick,
-      state.config.timeSignature.beatsPerMeasure,
-      state.config.timeSignature.beatUnit,
+      state.config.timeSignature,
     );
 
     return Column(
@@ -350,10 +331,9 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
 
   Widget _buildPortrait() {
     final state = ref.watch(pianoRollProvider);
-    final barBeat = _tickToBarBeatDisplay(
+    final barBeat = transport.tickToBarBeatDisplay(
       state.selectedColumnTick,
-      state.config.timeSignature.beatsPerMeasure,
-      state.config.timeSignature.beatUnit,
+      state.config.timeSignature,
     );
 
     return Column(
@@ -410,8 +390,7 @@ class _PortraitActionBar extends ConsumerWidget {
     final qualityLabel = qualityLabelBySymbol[composerState.quality] ?? 'maj';
     final durationLabel =
         durationTicksToLabel[composerState.durationTicks] ?? '1/4';
-    final presetLabel =
-        '${composerState.root}$qualityLabel $durationLabel';
+    final presetLabel = '${composerState.root}$qualityLabel $durationLabel';
 
     return Container(
       key: const ValueKey('v2-portrait-actionbar'),
@@ -430,9 +409,7 @@ class _PortraitActionBar extends ConsumerWidget {
           // height untouched.
           Row(
             children: [
-              Expanded(
-                child: _SelectionStatus(state: state, compact: true),
-              ),
+              Expanded(child: _SelectionStatus(state: state, compact: true)),
               const SizedBox(width: 8),
               const _ToolModeSegment(),
             ],
@@ -651,9 +628,7 @@ class _ComposerSheet extends ConsumerWidget {
                     current: durationLabel,
                   );
                   if (v != null) {
-                    composerNotifier.setDuration(
-                      labelToDurationTicks[v] ?? 4,
-                    );
+                    composerNotifier.setDuration(labelToDurationTicks[v] ?? 4);
                   }
                 },
               ),
@@ -677,210 +652,6 @@ class _ComposerSheet extends ConsumerWidget {
 }
 
 // ── Tempo / Settings sheets ───────────────────────────────────────────────
-
-/// Bottom-sheet for editing the playback tempo. Combines a numeric text input,
-/// ±1 / ±10 step buttons and a slider. All controls write live to the piano
-/// roll provider; the sheet has no separate "apply" step.
-class _BpmSheet extends ConsumerStatefulWidget {
-  const _BpmSheet();
-
-  @override
-  ConsumerState<_BpmSheet> createState() => _BpmSheetState();
-}
-
-class _BpmSheetState extends ConsumerState<_BpmSheet> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    final tempo = ref.read(pianoRollProvider).config.tempo;
-    _controller = TextEditingController(text: tempo.toString());
-    _focusNode = FocusNode();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _commit(int value) {
-    final clamped = value.clamp(_minBpm, _maxBpm);
-    ref.read(pianoRollProvider.notifier).setTempo(clamped);
-    final text = clamped.toString();
-    if (_controller.text != text) {
-      _controller.text = text;
-      _controller.selection =
-          TextSelection.collapsed(offset: text.length);
-    }
-  }
-
-  void _commitFromText() {
-    final parsed = int.tryParse(_controller.text.trim());
-    if (parsed != null) {
-      _commit(parsed);
-    } else {
-      // Restore to current valid value on bad input.
-      _commit(ref.read(pianoRollProvider).config.tempo);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tempo =
-        ref.watch(pianoRollProvider.select((s) => s.config.tempo));
-    // Sync controller when tempo changes externally (e.g. via step button),
-    // but skip while the user is actively composing input.
-    if (!_focusNode.hasFocus && _controller.text != tempo.toString()) {
-      _controller.text = tempo.toString();
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 140,
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            keyboardType: const TextInputType.numberWithOptions(decimal: false),
-            textAlign: TextAlign.center,
-            textInputAction: TextInputAction.done,
-            maxLength: 3,
-            cursorColor: MuzicianTheme.sky,
-            style: const TextStyle(
-              color: MuzicianTheme.textPrimary,
-              fontSize: 36,
-              fontWeight: FontWeight.w800,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-            decoration: const InputDecoration(
-              counterText: '',
-              isCollapsed: true,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: 8),
-            ),
-            onSubmitted: (_) {
-              _commitFromText();
-              _focusNode.unfocus();
-            },
-            onTapOutside: (_) {
-              _commitFromText();
-              _focusNode.unfocus();
-            },
-          ),
-        ),
-        const Text(
-          'BPM',
-          style: TextStyle(
-            color: MuzicianTheme.textMuted,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.0,
-          ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _StepBtn(label: '−10', onTap: () => _commit(tempo - 10)),
-            const SizedBox(width: 8),
-            _StepBtn(label: '−1', onTap: () => _commit(tempo - 1)),
-            const SizedBox(width: 16),
-            _StepBtn(label: '+1', onTap: () => _commit(tempo + 1)),
-            const SizedBox(width: 8),
-            _StepBtn(label: '+10', onTap: () => _commit(tempo + 10)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: MuzicianTheme.sky,
-            inactiveTrackColor: MuzicianTheme.glassBorder,
-            thumbColor: MuzicianTheme.sky,
-            overlayColor: MuzicianTheme.sky.withValues(alpha: 0.18),
-            trackHeight: 3,
-          ),
-          child: Slider(
-            value: tempo.toDouble().clamp(
-              _minBpm.toDouble(),
-              _maxBpm.toDouble(),
-            ),
-            min: _minBpm.toDouble(),
-            max: _maxBpm.toDouble(),
-            divisions: _maxBpm - _minBpm,
-            onChanged: (v) {
-              HapticFeedback.selectionClick();
-              _commit(v.round());
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                '$_minBpm',
-                style: TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                '$_maxBpm',
-                style: TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StepBtn extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _StepBtn({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 48, minHeight: 36),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: MuzicianTheme.glassBorder),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: MuzicianTheme.textPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            fontFeatures: [FontFeature.tabularFigures()],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Bottom-sheet for page-level Roll settings (currently: metronome toggle).
 class _SettingsSheet extends ConsumerWidget {
@@ -966,7 +737,18 @@ class _TransportStrip extends ConsumerWidget {
       await showWidgetSheet(
         context: context,
         title: 'Tempo',
-        child: const _BpmSheet(),
+        child: Consumer(
+          builder: (_, sheetRef, _) {
+            final tempo = sheetRef.watch(
+              pianoRollProvider.select((s) => s.config.tempo),
+            );
+            return transport.BpmSheet(
+              currentBpm: tempo,
+              onChanged: (v) =>
+                  sheetRef.read(pianoRollProvider.notifier).setTempo(v),
+            );
+          },
+        ),
       );
     }
 
@@ -975,7 +757,7 @@ class _TransportStrip extends ConsumerWidget {
       final picked = await showPickerSheet<String>(
         context: context,
         title: 'Time Signature',
-        options: _timeSignatureOptions,
+        options: transport.kTimeSignatureOptions,
         current: timeSigLabel,
       );
       if (picked == null) return;
@@ -988,138 +770,17 @@ class _TransportStrip extends ConsumerWidget {
       );
     }
 
-    return Container(
-      height: 48,
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: MuzicianTheme.glassBorder),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 4),
-          IconBtn(icon: Icons.skip_previous_rounded, onTap: onRewind),
-          _PlayBtn(playing: playing, onTap: onPlayPause),
-          IconBtn(icon: Icons.stop_rounded, onTap: onStop),
-          const SizedBox(width: 6),
-          Container(width: 1, height: 20, color: MuzicianTheme.glassBorder),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Row(
-              children: [
-                _Readout(
-                  label: 'BPM',
-                  value: '$bpm',
-                  accent: true,
-                  onTap: onBpmTap,
-                  // Vertical-drag fine-tune retained for quick adjustment
-                  // (±1 BPM per ~4px of vertical drag).
-                  onVerticalDragUpdate: (d) {
-                    if (d.delta.dy.abs() > 4) {
-                      prNotifier.setTempo(
-                        bpm + (d.delta.dy < 0 ? 1 : -1),
-                      );
-                    }
-                  },
-                ),
-                const SizedBox(width: 8),
-                _Readout(label: 'BAR', value: barBeat),
-                const SizedBox(width: 8),
-                _Readout(label: 'SIG', value: timeSigLabel, onTap: onSigTap),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayBtn extends StatelessWidget {
-  final bool playing;
-  final VoidCallback onTap;
-  const _PlayBtn({required this.playing, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: MuzicianTheme.sky,
-          ),
-          child: Icon(
-            playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-            size: 22,
-            color: MuzicianTheme.scaffoldBg,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Readout extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool accent;
-  final VoidCallback? onTap;
-  final GestureDragUpdateCallback? onVerticalDragUpdate;
-  const _Readout({
-    required this.label,
-    required this.value,
-    this.accent = false,
-    this.onTap,
-    this.onVerticalDragUpdate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final row = Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: MuzicianTheme.textMuted,
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            value,
-            style: TextStyle(
-              color: MuzicianTheme.textPrimary,
-              fontSize: accent ? 14 : 12,
-              fontWeight: accent ? FontWeight.w700 : FontWeight.w600,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-    final tappable = onTap != null || onVerticalDragUpdate != null;
-    return Expanded(
-      child: tappable
-          ? GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onTap,
-              onVerticalDragUpdate: onVerticalDragUpdate,
-              child: row,
-            )
-          : row,
+    return transport.TransportStrip(
+      bpm: bpm,
+      barBeat: barBeat,
+      timeSig: timeSig,
+      playing: playing,
+      onRewind: onRewind,
+      onStop: onStop,
+      onPlayPause: onPlayPause,
+      onBpmTap: onBpmTap,
+      onSigTap: onSigTap,
+      onBpmDelta: (delta) => prNotifier.setTempo(bpm + delta),
     );
   }
 }
@@ -1134,10 +795,9 @@ class _SelectionStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sc = state.selectedColumnTick;
-    final barBeat = _tickToBarBeatDisplay(
+    final barBeat = transport.tickToBarBeatDisplay(
       sc,
-      state.config.timeSignature.beatsPerMeasure,
-      state.config.timeSignature.beatUnit,
+      state.config.timeSignature,
     );
     final noteCount = sc != null
         ? rules.getNotesAtTick(state.notes, sc).length
@@ -1547,9 +1207,7 @@ class _ToolModeSegment extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tool = ref.watch(
-      pianoRollProvider.select((s) => s.activeTool),
-    );
+    final tool = ref.watch(pianoRollProvider.select((s) => s.activeTool));
     final notifier = ref.read(pianoRollProvider.notifier);
 
     return Container(
@@ -1565,8 +1223,7 @@ class _ToolModeSegment extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (var i = 0; i < _entries.length; i++) ...[
-              if (i > 0)
-                Container(width: 1, color: MuzicianTheme.glassBorder),
+              if (i > 0) Container(width: 1, color: MuzicianTheme.glassBorder),
               _ToolSegmentItem(
                 icon: _entries[i].$2,
                 label: _entries[i].$3,
@@ -1677,4 +1334,3 @@ class _QuickChip extends StatelessWidget {
     );
   }
 }
-

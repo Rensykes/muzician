@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/song/song_save_panel.dart';
 import 'package:muzician/models/piano_roll.dart';
-import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/song_project_store.dart';
 
@@ -43,6 +42,6 @@ void main() {
       ),
     );
 
-    expect(find.text('SAVES'), findsOneWidget);
+    expect(find.text('Library'), findsOneWidget);
   });
 }
