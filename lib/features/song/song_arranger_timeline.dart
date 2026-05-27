@@ -3,10 +3,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
+import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'song_pattern_editor_launcher.dart';
 import 'song_track_header.dart';
+
+const double _kHeaderWidth = 220;
 
 class SongArrangerTimeline extends ConsumerWidget {
   final int measureTicks;
@@ -24,15 +27,18 @@ class SongArrangerTimeline extends ConsumerWidget {
     final orderedTracks = [...project.tracks]
       ..sort((a, b) => a.order.compareTo(b.order));
 
+    final clipLengths = <String, int>{};
+    for (final clip in project.clips) {
+      final len = song_rules.patternLengthForClip(project, clip);
+      if (len != null) clipLengths[clip.id] = len;
+    }
+
     return Column(
       children: [
-        // Measure ruler
         _MeasureRuler(
           totalMeasures: project.config.totalMeasures,
           measureTicks: measureTicks,
-          tempo: project.config.tempo,
         ),
-        // Track lanes
         Expanded(
           child: ListView.builder(
             itemCount: orderedTracks.length,
@@ -44,6 +50,7 @@ class SongArrangerTimeline extends ConsumerWidget {
               return _TrackLane(
                 track: track,
                 clips: trackClips,
+                clipLengths: clipLengths,
                 measureTicks: measureTicks,
                 totalMeasures: project.config.totalMeasures,
                 currentPlaybackTick: currentPlaybackTick,
@@ -59,12 +66,10 @@ class SongArrangerTimeline extends ConsumerWidget {
 class _MeasureRuler extends StatelessWidget {
   final int totalMeasures;
   final int measureTicks;
-  final int tempo;
 
   const _MeasureRuler({
     required this.totalMeasures,
     required this.measureTicks,
-    required this.tempo,
   });
 
   @override
@@ -79,7 +84,7 @@ class _MeasureRuler extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 220), // leave room for track header area
+          const SizedBox(width: _kHeaderWidth),
           Expanded(
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
@@ -117,6 +122,7 @@ class _MeasureRuler extends StatelessWidget {
 class _TrackLane extends ConsumerWidget {
   final SongTrack track;
   final List<SongClipInstance> clips;
+  final Map<String, int> clipLengths;
   final int measureTicks;
   final int totalMeasures;
   final int? currentPlaybackTick;
@@ -124,6 +130,7 @@ class _TrackLane extends ConsumerWidget {
   const _TrackLane({
     required this.track,
     required this.clips,
+    required this.clipLengths,
     required this.measureTicks,
     required this.totalMeasures,
     required this.currentPlaybackTick,
@@ -144,7 +151,7 @@ class _TrackLane extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              // Clip lane
+              const SizedBox(width: _kHeaderWidth),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -159,17 +166,23 @@ class _TrackLane extends ConsumerWidget {
                             .round()
                             .clamp(0, totalTicks > 0 ? totalTicks - 1 : 0);
 
-                        // Check if tapped on an existing clip (16-tick approximate width).
-                        final tappedClip = clips
-                            .cast<SongClipInstance?>()
-                            .firstWhere((clip) {
-                              if (clip == null) return false;
-                              final clipEnd = clip.startTick + 16;
-                              return tapTick >= clip.startTick &&
-                                  tapTick < clipEnd;
-                            }, orElse: () => null);
+                        final tappedClip = clips.firstWhere(
+                          (clip) {
+                            final end =
+                                clip.startTick +
+                                (clipLengths[clip.id] ?? measureTicks);
+                            return tapTick >= clip.startTick && tapTick < end;
+                          },
+                          orElse: () => const SongClipInstance(
+                            id: '',
+                            trackId: '',
+                            patternId: '',
+                            patternType: SongPatternType.note,
+                            startTick: -1,
+                          ),
+                        );
 
-                        if (tappedClip != null) {
+                        if (tappedClip.startTick >= 0) {
                           openClipEditor(context, ref, tappedClip);
                         } else {
                           if (track.type == SongTrackType.note) {
@@ -192,6 +205,7 @@ class _TrackLane extends ConsumerWidget {
                       child: CustomPaint(
                         painter: _ClipLanePainter(
                           clips: clips,
+                          clipLengths: clipLengths,
                           measureTicks: measureTicks,
                           totalMeasures: totalMeasures,
                           trackColor: track.type == SongTrackType.note
@@ -215,13 +229,15 @@ class _TrackLane extends ConsumerWidget {
 
 class _ClipLanePainter extends CustomPainter {
   final List<SongClipInstance> clips;
+  final Map<String, int> clipLengths;
   final int measureTicks;
   final int totalMeasures;
   final Color trackColor;
   final int? currentPlaybackTick;
 
-  _ClipLanePainter({
+  const _ClipLanePainter({
     required this.clips,
+    required this.clipLengths,
     required this.measureTicks,
     required this.totalMeasures,
     required this.trackColor,
@@ -235,7 +251,6 @@ class _ClipLanePainter extends CustomPainter {
 
     final tickWidth = size.width / totalTicks;
 
-    // Draw measure lines
     final measureLinePaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.05)
       ..strokeWidth = 0.5;
@@ -245,7 +260,6 @@ class _ClipLanePainter extends CustomPainter {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), measureLinePaint);
     }
 
-    // Draw clips
     for (final clip in clips) {
       final clipPaint = Paint()
         ..color = trackColor.withValues(alpha: 0.3)
@@ -257,8 +271,8 @@ class _ClipLanePainter extends CustomPainter {
         ..strokeWidth = 1.5;
 
       final left = clip.startTick * tickWidth;
-      final right =
-          left + 16 * tickWidth; // approximate width based on measureTicks
+      final length = clipLengths[clip.id] ?? measureTicks;
+      final right = left + length * tickWidth;
       final rect = RRect.fromRectAndRadius(
         Rect.fromLTRB(left + 1, 6, right - 1, size.height - 6),
         const Radius.circular(6),
@@ -268,7 +282,6 @@ class _ClipLanePainter extends CustomPainter {
       canvas.drawRRect(rect, clipBorderPaint);
     }
 
-    // Draw playback cursor
     if (currentPlaybackTick != null) {
       final cursorPaint = Paint()
         ..color = MuzicianTheme.sky
@@ -279,5 +292,10 @@ class _ClipLanePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ClipLanePainter oldDelegate) => true;
+  bool shouldRepaint(covariant _ClipLanePainter oldDelegate) =>
+      clips != oldDelegate.clips ||
+      clipLengths != oldDelegate.clipLengths ||
+      totalMeasures != oldDelegate.totalMeasures ||
+      trackColor != oldDelegate.trackColor ||
+      currentPlaybackTick != oldDelegate.currentPlaybackTick;
 }
