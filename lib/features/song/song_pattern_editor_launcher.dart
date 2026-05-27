@@ -5,12 +5,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
+import 'drum_machine_editor.dart';
 import 'song_note_pattern_editor.dart';
 
 /// Opens the pattern editor for [clip].
 ///
 /// * [SongPatternType.note] → [SongNotePatternEditor] in full-screen dialog.
-/// * [SongPatternType.drum] → no-op (drum editor not yet implemented).
+/// * [SongPatternType.drum] → [DrumMachineEditor] in full-screen dialog.
 Future<void> openClipEditor(
   BuildContext context,
   WidgetRef ref,
@@ -25,5 +26,11 @@ Future<void> openClipEditor(
       ),
     );
   }
-  return Future.value();
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) =>
+          DrumMachineEditor(clipId: clip.id, patternId: clip.patternId),
+    ),
+  );
 }

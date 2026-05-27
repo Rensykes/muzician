@@ -416,6 +416,39 @@ class SongProjectNotifier extends Notifier<SongProject> {
     );
   }
 
+  void toggleDrumStep({
+    required String patternId,
+    required DrumLaneId laneId,
+    required int tick,
+  }) {
+    state = state.copyWith(
+      drumPatterns: [
+        for (final pattern in state.drumPatterns)
+          if (pattern.id == patternId)
+            pattern.copyWith(
+              lanes: [
+                for (final lane in pattern.lanes)
+                  if (lane.laneId == laneId)
+                    () {
+                      final activeTicks = lane.activeTicks.toList();
+                      if (activeTicks.contains(tick)) {
+                        activeTicks.remove(tick);
+                      } else {
+                        activeTicks.add(tick);
+                        activeTicks.sort();
+                      }
+                      return lane.copyWith(activeTicks: activeTicks);
+                    }()
+                  else
+                    lane,
+              ],
+            )
+          else
+            pattern,
+      ],
+    );
+  }
+
   // ── Project Load ────────────────────────────────────────────────────────────
 
   void loadProject(SongProject project) {
