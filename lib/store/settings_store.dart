@@ -47,6 +47,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(humSensitivity: sensitivity);
     await _persist();
   }
+
+  Future<void> setMetronomeEnabled(bool enabled) async {
+    state = state.copyWith(metronomeEnabled: enabled);
+    await _persist();
+  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(

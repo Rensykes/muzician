@@ -446,8 +446,8 @@ class _PianoRollInfoTab extends StatelessWidget {
               label: 'Landscape (width > 600 px)',
               desc:
                   'Grid on the left (3× width), persistent inspector rail on '
-                  'the right (1× width). The rail holds Composer, Selection, '
-                  'Edit & Pitch, Stack Selector, Scale, Detection, Hum Recorder, '
+                  'the right (1× width). The rail holds Stack Builder, Selection, '
+                  'Edit & Pitch, Scale, Detection, Hum Recorder, '
                   'Save/Load, and Import — all scrollable.',
               color: MuzicianTheme.emerald,
             ),
@@ -497,6 +497,14 @@ class _PianoRollInfoTab extends StatelessWidget {
           color: MuzicianTheme.sky,
           entries: [
             _Entry(
+              icon: Icons.select_all_rounded,
+              label: 'Select tool',
+              desc:
+                  'Switch to Select, then drag a box across the grid to select any notes '
+                  'the box touches. Use Draw afterward to move or resize the selected group.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
               icon: Icons.touch_app,
               label: 'Tap an empty cell',
               desc:
@@ -513,18 +521,38 @@ class _PianoRollInfoTab extends StatelessWidget {
               color: MuzicianTheme.sky,
             ),
             _Entry(
+              icon: Icons.view_column_outlined,
+              label: 'Selected column vs selected notes',
+              desc:
+                  'The selected column is a timeline position used for detection '
+                  'and playback start. Selected notes are the notes you are '
+                  'actively editing. They are related, but separate.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
               icon: Icons.mouse_outlined,
               label: 'Tap an existing note',
               desc:
-                  'Selects the note. The detection panel then shows note chips for '
-                  'that column. Double‑tap on a note toggles multi-select.',
+                  'Solo-selects that note (replaces the current note selection). '
+                  'Also previews that pitch. Use double-tap to add or remove '
+                  'that note from a multi-selection.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
+              icon: Icons.playlist_add_check_circle_outlined,
+              label: 'Select notes at current column',
+              desc:
+                  'Use the Select column button in the Selection area, or the '
+                  'selection icon at the top-left of the portrait action bar, '
+                  'to select all notes active at the current column tick.',
               color: MuzicianTheme.sky,
             ),
             _Entry(
               icon: Icons.open_with_outlined,
-              label: 'Drag note body',
+              label: 'Drag selected note(s)',
               desc:
-                  'Moves the note. Horizontal drag snaps to the nearest beat '
+                  'Drags the selected note group together. Horizontal drag snaps '
+                  'to the nearest beat '
                   '(quarter note in 4/4, eighth note in 4/8). Vertical drag '
                   'shifts pitch one semitone per row.',
               color: MuzicianTheme.sky,
@@ -533,8 +561,10 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.swap_horiz_outlined,
               label: 'Drag right edge of a note',
               desc:
-                  'Resizes the note duration. Minimum duration is one 1/16th note '
-                  '(1 tick). The resize handle is the rightmost 16 px of the note.',
+                  'Resizes note duration. If the note is selected, the current '
+                  'multi-selection resizes together. Minimum duration is one '
+                  '1/16th note (1 tick). The resize handle is the rightmost 16 px '
+                  'of the note.',
               color: MuzicianTheme.sky,
             ),
             _Entry(
@@ -578,9 +608,18 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.content_cut_outlined,
               label: 'Scissors tool',
               desc:
-                  'Tap a note to split it at the tapped position into two notes. '
-                  'Long‑press still deletes in scissors mode. Switch between '
-                  'Draw and Scissors in the toolbar.',
+                  'Tap a note to split at the tapped position. If that note is '
+                  'selected, the current multi-selection splits at the same tick. '
+                  'Long‑press still deletes in scissors mode. Switch between Draw '
+                  'and Scissors in the toolbar.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
+              icon: Icons.view_column_outlined,
+              label: 'Select column',
+              desc:
+                  'Secondary shortcut: tap or drag the ruler to select all notes active '
+                  'at the current column tick. Use Select tool for area‑based multi‑selection.',
               color: MuzicianTheme.sky,
             ),
           ],
@@ -601,21 +640,21 @@ class _PianoRollInfoTab extends StatelessWidget {
             _Entry(
               icon: Icons.backspace_outlined,
               label: 'Delete / Backspace',
-              desc: 'Delete all currently selected notes.',
+              desc:
+                  'Delete all currently selected notes (same as the UI delete '
+                  'selection action).',
               color: MuzicianTheme.teal,
             ),
             _Entry(
               icon: Icons.zoom_in_outlined,
               label: 'Ctrl / Cmd + scroll wheel',
-              desc:
-                  'Horizontal zoom — scales cell width (10–80 px range).',
+              desc: 'Horizontal zoom — scales cell width (10–80 px range).',
               color: MuzicianTheme.teal,
             ),
             _Entry(
               icon: Icons.zoom_out_map_outlined,
               label: 'Alt / Option + scroll wheel',
-              desc:
-                  'Vertical zoom — scales row height (10–40 px range).',
+              desc: 'Vertical zoom — scales row height (10–40 px range).',
               color: MuzicianTheme.teal,
             ),
           ],
@@ -637,8 +676,9 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.edit_outlined,
               label: 'Tool & Snap',
               desc:
-                  'Draw tool: add, move, and resize notes. Scissors tool: split '
-                  'notes with a tap. Snap presets: 1t (1/16) through 32t (2 bars).',
+                  'Draw: add, move, and resize notes. Select: drag a marquee to select '
+                  'note groups. Scissors: split notes with a tap. Snap presets: 1t '
+                  '(1/16) through 32t (2 bars).',
               color: MuzicianTheme.orange,
             ),
             _Entry(
@@ -699,12 +739,15 @@ class _PianoRollInfoTab extends StatelessWidget {
           entries: [
             _Entry(
               icon: Icons.library_music_outlined,
-              label: 'Stack selector (Composer)',
+              label: 'Stack Builder',
               desc:
-                  'Choose a chord root + quality (17 types) + note duration, '
-                  'then tap "Add Stack" to place all chord notes at the selected '
-                  'column tick. Notes are voice-led into the current pitch window '
-                  'using shared composer state used by both V1 and V2.',
+                  'Unified chord stack editor with two views on the same final '
+                  'note list. Canonico: pick root + quality + inversion + duration '
+                  'for quick entry. Avanzato: add, edit, remove, or reorder '
+                  'individual notes; insert by note + octave picker or chord '
+                  'degree shortcut (1–9). Supports custom voicings up to 10 '
+                  'notes, rejects exact duplicate notes, and closes the drawer '
+                  'after a successful "Add Stack" in portrait.',
               color: MuzicianTheme.violet,
             ),
             _Entry(
@@ -712,8 +755,10 @@ class _PianoRollInfoTab extends StatelessWidget {
               label: 'Scale picker',
               desc:
                   'Highlight scale tones (major, minor, pentatonic, blues, '
-                  'chromatic) across the grid in teal. The root note is highlighted '
-                  'in emerald green.',
+                  'chromatic) across the grid in teal. Applying a scale checks '
+                  'existing notes first, then blocks new notes, stack inserts, '
+                  'and pitch moves that would fall outside the active scale. '
+                  'Clear the scale pill with × to return to chromatic entry.',
               color: MuzicianTheme.violet,
             ),
             _Entry(

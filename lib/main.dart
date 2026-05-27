@@ -7,13 +7,11 @@ import 'ui/core/app_info_panel.dart';
 import 'features/fretboard/fretboard_screen_v2_mockup.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano/piano_screen_v2_mockup.dart';
-import 'features/piano_roll/piano_roll_feature.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
 import 'models/fretboard.dart' show TuningName;
 import 'models/piano.dart' show PianoRangeName;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
-import 'store/piano_roll_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'theme/muzician_theme.dart';
@@ -74,7 +72,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
         children: const [
           _FretboardScreen(),
           _PianoScreen(),
-          _PianoRollScreen(),
+          PianoRollScreenV2(),
           _SettingsScreen(),
         ],
       ),
@@ -736,161 +734,6 @@ class _PianoPanelAccessBar extends ConsumerWidget {
             active: activePanel == _PianoPanel.saves,
             hasValue: false,
             onTap: () => onToggle(_PianoPanel.saves),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Piano Roll Screen ───────────────────────────────────────────────────────
-
-enum _PianoRollPanel { playback, edit, pitch, scale }
-
-class _PianoRollScreen extends ConsumerStatefulWidget {
-  const _PianoRollScreen();
-
-  @override
-  ConsumerState<_PianoRollScreen> createState() => _PianoRollScreenState();
-}
-
-class _PianoRollScreenState extends ConsumerState<_PianoRollScreen> {
-  _PianoRollPanel? _activePanel;
-
-  void _togglePanel(_PianoRollPanel panel) {
-    HapticFeedback.selectionClick();
-    setState(() => _activePanel = _activePanel == panel ? null : panel);
-  }
-
-  Widget _activePanelWidget() => switch (_activePanel) {
-    _PianoRollPanel.playback => const _Card(
-      key: ValueKey('pr-playback'),
-      child: PianoRollPlaybackConfig(),
-    ),
-    _PianoRollPanel.edit => const _Card(
-      key: ValueKey('pr-edit'),
-      child: PianoRollEditConfig(),
-    ),
-    _PianoRollPanel.pitch => const _Card(
-      key: ValueKey('pr-pitch'),
-      child: PianoRollPitchConfig(),
-    ),
-    _PianoRollPanel.scale => const _Card(
-      key: ValueKey('pr-scale'),
-      child: PianoRollScalePicker(),
-    ),
-    null => const SizedBox.shrink(),
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(pianoRollProvider);
-
-    return _GradientScaffold(
-      title: 'Piano Roll',
-      subtitle: 'Build quantized note stacks by beat and time signature',
-      trailing: _MockupLauncher(
-        builder: (_) => const PianoRollScreenV2(),
-        helpTab: 2,
-      ),
-      children: [
-        // ── Tab pickers ──
-        _PianoRollPanelAccessBar(
-          activePanel: _activePanel,
-          onToggle: _togglePanel,
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          child: _activePanelWidget(),
-        ),
-        const _Card(child: PianoRollHumRecorderPanel()),
-        // ── Grid ──
-        _Card(
-          // GestureDetector claims vertical + horizontal pan in the gesture
-          // arena so the parent ListView never steals touch events from the grid.
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragStart: (_) {},
-            onHorizontalDragStart: (_) {},
-            child: SizedBox(height: 320, child: PianoRollGrid()),
-          ),
-        ),
-        // ── Config cards ──
-        // ── Panels ──
-        _Card(child: PianoRollStackSelector()),
-        _Card(child: PianoRollSaveStackLoader()),
-        _Card(child: PianoRollDetectionPanel()),
-        if (state.selectedColumnTick != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-            child: Text(
-              'Selected stack column: tick ${state.selectedColumnTick! + 1}',
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ── Piano Roll Panel Access Bar ──────────────────────────────────────────────
-
-class _PianoRollPanelAccessBar extends ConsumerWidget {
-  final _PianoRollPanel? activePanel;
-  final void Function(_PianoRollPanel) onToggle;
-
-  const _PianoRollPanelAccessBar({
-    required this.activePanel,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(pianoRollProvider);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: Row(
-        children: [
-          _PanelTab(
-            icon: Icons.music_note_outlined,
-            label: 'Playback',
-            color: MuzicianTheme.sky,
-            active: activePanel == _PianoRollPanel.playback,
-            hasValue: false,
-            onTap: () => onToggle(_PianoRollPanel.playback),
-          ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.edit_outlined,
-            label: 'Edit',
-            color: MuzicianTheme.violet,
-            active: activePanel == _PianoRollPanel.edit,
-            hasValue: false,
-            onTap: () => onToggle(_PianoRollPanel.edit),
-          ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.piano_outlined,
-            label: 'Pitch',
-            color: MuzicianTheme.orange,
-            active: activePanel == _PianoRollPanel.pitch,
-            hasValue: false,
-            onTap: () => onToggle(_PianoRollPanel.pitch),
-          ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.stacked_line_chart,
-            label: 'Scale',
-            color: MuzicianTheme.emerald,
-            active: activePanel == _PianoRollPanel.scale,
-            hasValue: state.highlightedNotes.isNotEmpty,
-            onTap: () => onToggle(_PianoRollPanel.scale),
           ),
         ],
       ),

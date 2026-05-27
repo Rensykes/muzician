@@ -234,6 +234,7 @@ class PianoRollSnapshot extends InstrumentSnapshot {
   final int? selectedColumnTick;
   final int snapTicks;
   final List<String> highlightedNotes;
+  final PendingScale? _pendingScale;
 
   PianoRollSnapshot({
     required this.tempo,
@@ -247,7 +248,8 @@ class PianoRollSnapshot extends InstrumentSnapshot {
     this.selectedColumnTick,
     required this.snapTicks,
     required this.highlightedNotes,
-  });
+    PendingScale? pendingScale,
+  }) : _pendingScale = pendingScale;
 
   /// Pitch classes of notes at the selected column (or all notes if none).
   @override
@@ -287,6 +289,9 @@ class PianoRollSnapshot extends InstrumentSnapshot {
   /// First detected scale from pitch classes at the saved selected column.
   @override
   PendingScale? get pendingScale {
+    if (_pendingScale != null) {
+      return _pendingScale;
+    }
     final sc = selectedNotes;
     if (sc.isEmpty) return null;
     final detected = detectChordsAndScales(sc);
@@ -311,6 +316,7 @@ class PianoRollSnapshot extends InstrumentSnapshot {
     'selectedColumnTick': selectedColumnTick,
     'snapTicks': snapTicks,
     'highlightedNotes': highlightedNotes,
+    'pendingScale': _pendingScale?.toJson(),
   };
 
   factory PianoRollSnapshot.fromJson(Map<String, dynamic> json) {
@@ -334,6 +340,9 @@ class PianoRollSnapshot extends InstrumentSnapshot {
               ?.map((n) => n as String)
               .toList() ??
           [],
+      pendingScale: json['pendingScale'] != null
+          ? PendingScale.fromJson(json['pendingScale'] as Map<String, dynamic>)
+          : null,
     );
   }
 }
@@ -576,11 +585,16 @@ class AppSettings {
   /// Stored as the enum's `.name` so adding values stays forward-compatible.
   final HumSensitivity humSensitivity;
 
+  /// Piano-roll transport plays a metronome click on each beat while playing.
+  /// Accent click on the downbeat (beat 1), softer click on other beats.
+  final bool metronomeEnabled;
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
     this.showNoteLabels = true,
     this.humSensitivity = HumSensitivity.balanced,
+    this.metronomeEnabled = true,
   });
 
   AppSettings copyWith({
@@ -588,11 +602,13 @@ class AppSettings {
     double? noteVolume,
     bool? showNoteLabels,
     HumSensitivity? humSensitivity,
+    bool? metronomeEnabled,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
     showNoteLabels: showNoteLabels ?? this.showNoteLabels,
     humSensitivity: humSensitivity ?? this.humSensitivity,
+    metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
   );
 
   Map<String, dynamic> toJson() => {
@@ -600,6 +616,7 @@ class AppSettings {
     'noteVolume': noteVolume,
     'showNoteLabels': showNoteLabels,
     'humSensitivity': humSensitivity.name,
+    'metronomeEnabled': metronomeEnabled,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -607,6 +624,7 @@ class AppSettings {
     noteVolume: (json['noteVolume'] as num?)?.toDouble() ?? 0.8,
     showNoteLabels: json['showNoteLabels'] as bool? ?? true,
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
+    metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,
   );
 }
 

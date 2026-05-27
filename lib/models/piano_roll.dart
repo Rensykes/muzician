@@ -78,7 +78,14 @@ class PianoRollConfig {
   );
 }
 
-enum PianoRollTool { draw, scissors }
+/// Piano Roll editing tools.
+///
+///   * [draw]     — add, move, and resize notes.
+///   * [select]   — drag a marquee box to select intersected notes.
+///   * [scissors] — split notes with a tap.
+///   * [paint]    — drag inserts notes along the path at snap-length.
+///   * [delete]   — tap or drag over a note removes it.
+enum PianoRollTool { draw, select, scissors, paint, delete }
 
 class PianoRollImportedRange {
   final int startTick;
