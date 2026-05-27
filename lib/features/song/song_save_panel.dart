@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../store/song_project_store.dart';
-import '../../ui/save_browser_panel.dart';
+import '../../ui/save_tree_browser.dart';
 
 class SongSavePanel extends ConsumerWidget {
   const SongSavePanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SaveBrowserPanel(
+    return SaveTreeBrowser(
       instrumentFilter: 'song',
       captureSnapshot: () =>
           SongProjectSnapshot(project: ref.read(songProjectProvider)),

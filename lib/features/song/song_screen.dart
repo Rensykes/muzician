@@ -1,14 +1,20 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/piano_roll.dart' show TimeSignature;
 import '../../models/song_playback.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/transport_strip.dart' as transport;
+import '../_mockup_shell.dart' show showWidgetSheet, showPickerSheet;
 import 'song_arranger_timeline.dart';
+import 'song_clip_action_bar.dart';
+import 'song_import_picker_sheet.dart';
 import 'song_save_panel.dart';
 
 class SongScreen extends ConsumerStatefulWidget {
@@ -19,6 +25,12 @@ class SongScreen extends ConsumerStatefulWidget {
 }
 
 class _SongScreenState extends ConsumerState<SongScreen> {
+  @override
+  void initState() {
+    super.initState();
+    registerSongImportPicker();
+  }
+
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(songProjectProvider);
@@ -39,7 +51,7 @@ class _SongScreenState extends ConsumerState<SongScreen> {
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
+              padding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -68,6 +80,14 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Add Track',
+                    icon: const Icon(
+                      Icons.add_circle_outline,
+                      color: MuzicianTheme.sky,
+                    ),
+                    onPressed: () => _showAddTrackSheet(context),
+                  ),
+                  IconButton(
                     tooltip: 'Save / Load',
                     icon: const Icon(
                       Icons.save_outlined,
@@ -78,16 +98,10 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            // Transport bar
-            _SongTransportBar(
-              project: project,
-              playback: playback,
-              onTogglePlayback: _togglePlayback,
-              onRewind: _rewind,
-              onAddTrack: () => _showAddTrackSheet(context),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
+            // Shared transport strip
+            _SongTransportStrip(project: project, playback: playback),
+            const SizedBox(height: 4),
             // Arranger timeline
             Expanded(
               child: project.tracks.isEmpty
@@ -126,23 +140,11 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                       currentPlaybackTick: playback.currentTick,
                     ),
             ),
+            const SongClipActionBar(),
           ],
         ),
       ),
     );
-  }
-
-  void _togglePlayback() {
-    final notifier = ref.read(songPlaybackProvider.notifier);
-    if (ref.read(songPlaybackProvider).status == SongPlaybackStatus.playing) {
-      notifier.stopPlayback();
-    } else {
-      notifier.startPlayback();
-    }
-  }
-
-  void _rewind() {
-    ref.read(songPlaybackProvider.notifier).stopPlayback();
   }
 
   void _showAddTrackSheet(BuildContext context) {
@@ -232,87 +234,93 @@ class _SongScreenState extends ConsumerState<SongScreen> {
   }
 }
 
-class _SongTransportBar extends StatelessWidget {
+class _SongTransportStrip extends ConsumerWidget {
   final SongProject project;
   final SongPlaybackState playback;
-  final VoidCallback onTogglePlayback;
-  final VoidCallback onRewind;
-  final VoidCallback onAddTrack;
 
-  const _SongTransportBar({
-    required this.project,
-    required this.playback,
-    required this.onTogglePlayback,
-    required this.onRewind,
-    required this.onAddTrack,
-  });
+  const _SongTransportStrip({required this.project, required this.playback});
 
   @override
-  Widget build(BuildContext context) {
-    final isPlaying = playback.status == SongPlaybackStatus.playing;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Rewind',
-            icon: const Icon(
-              Icons.skip_previous,
-              color: MuzicianTheme.textSecondary,
-              size: 22,
-            ),
-            onPressed: onRewind,
-          ),
-          IconButton(
-            tooltip: isPlaying ? 'Pause' : 'Play',
-            icon: Icon(
-              isPlaying ? Icons.pause : Icons.play_arrow,
-              color: MuzicianTheme.sky,
-              size: 28,
-            ),
-            onPressed: onTogglePlayback,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${project.config.tempo} BPM',
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${project.config.timeSignature.beatsPerMeasure}/${project.config.timeSignature.beatUnit}',
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${project.config.totalMeasures} bars',
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: onAddTrack,
-            icon: const Icon(Icons.add, size: 16, color: MuzicianTheme.sky),
-            label: const Text(
-              'Add Track',
-              style: TextStyle(color: MuzicianTheme.sky, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playing = playback.status == SongPlaybackStatus.playing;
+    final playbackNotifier = ref.read(songPlaybackProvider.notifier);
+    final songNotifier = ref.read(songProjectProvider.notifier);
+    final bpm = project.config.tempo;
+    final timeSig = project.config.timeSignature;
+    final barBeat = transport.tickToBarBeatDisplay(
+      playback.currentTick,
+      timeSig,
+    );
+    final timeSigLabel = '${timeSig.beatsPerMeasure}/${timeSig.beatUnit}';
+
+    void onRewind() {
+      HapticFeedback.selectionClick();
+      playbackNotifier.stopPlayback();
+    }
+
+    void onStop() {
+      HapticFeedback.lightImpact();
+      playbackNotifier.stopPlayback();
+    }
+
+    void onPlayPause() {
+      HapticFeedback.lightImpact();
+      if (playing) {
+        playbackNotifier.stopPlayback();
+      } else {
+        playbackNotifier.startPlayback();
+      }
+    }
+
+    Future<void> onBpmTap() async {
+      HapticFeedback.selectionClick();
+      await showWidgetSheet(
+        context: context,
+        title: 'Tempo',
+        child: Consumer(
+          builder: (_, sheetRef, _) {
+            final tempo = sheetRef.watch(
+              songProjectProvider.select((s) => s.config.tempo),
+            );
+            return transport.BpmSheet(
+              currentBpm: tempo,
+              onChanged: (v) =>
+                  sheetRef.read(songProjectProvider.notifier).setTempo(v),
+            );
+          },
+        ),
+      );
+    }
+
+    Future<void> onSigTap() async {
+      HapticFeedback.selectionClick();
+      final picked = await showPickerSheet<String>(
+        context: context,
+        title: 'Time Signature',
+        options: transport.kTimeSignatureOptions,
+        current: timeSigLabel,
+      );
+      if (picked == null) return;
+      final parts = picked.split('/');
+      songNotifier.setTimeSignature(
+        TimeSignature(
+          beatsPerMeasure: int.parse(parts[0]),
+          beatUnit: int.parse(parts[1]),
+        ),
+      );
+    }
+
+    return transport.TransportStrip(
+      bpm: bpm,
+      barBeat: barBeat,
+      timeSig: timeSig,
+      playing: playing,
+      onRewind: onRewind,
+      onStop: onStop,
+      onPlayPause: onPlayPause,
+      onBpmTap: onBpmTap,
+      onSigTap: onSigTap,
+      onBpmDelta: (delta) => songNotifier.setTempo(bpm + delta),
     );
   }
 }
