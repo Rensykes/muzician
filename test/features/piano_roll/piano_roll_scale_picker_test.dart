@@ -89,6 +89,33 @@ void main() {
     expect(activeAfter.scaleName, 'dorian');
   });
 
+  testWidgets('stale active scale does not overwrite a loaded highlight', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    container.read(pianoRollActiveScaleProvider.notifier).state = (
+      root: 'C',
+      scaleName: 'major',
+    );
+    container.read(pianoRollProvider.notifier).setHighlightedNotes([
+      'A',
+      'C#',
+      'E',
+    ]);
+
+    await tester.pumpWidget(_wrap(container));
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).highlightedNotes,
+      ['A', 'C#', 'E'],
+      reason: 'Reopening the picker must not reapply a stale committed scale',
+    );
+  });
+
   testWidgets('clear resets active and removes selected scale pill', (
     tester,
   ) async {

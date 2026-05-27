@@ -253,6 +253,38 @@ void main() {
     expect(moved.startTick, 2);
   });
 
+  test(
+    'active scale rejects a multi-note move unless the whole batch fits',
+    () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pianoRollProvider.notifier);
+      notifier.addNote(60, 2, 2); // C
+      final firstId = container.read(pianoRollProvider).notes.single.id;
+      notifier.addNote(64, 2, 2); // E
+      final secondId = container
+          .read(pianoRollProvider)
+          .notes
+          .firstWhere((note) => note.id != firstId)
+          .id;
+      notifier.setHighlightedNotes(['C', 'D', 'E', 'F', 'G', 'A', 'B']);
+
+      notifier.moveNotesBatch([
+        (id: firstId, startTick: 6, midiNote: 61), // C# -> out of scale
+        (id: secondId, startTick: 6, midiNote: 65), // F -> in scale
+      ]);
+
+      final state = container.read(pianoRollProvider);
+      final first = state.notes.firstWhere((note) => note.id == firstId);
+      final second = state.notes.firstWhere((note) => note.id == secondId);
+      expect(first.midiNote, 60);
+      expect(first.startTick, 2);
+      expect(second.midiNote, 64);
+      expect(second.startTick, 2);
+    },
+  );
+
   test('active scale rejects stacks containing out-of-scale notes', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);

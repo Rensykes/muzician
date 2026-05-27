@@ -151,6 +151,61 @@ void main() {
     );
   });
 
+  testWidgets('ruler tap uses the zoomed cell width after pinch zoom', (
+    tester,
+  ) async {
+    final notifier = _TrackingNotifier(_defaultPRState);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gridRect = tester.getRect(gridFinder);
+    final pinchY = gridRect.top + 160;
+
+    final firstFinger = await tester.startGesture(
+      Offset(gridRect.left + 120, pinchY),
+      pointer: 1,
+    );
+    final secondFinger = await tester.startGesture(
+      Offset(gridRect.left + 220, pinchY),
+      pointer: 2,
+    );
+    await tester.pump();
+
+    await firstFinger.moveTo(Offset(gridRect.left + 70, pinchY));
+    await secondFinger.moveTo(Offset(gridRect.left + 270, pinchY));
+    await tester.pump();
+
+    await firstFinger.up();
+    await secondFinger.up();
+    await tester.pump();
+
+    final rulerFinder = find.byKey(
+      const ValueKey('piano-roll-ruler-drag-area'),
+    );
+    final rulerRect = tester.getRect(rulerFinder);
+    await tester.tapAt(
+      Offset(rulerRect.left + 112, rulerRect.top + (rulerRect.height / 2)),
+    );
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).selectedColumnTick,
+      2,
+      reason: 'A tap at 112px should target tick 2 after doubling cell width',
+    );
+  });
+
   // ── Double-tap empty cell snap-length insertion ─────────────────────────
 
   testWidgets('double-tap empty cell inserts note with snapTicks duration', (
