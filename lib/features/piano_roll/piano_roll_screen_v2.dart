@@ -961,7 +961,7 @@ class _SelectionActions extends ConsumerWidget {
           if (showSelectColumnAction)
             _SelectionActionIcon(
               icon: Icons.select_all_rounded,
-              label: 'Multi-select notes at column',
+              label: 'Select column',
               color: MuzicianTheme.sky,
               onTap: selectColumnNotes,
             ),
@@ -988,7 +988,7 @@ class _SelectionActions extends ConsumerWidget {
       children: [
         if (hasColumnNotes)
           _QuickChip(
-            label: 'Multi-select',
+            label: 'Select column',
             icon: Icons.select_all_rounded,
             color: MuzicianTheme.sky,
             onTap: selectColumnNotes,
@@ -1091,6 +1091,15 @@ class _EditPitchControls extends ConsumerWidget {
               label: '✏ Draw',
               active: tool == PianoRollTool.draw,
               onTap: () => notifier.setActiveTool(PianoRollTool.draw),
+            ),
+            const SizedBox(width: 6),
+            _ToolPill(
+              label: '▭ Select',
+              active: tool == PianoRollTool.select,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                notifier.setActiveTool(PianoRollTool.select);
+              },
             ),
             const SizedBox(width: 6),
             _ToolPill(
@@ -1304,6 +1313,7 @@ class _ToolModeSegment extends ConsumerWidget {
 
   static const _entries = <(PianoRollTool, IconData, String)>[
     (PianoRollTool.draw, Icons.edit_rounded, 'Draw'),
+    (PianoRollTool.select, Icons.select_all_rounded, 'Select'),
     (PianoRollTool.scissors, Icons.content_cut_rounded, 'Split'),
     (PianoRollTool.paint, Icons.brush_rounded, 'Paint'),
     (PianoRollTool.delete, Icons.delete_outline_rounded, 'Delete'),

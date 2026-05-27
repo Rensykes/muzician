@@ -497,6 +497,14 @@ class _PianoRollInfoTab extends StatelessWidget {
           color: MuzicianTheme.sky,
           entries: [
             _Entry(
+              icon: Icons.select_all_rounded,
+              label: 'Select tool',
+              desc:
+                  'Switch to Select, then drag a box across the grid to select any notes '
+                  'the box touches. Use Draw afterward to move or resize the selected group.',
+              color: MuzicianTheme.sky,
+            ),
+            _Entry(
               icon: Icons.touch_app,
               label: 'Tap an empty cell',
               desc:
@@ -534,7 +542,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.playlist_add_check_circle_outlined,
               label: 'Select notes at current column',
               desc:
-                  'Use the Multi-select control in the Selection area, or the '
+                  'Use the Select column button in the Selection area, or the '
                   'selection icon at the top-left of the portrait action bar, '
                   'to select all notes active at the current column tick.',
               color: MuzicianTheme.sky,
@@ -606,6 +614,14 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'and Scissors in the toolbar.',
               color: MuzicianTheme.sky,
             ),
+            _Entry(
+              icon: Icons.view_column_outlined,
+              label: 'Select column',
+              desc:
+                  'Secondary shortcut: tap or drag the ruler to select all notes active '
+                  'at the current column tick. Use Select tool for area‑based multi‑selection.',
+              color: MuzicianTheme.sky,
+            ),
           ],
         ),
         SizedBox(height: 16),
@@ -660,8 +676,9 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.edit_outlined,
               label: 'Tool & Snap',
               desc:
-                  'Draw tool: add, move, and resize notes. Scissors tool: split '
-                  'notes with a tap. Snap presets: 1t (1/16) through 32t (2 bars).',
+                  'Draw: add, move, and resize notes. Select: drag a marquee to select '
+                  'note groups. Scissors: split notes with a tap. Snap presets: 1t '
+                  '(1/16) through 32t (2 bars).',
               color: MuzicianTheme.orange,
             ),
             _Entry(
