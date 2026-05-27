@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/save_system.dart';
+import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/piano_roll.dart';
 
 void main() {
   group('PianoRollSnapshot round-trip serialization', () {
@@ -257,6 +259,212 @@ void main() {
       };
       final snap = InstrumentSnapshot.fromJson(json);
       expect(snap, isA<FretboardSnapshot>());
+    });
+  });
+
+  group('InstrumentSnapshot.fromJson dispatches to SongProjectSnapshot', () {
+    test('when type is song', () {
+      final json = <String, dynamic>{
+        'type': 'song',
+        'instrument': 'song',
+        'project': {
+          'config': {
+            'tempo': 120,
+            'timeSignature': {'beatsPerMeasure': 4, 'beatUnit': 4},
+            'totalMeasures': 4,
+          },
+          'tracks': [],
+          'clips': [],
+          'notePatterns': [],
+          'drumPatterns': [],
+        },
+      };
+      final snapshot = InstrumentSnapshot.fromJson(json);
+      expect(snapshot, isA<SongProjectSnapshot>());
+    });
+
+    test('when instrument is song without type field', () {
+      final json = <String, dynamic>{
+        'instrument': 'song',
+        'project': {
+          'config': {
+            'tempo': 120,
+            'timeSignature': {'beatsPerMeasure': 4, 'beatUnit': 4},
+            'totalMeasures': 4,
+          },
+          'tracks': [],
+          'clips': [],
+          'notePatterns': [],
+          'drumPatterns': [],
+        },
+      };
+      final snapshot = InstrumentSnapshot.fromJson(json);
+      expect(snapshot, isA<SongProjectSnapshot>());
+    });
+  });
+
+  group('SongProjectSnapshot serialization', () {
+    test('toJson → fromJson round-trips track, clip, and pattern counts', () {
+      final snapshot = SongProjectSnapshot(
+        project: SongProject(
+          config: const SongProjectConfig(
+            tempo: 128,
+            timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+            totalMeasures: 8,
+          ),
+          tracks: const [
+            SongTrack(
+              id: 't1',
+              name: 'Lead',
+              type: SongTrackType.note,
+              order: 0,
+            ),
+            SongTrack(
+              id: 't2',
+              name: 'Drums',
+              type: SongTrackType.drum,
+              order: 1,
+            ),
+          ],
+          clips: const [
+            SongClipInstance(
+              id: 'c1',
+              trackId: 't1',
+              patternId: 'p1',
+              patternType: SongPatternType.note,
+              startTick: 0,
+            ),
+            SongClipInstance(
+              id: 'c2',
+              trackId: 't2',
+              patternId: 'd1',
+              patternType: SongPatternType.drum,
+              startTick: 16,
+            ),
+          ],
+          notePatterns: const [
+            NotePattern(
+              id: 'p1',
+              name: 'Lead',
+              lengthTicks: 16,
+              notes: [
+                NotePatternNote(
+                  id: 'n1',
+                  midiNote: 60,
+                  startTick: 0,
+                  durationTicks: 4,
+                ),
+              ],
+              pitchRangeStart: 48,
+              pitchRangeEnd: 84,
+              snapTicks: 1,
+              highlightedNotes: ['C'],
+            ),
+          ],
+          drumPatterns: const [
+            DrumPattern(
+              id: 'd1',
+              name: 'Beat',
+              lengthTicks: 16,
+              lanes: [
+                DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0, 8]),
+              ],
+            ),
+          ],
+        ),
+      );
+      final restored = SongProjectSnapshot.fromJson(snapshot.toJson());
+      expect(restored.project.tracks, hasLength(2));
+      expect(restored.project.clips, hasLength(2));
+      expect(restored.project.notePatterns, hasLength(1));
+      expect(restored.project.drumPatterns, hasLength(1));
+    });
+
+    test(
+      'selectedNotes returns unique pitch classes across all note patterns',
+      () {
+        final snapshot = SongProjectSnapshot(
+          project: SongProject(
+            config: const SongProjectConfig(
+              tempo: 120,
+              timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+              totalMeasures: 4,
+            ),
+            tracks: const [],
+            clips: const [],
+            notePatterns: const [
+              NotePattern(
+                id: 'p1',
+                name: 'Pattern 1',
+                lengthTicks: 8,
+                notes: [
+                  NotePatternNote(
+                    id: 'n1',
+                    midiNote: 60,
+                    startTick: 0,
+                    durationTicks: 4,
+                  ),
+                  NotePatternNote(
+                    id: 'n2',
+                    midiNote: 64,
+                    startTick: 4,
+                    durationTicks: 4,
+                  ),
+                ],
+                pitchRangeStart: 48,
+                pitchRangeEnd: 84,
+                snapTicks: 1,
+                highlightedNotes: ['C'],
+              ),
+              NotePattern(
+                id: 'p2',
+                name: 'Pattern 2',
+                lengthTicks: 8,
+                notes: [
+                  NotePatternNote(
+                    id: 'n3',
+                    midiNote: 60,
+                    startTick: 0,
+                    durationTicks: 4,
+                  ),
+                  NotePatternNote(
+                    id: 'n4',
+                    midiNote: 67,
+                    startTick: 4,
+                    durationTicks: 4,
+                  ),
+                ],
+                pitchRangeStart: 48,
+                pitchRangeEnd: 84,
+                snapTicks: 1,
+                highlightedNotes: ['C'],
+              ),
+            ],
+            drumPatterns: const [],
+          ),
+        );
+        final notes = snapshot.selectedNotes;
+        expect(notes, hasLength(3));
+        expect(notes, containsAll(['C', 'E', 'G']));
+      },
+    );
+
+    test('pendingChord and pendingScale return null', () {
+      final snapshot = SongProjectSnapshot(
+        project: SongProject(
+          config: const SongProjectConfig(
+            tempo: 120,
+            timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+            totalMeasures: 4,
+          ),
+          tracks: const [],
+          clips: const [],
+          notePatterns: const [],
+          drumPatterns: const [],
+        ),
+      );
+      expect(snapshot.pendingChord, isNull);
+      expect(snapshot.pendingScale, isNull);
     });
   });
 }
