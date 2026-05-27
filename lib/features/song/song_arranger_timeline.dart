@@ -10,8 +10,9 @@ import 'song_pattern_editor_launcher.dart';
 import 'song_track_header.dart';
 
 const double _kHeaderWidth = 220;
+const double _kTickWidth = 4.0;
 
-class SongArrangerTimeline extends ConsumerWidget {
+class SongArrangerTimeline extends ConsumerStatefulWidget {
   final int measureTicks;
   final int? currentPlaybackTick;
 
@@ -22,7 +23,27 @@ class SongArrangerTimeline extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SongArrangerTimeline> createState() =>
+      _SongArrangerTimelineState();
+}
+
+class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
+  late final ScrollController _hScroll;
+
+  @override
+  void initState() {
+    super.initState();
+    _hScroll = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _hScroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final project = ref.watch(songProjectProvider);
     final orderedTracks = [...project.tracks]
       ..sort((a, b) => a.order.compareTo(b.order));
@@ -33,14 +54,21 @@ class SongArrangerTimeline extends ConsumerWidget {
       if (len != null) clipLengths[clip.id] = len;
     }
 
+    final totalTicks = widget.measureTicks * project.config.totalMeasures;
+    final timelineWidth = totalTicks * _kTickWidth;
+
     return Column(
       children: [
         _MeasureRuler(
           totalMeasures: project.config.totalMeasures,
-          measureTicks: measureTicks,
+          measureTicks: widget.measureTicks,
+          timelineWidth: timelineWidth,
+          hScroll: _hScroll,
+          currentPlaybackTick: widget.currentPlaybackTick,
         ),
         Expanded(
           child: ListView.builder(
+            controller: ScrollController(),
             itemCount: orderedTracks.length,
             itemBuilder: (context, index) {
               final track = orderedTracks[index];
@@ -51,9 +79,11 @@ class SongArrangerTimeline extends ConsumerWidget {
                 track: track,
                 clips: trackClips,
                 clipLengths: clipLengths,
-                measureTicks: measureTicks,
+                measureTicks: widget.measureTicks,
                 totalMeasures: project.config.totalMeasures,
-                currentPlaybackTick: currentPlaybackTick,
+                timelineWidth: timelineWidth,
+                hScroll: _hScroll,
+                currentPlaybackTick: widget.currentPlaybackTick,
               );
             },
           ),
@@ -66,10 +96,16 @@ class SongArrangerTimeline extends ConsumerWidget {
 class _MeasureRuler extends StatelessWidget {
   final int totalMeasures;
   final int measureTicks;
+  final double timelineWidth;
+  final ScrollController hScroll;
+  final int? currentPlaybackTick;
 
   const _MeasureRuler({
     required this.totalMeasures,
     required this.measureTicks,
+    required this.timelineWidth,
+    required this.hScroll,
+    required this.currentPlaybackTick,
   });
 
   @override
@@ -86,31 +122,21 @@ class _MeasureRuler extends StatelessWidget {
         children: [
           const SizedBox(width: _kHeaderWidth),
           Expanded(
-            child: ListView.builder(
+            child: SingleChildScrollView(
+              controller: hScroll,
               scrollDirection: Axis.horizontal,
-              itemCount: totalMeasures,
-              itemBuilder: (context, index) {
-                return Container(
-                  width: 60.0,
-                  alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.only(left: 4),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.06),
-                      ),
-                    ),
+              child: SizedBox(
+                width: timelineWidth,
+                height: 28,
+                child: CustomPaint(
+                  painter: _RulerPainter(
+                    totalMeasures: totalMeasures,
+                    measureTicks: measureTicks,
+                    currentPlaybackTick: currentPlaybackTick,
                   ),
-                  child: Text(
-                    '${index + 1}',
-                    style: const TextStyle(
-                      color: MuzicianTheme.textMuted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                );
-              },
+                  size: Size(timelineWidth, 28),
+                ),
+              ),
             ),
           ),
         ],
@@ -119,12 +145,66 @@ class _MeasureRuler extends StatelessWidget {
   }
 }
 
+class _RulerPainter extends CustomPainter {
+  final int totalMeasures;
+  final int measureTicks;
+  final int? currentPlaybackTick;
+
+  const _RulerPainter({
+    required this.totalMeasures,
+    required this.measureTicks,
+    required this.currentPlaybackTick,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final measureWidth = measureTicks * _kTickWidth;
+    final linePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..strokeWidth = 0.5;
+
+    for (var m = 0; m <= totalMeasures; m++) {
+      final x = m * measureWidth;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+      if (m < totalMeasures) {
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '${m + 1}',
+            style: const TextStyle(
+              color: MuzicianTheme.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x + 4, 6));
+      }
+    }
+
+    if (currentPlaybackTick != null) {
+      final cx = currentPlaybackTick! * _kTickWidth;
+      final cursorPaint = Paint()
+        ..color = MuzicianTheme.sky
+        ..strokeWidth = 2;
+      canvas.drawLine(Offset(cx, 0), Offset(cx, size.height), cursorPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RulerPainter oldDelegate) =>
+      totalMeasures != oldDelegate.totalMeasures ||
+      currentPlaybackTick != oldDelegate.currentPlaybackTick;
+}
+
 class _TrackLane extends ConsumerWidget {
   final SongTrack track;
   final List<SongClipInstance> clips;
   final Map<String, int> clipLengths;
   final int measureTicks;
   final int totalMeasures;
+  final double timelineWidth;
+  final ScrollController hScroll;
   final int? currentPlaybackTick;
 
   const _TrackLane({
@@ -133,6 +213,8 @@ class _TrackLane extends ConsumerWidget {
     required this.clipLengths,
     required this.measureTicks,
     required this.totalMeasures,
+    required this.timelineWidth,
+    required this.hScroll,
     required this.currentPlaybackTick,
   });
 
@@ -153,18 +235,18 @@ class _TrackLane extends ConsumerWidget {
             children: [
               const SizedBox(width: _kHeaderWidth),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final totalTicks = measureTicks * totalMeasures;
-                    final tickWidth = totalTicks > 0
-                        ? constraints.maxWidth / totalTicks
-                        : 1.0;
-
-                    return GestureDetector(
+                child: SingleChildScrollView(
+                  controller: hScroll,
+                  scrollDirection: Axis.horizontal,
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: SizedBox(
+                    width: timelineWidth,
+                    height: 56,
+                    child: GestureDetector(
                       onTapDown: (details) {
-                        final tapTick = (details.localPosition.dx / tickWidth)
+                        final tapTick = (details.localPosition.dx / _kTickWidth)
                             .round()
-                            .clamp(0, totalTicks > 0 ? totalTicks - 1 : 0);
+                            .clamp(0, measureTicks * totalMeasures - 1);
 
                         final tappedClip = clips.firstWhere(
                           (clip) {
@@ -213,10 +295,10 @@ class _TrackLane extends ConsumerWidget {
                               : MuzicianTheme.orange,
                           currentPlaybackTick: currentPlaybackTick,
                         ),
-                        size: Size.infinite,
+                        size: Size(timelineWidth, 56),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -246,17 +328,12 @@ class _ClipLanePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final totalTicks = measureTicks * totalMeasures;
-    if (totalTicks == 0) return;
-
-    final tickWidth = size.width / totalTicks;
-
     final measureLinePaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.05)
       ..strokeWidth = 0.5;
 
     for (var m = 0; m <= totalMeasures; m++) {
-      final x = m * measureTicks * tickWidth;
+      final x = m * measureTicks * _kTickWidth;
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), measureLinePaint);
     }
 
@@ -270,9 +347,9 @@ class _ClipLanePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5;
 
-      final left = clip.startTick * tickWidth;
+      final left = clip.startTick * _kTickWidth;
       final length = clipLengths[clip.id] ?? measureTicks;
-      final right = left + length * tickWidth;
+      final right = left + length * _kTickWidth;
       final rect = RRect.fromRectAndRadius(
         Rect.fromLTRB(left + 1, 6, right - 1, size.height - 6),
         const Radius.circular(6),
@@ -283,11 +360,18 @@ class _ClipLanePainter extends CustomPainter {
     }
 
     if (currentPlaybackTick != null) {
+      final cx = currentPlaybackTick! * _kTickWidth;
       final cursorPaint = Paint()
         ..color = MuzicianTheme.sky
         ..strokeWidth = 2;
-      final cx = currentPlaybackTick! * tickWidth;
       canvas.drawLine(Offset(cx, 0), Offset(cx, size.height), cursorPaint);
+
+      final path = Path()
+        ..moveTo(cx - 5, 0)
+        ..lineTo(cx + 5, 0)
+        ..lineTo(cx, 6)
+        ..close();
+      canvas.drawPath(path, Paint()..color = MuzicianTheme.sky);
     }
   }
 
