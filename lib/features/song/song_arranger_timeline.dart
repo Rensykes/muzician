@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import 'song_pattern_editor_launcher.dart';
 import 'song_track_header.dart';
 
 class SongArrangerTimeline extends ConsumerWidget {
@@ -145,36 +146,63 @@ class _TrackLane extends ConsumerWidget {
             children: [
               // Clip lane
               Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    if (track.type == SongTrackType.note) {
-                      ref
-                          .read(songProjectProvider.notifier)
-                          .createEmptyNotePatternClip(
-                            trackId: track.id,
-                            startTick: 0,
-                          );
-                    } else {
-                      ref
-                          .read(songProjectProvider.notifier)
-                          .createEmptyDrumPatternClip(
-                            trackId: track.id,
-                            startTick: 0,
-                          );
-                    }
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final totalTicks = measureTicks * totalMeasures;
+                    final tickWidth = totalTicks > 0
+                        ? constraints.maxWidth / totalTicks
+                        : 1.0;
+
+                    return GestureDetector(
+                      onTapDown: (details) {
+                        final tapTick = (details.localPosition.dx / tickWidth)
+                            .round()
+                            .clamp(0, totalTicks > 0 ? totalTicks - 1 : 0);
+
+                        // Check if tapped on an existing clip (16-tick approximate width).
+                        final tappedClip = clips
+                            .cast<SongClipInstance?>()
+                            .firstWhere((clip) {
+                              if (clip == null) return false;
+                              final clipEnd = clip.startTick + 16;
+                              return tapTick >= clip.startTick &&
+                                  tapTick < clipEnd;
+                            }, orElse: () => null);
+
+                        if (tappedClip != null) {
+                          openClipEditor(context, ref, tappedClip);
+                        } else {
+                          if (track.type == SongTrackType.note) {
+                            ref
+                                .read(songProjectProvider.notifier)
+                                .createEmptyNotePatternClip(
+                                  trackId: track.id,
+                                  startTick: tapTick,
+                                );
+                          } else {
+                            ref
+                                .read(songProjectProvider.notifier)
+                                .createEmptyDrumPatternClip(
+                                  trackId: track.id,
+                                  startTick: tapTick,
+                                );
+                          }
+                        }
+                      },
+                      child: CustomPaint(
+                        painter: _ClipLanePainter(
+                          clips: clips,
+                          measureTicks: measureTicks,
+                          totalMeasures: totalMeasures,
+                          trackColor: track.type == SongTrackType.note
+                              ? MuzicianTheme.sky
+                              : MuzicianTheme.orange,
+                          currentPlaybackTick: currentPlaybackTick,
+                        ),
+                        size: Size.infinite,
+                      ),
+                    );
                   },
-                  child: CustomPaint(
-                    painter: _ClipLanePainter(
-                      clips: clips,
-                      measureTicks: measureTicks,
-                      totalMeasures: totalMeasures,
-                      trackColor: track.type == SongTrackType.note
-                          ? MuzicianTheme.sky
-                          : MuzicianTheme.orange,
-                      currentPlaybackTick: currentPlaybackTick,
-                    ),
-                    size: Size.infinite,
-                  ),
                 ),
               ),
             ],
