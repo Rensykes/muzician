@@ -333,6 +333,8 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           : s.notes.map((n) => n.pitchClass).toSet().toList();
       selectedNotes = colNotes;
       highlightedNotes = s.highlightedNotes;
+    } else if (widget.instrumentFilter == 'song') {
+      return ['Song Project'];
     } else {
       return [];
     }
@@ -967,7 +969,9 @@ class _SaveRowState extends State<_SaveRow>
     super.dispose();
   }
 
-  String get _icon => widget.save.snapshot.instrument == 'piano'
+  String get _icon => widget.save.snapshot.instrument == 'song'
+      ? '🎵'
+      : widget.save.snapshot.instrument == 'piano'
       ? '🎹'
       : widget.save.snapshot.instrument == 'piano_roll'
       ? '🎶'
@@ -1205,63 +1209,67 @@ class _SaveExpandedDetails extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Divider(color: MuzicianTheme.glassBorder, height: 12, thickness: 0.5),
-          if (save.snapshot.selectedNotes.isNotEmpty) ...[
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: save.snapshot.selectedNotes.map((note) {
-                  return Container(
-                    margin: const EdgeInsets.only(right: 5),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: MuzicianTheme.sky.withValues(alpha: 0.12),
-                      border: Border.all(
-                        color: MuzicianTheme.sky.withValues(alpha: 0.3),
-                        width: 0.5,
+          if (save.snapshot is SongProjectSnapshot)
+            _buildSongSummary(save.snapshot as SongProjectSnapshot)
+          else ...[
+            if (save.snapshot.selectedNotes.isNotEmpty) ...[
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: save.snapshot.selectedNotes.map((note) {
+                    return Container(
+                      margin: const EdgeInsets.only(right: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
                       ),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      note,
-                      style: const TextStyle(
-                        color: MuzicianTheme.sky,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                      decoration: BoxDecoration(
+                        color: MuzicianTheme.sky.withValues(alpha: 0.12),
+                        border: Border.all(
+                          color: MuzicianTheme.sky.withValues(alpha: 0.3),
+                          width: 0.5,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                    ),
-                  );
-                }).toList(),
+                      child: Text(
+                        note,
+                        style: const TextStyle(
+                          color: MuzicianTheme.sky,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
-            const SizedBox(height: 5),
+              const SizedBox(height: 5),
+            ],
+            if (save.snapshot.pendingChord != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  'Chord: ${save.snapshot.pendingChord!.symbol}',
+                  style: const TextStyle(
+                    color: MuzicianTheme.violet,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            if (save.snapshot.pendingScale != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  'Scale: ${save.snapshot.pendingScale!.root} ${save.snapshot.pendingScale!.scaleName}',
+                  style: const TextStyle(
+                    color: MuzicianTheme.emerald,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
           ],
-          if (save.snapshot.pendingChord != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Text(
-                'Chord: ${save.snapshot.pendingChord!.symbol}',
-                style: const TextStyle(
-                  color: MuzicianTheme.violet,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          if (save.snapshot.pendingScale != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Text(
-                'Scale: ${save.snapshot.pendingScale!.root} ${save.snapshot.pendingScale!.scaleName}',
-                style: const TextStyle(
-                  color: MuzicianTheme.emerald,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1309,6 +1317,24 @@ class _SaveExpandedDetails extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSongSummary(SongProjectSnapshot snap) {
+    final trackCount = snap.project.tracks.length;
+    final clipCount = snap.project.clips.length;
+    final patternCount =
+        snap.project.notePatterns.length + snap.project.drumPatterns.length;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Text(
+        '$trackCount tracks · $clipCount clips · $patternCount patterns',
+        style: const TextStyle(
+          color: MuzicianTheme.emerald,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

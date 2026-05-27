@@ -7,6 +7,7 @@ import '../schema/rules/piano_roll_rules.dart' as pr_rules;
 import '../utils/note_utils.dart';
 import 'fretboard.dart';
 import 'piano.dart';
+import 'song_project.dart';
 
 // ─── Musical Context ──────────────────────────────────────────────────────────
 
@@ -63,6 +64,9 @@ sealed class InstrumentSnapshot {
     final instrument = json['instrument'] as String? ?? 'fretboard';
     if (type == 'piano_roll' || instrument == 'piano_roll') {
       return PianoRollSnapshot.fromJson(json);
+    }
+    if (type == 'song' || instrument == 'song') {
+      return SongProjectSnapshot.fromJson(json);
     }
     if (instrument == 'piano') {
       return PianoSnapshot.fromJson(json);
@@ -336,6 +340,40 @@ class PianoRollSnapshot extends InstrumentSnapshot {
           [],
     );
   }
+}
+
+class SongProjectSnapshot extends InstrumentSnapshot {
+  @override
+  String get instrument => 'song';
+
+  final SongProject project;
+
+  SongProjectSnapshot({required this.project});
+
+  @override
+  List<String> get selectedNotes => project.notePatterns
+      .expand((pattern) => pattern.notes)
+      .map((note) => pr_rules.midiToPitchClass(note.midiNote))
+      .toSet()
+      .toList();
+
+  @override
+  PendingChord? get pendingChord => null;
+
+  @override
+  PendingScale? get pendingScale => null;
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'song',
+    'instrument': 'song',
+    'project': project.toJson(),
+  };
+
+  factory SongProjectSnapshot.fromJson(Map<String, dynamic> json) =>
+      SongProjectSnapshot(
+        project: SongProject.fromJson(json['project'] as Map<String, dynamic>),
+      );
 }
 
 // ─── Progression Metadata ─────────────────────────────────────────────────────
