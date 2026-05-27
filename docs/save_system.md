@@ -33,7 +33,37 @@ lib/
 | `AppSettings` | User preferences — `fretboardFavouriteViewMode`, `pianoFavouriteViewMode` |
 | `SaveSystemState` | Root state: `folders`, `saves`, `session`, `settings` |
 
-> Snapshots use `sealed class` with `FretboardSnapshot` and `PianoSnapshot` subtypes. All types implement `toJson` / `fromJson` for `SharedPreferences` persistence.
+> Snapshots use `sealed class` with `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, and `SongProjectSnapshot` subtypes. All types implement `toJson` / `fromJson` for `SharedPreferences` persistence.
+
+---
+
+## Snapshot Types
+
+Each instrument produces a subtype of `InstrumentSnapshot`, stored inside a `SaveEntry`.
+
+### FretboardSnapshot (`type: 'fretboard'`)
+
+Captures the fretboard layout (tuning, capo, number of frets), selected fret coordinates, note names, and view mode. `pendingChord` and `pendingScale` are derived from the selected notes.
+
+### PianoSnapshot (`type: 'piano'`)
+
+Captures the piano range name, selected key coordinates, note names, and view mode. `pendingChord` and `pendingScale` are derived from the selected notes.
+
+### PianoRollSnapshot (`type: 'piano_roll'`)
+
+Full piano-roll session: tempo, key, time signature, total measures, notes, pitch window, snap, and highlighted scale notes.
+
+- `selectedNotes` resolves pitch classes at the saved column tick (or all unique PCs if no tick is set).
+- `pendingChord` and `pendingScale` are derived from those pitch classes.
+- Save browser shows note chips for quick identification.
+
+### SongProjectSnapshot (`type: 'song'`)
+
+Entire Song project with tracks, clips, note patterns, and drum patterns.
+
+- `selectedNotes` aggregates unique pitch classes across all note patterns.
+- `pendingChord` and `pendingScale` return `null` — Song saves do not produce chord/scale summaries.
+- Save browser shows track/clip/pattern counts instead of note chips.
 
 ---
 
