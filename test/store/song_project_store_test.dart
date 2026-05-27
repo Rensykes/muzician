@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/song_project_store.dart';
 
@@ -180,5 +181,71 @@ void main() {
     // Solo should persist after other mutations
     notifier.setTempo(140);
     expect(container.read(songProjectProvider).tracks.single.isSolo, true);
+  });
+
+  test('createImportedNotePatternClip imports PianoRollSnapshot notes', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final trackId = notifier.addTrack(SongTrackType.note);
+
+    final snapshot = PianoRollSnapshot(
+      tempo: 100,
+      key: 'C',
+      numerator: 4,
+      denominator: 4,
+      totalMeasures: 1,
+      notes: const [
+        {'midiNote': 60, 'startTick': 0, 'durationTicks': 4},
+      ],
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      selectedColumnTick: null,
+      snapTicks: 1,
+      highlightedNotes: const [],
+    );
+
+    final clipId = notifier.createImportedNotePatternClip(
+      trackId: trackId,
+      startTick: 0,
+      snapshot: snapshot,
+    );
+
+    final state = container.read(songProjectProvider);
+    expect(state.clips.single.id, clipId);
+    expect(state.notePatterns.single.notes.single.midiNote, 60);
+  });
+
+  test('createImportedNotePatternClip rejects overlapping placement', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final trackId = notifier.addTrack(SongTrackType.note);
+    notifier.createEmptyNotePatternClip(trackId: trackId, startTick: 0);
+
+    final snapshot = PianoRollSnapshot(
+      tempo: 100,
+      key: 'C',
+      numerator: 4,
+      denominator: 4,
+      totalMeasures: 1,
+      notes: const [
+        {'midiNote': 60, 'startTick': 0, 'durationTicks': 4},
+      ],
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      selectedColumnTick: null,
+      snapTicks: 1,
+      highlightedNotes: const [],
+    );
+
+    expect(
+      () => notifier.createImportedNotePatternClip(
+        trackId: trackId,
+        startTick: 0,
+        snapshot: snapshot,
+      ),
+      throwsStateError,
+    );
   });
 }

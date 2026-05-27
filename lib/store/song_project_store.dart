@@ -4,7 +4,9 @@ library;
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/piano_roll.dart';
+import '../models/save_system.dart';
 import '../models/song_project.dart';
+import '../schema/rules/song_import_rules.dart' as import_rules;
 import '../schema/rules/song_rules.dart' as rules;
 
 class SongProjectNotifier extends Notifier<SongProject> {
@@ -207,6 +209,50 @@ class SongProjectNotifier extends Notifier<SongProject> {
     state = rules.ensureProjectCoversEndTick(state, startTick + patternLen);
 
     return clipId;
+  }
+
+  String createImportedNotePatternClip({
+    required String trackId,
+    required int startTick,
+    required InstrumentSnapshot snapshot,
+    String? patternName,
+    int? fallbackLengthTicks,
+  }) {
+    final patternId = _id('note_pattern');
+    final pattern = import_rules.notePatternFromSnapshot(
+      snapshot,
+      patternId: patternId,
+      patternName: patternName ?? 'Imported Pattern',
+      songMeasureTicks: rules.songTicksPerMeasure(state.config.timeSignature),
+      fallbackLengthTicks:
+          fallbackLengthTicks ??
+          rules.songTicksPerMeasure(state.config.timeSignature),
+    );
+    final clip = SongClipInstance(
+      id: _id('song_clip'),
+      trackId: trackId,
+      patternId: pattern.id,
+      patternType: SongPatternType.note,
+      startTick: startTick,
+    );
+    if (!rules.canPlaceClipOnTrack(
+      state,
+      clip,
+      patternLengthTicks: pattern.lengthTicks,
+    )) {
+      throw StateError(
+        'Imported clip would overlap an existing clip on the track',
+      );
+    }
+    final expanded = rules.ensureProjectCoversEndTick(
+      state,
+      clip.startTick + pattern.lengthTicks,
+    );
+    state = expanded.copyWith(
+      notePatterns: [...expanded.notePatterns, pattern],
+      clips: [...expanded.clips, clip],
+    );
+    return clip.id;
   }
 
   void moveClip(String clipId, int newStartTick) {
