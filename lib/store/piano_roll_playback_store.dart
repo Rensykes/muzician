@@ -19,6 +19,10 @@ import 'settings_store.dart';
 typedef PianoRollPlaybackSink =
     Future<void> Function(List<int> midiNotes, double volume);
 
+/// Signature for a function that plays a metronome click. [accent] is true on
+/// the downbeat (beat 1 of a measure), false on other beats.
+typedef PianoRollMetronomeSink = Future<void> Function({required bool accent});
+
 /// Injected playback sink that wraps the synthesised [NotePlayer] engine.
 ///
 /// Override this provider in tests to capture events without real audio.
@@ -27,6 +31,14 @@ final pianoRollPlaybackSinkProvider = Provider<PianoRollPlaybackSink>((ref) {
     for (final midi in midiNotes) {
       NotePlayer.instance.previewNote(midi, volume: volume);
     }
+  };
+});
+
+/// Injected metronome sink. Defaults to the synthesised click in [NotePlayer];
+/// tests override this with a recorder.
+final pianoRollMetronomeSinkProvider = Provider<PianoRollMetronomeSink>((ref) {
+  return ({required bool accent}) async {
+    NotePlayer.instance.playClick(accent: accent);
   };
 });
 
@@ -67,15 +79,22 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
     final prState = ref.read(pianoRollProvider);
     final settings = ref.read(settingsProvider);
     final sink = ref.read(pianoRollPlaybackSinkProvider);
+    final metronomeSink = ref.read(pianoRollMetronomeSinkProvider);
 
     final startTick = rules.resolvePlaybackStartTick(prState);
     final endTick = rules.resolvePlaybackEndTick(prState);
     final events = rules.groupPlaybackEvents(prState.notes, startTick);
     final tempo = prState.config.tempo;
     final volume = settings.noteVolume;
+    final metronomeOn = settings.metronomeEnabled;
+    final timeSig = prState.config.timeSignature;
+    // Quarter-note grid (ticksPerQuarter = 4). One "beat" spans 4 ticks for
+    // x/4 signatures and 2 ticks for x/8 (eighth-note beats).
+    final beatTicks = timeSig.beatUnit == 8 ? 2 : 4;
+    final measureTicks = beatTicks * timeSig.beatsPerMeasure;
     final tickDuration = rules.durationForTickDelta(1, tempo);
 
-    if (events.isEmpty) {
+    if (events.isEmpty && !metronomeOn) {
       state = state.copyWith(
         status: PianoRollPlaybackStatus.completed,
         message: () => 'Nothing to play from the selected column',
@@ -110,6 +129,13 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
       if (_playbackVersion != version) return;
 
       state = state.copyWith(currentTick: () => tick);
+
+      // Metronome click on beat boundaries. Accent = downbeat (beat 1).
+      // Fired before notes so the click can layer with chord onsets without
+      // blocking the note sink.
+      if (metronomeOn && tick % beatTicks == 0) {
+        unawaited(metronomeSink(accent: tick % measureTicks == 0));
+      }
 
       final midiNotes = eventsByTick[tick];
       if (midiNotes != null) {

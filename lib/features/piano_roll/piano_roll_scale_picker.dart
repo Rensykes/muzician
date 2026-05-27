@@ -28,12 +28,56 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
   String? _selectedRoot;
   String? _selectedScale;
   ScaleCategory _activeCategory = ScaleCategory.common;
+  bool _initialSyncDone = false;
+
+  bool _samePitchClassSet(List<String> a, List<String> b) {
+    final left = a.toSet();
+    final right = b.toSet();
+    return left.length == right.length && left.containsAll(right);
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
     final notifier = ref.read(pianoRollProvider.notifier);
     final pendingScale = ref.watch(pianoRollPendingScaleProvider);
+    final activeScale = ref.watch(pianoRollActiveScaleProvider);
+
+    // Restore from committed active state once per widget lifecycle.
+    if (!_initialSyncDone && activeScale != null && pendingScale == null) {
+      final notes = getScaleNotes(activeScale.root, activeScale.scaleName);
+      final highlightLooksStale =
+          state.highlightedNotes.isNotEmpty &&
+          notes.isNotEmpty &&
+          !_samePitchClassSet(state.highlightedNotes, notes);
+      _initialSyncDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (highlightLooksStale) {
+          ref.read(pianoRollActiveScaleProvider.notifier).state = null;
+          setState(() {
+            _selectedRoot = null;
+            _selectedScale = null;
+          });
+          return;
+        }
+        var cat = ScaleCategory.common;
+        for (final entry in scaleGroups.entries) {
+          if (entry.value.any((s) => s.$1 == activeScale.scaleName)) {
+            cat = entry.key;
+            break;
+          }
+        }
+        setState(() {
+          _selectedRoot = activeScale.root;
+          _selectedScale = activeScale.scaleName;
+          _activeCategory = cat;
+        });
+        if (notes.isNotEmpty) {
+          ref.read(pianoRollProvider.notifier).setHighlightedNotes(notes);
+        }
+      });
+    }
 
     // Sync from detection panel
     if (pendingScale != null) {
@@ -49,9 +93,11 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
           _selectedRoot = pendingScale.root;
           _selectedScale = pendingScale.scaleName;
           _activeCategory = cat;
+          _initialSyncDone = true;
         });
         final notes = getScaleNotes(pendingScale.root, pendingScale.scaleName);
         if (notes.isNotEmpty) notifier.setHighlightedNotes(notes);
+        ref.read(pianoRollActiveScaleProvider.notifier).state = pendingScale;
         ref.read(pianoRollPendingScaleProvider.notifier).state = null;
       });
     }
@@ -65,7 +111,9 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
         setState(() {
           _selectedRoot = null;
           _selectedScale = null;
+          _initialSyncDone = false;
         });
+        ref.read(pianoRollActiveScaleProvider.notifier).state = null;
       }
     });
 
@@ -126,8 +174,13 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
                           setState(() {
                             _selectedRoot = null;
                             _selectedScale = null;
+                            _initialSyncDone = false;
                           });
                           notifier.setHighlightedNotes([]);
+                          ref
+                                  .read(pianoRollActiveScaleProvider.notifier)
+                                  .state =
+                              null;
                         },
                         child: Container(
                           width: 16,
@@ -338,6 +391,10 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(pianoRollProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pianoRollActiveScaleProvider.notifier).state = (
+        root: root,
+        scaleName: scaleName,
+      );
       return;
     }
     if (!mounted) return;
@@ -352,6 +409,10 @@ class _PianoRollScalePickerState extends ConsumerState<PianoRollScalePicker> {
         _selectedScale = scaleName;
       });
       ref.read(pianoRollProvider.notifier).setHighlightedNotes(scaleNotes);
+      ref.read(pianoRollActiveScaleProvider.notifier).state = (
+        root: root,
+        scaleName: scaleName,
+      );
     }
   }
 }

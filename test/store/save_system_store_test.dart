@@ -58,6 +58,36 @@ void main() {
     });
 
     test(
+      'explicit pendingScale survives round-trip and overrides derived one',
+      () {
+        final original = PianoRollSnapshot(
+          tempo: 120,
+          key: 'A',
+          numerator: 4,
+          denominator: 4,
+          totalMeasures: 4,
+          notes: [
+            {'midiNote': 60, 'startTick': 0, 'durationTicks': 4},
+            {'midiNote': 64, 'startTick': 0, 'durationTicks': 4},
+            {'midiNote': 67, 'startTick': 0, 'durationTicks': 4},
+          ],
+          pitchRangeStart: 48,
+          pitchRangeEnd: 84,
+          selectedColumnTick: 0,
+          snapTicks: 1,
+          highlightedNotes: ['A', 'C#', 'E'],
+          pendingScale: const PendingScale(root: 'A', scaleName: 'major'),
+        );
+
+        final restored = PianoRollSnapshot.fromJson(original.toJson());
+
+        expect(restored.pendingScale, isNotNull);
+        expect(restored.pendingScale!.root, 'A');
+        expect(restored.pendingScale!.scaleName, 'major');
+      },
+    );
+
+    test(
       'PianoRollSnapshot with null selectedColumnTick survives round-trip',
       () {
         final original = PianoRollSnapshot(
