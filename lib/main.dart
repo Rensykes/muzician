@@ -8,6 +8,7 @@ import 'features/fretboard/fretboard_screen_v2_mockup.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano/piano_screen_v2_mockup.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
+import 'features/song/song_screen.dart';
 import 'models/fretboard.dart' show TuningName;
 import 'models/piano.dart' show PianoRangeName;
 import 'store/fretboard_store.dart';
@@ -70,10 +71,11 @@ class _AppShellState extends ConsumerState<_AppShell> {
       body: IndexedStack(
         index: _tabIndex,
         children: const [
-          _FretboardScreen(),
-          _PianoScreen(),
-          PianoRollScreenV2(),
-          _SettingsScreen(),
+          _FretboardScreen(), // index 0
+          _PianoScreen(), // index 1
+          PianoRollScreenV2(), // index 2
+          SongScreen(), // index 3
+          _SettingsScreen(), // index 4
         ],
       ),
       bottomNavigationBar: Container(
@@ -107,10 +109,16 @@ class _AppShellState extends ConsumerState<_AppShell> {
                   onTap: () => _setTab(2),
                 ),
                 _NavTab(
-                  icon: Icons.settings,
-                  label: 'Settings',
+                  icon: Icons.queue_music,
+                  label: 'Song',
                   active: _tabIndex == 3,
                   onTap: () => _setTab(3),
+                ),
+                _NavTab(
+                  icon: Icons.settings,
+                  label: 'Settings',
+                  active: _tabIndex == 4,
+                  onTap: () => _setTab(4),
                 ),
               ],
             ),
