@@ -172,7 +172,6 @@ class _TrackOverflowMenu extends ConsumerWidget {
       color: MuzicianTheme.surface,
       items: const [
         PopupMenuItem(value: 'rename', child: Text('Rename')),
-        PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
         PopupMenuItem(value: 'delete', child: Text('Delete')),
       ],
     );
@@ -180,9 +179,6 @@ class _TrackOverflowMenu extends ConsumerWidget {
     switch (value) {
       case 'rename':
         _showRenameDialog(context, ref, track);
-        break;
-      case 'duplicate':
-        ref.read(songProjectProvider.notifier).duplicateTrack(track.id);
         break;
       case 'delete':
         ref.read(songProjectProvider.notifier).deleteTrack(track.id);

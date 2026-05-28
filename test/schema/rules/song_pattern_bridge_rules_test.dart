@@ -58,6 +58,7 @@ void main() {
       state,
       patternId: 'pattern2',
       patternName: 'Converted',
+      minimumLengthTicks: 1,
     );
     expect(pattern.notes.single.midiNote, 64);
     expect(pattern.notes.single.startTick, 2);
@@ -87,12 +88,75 @@ void main() {
       state,
       patternId: 'p1',
       patternName: 'Test',
+      minimumLengthTicks: pattern.lengthTicks,
     );
     expect(roundTripped.notes.single.midiNote, 72);
     expect(roundTripped.notes.single.startTick, 4);
-    expect(
-      roundTripped.lengthTicks,
-      12,
-    ); // startTick(4) + durationTicks(8) = 12
+    expect(roundTripped.lengthTicks, 16);
+  });
+
+  test('preserves empty pattern length on save', () {
+    final state = PianoRollState(
+      config: const PianoRollConfig(
+        tempo: 120,
+        key: null,
+        timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+        totalMeasures: 1,
+      ),
+      notes: const [],
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      selectedColumnTick: null,
+      selectedNoteIds: {},
+      snapTicks: 1,
+      highlightedNotes: [],
+      latestImportedRange: null,
+    );
+
+    final pattern = bridge.notePatternFromPianoRollState(
+      state,
+      patternId: 'empty',
+      patternName: 'Empty',
+      minimumLengthTicks: 16,
+    );
+
+    expect(pattern.lengthTicks, 16);
+  });
+
+  test('preserves trailing space when notes end before saved length', () {
+    final state = PianoRollState(
+      config: const PianoRollConfig(
+        tempo: 120,
+        key: null,
+        timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+        totalMeasures: 1,
+      ),
+      notes: const [
+        PianoRollNote(
+          id: 'n1',
+          midiNote: 60,
+          pitchClass: 'C',
+          noteWithOctave: 'C4',
+          startTick: 0,
+          durationTicks: 4,
+        ),
+      ],
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      selectedColumnTick: null,
+      selectedNoteIds: {},
+      snapTicks: 1,
+      highlightedNotes: [],
+      latestImportedRange: null,
+    );
+
+    final pattern = bridge.notePatternFromPianoRollState(
+      state,
+      patternId: 'spaced',
+      patternName: 'Spaced',
+      minimumLengthTicks: 16,
+    );
+
+    expect(pattern.lengthTicks, 16);
   });
 }

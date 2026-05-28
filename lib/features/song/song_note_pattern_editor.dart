@@ -75,14 +75,29 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
 
   void _onSave() {
     final pianoRollState = _isolatedContainer!.read(pianoRollProvider);
+    final project = ref.read(songProjectProvider);
+    final currentPattern = project.notePatterns.firstWhere(
+      (p) => p.id == widget.patternId,
+    );
     final nextPattern = bridge.notePatternFromPianoRollState(
       pianoRollState,
       patternId: widget.patternId,
       patternName: _patternName,
+      minimumLengthTicks: currentPattern.lengthTicks,
     );
-    ref
+    final applied = ref
         .read(songProjectProvider.notifier)
         .applyNotePattern(widget.patternId, nextPattern);
+    if (!applied) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Pattern resize rejected because it would overlap another clip.',
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.pop(context);
   }
 
