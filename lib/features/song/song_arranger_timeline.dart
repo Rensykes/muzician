@@ -297,6 +297,10 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
   ({String clipId, int lengthTicks})? _pendingResize;
   int? _grabOffsetTicks;
 
+  /// True while the active pan gesture is panning the timeline horizontally
+  /// (i.e. neither moving nor resizing the selected clip).
+  bool _isScrolling = false;
+
   int _tickAtDx(double dx) => (dx / _kTickWidth).round().clamp(
     0,
     widget.measureTicks * widget.totalMeasures,
@@ -406,32 +410,46 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
 
   void _onPanStart(DragStartDetails details) {
     final selectedId = ref.read(songSelectedClipIdProvider);
-    if (selectedId == null) return;
-    final clip = widget.clips.where((c) => c.id == selectedId).firstOrNull;
-    if (clip == null) return; // selected clip is on a different track
-    final tick = _tickAtDx(details.localPosition.dx);
-    if (_tickInRightHandle(clip, tick)) {
-      setState(() {
-        _pendingResize = (
-          clipId: clip.id,
-          lengthTicks: widget.clipLengths[clip.id] ?? widget.measureTicks,
-        );
-      });
-      HapticFeedback.selectionClick();
-      return;
+    final clip = selectedId == null
+        ? null
+        : widget.clips.where((c) => c.id == selectedId).firstOrNull;
+    if (clip != null) {
+      final tick = _tickAtDx(details.localPosition.dx);
+      if (_tickInRightHandle(clip, tick)) {
+        setState(() {
+          _pendingResize = (
+            clipId: clip.id,
+            lengthTicks: widget.clipLengths[clip.id] ?? widget.measureTicks,
+          );
+        });
+        HapticFeedback.selectionClick();
+        return;
+      }
+      final length = widget.clipLengths[clip.id] ?? widget.measureTicks;
+      if (tick >= clip.startTick &&
+          tick < clip.startTick + length - _kResizeHandleTicks) {
+        setState(() {
+          _pendingMove = (clipId: clip.id, startTick: clip.startTick);
+          _grabOffsetTicks = tick - clip.startTick;
+        });
+        HapticFeedback.selectionClick();
+        return;
+      }
     }
-    final length = widget.clipLengths[clip.id] ?? widget.measureTicks;
-    if (tick >= clip.startTick &&
-        tick < clip.startTick + length - _kResizeHandleTicks) {
-      setState(() {
-        _pendingMove = (clipId: clip.id, startTick: clip.startTick);
-        _grabOffsetTicks = tick - clip.startTick;
-      });
-      HapticFeedback.selectionClick();
-    }
+    // Default: treat the pan as a horizontal timeline scroll.
+    _isScrolling = true;
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
+    if (_isScrolling) {
+      if (!widget.hScroll.hasClients) return;
+      final next = (widget.hScroll.offset - details.delta.dx).clamp(
+        0.0,
+        widget.hScroll.position.maxScrollExtent,
+      );
+      widget.hScroll.jumpTo(next);
+      return;
+    }
     final tick = _tickAtDx(details.localPosition.dx);
     if (_pendingResize != null) {
       final clip = widget.clips.firstWhere(
@@ -506,15 +524,19 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
       _pendingMove = null;
       _pendingResize = null;
       _grabOffsetTicks = null;
+      _isScrolling = false;
     });
   }
 
   void _onPanCancel() {
-    if (_pendingMove == null && _pendingResize == null) return;
+    if (_pendingMove == null && _pendingResize == null && !_isScrolling) {
+      return;
+    }
     setState(() {
       _pendingMove = null;
       _pendingResize = null;
       _grabOffsetTicks = null;
+      _isScrolling = false;
     });
   }
 
