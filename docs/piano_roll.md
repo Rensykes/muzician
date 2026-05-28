@@ -645,3 +645,13 @@ Rendered as a modal bottom sheet at 88 % of screen height with a drag handle.
 | `_PianoRollInfoTab` | Gesture + toolbar + panel + layout + shortcut + timeline-math entries |
 | `_Section` | Section header (icon + uppercase label) + card container |
 | `_Entry` | Icon badge + bold label + description text |
+
+---
+
+## Standalone Roll vs. Song Note Editor
+
+The standalone `Roll` tab (`PianoRollScreenV2`) uses `pianoRollProvider` with the default container.
+The Song workspace uses an **isolated `ProviderContainer`** seeded from a `NotePattern` when editing note clips.
+Both use `PianoRollGrid` and `PianoRollDetectionPanel`, but the provider scope keeps their states independent.
+Closing the Song note editor writes a converted `NotePattern` back through `applyNotePattern` on the Song store.
+This ensures that editing a Song pattern does not mutate the standalone Roll session.
