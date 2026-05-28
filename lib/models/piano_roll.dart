@@ -78,13 +78,14 @@ class PianoRollConfig {
   );
 }
 
-/// Tap behaviour mode for the piano roll grid.
+/// Piano Roll editing tools.
 ///
-///   * [draw]     — tap to insert, drag to move/resize, long-press to delete.
-///   * [scissors] — tap on a note splits it at the tap position.
+///   * [draw]     — add, move, and resize notes.
+///   * [select]   — drag a marquee box to select intersected notes.
+///   * [scissors] — split notes with a tap.
 ///   * [paint]    — drag inserts notes along the path at snap-length.
 ///   * [delete]   — tap or drag over a note removes it.
-enum PianoRollTool { draw, scissors, paint, delete }
+enum PianoRollTool { draw, select, scissors, paint, delete }
 
 class PianoRollImportedRange {
   final int startTick;

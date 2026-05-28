@@ -27,6 +27,7 @@ class PianoRollSavePanel extends ConsumerWidget {
   /// Builds a [PianoRollSnapshot] from the current store state.
   PianoRollSnapshot _captureSnapshot(WidgetRef ref) {
     final prState = ref.read(pianoRollProvider);
+    final activeScale = ref.read(pianoRollActiveScaleProvider);
 
     return PianoRollSnapshot(
       tempo: prState.config.tempo,
@@ -48,6 +49,12 @@ class PianoRollSavePanel extends ConsumerWidget {
       selectedColumnTick: prState.selectedColumnTick,
       snapTicks: prState.snapTicks,
       highlightedNotes: List<String>.from(prState.highlightedNotes),
+      pendingScale: activeScale != null
+          ? PendingScale(
+              root: activeScale.root,
+              scaleName: activeScale.scaleName,
+            )
+          : null,
     );
   }
 
@@ -55,5 +62,14 @@ class PianoRollSavePanel extends ConsumerWidget {
   void _loadSnapshot(WidgetRef ref, InstrumentSnapshot snap) {
     if (snap is! PianoRollSnapshot) return;
     ref.read(pianoRollProvider.notifier).loadSnapshot(snap);
+    ref.read(pianoRollPendingScaleProvider.notifier).state = null;
+    if (snap.pendingScale != null) {
+      ref.read(pianoRollActiveScaleProvider.notifier).state = (
+        root: snap.pendingScale!.root,
+        scaleName: snap.pendingScale!.scaleName,
+      );
+    } else {
+      ref.read(pianoRollActiveScaleProvider.notifier).state = null;
+    }
   }
 }
