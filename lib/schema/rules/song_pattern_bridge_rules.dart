@@ -52,12 +52,14 @@ PianoRollState pianoRollStateFromNotePattern(
 /// Converts a [PianoRollState] back into a [NotePattern], stripping derived
 /// fields (`pitchClass`, `noteWithOctave`) that are stored only in the editor.
 ///
-/// The pattern's [NotePattern.lengthTicks] is computed as the latest end tick
-/// across all notes (or 1 when there are none).
+/// The pattern's [NotePattern.lengthTicks] keeps at least the previous saved
+/// length so trailing space and empty patterns are preserved, while still
+/// extending when edited notes reach further right.
 NotePattern notePatternFromPianoRollState(
   PianoRollState state, {
   required String patternId,
   required String patternName,
+  required int minimumLengthTicks,
 }) {
   final notes = state.notes.map((n) {
     return NotePatternNote(
@@ -68,9 +70,10 @@ NotePattern notePatternFromPianoRollState(
     );
   }).toList();
 
-  final lengthTicks = notes.isEmpty
-      ? 1
+  final furthestEndTick = notes.isEmpty
+      ? 0
       : notes.map((n) => n.startTick + n.durationTicks).reduce(max);
+  final lengthTicks = max(minimumLengthTicks, furthestEndTick);
 
   return NotePattern(
     id: patternId,

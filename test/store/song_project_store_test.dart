@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/song_project_store.dart';
@@ -81,22 +82,6 @@ void main() {
     expect(state.notePatterns, isEmpty);
   });
 
-  test('duplicateTrack shares patterns not clones them', () {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final notifier = container.read(songProjectProvider.notifier);
-    final trackId = notifier.addTrack(SongTrackType.note);
-    notifier.createEmptyNotePatternClip(trackId: trackId, startTick: 0);
-    notifier.duplicateTrack(trackId);
-    final state = container.read(songProjectProvider);
-    expect(state.tracks, hasLength(2));
-    expect(state.clips, hasLength(2));
-    // Both clips should reference the same pattern
-    expect(state.clips[0].patternId, state.clips[1].patternId);
-    // Only one pattern exists
-    expect(state.notePatterns, hasLength(1));
-  });
-
   test('moveClip rejects overlap', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -163,8 +148,9 @@ void main() {
     final pattern = container.read(songProjectProvider).notePatterns.first;
     // Try to expand pattern to overlap with clip2
     final expanded = pattern.copyWith(lengthTicks: 20);
-    notifier.applyNotePattern(pattern.id, expanded);
+    final applied = notifier.applyNotePattern(pattern.id, expanded);
     // Should be rejected
+    expect(applied, isFalse);
     expect(
       container.read(songProjectProvider).notePatterns.first.lengthTicks,
       16,
@@ -181,6 +167,28 @@ void main() {
     // Solo should persist after other mutations
     notifier.setTempo(140);
     expect(container.read(songProjectProvider).tracks.single.isSolo, true);
+  });
+
+  test('moveClip allows positions beyond tick 511 within 32-measure limit', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    notifier.setTimeSignature(
+      const TimeSignature(beatsPerMeasure: 12, beatUnit: 8),
+    );
+    final trackId = notifier.addTrack(SongTrackType.note);
+    final clipId = notifier.createEmptyNotePatternClip(
+      trackId: trackId,
+      startTick: 0,
+    );
+
+    notifier.moveClip(clipId, 700);
+
+    final clip = container
+        .read(songProjectProvider)
+        .clips
+        .firstWhere((c) => c.id == clipId);
+    expect(clip.startTick, 700);
   });
 
   test('createImportedNotePatternClip imports PianoRollSnapshot notes', () {

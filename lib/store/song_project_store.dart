@@ -95,47 +95,6 @@ class SongProjectNotifier extends Notifier<SongProject> {
     _removeOrphanedPatterns();
   }
 
-  void duplicateTrack(String trackId) {
-    final source = state.tracks.firstWhere((t) => t.id == trackId);
-    final newTrackId = _id('trk');
-    final newTrack = SongTrack(
-      id: newTrackId,
-      name: source.name,
-      type: source.type,
-      order: state.tracks.length,
-      isMuted: source.isMuted,
-      isSolo: source.isSolo,
-    );
-
-    final sourceClips = state.clips.where((c) => c.trackId == trackId).toList();
-
-    var newClips = <SongClipInstance>[];
-
-    for (final sourceClip in sourceClips) {
-      final patternLen = rules.patternLengthForClip(state, sourceClip);
-      if (patternLen == null) continue;
-      final startTick = rules.firstAvailableDuplicateStartTick(
-        state,
-        sourceClip,
-        patternLengthTicks: patternLen,
-      );
-      final newClip = SongClipInstance(
-        id: _id('sci'),
-        trackId: newTrackId,
-        patternId: sourceClip.patternId,
-        patternType: sourceClip.patternType,
-        startTick: startTick,
-      );
-      newClips.add(newClip);
-      state = rules.ensureProjectCoversEndTick(state, startTick + patternLen);
-    }
-
-    state = state.copyWith(
-      tracks: [...state.tracks, newTrack],
-      clips: [...state.clips, ...newClips],
-    );
-  }
-
   // ── Clip Mutations ──────────────────────────────────────────────────────────
 
   String createEmptyNotePatternClip({
@@ -260,7 +219,10 @@ class SongProjectNotifier extends Notifier<SongProject> {
     final patternLen = rules.patternLengthForClip(state, clip);
     if (patternLen == null) return;
 
-    final clampedTick = newStartTick.clamp(0, 511);
+    final maxSongTicks =
+        rules.songTicksPerMeasure(state.config.timeSignature) * 32;
+    final maxStartTick = max(0, maxSongTicks - patternLen);
+    final clampedTick = newStartTick.clamp(0, maxStartTick);
 
     // No-op if the tick hasn't changed
     if (clampedTick == clip.startTick) return;
@@ -384,13 +346,13 @@ class SongProjectNotifier extends Notifier<SongProject> {
 
   // ── Pattern Mutations ───────────────────────────────────────────────────────
 
-  void applyNotePattern(String patternId, NotePattern nextPattern) {
+  bool applyNotePattern(String patternId, NotePattern nextPattern) {
     if (!rules.canApplyPatternLength(
       state,
       patternId,
       nextPattern.lengthTicks,
     )) {
-      return; // rejected
+      return false;
     }
 
     state = state.copyWith(
@@ -398,15 +360,16 @@ class SongProjectNotifier extends Notifier<SongProject> {
           .map((p) => p.id == patternId ? nextPattern : p)
           .toList(),
     );
+    return true;
   }
 
-  void applyDrumPattern(String patternId, DrumPattern nextPattern) {
+  bool applyDrumPattern(String patternId, DrumPattern nextPattern) {
     if (!rules.canApplyPatternLength(
       state,
       patternId,
       nextPattern.lengthTicks,
     )) {
-      return; // rejected
+      return false;
     }
 
     state = state.copyWith(
@@ -414,6 +377,7 @@ class SongProjectNotifier extends Notifier<SongProject> {
           .map((p) => p.id == patternId ? nextPattern : p)
           .toList(),
     );
+    return true;
   }
 
   void toggleDrumStep({
