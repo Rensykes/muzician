@@ -1,6 +1,27 @@
 # Piano Roll
 
-A quantized, timeline-based note editor rendered with `CustomPainter`. Supports four tap-mode tools (Draw / Split / Paint / Delete), drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and adaptive landscape/portrait layout.
+A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and adaptive landscape/portrait layout.
+
+---
+
+## Selection Model
+
+### Selected column vs selected notes
+
+- **Selected column** (`selectedColumnTick`) is a timeline anchor used for detection and playback start.
+- **Selected notes** (`selectedNoteIds`) are the notes currently targeted for edit actions.
+- They often overlap in practice, but they are separate concepts.
+
+### Selection workflows
+
+- **Select tool (primary)**: Switch to `Select`, then drag a marquee rectangle across the grid. All notes the box touches (partial overlap) are selected. Each new marquee replaces the previous selection.
+- **Double-tap (refinement)**: In any mode, double-tap a note to add or remove it from the current selection.
+- **Tap a note**: solo-select that note (replace current note selection).
+- **Select column (secondary shortcut)**: Use the selection action to select all notes active at `selectedColumnTick` — kept as a quick legacy alternative to the Select tool.
+- **Move a selected group**: drag a selected note body to move all selected notes together.
+- **Resize a selected group**: drag the right edge of a selected note to resize the whole current selection.
+- **Split a selected group**: in scissors mode, split on a selected note to split the whole current selection at that tick.
+- **Delete selected notes**: use the UI delete-selection action or `Delete` / `Backspace` (desktop/web).
 
 ---
 
@@ -16,23 +37,28 @@ have been removed. The Roll tab in the bottom navigation mounts
 lib/
   models/
     piano_roll.dart                       ← canonical editor state
-    piano_roll_composer.dart              ← shared chord-stack composer state
+    piano_roll_composer.dart              ← quality/duration label maps (constants)
+    piano_roll_stack_builder.dart         ← stack builder state model
     piano_roll_playback.dart              ← playback transport state
+    hum_to_midi.dart                      ← hum recording types (PitchFrame, etc.)
+    harmonic_analysis.dart                ← shared chord/scale detection types
     save_system.dart                      ← PianoRollSnapshot (persistence)
   schema/rules/
     piano_roll_rules.dart                 ← tick math, MIDI helpers, defaults
     piano_roll_import_rules.dart          ← stack building, snapshot-import mapping
     piano_roll_playback_rules.dart        ← playback sequencing
+    piano_roll_stack_builder_rules.dart   ← canonical generation, recognition, retargeting
     mono_pitch_rules.dart                 ← hum-to-MIDI pitch estimation
   store/
     piano_roll_store.dart                 ← Riverpod NotifierProvider
-    piano_roll_composer_store.dart        ← shared composer provider
     piano_roll_playback_store.dart        ← playback transport provider
+    piano_roll_stack_builder_store.dart   ← builder state transitions
     hum_to_midi_store.dart                ← hum recording provider
+    settings_store.dart                   ← metronome + app-wide preferences
   features/piano_roll/
     piano_roll_grid.dart                  ← main editor canvas (PianoRollGrid)
     piano_roll_screen_v2.dart             ← adaptive layout shell (Roll tab body)
-    piano_roll_stack_selector.dart        ← chord root + quality → add note stack
+    piano_roll_stack_builder.dart         ← unified Stack Builder (Canonico/Avanzato)
     piano_roll_scale_picker.dart          ← scale-highlight picker
     piano_roll_save_stack_loader.dart     ← load stacks from saved progressions
     piano_roll_save_panel.dart            ← first-class piano-roll save/load
@@ -45,10 +71,11 @@ lib/
 | Provider | State type | Purpose |
 |---|---|---|
 | `pianoRollProvider` | `PianoRollState` | Canonical editor: notes, config, range, selection, tool, snap, highlights |
-| `pianoRollComposerProvider` | `PianoRollComposerState` | Root, quality, duration for chord-stack building |
+| `pianoRollStackBuilderProvider` | `PianoRollStackBuilderState` | Stack Builder: MIDI notes, duration, view mode, recognition |
 | `pianoRollPlaybackProvider` | `PianoRollPlaybackState` | Playback transport: status, current tick, start point |
 | `humToMidiProvider` | `HumToMidiState` | Mobile-only recording pipeline |
-| `pianoRollPendingScaleProvider` | `({String root, String scaleName})?` | Temp scale preview |
+| `pianoRollPendingScaleProvider` | `({String root, String scaleName})?` | Temp scale preview (detection panel) |
+| `pianoRollActiveScaleProvider` | `({String root, String scaleName})?` | Committed scale selection (persists across drawer) |
 | `pianoRollScrollToTickProvider` | `int?` | One-shot scroll-to-tick signal |
 
 ---
@@ -60,19 +87,22 @@ lib/
 | `PianoRollNote` | One note: `id`, `midiNote`, `pitchClass`, `noteWithOctave`, `startTick`, `durationTicks` |
 | `TimeSignature` | `beatsPerMeasure` + `beatUnit` (4 or 8) |
 | `PianoRollConfig` | `tempo` (BPM), `key`, `timeSignature`, `totalMeasures` |
-| `PianoRollTool` | Enum: `draw`, `scissors`, `paint`, `delete` (see [Tool Modes](#tool-modes)) |
+| `PianoRollTool` | Enum: `draw`, `select`, `scissors`, `paint`, `delete`. `draw` = add/move/resize · `select` = marquee area selection · `scissors` = split · `paint` = brush insert · `delete` = brush remove (see [Tool Modes](#tool-modes)) |
 | `PianoRollImportedRange` | `startTick`, `endTickExclusive` — tracks latest hum import range |
 | `PianoRollState` | Full state: `config`, `notes`, `pitchRangeStart`, `pitchRangeEnd`, `selectedColumnTick`, `selectedNoteIds`, `activeTool`, `snapTicks`, `highlightedNotes`, `latestImportedRange` |
 
-### Composer State (`lib/models/piano_roll_composer.dart`)
+### Stack Builder State (`lib/models/piano_roll_stack_builder.dart`)
 
 | Field | Default | Purpose |
 |---|---|---|
-| `root` | `"C"` | Root note of the chord to build |
-| `quality` | `""` (major) | Chord quality symbol |
+| `midiNotes` | `[60, 64, 67]` (C4, E4, G4) | Final stack notes (max 10) |
 | `durationTicks` | `4` (quarter) | Note duration for each stack note |
+| `activeView` | `canonical` | `canonical` or `advanced` editing mode |
+| `recognition` | — | Derived: `recognizedRoot`, `recognizedQuality`, `recognizedInversionIndex`, `isCustomVoicing` |
 
-Quality symbols: `''` (maj), `'m'`, `'7'`, `'maj7'`, `'m7'`, `'dim'`, `'aug'`, `'sus2'`, `'sus4'`, `'m7b5'`, `'add9'`, `'maj9'`, `'6'`, `'m6'`, `'dim7'`, `'7sus4'`
+### Composer State (`lib/models/piano_roll_composer.dart`)
+
+Legacy state type kept for its quality/duration label maps. The store and widget have been replaced by the unified Stack Builder.
 
 ---
 
@@ -168,10 +198,15 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 | `addNoteStack(midiList, tick, duration)` | Add multiple notes at the same tick (chord) |
 | `selectColumn(tick)` | Set `selectedColumnTick` for detection panel |
 | `selectNote(id)` | Highlight a specific note |
-| `setSelection(ids)` | Replace all selected note IDs at once |
+| `setSelection(ids)` | Replace current selection (used by Select tool marquee commit and double-tap refinement) |
+| `clearSelection()` | Clear note selection without touching `selectedColumnTick` |
+| `deleteSelectedNotes()` | Remove the whole current note selection |
+| `selectNotesAtTick(tick)` | Select all notes active at a given tick and sync `selectedColumnTick` |
+| `resizeNotesBatch(updates)` | Apply per-note duration updates to a selected group |
+| `splitSelectedNotesAtTick(tick)` | Split every selected note that spans the given absolute tick |
 | `setPitchRange(start, end)` | Shift the visible MIDI window |
 | `shiftPitchRange(semitones)` | Scroll the pitch window ± semitones |
-| `setActiveTool(tool)` | Switch between `draw` / `scissors` / `paint` / `delete` |
+| `setActiveTool(tool)` | Switch between `draw` / `select` / `scissors` / `paint` / `delete` |
 | `setSnapTicks(n)` | Set snap granularity (1, 2, 4, 8, 16, 32) |
 | `setHighlightedNotes(pcs)` | Set pitch classes to highlight on the grid |
 | `clearHighlightedNotes()` | Remove all highlights |
@@ -179,16 +214,24 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 | `loadSnapshot(snap)` | Restore full session from a `PianoRollSnapshot` |
 | `reset()` | Revert to default state |
 
-### Composer store (`lib/store/piano_roll_composer_store.dart`)
+### Stack builder store (`lib/store/piano_roll_stack_builder_store.dart`)
 
-Provider: `pianoRollComposerProvider` — shared composer state behind the `_ComposerSheet`, the `_AddPresetSplitChip` preset label, and the landscape inspector rail's composer fields.
+Provider: `pianoRollStackBuilderProvider` — single source of truth for the unified Stack Builder widget. Replaces the old `pianoRollComposerProvider`.
 
 | Method | Description |
 |---|---|
-| `setRoot(root)` | Set root note (e.g. `"C"`, `"F#"`) |
-| `setQuality(quality)` | Set chord quality symbol |
-| `setDuration(ticks)` | Set note duration in ticks |
-| `addStack()` | Build chord stack from current state and place on roll at `selectedColumnTick` |
+| `switchView(view)` | Toggle between Canonico / Avanzato (preserves notes) |
+| `setCanonicalRoot(root)` | Retarget stack to new root via rules layer |
+| `setCanonicalQuality(quality)` | Retarget stack to new quality |
+| `setCanonicalInversion(index)` | Change inversion (0=Root, 1=1st, 2=2nd, 3=3rd) |
+| `setDurationTicks(ticks)` | Update note duration |
+| `addAbsoluteNote(midi)` | Add a MIDI note to the stack (advanced view) |
+| `duplicateNoteAt(index)` | Duplicate note at index (advanced view) |
+| `removeNoteAt(index)` | Remove note at index (advanced view) |
+| `reorderNotes(oldIdx, newIdx)` | Reorder notes (advanced view) |
+| `replaceNoteAt(index, midi)` | Replace a note (advanced view) |
+| `insertDegreeShortcut(degree)` | Insert note by chord degree number (1–9) |
+| `addStack()` | Insert current builder notes into the piano roll at `selectedColumnTick` |
 
 ---
 
@@ -313,11 +356,12 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 ## Tool Modes
 
-`PianoRollState.activeTool` drives the grid's tap behaviour. All four modes are reachable from the portrait action-bar tool segment (icon-only segmented control) or directly via `pianoRollProvider.setActiveTool(...)`.
+`PianoRollState.activeTool` drives the grid's tap behaviour. All five modes are reachable from the portrait action-bar tool segment (icon-only segmented control) or directly via `pianoRollProvider.setActiveTool(...)`.
 
 | Tool | Icon | Tap on empty cell | Tap on note | Drag |
 |---|---|---|---|---|
 | `draw` | ✏ `edit_rounded` | Insert 1-tick note (or snap-length on double-tap). | Select / multi-select (double-tap). Long-press (500 ms) deletes. | Move / resize the note. |
+| `select` | Ⓢ `select_all_rounded` | Draws a marquee to select notes in area. | Double-tap to add/remove from selection. | Draws marquee; on release, all intersected notes are selected. |
 | `scissors` | ✂ `content_cut_rounded` | No-op. | Split the note at the tap position. | No-op (no move/resize in this mode). |
 | `paint` | 🖌 `brush_rounded` | Insert a note at `snapTicks` duration. | No-op (cell already occupied). | Continues inserting notes along the drag path, snap-aligned; cells already occupied are skipped. |
 | `delete` | 🗑 `delete_outline_rounded` | No-op. | Remove the note. | Removes every note touched along the drag path. |
@@ -339,6 +383,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 | Tool | Empty cell | Over a note |
 |---|---|---|
 | `draw` | basic | move / resize-right (last 16 px) |
+| `select` | crosshair | basic (double-tap to add/remove) |
 | `scissors` | basic | precise (with scissors x-position painted) |
 | `paint` | precise | precise |
 | `delete` | forbidden | precise |
@@ -351,10 +396,9 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 - **Grid**: 3× flex on the left — primary editing surface.
 - **Inspector rail**: 1× flex on the right — scrollable utility panel containing:
-  - Composer (root / quality / duration pickers + "Add Stack" button)
+  - Stack Builder (unified Canonico/Avanzato chord stack editor)
   - Selection status
   - Edit & Pitch controls (tool + snap pills, pitch range ± octave)
-  - Stack Selector
   - Scale picker
   - Detection panel (when column selected)
   - Hum Recorder (mobile) / unsupported card (web)
@@ -371,19 +415,8 @@ The portrait shell is minimal-by-design: the grid is `Expanded` and the chrome b
 - **Grid**: full-width `PianoRollGrid` inside `Expanded` — never shrinks.
 - **`_PortraitActionBar`** (3 fixed rows under the grid):
   1. `_SelectionStatus(compact)` (left, ellipsis-safe) + `_ToolModeSegment` (right, fixed 4-icon segmented control).
-  2. `_AddPresetSplitChip` (Add + chord-preset label + chevron, flex 2) · `Scale` · `Detect`.
+  2. `Stack Builder` · `Scale` · `Detect`.
   3. `Record` · `Save` · `Import`.
-
-#### Add-preset split chip
-
-A single chip combining the most-frequent action with the configuration entry point:
-
-| Region | Action |
-|---|---|
-| Main area (icon + `Cmaj 1/4` preset label) | `composerNotifier.addStack()` — adds the current composer preset to the roll. |
-| Trailing chevron | Opens `_ComposerSheet` (Root / Quality / Duration pickers + Add Stack + stack list). |
-
-The label is reactive on `pianoRollComposerProvider` so the user always sees what they are about to add.
 
 #### Bottom sheets
 
@@ -391,7 +424,7 @@ Each chip opens the corresponding panel as a glass `showWidgetSheet`:
 
 | Chip | Sheet body |
 |---|---|
-| `Compose` chevron | `_ComposerSheet` — root/quality/duration fields + Add Stack + `PianoRollStackSelector` |
+| `Stack Builder` | `PianoRollStackBuilder` — unified Canonico/Avanzato chord stack editor |
 | `Scale` | `PianoRollScalePicker` |
 | `Detect` | `PianoRollDetectionPanel` (chip disabled when no column is selected) |
 | `Record` | `PianoRollHumRecorderPanel` |
@@ -412,6 +445,8 @@ The core editor. Three `CustomPainter` layers rendered inside synchronized scrol
 | `_RulerPainter` | Measure numbers, beat dots, tick marks, selected-column marker |
 | `_GridPainter` | Row backgrounds, grid lines, column highlight, note rectangles, resize handles |
 
+The select marquee overlay is rendered as a `Positioned` widget in the grid `Stack` with Key `piano-roll-select-marquee`. It appears as a blue rectangle with translucent fill and a high-contrast border only during an active `Select`-tool drag.
+
 **Scroll architecture:**
 - Four `ScrollController`s: `_hScroll` + `_vScroll` (grid), `_rulerHScroll` (ruler synced to `_hScroll`), `_sidebarVScroll` (sidebar synced to `_vScroll`)
 - All scroll views use `NeverScrollableScrollPhysics` — scroll is driven programmatically via `_manualScroll(delta)` in pointer move
@@ -426,14 +461,14 @@ The core editor. Three `CustomPainter` layers rendered inside synchronized scrol
 
 **Gesture state machine (raw `Listener`):**
 
-The state machine below applies to `draw` and `scissors`. `paint` and `delete` are continuous tools and short-circuit the slop/long-press logic — see [Tool Modes](#tool-modes).
+The state machine below applies to `draw`, `select`, and `scissors`. `paint` and `delete` are continuous tools and short-circuit the slop/long-press logic — see [Tool Modes](#tool-modes).
 
-| Event | Single finger (`draw` / `scissors`) | Two fingers |
+| Event | Single finger (`draw` / `select` / `scissors`) | Two fingers |
 |---|---|---|
-| `onPointerDown` | Record hit, start 500 ms long-press timer | Enter pinch mode, record initial spread |
-| `onPointerMove` (< 8 px) | No-op (inside slop threshold) | Scale `_cellW` / `_rowH` |
-| `onPointerMove` (≥ 8 px) | If on note: move/resize; else: scroll | Scale `_cellW` / `_rowH` |
-| `onPointerUp` | If no movement: tap (add/select/split); if timer fired: already deleted | Exit pinch if last finger lifted |
+| `onPointerDown` | Record hit, start 500 ms long-press timer (skipped for `select`) | Enter pinch mode, record initial spread |
+| `onPointerMove` (< 8 px) | No-op (inside slop threshold); `select` also no-op until slop is exceeded | Scale `_cellW` / `_rowH` |
+| `onPointerMove` (≥ 8 px) | `draw`/`scissors`: if on note → move/resize; else → scroll. `select`: draw marquee rectangle, intersect notes | Scale `_cellW` / `_rowH` |
+| `onPointerUp` | `draw`/`scissors`: if no movement → tap (add/select/split); if timer fired → already deleted. `select`: commit marquee selection via `setSelection(ids)` | Exit pinch if last finger lifted |
 
 **Note interactions:**
 
@@ -443,16 +478,28 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 |---|---|
 | **Add note (1 tick)** | `draw` tool: tap on empty cell |
 | **Add note (snap length)** | `draw` tool: double-tap on empty cell — inserts note at current snap duration |
-| **Select note** | `draw` tool: tap on existing note (double-tap toggles multi-select) |
-| **Move note** | `draw` tool: drag note body (horizontal = beat-snapped tick, vertical = semitone pitch) |
-| **Resize note** | `draw` tool: drag right-edge handle (rightmost 16 px, snaps to 1/16th minimum) |
-| **Split note** | `scissors` tool: tap note — splits at tapped position |
+| **Solo-select note + audition pitch** | `draw` tool: tap on existing note |
+| **Add/remove note in selection** | `draw` tool: double-tap on existing note |
+| **Select notes at current column** | Selection action: use **Multi-select** in the Selection area (landscape) or the top-left selection icon in the portrait action bar to select all notes active at `selectedColumnTick` |
+| **Move selected group** | `draw` tool: drag body of any selected note (horizontal = beat-snapped tick, vertical = semitone pitch) |
+| **Resize selected group** | `draw` tool: drag the right-edge handle of a selected note (rightmost 16 px, snaps to 1/16th minimum) |
+| **Split selected group** | `scissors` tool: tap a selected note — splits the current selection at the tapped position |
 | **Paint notes along a path** | `paint` tool: drag — inserts snap-length notes on every cell touched (skips occupied cells) |
 | **Delete a note by tap** | `delete` tool: tap on the note |
 | **Sweep-delete** | `delete` tool: drag — removes every note touched |
 | **Long-press delete** | `draw` tool: long-press (500 ms) on note |
-| **Delete selected notes** | `Delete` or `Backspace` key (desktop/web) |
+| **Delete selected notes** | UI delete-selection action, or `Delete` / `Backspace` key (desktop/web) |
 | **Play / Stop** | `Space` key (desktop/web) |
+
+### Explicit selection actions
+
+| Action | How to trigger |
+|---|---|
+| **Select tool** | Switch to `Select`, then drag a box across the grid. All notes the box touches are selected. |
+| **Replace selection** | Every new marquee replaces the previous selection. |
+| **Refine selection** | Double-tap a note to add or remove it from the current selection. |
+| **Select column** | Secondary shortcut — selects all notes active at the current column tick. |
+| **Edit after selection** | Switch back to `Draw` to move/resize, or `Scissors` to split the selected group. |
 
 **Beat snapping (move):**
 - Beat ticks = 4 (quarter note) for 4/4; = 2 (eighth) for 4/8 time signatures
@@ -464,8 +511,13 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 
 ---
 
-### `PianoRollStackSelector`
-Chord root (12 chromatic) + quality (17 chords) + duration (1–4 beats) picker. Tapping "Add Stack" calls `addStack()` on the composer provider, which builds the chord via shared import rules and places notes at `selectedColumnTick` (or tick 0 if none). Notes are voice-led to the closest MIDI range within the current pitch window.
+### `PianoRollStackBuilder`
+Unified chord stack editor replacing the old `Stack Selector` and `Stack Composer` flows. Provides two views on the same final note list:
+
+- **Canonico**: Quick path — pick root, quality (17 types), inversion, and duration. Changes transform the current stack.
+- **Avanzato**: Lossless editor — add, edit, remove, and reorder individual notes; insert by note + octave picker or chord degree shortcut (1–9). Hard cap at 10 notes. Exact duplicates (e.g. `C4` + `C4`) are rejected; octave doublings (e.g. `C3` + `C4`) are allowed.
+
+The builder recognises custom voicings (e.g. `G2 C3 E3 G3 C4` displays as "C maj • 2nd inv • Custom voicing"). Unrecognised stacks show "Unrecognized custom stack". Canonical and advanced views remain synchronised — switching tabs never resets the stack. In portrait, tapping **Add Stack** inserts the stack at the current column and dismisses the drawer immediately.
 
 ---
 
@@ -483,6 +535,11 @@ Supports `FretboardSnapshot` (MIDI via tuning + string + fret) and `PianoSnapsho
 
 ### `PianoRollScalePicker`
 Scale-highlight picker: choose a root note and scale type (major, minor, pentatonic major/minor, blues, chromatic). Highlights all matching pitch-class rows on the grid in teal. The selection is stored as `highlightedNotes` in `PianoRollState`.
+
+When a scale is active:
+- existing out-of-scale notes are checked before applying the scale and can be removed via the confirmation flow
+- new notes, pasted stacks, and pitch moves that would land outside the active scale are blocked
+- the active scale pill can be cleared back to `null` with `✕` to return to full chromatic note entry
 
 ---
 
@@ -550,8 +607,13 @@ Transport strip / inspector rail → pianoRollProvider.setTempo() / setTimeSigna
                                 │
      PianoRollDetectionPanel shows chords/scales at that column
                                 │
-     Composer dock → pianoRollComposerProvider.setRoot/Quality/Duration
-                  → addStack() → import_rules.buildChordStackMidis() → addNoteStack()
+     User switches to Select → drag marquee → _onPointerUp
+                                │       → pianoRollProvider.setSelection(ids)
+                                │
+     User switches to Draw/Scissors → edits the selected group
+                                │
+     Stack Builder → pianoRollStackBuilderProvider.setCanonicalRoot/Quality/Inversion
+                  → addStack() → addNoteStack(current builder notes)
 ```
 
 ---

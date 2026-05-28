@@ -17,6 +17,12 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   int _clamp(int value, int minV, int maxV) => value.clamp(minV, maxV);
 
+  bool _isAllowedByActiveScale(int midiNote) {
+    final highlightedNotes = state.highlightedNotes;
+    if (highlightedNotes.isEmpty) return true;
+    return highlightedNotes.contains(rules.midiToPitchClass(midiNote));
+  }
+
   void rememberLatestImportedRange(int startTick, int endTickExclusive) {
     state = state.copyWith(
       latestImportedRange: () => PianoRollImportedRange(
@@ -119,6 +125,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       state.config.totalMeasures,
     );
     if (startTick < 0 || startTick >= maxTick) return;
+    if (!_isAllowedByActiveScale(midiNote)) return;
     final note = PianoRollNote(
       id: _makeId(),
       midiNote: midiNote,
@@ -140,6 +147,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       state.config.totalMeasures,
     );
     if (startTick < 0 || startTick >= maxTick) return;
+    if (!_isAllowedByActiveScale(midiNote)) return;
     final safeDuration = durationTicks.clamp(1, maxTick - startTick);
     final note = PianoRollNote(
       id: _makeId(),
@@ -176,6 +184,31 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
 
   void setSelection(Set<String> ids) =>
       state = state.copyWith(selectedNoteIds: ids);
+
+  void clearSelection() =>
+      state = state.copyWith(selectedNoteIds: const <String>{});
+
+  void deleteSelectedNotes() {
+    final selectedIds = state.selectedNoteIds;
+    if (selectedIds.isEmpty) return;
+    state = state.copyWith(
+      notes: state.notes
+          .where((note) => !selectedIds.contains(note.id))
+          .toList(),
+      selectedNoteIds: const <String>{},
+    );
+  }
+
+  void selectNotesAtTick(int tick) {
+    final idsAtTick = rules
+        .getNotesAtTick(state.notes, tick)
+        .map((note) => note.id)
+        .toSet();
+    state = state.copyWith(
+      selectedNoteIds: idsAtTick,
+      selectedColumnTick: () => tick,
+    );
+  }
 
   void splitNote(String noteId, int splitTick) {
     final target = state.notes.where((n) => n.id == noteId).firstOrNull;
@@ -219,6 +252,71 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
   }
 
+  void resizeNotesBatch(List<({String id, int durationTicks})> updates) {
+    if (updates.isEmpty) return;
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    final updateMap = <String, int>{
+      for (final u in updates) u.id: u.durationTicks,
+    };
+    state = state.copyWith(
+      notes: state.notes.map((note) {
+        final nextDuration = updateMap[note.id];
+        if (nextDuration == null) return note;
+        final safeDuration = nextDuration
+            .clamp(1, max(1, maxTick - note.startTick))
+            .toInt();
+        return note.copyWith(durationTicks: safeDuration);
+      }).toList(),
+    );
+  }
+
+  void splitSelectedNotesAtTick(int splitTick) {
+    final selectedIds = state.selectedNoteIds;
+    if (selectedIds.isEmpty) return;
+
+    final splittable = state.notes
+        .where(
+          (note) =>
+              selectedIds.contains(note.id) &&
+              splitTick > note.startTick &&
+              splitTick < note.startTick + note.durationTicks,
+        )
+        .toList();
+    if (splittable.isEmpty) return;
+
+    final splitIds = splittable.map((note) => note.id).toSet();
+    final rightSelection = <String>{};
+    final splitNotes = <PianoRollNote>[];
+    for (final note in splittable) {
+      final leftDuration = splitTick - note.startTick;
+      final rightDuration = (note.startTick + note.durationTicks) - splitTick;
+      final right = PianoRollNote(
+        id: _makeId(),
+        midiNote: note.midiNote,
+        pitchClass: note.pitchClass,
+        noteWithOctave: note.noteWithOctave,
+        startTick: splitTick,
+        durationTicks: rightDuration,
+      );
+      splitNotes.add(note.copyWith(durationTicks: leftDuration));
+      splitNotes.add(right);
+      rightSelection.add(right.id);
+    }
+
+    final untouchedSelection = selectedIds.difference(splitIds);
+    state = state.copyWith(
+      notes: [
+        ...state.notes.where((note) => !splitIds.contains(note.id)),
+        ...splitNotes,
+      ],
+      selectedNoteIds: {...rightSelection, ...untouchedSelection},
+      latestImportedRange: () => null,
+    );
+  }
+
   void moveNote(String noteId, int newStartTick, [int? newMidiNote]) {
     final target = state.notes.where((n) => n.id == noteId).firstOrNull;
     if (target == null) return;
@@ -231,6 +329,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       state.pitchRangeStart,
       state.pitchRangeEnd,
     );
+    if (!_isAllowedByActiveScale(midi)) return;
     final maxDuration = max<int>(1, maxTick - boundedStart);
     state = state.copyWith(
       notes: state.notes
@@ -261,38 +360,48 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       for (final u in updates)
         u.id: (startTick: u.startTick, midiNote: u.midiNote),
     };
+    final nextNotesById = <String, PianoRollNote>{};
+    for (final note in state.notes) {
+      final update = updateMap[note.id];
+      if (update == null) continue;
+      final boundedStart = update.startTick
+          .clamp(0, max(0, maxTick - 1))
+          .toInt();
+      final midi = update.midiNote.clamp(
+        state.pitchRangeStart,
+        state.pitchRangeEnd,
+      );
+      if (!_isAllowedByActiveScale(midi)) {
+        return;
+      }
+      final maxDuration = max<int>(1, maxTick - boundedStart);
+      nextNotesById[note.id] = note.copyWith(
+        midiNote: midi,
+        pitchClass: rules.midiToPitchClass(midi),
+        noteWithOctave: rules.midiToNoteWithOctave(midi),
+        startTick: boundedStart,
+        durationTicks: min(note.durationTicks, maxDuration),
+      );
+    }
     state = state.copyWith(
       notes: state.notes.map((n) {
-        final u = updateMap[n.id];
-        if (u == null) return n;
-        final boundedStart = u.startTick.clamp(0, max(0, maxTick - 1)).toInt();
-        final midi = u.midiNote.clamp(
-          state.pitchRangeStart,
-          state.pitchRangeEnd,
-        );
-        final maxDuration = max<int>(1, maxTick - boundedStart);
-        return n.copyWith(
-          midiNote: midi,
-          pitchClass: rules.midiToPitchClass(midi),
-          noteWithOctave: rules.midiToNoteWithOctave(midi),
-          startTick: boundedStart,
-          durationTicks: min(n.durationTicks, maxDuration),
-        );
+        return nextNotesById[n.id] ?? n;
       }).toList(),
     );
   }
 
-  void addNoteStack(List<int> midiNotes, int startTick, int durationTicks) {
+  int addNoteStack(List<int> midiNotes, int startTick, int durationTicks) {
     final maxTick = rules.totalTicks(
       state.config.timeSignature,
       state.config.totalMeasures,
     );
-    if (startTick < 0 || startTick >= maxTick) return;
+    if (startTick < 0 || startTick >= maxTick) return 0;
     final safe = durationTicks.clamp(1, maxTick - startTick);
     final unique = midiNotes.toSet().where(
       (m) => m >= state.pitchRangeStart && m <= state.pitchRangeEnd,
     );
-    if (unique.isEmpty) return;
+    if (unique.isEmpty) return 0;
+    if (unique.any((midi) => !_isAllowedByActiveScale(midi))) return 0;
     final created = unique.map(
       (midi) => PianoRollNote(
         id: _makeId(),
@@ -307,6 +416,7 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
       notes: [...state.notes, ...created],
       latestImportedRange: _latestImportedRangeClearForNewNote(),
     );
+    return unique.length;
   }
 
   void selectColumn(int? tick) =>
@@ -496,6 +606,9 @@ final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollState>(
 );
 
 final pianoRollPendingScaleProvider =
+    StateProvider<({String root, String scaleName})?>((_) => null);
+
+final pianoRollActiveScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
 
 final pianoRollScrollToTickProvider = StateProvider<int?>((_) => null);

@@ -13,13 +13,15 @@ lib/
   store/fretboard_store.dart          ← Riverpod NotifierProvider
   features/fretboard/
     fretboard.dart                    ← CustomPainter grid (GuitarFretboard)
+    fretboard_feature.dart            ← Fretboard tab screen shell
+    fretboard_screen_v2_mockup.dart   ← landscape-optimized mockup variant
+    fretboard_save_panel.dart         ← save/load panel (wraps SaveBrowserPanel)
     capo_control.dart                 ← capo position stepper
     chord_diagram.dart                ← chord shape mini-diagram
     chord_voicing_picker.dart         ← chord root + quality → load to fretboard
     note_detection_panel.dart         ← detect chord/scale from selected cells
     scale_picker.dart                 ← scale root + type → highlight fretboard
     tuning_selector.dart              ← preset tuning picker
-    landscape_fretboard_modal.dart    ← full-screen landscape view
 ```
 
 ---
@@ -36,7 +38,7 @@ lib/
 | `FretCoordinate` | A selected position: `stringIndex`, `fret`, `noteName` |
 | `ChordVoicing` | A named chord shape: `name`, list of `FretCoordinate` |
 | `FretboardState` | Full state: `tuning`, `numFrets`, `capo`, `viewMode`, `inputMode`, `selectedCells`, `highlightedNotes` |
-| `FretboardViewMode` | Enum — pitchClass / exact / focus / exactFocus |
+| `FretboardViewMode` | Enum — `exact`, `exactFocus` |
 | `FretboardInputMode` | Enum — free / chord |
 
 ---
@@ -90,7 +92,7 @@ The main fretboard widget. Rendered entirely with `CustomPainter` + `RepaintBoun
 
 **Controls (top bars):**
 1. **Input Mode Bar** — `Free` vs `Chord` toggle (see [Input Modes](#input-modes) below).
-2. **View Mode Bar** — `All` / `Exact` / `Focus` / `Solo` selector.
+2. **View Mode Bar** — `Exact` / `Exact + Focus` selector.
 
 **Painter logic:**
 - String lines spaced vertically, fret lines spaced horizontally
@@ -154,11 +156,6 @@ Used as a preview inside `ChordVoicingPicker`.
 
 ---
 
-### `LandscapeFretboardModal`
-A full-screen modal (pushed via `Navigator.push`) that renders `GuitarFretboard` in landscape orientation using `SystemChrome.setPreferredOrientations`. Includes a close button that restores the original orientation on pop.
-
----
-
 ## State Flow
 
 ```
@@ -177,7 +174,7 @@ TuningSelector → fretboardProvider.setTuning()
 
 - Out-of-key confirmation: If a scale highlight is active and the user attempts to add a note outside that scale, the app shows an out-of-key confirmation dialog. The dialog offers a "Don't show again" option which persists to settings. See implementation: [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
 
-- View-mode initialization & local override: The fretboard initializes its view mode from app settings but exposes a small view-mode control on the page allowing a local override. Tools such as chord/scale pickers do not force the view mode. Relevant code: [lib/main.dart](lib/main.dart) and [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
+- View-mode control: The fretboard exposes an in-page view-mode control (`exact` / `exactFocus`) for local display preference. Tools such as chord/scale pickers do not force the view mode. Relevant code: [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
 
 - Scroll guard: To prevent accidental note insertion while scrolling horizontally, the fretboard uses a pointer-down/ up movement threshold and ignores taps that exceed the threshold distance. See: [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart).
 
@@ -225,5 +222,5 @@ showAppInfoPanel(context, initialTab: 0); // 0 = Fretboard, 1 = Piano, 2 = Piano
 | Section | Content |
 |---|---|
 | **Gestures** | Tap fret cell to select / deselect |
-| **Input & View Modes** | Free mode, Chord mode, All / Exact / Focus / Solo views |
+| **Input & View Modes** | Free mode, Chord mode, Exact / Exact+Focus views |
 | **Panels & Tools** | Tuning (10 presets), Capo (0–11), Chord voicing picker, Scale picker, Detection panel, Saves |
