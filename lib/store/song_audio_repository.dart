@@ -1,0 +1,142 @@
+/// Filesystem-backed repository for audio clip files.
+///
+/// All disk I/O for song audio lives here.  Other layers refer to assets by
+/// id; this class is the only place that converts an id into a real `File`.
+library;
+
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+
+import '../models/song_project.dart';
+import '../schema/rules/song_audio_rules.dart';
+import '../utils/wav_writer.dart';
+
+class ReconcileResult {
+  final List<String> deletedAssetIds;
+  const ReconcileResult(this.deletedAssetIds);
+}
+
+class SongAudioRepository {
+  final Directory? _rootOverride;
+  final Uuid _uuid;
+  Directory? _rootCache;
+
+  SongAudioRepository._({Directory? root, Uuid? uuid})
+      : _rootOverride = root,
+        _uuid = uuid ?? const Uuid();
+
+  factory SongAudioRepository.production() => SongAudioRepository._();
+
+  /// Test factory: bypasses `path_provider` by pinning the root directory.
+  factory SongAudioRepository.testWith({required Directory rootDirectory}) =>
+      SongAudioRepository._(root: rootDirectory);
+
+  Future<Directory> _root() async {
+    final override = _rootOverride;
+    if (override != null) {
+      if (!override.existsSync()) await override.create(recursive: true);
+      return override;
+    }
+    final cached = _rootCache;
+    if (cached != null) return cached;
+    final docs = await getApplicationDocumentsDirectory();
+    final dir = Directory(p.join(docs.path, 'song_audio'));
+    if (!dir.existsSync()) await dir.create(recursive: true);
+    _rootCache = dir;
+    return dir;
+  }
+
+  Future<File> resolvePath(String assetId, String format) async {
+    final root = await _root();
+    return File(p.join(root.path, '$assetId.$format'));
+  }
+
+  Future<AudioAsset> writeRecording(Uint8List wavBytes) async {
+    final id = _uuid.v4();
+    final file = await resolvePath(id, 'wav');
+    await file.writeAsBytes(wavBytes, flush: true);
+
+    final header = parseWavHeader(wavBytes);
+    final samples = _extractInt16Samples(wavBytes);
+    final peaks = computePeaksFromInt16(samples);
+
+    return AudioAsset(
+      id: id,
+      durationMs: header.durationMs,
+      sampleRate: header.sampleRate,
+      channels: header.channels,
+      format: 'wav',
+      peaks: peaks,
+      sourceLabel: 'Recording',
+    );
+  }
+
+  Future<void> delete(String assetId) async {
+    final root = await _root();
+    const candidates = <String>['wav', 'mp3', 'm4a'];
+    for (final fmt in candidates) {
+      final file = File(p.join(root.path, '$assetId.$fmt'));
+      if (file.existsSync()) {
+        try {
+          await file.delete();
+        } on FileSystemException {
+          // tolerate races / missing
+        }
+      }
+    }
+  }
+
+  Future<ReconcileResult> reconcileOrphans({
+    required Set<String> referencedAssetIds,
+  }) async {
+    final root = await _root();
+    final files = root.listSync().whereType<File>();
+    final deleted = <String>[];
+    for (final f in files) {
+      final base = p.basenameWithoutExtension(f.path);
+      if (!referencedAssetIds.contains(base)) {
+        try {
+          await f.delete();
+          deleted.add(base);
+        } on FileSystemException {
+          // ignore
+        }
+      }
+    }
+    return ReconcileResult(deleted);
+  }
+
+  Int16List _extractInt16Samples(Uint8List wav) {
+    final bd = ByteData.sublistView(wav);
+    var cursor = 12; // after 'RIFF<size>WAVE'
+    while (cursor + 8 <= wav.length) {
+      final tag = String.fromCharCodes(wav.sublist(cursor, cursor + 4));
+      final size = bd.getUint32(cursor + 4, Endian.little);
+      if (tag == 'data') {
+        final start = cursor + 8;
+        final end = start + size;
+        final view = wav.buffer.asInt16List(
+          wav.offsetInBytes + start,
+          (end - start) ~/ 2,
+        );
+        return Int16List.fromList(view);
+      }
+      cursor += 8 + size;
+    }
+    return Int16List(0);
+  }
+}
+
+final songAudioRepositoryProvider = Provider<SongAudioRepository>((ref) {
+  if (kIsWeb) {
+    return SongAudioRepository.production();
+  }
+  return SongAudioRepository.production();
+});
