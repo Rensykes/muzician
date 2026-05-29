@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/song_project.dart';
@@ -70,6 +72,29 @@ void main() {
         totalMeasures: 4,
       );
       expect(audioTickToMs(4, cfg), 1000);
+    });
+  });
+
+  group('computePeaksFromInt16', () {
+    test('downsamples to requested bin count', () {
+      final samples = Int16List.fromList(
+        List<int>.filled(1000, 32767),
+      );
+      final peaks = computePeaksFromInt16(samples, targetBins: 100);
+      expect(peaks.length, 100);
+      expect(peaks.every((p) => p == 255), isTrue);
+    });
+
+    test('silence produces zero peaks', () {
+      final samples = Int16List.fromList(List<int>.filled(1000, 0));
+      final peaks = computePeaksFromInt16(samples, targetBins: 50);
+      expect(peaks.every((p) => p == 0), isTrue);
+    });
+
+    test('returns at least 1 bin for non-empty input', () {
+      final samples = Int16List.fromList([1000, -1000]);
+      final peaks = computePeaksFromInt16(samples, targetBins: 50);
+      expect(peaks, isNotEmpty);
     });
   });
 }

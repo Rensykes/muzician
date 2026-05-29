@@ -2,6 +2,7 @@
 library;
 
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import '../../models/piano_roll.dart';
 import '../../models/song_project.dart';
@@ -35,4 +36,25 @@ int audioTickToMs(int tick, SongProjectConfig config) {
 int requiredMeasuresForEndTick(int endTick, SongProjectConfig config) {
   final perMeasure = songTicksPerMeasure(config.timeSignature);
   return math.max(config.totalMeasures, (endTick / perMeasure).ceil());
+}
+
+/// Compresses a PCM 16-bit sample buffer down to [targetBins] amplitude bins
+/// scaled to 0..255.  Each bin holds the absolute maximum across the samples
+/// assigned to it.  Used to render audio clip waveforms on the timeline.
+List<int> computePeaksFromInt16(Int16List samples, {int targetBins = 400}) {
+  if (samples.isEmpty) return const [];
+  final bins = math.min(targetBins, samples.length);
+  final step = samples.length / bins;
+  final out = List<int>.filled(bins, 0);
+  for (var i = 0; i < bins; i++) {
+    final from = (i * step).floor();
+    final to = math.min(samples.length, ((i + 1) * step).floor());
+    var peak = 0;
+    for (var s = from; s < to; s++) {
+      final v = samples[s].abs();
+      if (v > peak) peak = v;
+    }
+    out[i] = (peak * 255 / 32767).round().clamp(0, 255);
+  }
+  return out;
 }
