@@ -138,6 +138,41 @@ void main() {
     expect(file.existsSync(), isFalse);
   });
 
+  test('mutes the target track during recording and restores on preview',
+      () async {
+    final driver = _FakeRecorderDriver();
+    final tmp = await Directory.systemTemp.createTemp('rec_mute_test_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+
+    final container = ProviderContainer(overrides: [
+      songAudioRecorderDriverProvider.overrideWithValue(driver),
+      songAudioRepositoryProvider.overrideWithValue(
+        SongAudioRepository.testWith(rootDirectory: tmp),
+      ),
+    ]);
+    addTearDown(container.dispose);
+
+    final project = container.read(songProjectProvider.notifier);
+    final trackId = project.addTrack(SongTrackType.audio);
+    expect(
+      container.read(songProjectProvider).tracks.first.isMuted,
+      isFalse,
+    );
+
+    final notifier = container.read(songAudioRecorderProvider.notifier);
+    await notifier.start(trackId: trackId, startTick: 0, countInMs: 0);
+    expect(
+      container.read(songProjectProvider).tracks.first.isMuted,
+      isTrue,
+    );
+
+    await notifier.stop();
+    expect(
+      container.read(songProjectProvider).tracks.first.isMuted,
+      isFalse,
+    );
+  });
+
   test('consumePendingAsset returns asset and resets to idle', () async {
     final driver = _FakeRecorderDriver();
     final tmp = await Directory.systemTemp.createTemp('rec_test_');

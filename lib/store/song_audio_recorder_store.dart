@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song_project.dart';
 import '../utils/note_player.dart';
 import 'song_audio_repository.dart';
+import 'song_project_store.dart';
 
 enum SongAudioRecorderStatus {
   idle,
@@ -74,6 +75,8 @@ final songAudioRecorderDriverProvider =
 });
 
 class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
+  bool? _originalMuted;
+
   @override
   SongAudioRecorderState build() => const SongAudioRecorderState();
 
@@ -95,6 +98,21 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
       );
       return;
     }
+
+    final projectNotifier = ref.read(songProjectProvider.notifier);
+    final project = ref.read(songProjectProvider);
+    final track = project.tracks
+        .where((t) => t.id == trackId)
+        .firstOrNull;
+    if (track == null) {
+      state = state.copyWith(
+        status: SongAudioRecorderStatus.error,
+        errorMessage: () => 'Track not found',
+      );
+      return;
+    }
+    _originalMuted = track.isMuted;
+    if (!track.isMuted) projectNotifier.toggleMute(trackId);
 
     state = SongAudioRecorderState(
       status: SongAudioRecorderStatus.countIn,
@@ -137,6 +155,7 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
         errorMessage: () => 'Recording failed: $e',
       );
     }
+    _restoreTargetTrackMute();
   }
 
   /// Discards the pending take and returns the recorder to idle.
@@ -146,6 +165,7 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
       final repo = ref.read(songAudioRepositoryProvider);
       await repo.delete(asset.id);
     }
+    _restoreTargetTrackMute();
     state = const SongAudioRecorderState();
   }
 
@@ -158,7 +178,23 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
   }
 
   Future<void> reset() async {
+    _restoreTargetTrackMute();
     state = const SongAudioRecorderState();
+  }
+
+  /// Restores the target track's mute state to what it was before the
+  /// recording started.  If the user had it muted to begin with, leave it
+  /// muted; otherwise unmute.
+  void _restoreTargetTrackMute() {
+    final restoredId = state.targetTrackId;
+    final originalMuted = _originalMuted;
+    if (restoredId == null || originalMuted == null) return;
+    final project = ref.read(songProjectProvider);
+    final t = project.tracks.where((x) => x.id == restoredId).firstOrNull;
+    if (t != null && t.isMuted != originalMuted) {
+      ref.read(songProjectProvider.notifier).toggleMute(restoredId);
+    }
+    _originalMuted = null;
   }
 }
 
