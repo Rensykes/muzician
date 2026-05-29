@@ -14,9 +14,16 @@ class SongTrackHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final accent = track.type == SongTrackType.note
-        ? MuzicianTheme.sky
-        : MuzicianTheme.orange;
+    final accent = switch (track.type) {
+      SongTrackType.note => MuzicianTheme.sky,
+      SongTrackType.drum => MuzicianTheme.orange,
+      SongTrackType.audio => MuzicianTheme.teal,
+    };
+    final typeLabel = switch (track.type) {
+      SongTrackType.note => 'NOTE',
+      SongTrackType.drum => 'DRUM',
+      SongTrackType.audio => 'AUDIO',
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       color: Colors.white.withValues(alpha: 0.025),
@@ -39,7 +46,7 @@ class SongTrackHeader extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    track.type == SongTrackType.note ? 'NOTE' : 'DRUM',
+                    typeLabel,
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w800,

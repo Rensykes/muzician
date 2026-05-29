@@ -7,6 +7,7 @@ import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import 'song_audio_actions.dart';
 import 'song_track_header.dart';
 
 const double _kTickWidth = 4.0;
@@ -68,6 +69,29 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
         if (entry.value > 1) entry.key,
     };
 
+    final audioPatternById = {
+      for (final p in project.audioPatterns) p.id: p,
+    };
+    final audioAssetById = {
+      for (final a in project.audioAssets) a.id: a,
+    };
+    final audioPeaksByClipId = <String, List<int>>{};
+    final audioBrokenClipIds = <String>{};
+    for (final clip in project.clips) {
+      if (clip.patternType != SongPatternType.audio) continue;
+      final pattern = audioPatternById[clip.patternId];
+      if (pattern == null) {
+        audioBrokenClipIds.add(clip.id);
+        continue;
+      }
+      final asset = audioAssetById[pattern.assetId];
+      if (asset == null) {
+        audioBrokenClipIds.add(clip.id);
+        continue;
+      }
+      audioPeaksByClipId[clip.id] = asset.peaks;
+    }
+
     final totalTicks = widget.measureTicks * project.config.totalMeasures;
     final timelineWidth = totalTicks * _kTickWidth;
 
@@ -99,6 +123,8 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
                     clips: trackClips,
                     clipLengths: clipLengths,
                     sharedPatternIds: sharedPatternIds,
+                    audioPeaksByClipId: audioPeaksByClipId,
+                    audioBrokenClipIds: audioBrokenClipIds,
                     measureTicks: widget.measureTicks,
                     totalMeasures: project.config.totalMeasures,
                     timelineWidth: timelineWidth,
@@ -263,6 +289,8 @@ class _TrackLane extends ConsumerStatefulWidget {
   final List<SongClipInstance> clips;
   final Map<String, int> clipLengths;
   final Set<String> sharedPatternIds;
+  final Map<String, List<int>> audioPeaksByClipId;
+  final Set<String> audioBrokenClipIds;
   final int measureTicks;
   final int totalMeasures;
   final double timelineWidth;
@@ -275,6 +303,8 @@ class _TrackLane extends ConsumerStatefulWidget {
     required this.clips,
     required this.clipLengths,
     required this.sharedPatternIds,
+    required this.audioPeaksByClipId,
+    required this.audioBrokenClipIds,
     required this.measureTicks,
     required this.totalMeasures,
     required this.timelineWidth,
@@ -580,11 +610,15 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
                       clips: widget.clips,
                       clipLengths: widget.clipLengths,
                       sharedPatternIds: widget.sharedPatternIds,
+                      audioPeaksByClipId: widget.audioPeaksByClipId,
+                      audioBrokenClipIds: widget.audioBrokenClipIds,
                       measureTicks: widget.measureTicks,
                       totalMeasures: widget.totalMeasures,
-                      trackColor: widget.track.type == SongTrackType.note
-                          ? MuzicianTheme.sky
-                          : MuzicianTheme.orange,
+                      trackColor: switch (widget.track.type) {
+                        SongTrackType.note => MuzicianTheme.sky,
+                        SongTrackType.drum => MuzicianTheme.orange,
+                        SongTrackType.audio => MuzicianTheme.teal,
+                      },
                       currentPlaybackTick: widget.currentPlaybackTick,
                       showEmptyHint:
                           widget.clips.isEmpty && _pendingStartTick == null,
@@ -618,6 +652,42 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        if (widget.track.type == SongTrackType.audio) {
+          return _AddClipSheet(
+            title: 'Add Audio Clip',
+            subtitle: _audioStartSummary(startTick),
+            options: [
+              _AddClipOption(
+                label: 'Record audio',
+                icon: Icons.mic,
+                color: MuzicianTheme.teal,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  openAudioRecorder(
+                    context,
+                    ref,
+                    trackId: widget.track.id,
+                    startTick: startTick,
+                  );
+                },
+              ),
+              _AddClipOption(
+                label: 'Import audio file',
+                icon: Icons.file_open,
+                color: MuzicianTheme.teal,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  importAudioFile(
+                    context,
+                    ref,
+                    trackId: widget.track.id,
+                    startTick: startTick,
+                  );
+                },
+              ),
+            ],
+          );
+        }
         if (widget.track.type == SongTrackType.drum) {
           return _AddClipSheet(
             title: 'Add Drum Clip',
@@ -696,6 +766,11 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
   String _lengthSummary(int lengthTicks) {
     final measures = lengthTicks ~/ widget.measureTicks;
     return measures == 1 ? '1 measure' : '$measures measures';
+  }
+
+  String _audioStartSummary(int startTick) {
+    final measure = (startTick ~/ widget.measureTicks) + 1;
+    return 'Starts at measure $measure';
   }
 
   void _openImportPicker(
@@ -833,6 +908,8 @@ class _ClipLanePainter extends CustomPainter {
   final List<SongClipInstance> clips;
   final Map<String, int> clipLengths;
   final Set<String> sharedPatternIds;
+  final Map<String, List<int>> audioPeaksByClipId;
+  final Set<String> audioBrokenClipIds;
   final int measureTicks;
   final int totalMeasures;
   final Color trackColor;
@@ -848,6 +925,8 @@ class _ClipLanePainter extends CustomPainter {
     required this.clips,
     required this.clipLengths,
     required this.sharedPatternIds,
+    required this.audioPeaksByClipId,
+    required this.audioBrokenClipIds,
     required this.measureTicks,
     required this.totalMeasures,
     required this.trackColor,
@@ -945,6 +1024,15 @@ class _ClipLanePainter extends CustomPainter {
         }
       }
 
+      // Waveform overlay for audio clips.
+      final peaks = audioPeaksByClipId[clip.id];
+      if (peaks != null && peaks.isNotEmpty) {
+        _paintAudioWaveform(canvas, rect, peaks);
+      }
+      if (audioBrokenClipIds.contains(clip.id)) {
+        _paintBrokenStripes(canvas, rect);
+      }
+
       // Shared-pattern badge.
       if (sharedPatternIds.contains(clip.patternId)) {
         _paintSharedBadge(canvas, rect.outerRect);
@@ -1026,6 +1114,47 @@ class _ClipLanePainter extends CustomPainter {
     }
   }
 
+  void _paintAudioWaveform(Canvas canvas, RRect rect, List<int> peaks) {
+    final inner = rect.outerRect.deflate(4);
+    if (inner.width <= 2 || inner.height <= 2) return;
+    canvas.save();
+    canvas.clipRRect(rect);
+    final centerY = inner.center.dy;
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.85)
+      ..strokeWidth = 1.0;
+    final width = inner.width.floor();
+    for (var x = 0; x < width; x++) {
+      final binIndex = ((x / inner.width) * peaks.length).floor();
+      final peak = peaks[binIndex.clamp(0, peaks.length - 1)];
+      final h = (peak / 255.0) * inner.height * 0.8;
+      final xDp = inner.left + x;
+      canvas.drawLine(
+        Offset(xDp, centerY - h / 2),
+        Offset(xDp, centerY + h / 2),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  void _paintBrokenStripes(Canvas canvas, RRect rect) {
+    final paint = Paint()
+      ..color = const Color(0xCCB23A3A)
+      ..strokeWidth = 2.0;
+    final r = rect.outerRect;
+    canvas.save();
+    canvas.clipRRect(rect);
+    for (var x = -r.height.toInt(); x < r.width; x += 12) {
+      canvas.drawLine(
+        Offset(r.left + x, r.top),
+        Offset(r.left + x + r.height, r.bottom),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
   void _paintSharedBadge(Canvas canvas, Rect clipRect) {
     // Skip the badge if the clip is too narrow to fit it cleanly.
     if (clipRect.width < 26) return;
@@ -1064,6 +1193,8 @@ class _ClipLanePainter extends CustomPainter {
       sharedPatternIds != oldDelegate.sharedPatternIds ||
       clips != oldDelegate.clips ||
       clipLengths != oldDelegate.clipLengths ||
+      audioPeaksByClipId != oldDelegate.audioPeaksByClipId ||
+      audioBrokenClipIds != oldDelegate.audioBrokenClipIds ||
       totalMeasures != oldDelegate.totalMeasures ||
       trackColor != oldDelegate.trackColor ||
       currentPlaybackTick != oldDelegate.currentPlaybackTick ||
