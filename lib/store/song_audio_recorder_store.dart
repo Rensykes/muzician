@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/song_project.dart';
+import '../utils/note_player.dart';
 import 'song_audio_repository.dart';
 
 enum SongAudioRecorderStatus {
@@ -101,9 +102,18 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
       startTick: startTick,
     );
     if (countInMs > 0) {
-      await Future<void>.delayed(Duration(milliseconds: countInMs));
+      // Emit four metronome blips evenly spaced across the count-in.  The
+      // first one fires immediately so the user gets a clear "1" downbeat,
+      // and we abandon the loop if the state has been cancelled.
+      final beatSpacing = Duration(milliseconds: (countInMs / 4).round());
+      for (var i = 0; i < 4; i++) {
+        if (state.status != SongAudioRecorderStatus.countIn) return;
+        NotePlayer.instance.playDrumLane(DrumLaneId.closedHiHat);
+        await Future<void>.delayed(beatSpacing);
+      }
     }
 
+    if (state.status != SongAudioRecorderStatus.countIn) return;
     state = state.copyWith(status: SongAudioRecorderStatus.recording);
     await driver.start();
   }
