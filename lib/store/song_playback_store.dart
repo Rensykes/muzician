@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song_playback.dart';
 import '../models/song_project.dart';
+import '../schema/rules/song_audio_rules.dart';
 import '../schema/rules/song_playback_rules.dart' as pb_rules;
 import '../schema/rules/song_rules.dart' as song_rules;
 import '../utils/note_player.dart';
@@ -41,6 +42,35 @@ final songDrumPlaybackSinkProvider = Provider<SongDrumPlaybackSink>((ref) {
   };
 });
 
+/// Sink for audio clips on audio tracks.  The default implementation is a
+/// no-op so unit tests do not need to touch real audio playback; production
+/// code overrides this with [AudioPlayersClipSink].
+abstract class SongAudioClipSink {
+  Future<void> startClip({required AudioAsset asset, required int offsetMs});
+  Future<void> stopClip({required AudioAsset asset});
+  Future<void> stopAll();
+}
+
+class _NoopAudioSink implements SongAudioClipSink {
+  const _NoopAudioSink();
+  @override
+  Future<void> startClip(
+      {required AudioAsset asset, required int offsetMs}) async {}
+  @override
+  Future<void> stopClip({required AudioAsset asset}) async {}
+  @override
+  Future<void> stopAll() async {}
+}
+
+final songAudioClipSinkProvider =
+    Provider<SongAudioClipSink>((ref) => const _NoopAudioSink());
+
+class _PendingAudioStop {
+  final AudioAsset asset;
+  final int stopAtMs;
+  _PendingAudioStop(this.asset, this.stopAtMs);
+}
+
 /// Riverpod notifier for the song playback transport.
 ///
 /// Snapshots the [SongProject] at the moment [startPlayback] is called so
@@ -63,6 +93,10 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
     final project = ref.read(songProjectProvider);
     final noteSink = ref.read(songNotePlaybackSinkProvider);
     final drumSink = ref.read(songDrumPlaybackSinkProvider);
+    final audioSink = ref.read(songAudioClipSinkProvider);
+    final scheduled = schedulableAudioClips(project)
+      ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    final pendingStops = <_PendingAudioStop>[];
 
     final totalTicks = song_rules.songTotalTicks(project.config);
     final start = startTick ?? 0;
@@ -91,6 +125,29 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
           .where((e) => e.tick >= start && e.tick < end)
           .toList();
 
+      void fireAudioForTick(int tick) {
+        final nowMs =
+            ((tick - start) * tickDuration.inMicroseconds / 1000).round();
+        while (scheduled.isNotEmpty && scheduled.first.startMs <= nowMs) {
+          final clip = scheduled.removeAt(0);
+          final offset = nowMs - clip.startMs;
+          unawaited(
+            audioSink.startClip(
+              asset: clip.asset,
+              offsetMs: offset.clamp(0, clip.asset.durationMs),
+            ),
+          );
+          pendingStops.add(_PendingAudioStop(clip.asset, clip.endMs));
+        }
+        pendingStops.removeWhere((pending) {
+          if (pending.stopAtMs <= nowMs) {
+            unawaited(audioSink.stopClip(asset: pending.asset));
+            return true;
+          }
+          return false;
+        });
+      }
+
       if (rangeEvents.isEmpty) {
         // No events in range, just advance ticks.
         for (
@@ -101,6 +158,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
           if (tick > start) await Future<void>.delayed(tickDuration);
           if (_playbackVersion != version) return;
           state = state.copyWith(currentTick: () => tick);
+          fireAudioForTick(tick);
         }
       } else {
         var eventIndex = 0;
@@ -125,8 +183,15 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
             }
             eventIndex++;
           }
+          fireAudioForTick(tick);
         }
       }
+
+      // Flush any audio still queued past the loop end.
+      for (final pending in pendingStops) {
+        unawaited(audioSink.stopClip(asset: pending.asset));
+      }
+      pendingStops.clear();
 
       if (_playbackVersion == version) {
         // Let last notes decay.
@@ -149,6 +214,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
   /// internal version counter.
   void stopPlayback() {
     _playbackVersion++;
+    unawaited(ref.read(songAudioClipSinkProvider).stopAll());
     state = const SongPlaybackState();
   }
 }

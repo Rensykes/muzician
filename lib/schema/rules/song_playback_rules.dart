@@ -31,32 +31,37 @@ List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
   for (final clip in project.clips.where(
     (clip) => activeTrackIds.contains(clip.trackId),
   )) {
-    if (clip.patternType == SongPatternType.note) {
-      final pattern = project.notePatterns.firstWhere(
-        (pattern) => pattern.id == clip.patternId,
-      );
-      for (final note in pattern.notes) {
-        final tick = clip.startTick + note.startTick;
-        final bucket = tickMap.putIfAbsent(
-          tick,
-          () => (midiNotes: <int>{}, drumLanes: <DrumLaneId>{}),
+    switch (clip.patternType) {
+      case SongPatternType.note:
+        final pattern = project.notePatterns.firstWhere(
+          (pattern) => pattern.id == clip.patternId,
         );
-        bucket.midiNotes.add(note.midiNote);
-      }
-    } else {
-      final pattern = project.drumPatterns.firstWhere(
-        (pattern) => pattern.id == clip.patternId,
-      );
-      for (final lane in pattern.lanes) {
-        for (final activeTick in lane.activeTicks) {
-          final absoluteTick = clip.startTick + activeTick;
+        for (final note in pattern.notes) {
+          final tick = clip.startTick + note.startTick;
           final bucket = tickMap.putIfAbsent(
-            absoluteTick,
+            tick,
             () => (midiNotes: <int>{}, drumLanes: <DrumLaneId>{}),
           );
-          bucket.drumLanes.add(lane.laneId);
+          bucket.midiNotes.add(note.midiNote);
         }
-      }
+      case SongPatternType.drum:
+        final pattern = project.drumPatterns.firstWhere(
+          (pattern) => pattern.id == clip.patternId,
+        );
+        for (final lane in pattern.lanes) {
+          for (final activeTick in lane.activeTicks) {
+            final absoluteTick = clip.startTick + activeTick;
+            final bucket = tickMap.putIfAbsent(
+              absoluteTick,
+              () => (midiNotes: <int>{}, drumLanes: <DrumLaneId>{}),
+            );
+            bucket.drumLanes.add(lane.laneId);
+          }
+        }
+      case SongPatternType.audio:
+        // Audio clips have no per-tick events; they are scheduled by the
+        // playback notifier through the audio sink.
+        break;
     }
   }
 
