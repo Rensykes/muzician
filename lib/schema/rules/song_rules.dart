@@ -4,6 +4,7 @@ library;
 
 import '../../models/piano_roll.dart';
 import '../../models/song_project.dart';
+import 'song_audio_rules.dart' show audioClipLengthTicks;
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
@@ -33,16 +34,28 @@ int songTotalTicks(SongProjectConfig config) {
 // ── Pattern lookup ────────────────────────────────────────────────────────────
 
 int? patternLengthForClip(SongProject project, SongClipInstance clip) {
-  if (clip.patternType == SongPatternType.note) {
-    final pattern = project.notePatterns
-        .where((p) => p.id == clip.patternId)
-        .firstOrNull;
-    return pattern?.lengthTicks;
+  switch (clip.patternType) {
+    case SongPatternType.note:
+      return project.notePatterns
+          .where((p) => p.id == clip.patternId)
+          .firstOrNull
+          ?.lengthTicks;
+    case SongPatternType.drum:
+      return project.drumPatterns
+          .where((p) => p.id == clip.patternId)
+          .firstOrNull
+          ?.lengthTicks;
+    case SongPatternType.audio:
+      final pattern = project.audioPatterns
+          .where((p) => p.id == clip.patternId)
+          .firstOrNull;
+      if (pattern == null) return null;
+      final asset = project.audioAssets
+          .where((a) => a.id == pattern.assetId)
+          .firstOrNull;
+      if (asset == null) return null;
+      return audioClipLengthTicks(asset, project.config);
   }
-  final pattern = project.drumPatterns
-      .where((p) => p.id == clip.patternId)
-      .firstOrNull;
-  return pattern?.lengthTicks;
 }
 
 // ── Overlap detection ─────────────────────────────────────────────────────────
