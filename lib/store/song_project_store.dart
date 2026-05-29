@@ -42,6 +42,7 @@ class SongProjectNotifier extends Notifier<SongProject> {
     final defaultName = switch (type) {
       SongTrackType.note => 'Note Track',
       SongTrackType.drum => 'Drum Track',
+      SongTrackType.audio => 'Audio Track',
     };
     final trackId = _id('trk');
     final track = SongTrack(
@@ -57,9 +58,11 @@ class SongProjectNotifier extends Notifier<SongProject> {
   void renameTrack(String trackId, String name) {
     final trimmed = name.trim();
     final track = state.tracks.firstWhere((t) => t.id == trackId);
-    final fallbackName = track.type == SongTrackType.note
-        ? 'Note Track'
-        : 'Drum Track';
+    final fallbackName = switch (track.type) {
+      SongTrackType.note => 'Note Track',
+      SongTrackType.drum => 'Drum Track',
+      SongTrackType.audio => 'Audio Track',
+    };
     final effectiveName = trimmed.isEmpty ? fallbackName : trimmed;
     state = state.copyWith(
       tracks: state.tracks
@@ -301,6 +304,11 @@ class SongProjectNotifier extends Notifier<SongProject> {
         ),
         SongPatternType.drum => state.copyWith(
           drumPatterns: state.drumPatterns
+              .where((p) => p.id != clip.patternId)
+              .toList(),
+        ),
+        SongPatternType.audio => state.copyWith(
+          audioPatterns: state.audioPatterns
               .where((p) => p.id != clip.patternId)
               .toList(),
         ),

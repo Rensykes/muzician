@@ -7,9 +7,9 @@ import 'piano_roll.dart';
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
-enum SongTrackType { note, drum }
+enum SongTrackType { note, drum, audio }
 
-enum SongPatternType { note, drum }
+enum SongPatternType { note, drum, audio }
 
 enum DrumLaneId {
   kick,
@@ -347,6 +347,100 @@ class DrumPattern {
   );
 }
 
+// ── AudioAsset ────────────────────────────────────────────────────────────────
+
+class AudioAsset {
+  final String id;
+  final int durationMs;
+  final int sampleRate;
+  final int channels;
+  final String format; // 'wav' | 'mp3' | 'm4a'
+  final List<int> peaks;
+  final String sourceLabel;
+
+  const AudioAsset({
+    required this.id,
+    required this.durationMs,
+    required this.sampleRate,
+    required this.channels,
+    required this.format,
+    required this.peaks,
+    required this.sourceLabel,
+  });
+
+  AudioAsset copyWith({
+    String? id,
+    int? durationMs,
+    int? sampleRate,
+    int? channels,
+    String? format,
+    List<int>? peaks,
+    String? sourceLabel,
+  }) => AudioAsset(
+    id: id ?? this.id,
+    durationMs: durationMs ?? this.durationMs,
+    sampleRate: sampleRate ?? this.sampleRate,
+    channels: channels ?? this.channels,
+    format: format ?? this.format,
+    peaks: peaks ?? this.peaks,
+    sourceLabel: sourceLabel ?? this.sourceLabel,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'durationMs': durationMs,
+    'sampleRate': sampleRate,
+    'channels': channels,
+    'format': format,
+    'peaks': peaks,
+    'sourceLabel': sourceLabel,
+  };
+
+  factory AudioAsset.fromJson(Map<String, dynamic> json) => AudioAsset(
+    id: json['id'] as String,
+    durationMs: json['durationMs'] as int,
+    sampleRate: json['sampleRate'] as int,
+    channels: json['channels'] as int,
+    format: json['format'] as String,
+    peaks: List<int>.from(json['peaks'] as List),
+    sourceLabel: json['sourceLabel'] as String,
+  );
+}
+
+// ── AudioClipPattern ──────────────────────────────────────────────────────────
+
+class AudioClipPattern {
+  final String id;
+  final String name;
+  final String assetId;
+
+  const AudioClipPattern({
+    required this.id,
+    required this.name,
+    required this.assetId,
+  });
+
+  AudioClipPattern copyWith({String? id, String? name, String? assetId}) =>
+      AudioClipPattern(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        assetId: assetId ?? this.assetId,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'assetId': assetId,
+  };
+
+  factory AudioClipPattern.fromJson(Map<String, dynamic> json) =>
+      AudioClipPattern(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        assetId: json['assetId'] as String,
+      );
+}
+
 // ── SongProject ───────────────────────────────────────────────────────────────
 
 class SongProject {
@@ -355,6 +449,8 @@ class SongProject {
   final List<SongClipInstance> clips;
   final List<NotePattern> notePatterns;
   final List<DrumPattern> drumPatterns;
+  final List<AudioAsset> audioAssets;
+  final List<AudioClipPattern> audioPatterns;
 
   const SongProject({
     required this.config,
@@ -362,6 +458,8 @@ class SongProject {
     required this.clips,
     required this.notePatterns,
     required this.drumPatterns,
+    this.audioAssets = const [],
+    this.audioPatterns = const [],
   });
 
   SongProject copyWith({
@@ -370,12 +468,16 @@ class SongProject {
     List<SongClipInstance>? clips,
     List<NotePattern>? notePatterns,
     List<DrumPattern>? drumPatterns,
+    List<AudioAsset>? audioAssets,
+    List<AudioClipPattern>? audioPatterns,
   }) => SongProject(
     config: config ?? this.config,
     tracks: tracks ?? this.tracks,
     clips: clips ?? this.clips,
     notePatterns: notePatterns ?? this.notePatterns,
     drumPatterns: drumPatterns ?? this.drumPatterns,
+    audioAssets: audioAssets ?? this.audioAssets,
+    audioPatterns: audioPatterns ?? this.audioPatterns,
   );
 
   Map<String, dynamic> toJson() => {
@@ -384,6 +486,8 @@ class SongProject {
     'clips': clips.map((c) => c.toJson()).toList(),
     'notePatterns': notePatterns.map((p) => p.toJson()).toList(),
     'drumPatterns': drumPatterns.map((p) => p.toJson()).toList(),
+    'audioAssets': audioAssets.map((a) => a.toJson()).toList(),
+    'audioPatterns': audioPatterns.map((p) => p.toJson()).toList(),
   };
 
   factory SongProject.fromJson(Map<String, dynamic> json) => SongProject(
@@ -399,6 +503,12 @@ class SongProject {
         .toList(),
     drumPatterns: (json['drumPatterns'] as List<dynamic>)
         .map((p) => DrumPattern.fromJson(p as Map<String, dynamic>))
+        .toList(),
+    audioAssets: (json['audioAssets'] as List<dynamic>? ?? const [])
+        .map((a) => AudioAsset.fromJson(a as Map<String, dynamic>))
+        .toList(),
+    audioPatterns: (json['audioPatterns'] as List<dynamic>? ?? const [])
+        .map((p) => AudioClipPattern.fromJson(p as Map<String, dynamic>))
         .toList(),
   );
 }
