@@ -1,9 +1,14 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
+import 'package:muzician/store/song_audio_repository.dart';
 import 'package:muzician/store/song_project_store.dart';
+import 'package:muzician/utils/wav_writer.dart';
 
 void main() {
   test('addTrack appends a note track with deterministic order', () {
@@ -344,6 +349,42 @@ void main() {
       expect(p.clips, isEmpty);
       expect(p.audioPatterns, isEmpty);
       expect(p.audioAssets, isEmpty);
+    });
+
+    test('loadProject reconciles orphan audio files', () async {
+      final tmp = await Directory.systemTemp.createTemp('reconcile_test_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+
+      final repo = SongAudioRepository.testWith(rootDirectory: tmp);
+      final samples = Int16List.fromList(List<int>.filled(44100, 0));
+      final orphan = await repo.writeRecording(
+        writeWavPcm16Mono(samples, sampleRate: 44100),
+      );
+
+      final container = ProviderContainer(overrides: [
+        songAudioRepositoryProvider.overrideWithValue(repo),
+      ]);
+      addTearDown(container.dispose);
+
+      await container.read(songProjectProvider.notifier).loadProject(
+            const SongProject(
+              config: SongProjectConfig(
+                tempo: 120,
+                timeSignature:
+                    TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+                totalMeasures: 4,
+              ),
+              tracks: [],
+              clips: [],
+              notePatterns: [],
+              drumPatterns: [],
+              audioAssets: [],
+              audioPatterns: [],
+            ),
+          );
+
+      final file = await repo.resolvePath(orphan.id, orphan.format);
+      expect(file.existsSync(), isFalse);
     });
 
     test('renameAudioClip updates only the targeted pattern name', () {

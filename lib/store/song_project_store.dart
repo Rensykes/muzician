@@ -9,6 +9,7 @@ import '../models/song_project.dart';
 import '../schema/rules/song_audio_rules.dart' show audioClipLengthTicks;
 import '../schema/rules/song_import_rules.dart' as import_rules;
 import '../schema/rules/song_rules.dart' as rules;
+import 'song_audio_repository.dart';
 
 class SongProjectNotifier extends Notifier<SongProject> {
   @override
@@ -508,8 +509,11 @@ class SongProjectNotifier extends Notifier<SongProject> {
 
   // ── Project Load ────────────────────────────────────────────────────────────
 
-  void loadProject(SongProject project) {
+  Future<void> loadProject(SongProject project) async {
     state = project;
+    final repo = ref.read(songAudioRepositoryProvider);
+    final referenced = {for (final a in state.audioAssets) a.id};
+    await repo.reconcileOrphans(referencedAssetIds: referenced);
   }
 
   // ── Orphan Cleanup ──────────────────────────────────────────────────────────
