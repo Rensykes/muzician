@@ -207,6 +207,23 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                     Navigator.pop(ctx);
                   },
                 ),
+                ListTile(
+                  leading: const Icon(Icons.mic, color: MuzicianTheme.teal),
+                  title: const Text(
+                    'Audio Track',
+                    style: TextStyle(color: MuzicianTheme.textPrimary),
+                  ),
+                  subtitle: const Text(
+                    'Record or import audio clips',
+                    style: TextStyle(color: MuzicianTheme.textMuted),
+                  ),
+                  onTap: () {
+                    ref
+                        .read(songProjectProvider.notifier)
+                        .addTrack(SongTrackType.audio);
+                    Navigator.pop(ctx);
+                  },
+                ),
               ],
             ),
           ),
