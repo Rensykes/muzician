@@ -256,4 +256,120 @@ void main() {
       throwsStateError,
     );
   });
+
+  group('SongProjectNotifier audio clips', () {
+    test('addAudioClip places a clip, pattern, and asset', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(songProjectProvider.notifier);
+
+      final trackId = notifier.addTrack(SongTrackType.audio);
+      const asset = AudioAsset(
+        id: 'asset-1',
+        durationMs: 2000,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [10, 20, 30],
+        sourceLabel: 'Recording',
+      );
+
+      final clipId = notifier.addAudioClip(
+        trackId: trackId,
+        startTick: 0,
+        asset: asset,
+        clipName: 'Take 1',
+      );
+
+      final p = container.read(songProjectProvider);
+      expect(p.audioAssets, hasLength(1));
+      expect(p.audioPatterns, hasLength(1));
+      expect(p.clips, hasLength(1));
+      expect(p.clips.first.patternType, SongPatternType.audio);
+      expect(p.clips.first.id, clipId);
+      expect(p.audioPatterns.first.assetId, 'asset-1');
+      expect(p.audioPatterns.first.name, 'Take 1');
+    });
+
+    test('removeAudioClip cascades pattern + asset deletion', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(songProjectProvider.notifier);
+
+      final trackId = notifier.addTrack(SongTrackType.audio);
+      const asset = AudioAsset(
+        id: 'asset-1',
+        durationMs: 2000,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [10, 20, 30],
+        sourceLabel: 'Recording',
+      );
+      final clipId = notifier.addAudioClip(
+        trackId: trackId,
+        startTick: 0,
+        asset: asset,
+      );
+
+      notifier.removeAudioClip(clipId);
+
+      final p = container.read(songProjectProvider);
+      expect(p.clips, isEmpty);
+      expect(p.audioPatterns, isEmpty);
+      expect(p.audioAssets, isEmpty);
+    });
+
+    test('deleteTrack on audio track removes its clips + assets', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(songProjectProvider.notifier);
+      final trackId = notifier.addTrack(SongTrackType.audio);
+      notifier.addAudioClip(
+        trackId: trackId,
+        startTick: 0,
+        asset: const AudioAsset(
+          id: 'a1',
+          durationMs: 1000,
+          sampleRate: 44100,
+          channels: 1,
+          format: 'wav',
+          peaks: [0],
+          sourceLabel: '',
+        ),
+      );
+      notifier.deleteTrack(trackId);
+      final p = container.read(songProjectProvider);
+      expect(p.tracks, isEmpty);
+      expect(p.clips, isEmpty);
+      expect(p.audioPatterns, isEmpty);
+      expect(p.audioAssets, isEmpty);
+    });
+
+    test('renameAudioClip updates only the targeted pattern name', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(songProjectProvider.notifier);
+      final trackId = notifier.addTrack(SongTrackType.audio);
+      final clipId = notifier.addAudioClip(
+        trackId: trackId,
+        startTick: 0,
+        asset: const AudioAsset(
+          id: 'a1',
+          durationMs: 1000,
+          sampleRate: 44100,
+          channels: 1,
+          format: 'wav',
+          peaks: [0],
+          sourceLabel: '',
+        ),
+        clipName: 'First',
+      );
+
+      notifier.renameAudioClip(clipId, 'Renamed');
+
+      final p = container.read(songProjectProvider);
+      expect(p.audioPatterns.first.name, 'Renamed');
+    });
+  });
 }

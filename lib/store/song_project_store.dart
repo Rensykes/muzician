@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/piano_roll.dart';
 import '../models/save_system.dart';
 import '../models/song_project.dart';
+import '../schema/rules/song_audio_rules.dart' show audioClipLengthTicks;
 import '../schema/rules/song_import_rules.dart' as import_rules;
 import '../schema/rules/song_rules.dart' as rules;
 
@@ -88,11 +89,27 @@ class SongProjectNotifier extends Notifier<SongProject> {
   }
 
   void deleteTrack(String trackId) {
+    final removedClips =
+        state.clips.where((c) => c.trackId == trackId).toList();
     final keptClips = state.clips.where((c) => c.trackId != trackId).toList();
+    final removedAudioPatternIds = removedClips
+        .where((c) => c.patternType == SongPatternType.audio)
+        .map((c) => c.patternId)
+        .toSet();
+    final removedAudioAssetIds = state.audioPatterns
+        .where((p) => removedAudioPatternIds.contains(p.id))
+        .map((p) => p.assetId)
+        .toSet();
 
     state = state.copyWith(
       tracks: state.tracks.where((t) => t.id != trackId).toList(),
       clips: keptClips,
+      audioPatterns: state.audioPatterns
+          .where((p) => !removedAudioPatternIds.contains(p.id))
+          .toList(),
+      audioAssets: state.audioAssets
+          .where((a) => !removedAudioAssetIds.contains(a.id))
+          .toList(),
     );
 
     _removeOrphanedPatterns();
@@ -418,6 +435,74 @@ class SongProjectNotifier extends Notifier<SongProject> {
           else
             pattern,
       ],
+    );
+  }
+
+  // ── Audio Clip Mutations ────────────────────────────────────────────────────
+
+  String addAudioClip({
+    required String trackId,
+    required int startTick,
+    required AudioAsset asset,
+    String? clipName,
+  }) {
+    final patternId = _id('ap');
+    final effectiveName = clipName ??
+        (asset.sourceLabel.isNotEmpty ? asset.sourceLabel : 'Audio');
+    final pattern = AudioClipPattern(
+      id: patternId,
+      name: effectiveName,
+      assetId: asset.id,
+    );
+    final clipId = _id('sci');
+    final clip = SongClipInstance(
+      id: clipId,
+      trackId: trackId,
+      patternId: patternId,
+      patternType: SongPatternType.audio,
+      startTick: startTick,
+    );
+
+    state = state.copyWith(
+      audioAssets: [...state.audioAssets, asset],
+      audioPatterns: [...state.audioPatterns, pattern],
+      clips: [...state.clips, clip],
+    );
+
+    final lengthTicks = audioClipLengthTicks(asset, state.config);
+    state = rules.ensureProjectCoversEndTick(state, startTick + lengthTicks);
+    return clipId;
+  }
+
+  void removeAudioClip(String clipId) {
+    final clip = state.clips.firstWhere((c) => c.id == clipId);
+    if (clip.patternType != SongPatternType.audio) return;
+    final pattern = state.audioPatterns.firstWhere(
+      (p) => p.id == clip.patternId,
+    );
+
+    state = state.copyWith(
+      clips: state.clips.where((c) => c.id != clipId).toList(),
+      audioPatterns: state.audioPatterns
+          .where((p) => p.id != pattern.id)
+          .toList(),
+      audioAssets: state.audioAssets
+          .where((a) => a.id != pattern.assetId)
+          .toList(),
+    );
+  }
+
+  void renameAudioClip(String clipId, String name) {
+    final clip = state.clips.firstWhere((c) => c.id == clipId);
+    if (clip.patternType != SongPatternType.audio) return;
+    final trimmed = name.trim();
+    final effective = trimmed.isEmpty ? 'Audio' : trimmed;
+    state = state.copyWith(
+      audioPatterns: state.audioPatterns
+          .map(
+            (p) => p.id == clip.patternId ? p.copyWith(name: effective) : p,
+          )
+          .toList(),
     );
   }
 
