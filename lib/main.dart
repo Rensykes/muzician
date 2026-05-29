@@ -15,6 +15,10 @@ import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
+import 'store/song_audio_player_sink.dart';
+import 'store/song_audio_recorder_driver_impl.dart';
+import 'store/song_audio_recorder_store.dart';
+import 'store/song_playback_store.dart';
 import 'theme/muzician_theme.dart';
 import 'utils/note_player.dart';
 
@@ -26,7 +30,18 @@ void main() {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-  runApp(const ProviderScope(child: MuzicianApp()));
+  runApp(
+    ProviderScope(
+      overrides: [
+        songAudioRecorderDriverProvider
+            .overrideWith((ref) => RecordPackageDriver()),
+        songAudioClipSinkProvider.overrideWith(
+          (ref) => ref.watch(productionSongAudioClipSinkProvider),
+        ),
+      ],
+      child: const MuzicianApp(),
+    ),
+  );
 }
 
 class MuzicianApp extends StatelessWidget {
