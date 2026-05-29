@@ -78,6 +78,59 @@ class SongAudioRepository {
     );
   }
 
+  /// Copies an external audio file into the repository.
+  ///
+  /// For WAV files, the duration is parsed from the header and peaks are
+  /// computed.  For MP3 / M4A files, the caller must provide the duration
+  /// via [explicitDurationMs] (probed through `audioplayers`), and peaks are
+  /// left empty in v1 (waveform renders as a flat band until a later spec
+  /// adds decompressed peak computation).
+  Future<AudioAsset> importExternalFile({
+    required String sourcePath,
+    required String sourceLabel,
+    required int? explicitDurationMs,
+  }) async {
+    final ext = p.extension(sourcePath).replaceFirst('.', '').toLowerCase();
+    if (!const {'wav', 'mp3', 'm4a'}.contains(ext)) {
+      throw UnsupportedError('Unsupported audio extension: $ext');
+    }
+
+    final id = _uuid.v4();
+    final dest = await resolvePath(id, ext);
+    final source = File(sourcePath);
+    final bytes = await source.readAsBytes();
+    await dest.writeAsBytes(bytes, flush: true);
+
+    int durationMs;
+    int sampleRate;
+    int channels;
+    List<int> peaks;
+
+    if (ext == 'wav') {
+      final header = parseWavHeader(bytes);
+      durationMs = header.durationMs;
+      sampleRate = header.sampleRate;
+      channels = header.channels;
+      final samples = _extractInt16Samples(bytes);
+      peaks = computePeaksFromInt16(samples);
+    } else {
+      durationMs = explicitDurationMs ?? 0;
+      sampleRate = 44100; // unknown without a decoder
+      channels = 2;       // safe default
+      peaks = const [];
+    }
+
+    return AudioAsset(
+      id: id,
+      durationMs: durationMs,
+      sampleRate: sampleRate,
+      channels: channels,
+      format: ext,
+      peaks: peaks,
+      sourceLabel: sourceLabel,
+    );
+  }
+
   Future<void> delete(String assetId) async {
     final root = await _root();
     const candidates = <String>['wav', 'mp3', 'm4a'];

@@ -52,6 +52,60 @@ void main() {
       await repo.delete(asset.id); // second call must not throw
     });
 
+    test('importExternalFile imports a WAV file and parses its header',
+        () async {
+      final samples = Int16List.fromList(List<int>.filled(22050, 5000));
+      final wav = writeWavPcm16Mono(samples, sampleRate: 44100);
+      final src = File('${tmp.path}/source.wav');
+      await src.writeAsBytes(wav, flush: true);
+
+      final asset = await repo.importExternalFile(
+        sourcePath: src.path,
+        sourceLabel: 'source.wav',
+        explicitDurationMs: null,
+      );
+
+      expect(asset.format, 'wav');
+      expect(asset.sourceLabel, 'source.wav');
+      expect(asset.durationMs, closeTo(500, 5));
+      final stored = await repo.resolvePath(asset.id, asset.format);
+      expect(stored.existsSync(), isTrue);
+    });
+
+    test('importExternalFile copies an MP3 using the explicit duration probe',
+        () async {
+      final src = File('${tmp.path}/loop.mp3');
+      await src.writeAsBytes(
+        Uint8List.fromList(List<int>.generate(2048, (i) => i & 0xFF)),
+        flush: true,
+      );
+
+      final asset = await repo.importExternalFile(
+        sourcePath: src.path,
+        sourceLabel: 'loop.mp3',
+        explicitDurationMs: 2500,
+      );
+
+      expect(asset.format, 'mp3');
+      expect(asset.durationMs, 2500);
+      expect(asset.peaks, isEmpty);
+      final stored = await repo.resolvePath(asset.id, asset.format);
+      expect(stored.existsSync(), isTrue);
+    });
+
+    test('importExternalFile rejects unsupported file extensions', () async {
+      final src = File('${tmp.path}/note.txt');
+      await src.writeAsString('hello', flush: true);
+      expect(
+        () => repo.importExternalFile(
+          sourcePath: src.path,
+          sourceLabel: 'note.txt',
+          explicitDurationMs: null,
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
     test('reconcileOrphans deletes files not referenced by the project',
         () async {
       final samples = Int16List.fromList(List<int>.filled(44100, 0));
