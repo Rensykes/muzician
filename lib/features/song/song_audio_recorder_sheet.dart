@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart';
+import '../../schema/rules/song_audio_rules.dart';
+import '../../schema/rules/song_rules.dart' show songTicksPerMeasure;
 import '../../store/song_audio_recorder_store.dart';
+import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'song_audio_clip_body.dart';
 
@@ -62,11 +65,17 @@ class SongAudioRecorderSheet extends ConsumerWidget {
             const SizedBox(height: 24),
             _ActionRow(
               status: state.status,
-              onStart: () => notifier.start(
-                trackId: trackId,
-                startTick: startTick,
-                countInMs: 0,
-              ),
+              onStart: () {
+                final config = ref.read(songProjectProvider).config;
+                final ticksPerMeasure =
+                    songTicksPerMeasure(config.timeSignature);
+                final countInMs = audioTickToMs(ticksPerMeasure, config);
+                notifier.start(
+                  trackId: trackId,
+                  startTick: startTick,
+                  countInMs: countInMs,
+                );
+              },
               onStop: () => notifier.stop(),
               onConfirm: () {
                 final asset = notifier.consumePendingAsset();
