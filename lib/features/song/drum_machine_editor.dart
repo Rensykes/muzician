@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart' show TimeSignature;
 import '../../models/song_project.dart';
+import '../../store/drum_pattern_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 
@@ -19,7 +20,7 @@ const double _kLaneHeight = 40;
 const double _kBeatGap = 4;
 const double _kLabelColumnWidth = 110;
 
-class DrumMachineEditor extends ConsumerWidget {
+class DrumMachineEditor extends ConsumerStatefulWidget {
   final String clipId;
   final String patternId;
 
@@ -30,13 +31,39 @@ class DrumMachineEditor extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DrumMachineEditor> createState() => _DrumMachineEditorState();
+}
+
+class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
+  @override
+  void dispose() {
+    // Stop the audition loop so it does not keep playing after the editor pops.
+    ref.read(drumPatternPlaybackProvider.notifier).stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final patternId = widget.patternId;
+    final clipId = widget.clipId;
     final project = ref.watch(songProjectProvider);
     final pattern = project.drumPatterns.firstWhere((p) => p.id == patternId);
     final usedCount = project.clips
         .where((clip) => clip.patternId == patternId)
         .length;
     final timeSig = project.config.timeSignature;
+    final playback = ref.watch(drumPatternPlaybackProvider);
+    final playing = playback.status == DrumPatternPlaybackStatus.playing;
+
+    void togglePlayback() {
+      final notifier = ref.read(drumPatternPlaybackProvider.notifier);
+      if (playing) {
+        notifier.stop();
+      } else {
+        notifier.start(pattern: pattern, tempo: project.config.tempo);
+      }
+      HapticFeedback.lightImpact();
+    }
 
     void clearAll() {
       ref
@@ -58,6 +85,12 @@ class DrumMachineEditor extends ConsumerWidget {
       appBar: AppBar(
         title: Text(pattern.name),
         actions: [
+          IconButton(
+            tooltip: playing ? 'Stop' : 'Play',
+            icon: Icon(playing ? Icons.stop : Icons.play_arrow),
+            color: MuzicianTheme.sky,
+            onPressed: togglePlayback,
+          ),
           IconButton(
             tooltip: 'Clear all',
             icon: const Icon(Icons.clear_all),
@@ -120,6 +153,7 @@ class DrumMachineEditor extends ConsumerWidget {
             child: _DrumGrid(
               pattern: pattern,
               timeSig: timeSig,
+              playheadTick: playing ? playback.currentTick : null,
               onToggle: (laneId, tick) {
                 HapticFeedback.lightImpact();
                 ref
@@ -231,11 +265,13 @@ class _MetaChip extends StatelessWidget {
 class _DrumGrid extends StatefulWidget {
   final DrumPattern pattern;
   final TimeSignature timeSig;
+  final int? playheadTick;
   final void Function(DrumLaneId laneId, int tick) onToggle;
 
   const _DrumGrid({
     required this.pattern,
     required this.timeSig,
+    required this.playheadTick,
     required this.onToggle,
   });
 
