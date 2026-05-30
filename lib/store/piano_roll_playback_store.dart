@@ -156,6 +156,25 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
     );
   }
 
+  /// Reflects an external transport's position as the visible playhead without
+  /// generating any audio.
+  ///
+  /// Used when the song pattern editor plays a pattern in *song context*: the
+  /// song transport produces the sound, while this mirrors the mapped local
+  /// tick into the embedded grid so the playhead still animates.  Pass `null`
+  /// to clear the mirrored playhead.
+  void mirrorExternalTick(int? localTick) {
+    _playbackVersion++;
+    if (localTick == null) {
+      state = const PianoRollPlaybackState();
+      return;
+    }
+    state = PianoRollPlaybackState(
+      status: PianoRollPlaybackStatus.playing,
+      currentTick: localTick,
+    );
+  }
+
   /// Stops active playback and resets the transport to idle.
   ///
   /// Safe to call repeatedly; cancels any pending scheduled work via an
