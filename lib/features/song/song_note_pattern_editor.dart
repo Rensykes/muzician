@@ -13,9 +13,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart';
+import '../../models/piano_roll_playback.dart';
+import '../../models/song_playback.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_pattern_bridge_rules.dart' as bridge;
+import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_store.dart';
+import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../utils/note_utils.dart';
@@ -48,6 +52,12 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
   ProviderContainer? _isolatedContainer;
   String _patternName = '';
 
+  /// When false (default) the editor's transport plays only this pattern in
+  /// isolation (SOLO).  When true, playback is delegated to the song transport
+  /// so the pattern is heard together with the rest of the arrangement, started
+  /// at the opened clip instance's slot.
+  bool _songContext = false;
+
   /// Snapshot of the pattern's per-pattern `highlightedNotes` taken at open
   /// time.  Preserved through save so the pattern keeps its own fallback when
   /// the song scale is cleared later.
@@ -55,8 +65,39 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
 
   @override
   void dispose() {
+    // Stop any song-context playback this editor started so it does not keep
+    // running after the editor is dismissed.
+    if (_songContext) {
+      ref.read(songPlaybackProvider.notifier).stopPlayback();
+    }
     _isolatedContainer?.dispose();
     super.dispose();
+  }
+
+  PianoRollPlaybackNotifier? get _soloPlayback =>
+      _isolatedContainer?.read(pianoRollPlaybackProvider.notifier);
+
+  void _setSongContext(bool songContext) {
+    if (_songContext == songContext) return;
+    // Tear down whichever transport was active before switching modes.
+    if (songContext) {
+      _soloPlayback?.stopPlayback();
+    } else {
+      ref.read(songPlaybackProvider.notifier).stopPlayback();
+      _soloPlayback?.mirrorExternalTick(null);
+    }
+    setState(() => _songContext = songContext);
+  }
+
+  void _toggleSongPlayback(int clipStartTick) {
+    final notifier = ref.read(songPlaybackProvider.notifier);
+    final status = ref.read(songPlaybackProvider).status;
+    if (status == SongPlaybackStatus.playing) {
+      notifier.stopPlayback();
+      _soloPlayback?.mirrorExternalTick(null);
+    } else {
+      notifier.startPlayback(startTick: clipStartTick);
+    }
   }
 
   void _ensureIsolatedContainer(NotePattern pattern, SongProject project) {
@@ -125,8 +166,9 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
     final project = ref.watch(songProjectProvider);
 
     NotePattern pattern;
+    SongClipInstance clip;
     try {
-      project.clips.firstWhere((c) => c.id == widget.clipId);
+      clip = project.clips.firstWhere((c) => c.id == widget.clipId);
       pattern = project.notePatterns.firstWhere(
         (p) => p.id == widget.patternId,
       );
@@ -138,6 +180,29 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
     }
 
     _ensureIsolatedContainer(pattern, project);
+
+    final clipStartTick = clip.startTick;
+    final patternLength = pattern.lengthTicks;
+
+    // In song context, mirror the song transport's position into the embedded
+    // grid's playhead (mapped to pattern-local ticks). The song transport is
+    // what actually produces the audio.
+    ref.listen<SongPlaybackState>(songPlaybackProvider, (_, next) {
+      if (!_songContext) return;
+      final solo = _soloPlayback;
+      if (solo == null) return;
+      if (next.status == SongPlaybackStatus.playing && next.currentTick != null) {
+        final local = next.currentTick! - clipStartTick;
+        solo.mirrorExternalTick(
+          local >= 0 && local < patternLength ? local : null,
+        );
+      } else {
+        solo.mirrorExternalTick(null);
+      }
+    });
+
+    final songPlaying =
+        ref.watch(songPlaybackProvider).status == SongPlaybackStatus.playing;
 
     final usageCount = project.clips
         .where((c) => c.patternId == widget.patternId)
@@ -169,6 +234,20 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
           ],
         ),
         actions: [
+          _PlaybackModeToggle(
+            songContext: _songContext,
+            onChanged: _setSongContext,
+          ),
+          if (_songContext) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: songPlaying ? 'Stop' : 'Play in song',
+              icon: Icon(songPlaying ? Icons.stop : Icons.play_arrow),
+              color: MuzicianTheme.sky,
+              onPressed: () => _toggleSongPlayback(clipStartTick),
+            ),
+          ],
+          const SizedBox(width: 8),
           Text(
             'Used in $usageCount clips',
             style: const TextStyle(
@@ -201,6 +280,63 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
           showSavePanels: false,
           showBackground: false,
         ),
+      ),
+    );
+  }
+}
+
+/// Compact SOLO / SONG segmented toggle shown in the editor app bar.
+///
+/// SOLO plays only the edited pattern (via the embedded transport); SONG hands
+/// playback to the song transport so the pattern is heard in arrangement
+/// context, positioned at the opened clip instance's slot.
+class _PlaybackModeToggle extends StatelessWidget {
+  final bool songContext;
+  final ValueChanged<bool> onChanged;
+
+  const _PlaybackModeToggle({
+    required this.songContext,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget pill(String label, bool value) {
+      final active = songContext == value;
+      return GestureDetector(
+        onTap: () => onChanged(value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? MuzicianTheme.sky : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: active
+                  ? MuzicianTheme.surface
+                  : MuzicianTheme.textSecondary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: MuzicianTheme.glassBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: MuzicianTheme.glassBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [pill('SOLO', false), pill('SONG', true)],
       ),
     );
   }
