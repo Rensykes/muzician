@@ -7,8 +7,12 @@ import '../../schema/rules/song_rules.dart' show songTicksPerMeasure;
 import '../../store/song_audio_recorder_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
-import 'song_audio_clip_body.dart';
 
+/// Recorder bottom sheet.
+///
+/// Flow: idle → countIn → recording → finalising → ready (auto-pops with the
+/// recorded asset).  There is intentionally no review step — the caller
+/// commits the clip immediately and the user manages it from the timeline.
 class SongAudioRecorderSheet extends ConsumerWidget {
   final String trackId;
   final int startTick;
@@ -21,6 +25,19 @@ class SongAudioRecorderSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Auto-pop with the asset once the recorder finishes finalising the take.
+    ref.listen<SongAudioRecorderState>(songAudioRecorderProvider, (prev, next) {
+      if (next.status == SongAudioRecorderStatus.ready &&
+          next.pendingAsset != null) {
+        final asset = ref
+            .read(songAudioRecorderProvider.notifier)
+            .consumePendingAsset();
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop<AudioAsset?>(asset);
+        }
+      }
+    });
+
     final state = ref.watch(songAudioRecorderProvider);
     final notifier = ref.read(songAudioRecorderProvider.notifier);
 
@@ -49,26 +66,13 @@ class SongAudioRecorderSheet extends ConsumerWidget {
               errorMessage: state.errorMessage,
             ),
             const SizedBox(height: 20),
-            if (state.status == SongAudioRecorderStatus.preview &&
-                state.pendingAsset != null)
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: AudioClipBody(
-                  name: 'Preview',
-                  durationMs: state.pendingAsset!.durationMs,
-                  format: state.pendingAsset!.format,
-                  peaks: state.pendingAsset!.peaks,
-                  isBroken: false,
-                ),
-              ),
-            const SizedBox(height: 24),
             _ActionRow(
               status: state.status,
               onStart: () {
                 final config = ref.read(songProjectProvider).config;
-                final ticksPerMeasure =
-                    songTicksPerMeasure(config.timeSignature);
+                final ticksPerMeasure = songTicksPerMeasure(
+                  config.timeSignature,
+                );
                 final countInMs = audioTickToMs(ticksPerMeasure, config);
                 notifier.start(
                   trackId: trackId,
@@ -77,16 +81,13 @@ class SongAudioRecorderSheet extends ConsumerWidget {
                 );
               },
               onStop: () => notifier.stop(),
-              onConfirm: () {
-                final asset = notifier.consumePendingAsset();
-                Navigator.of(context).pop<AudioAsset?>(asset);
-              },
-              onDiscard: () async {
-                await notifier.discard();
+              onCancel: () async {
+                await notifier.cancel();
                 if (!context.mounted) return;
-                Navigator.of(context).pop<AudioAsset?>(null);
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop<AudioAsset?>(null);
+                }
               },
-              onRetry: () => notifier.discard(),
             ),
           ],
         ),
@@ -107,7 +108,7 @@ class _StatusLabel extends StatelessWidget {
       SongAudioRecorderStatus.countIn => 'Count-in…',
       SongAudioRecorderStatus.recording => 'Recording…',
       SongAudioRecorderStatus.finalising => 'Finalising…',
-      SongAudioRecorderStatus.preview => 'Review the take',
+      SongAudioRecorderStatus.ready => 'Done',
       SongAudioRecorderStatus.error => errorMessage ?? 'Error',
     };
     return Text(
@@ -125,17 +126,13 @@ class _ActionRow extends StatelessWidget {
   final SongAudioRecorderStatus status;
   final VoidCallback onStart;
   final VoidCallback onStop;
-  final VoidCallback onConfirm;
-  final VoidCallback onDiscard;
-  final VoidCallback onRetry;
+  final VoidCallback onCancel;
 
   const _ActionRow({
     required this.status,
     required this.onStart,
     required this.onStop,
-    required this.onConfirm,
-    required this.onDiscard,
-    required this.onRetry,
+    required this.onCancel,
   });
 
   @override
@@ -143,42 +140,65 @@ class _ActionRow extends StatelessWidget {
     switch (status) {
       case SongAudioRecorderStatus.idle:
       case SongAudioRecorderStatus.error:
-        return FilledButton.icon(
-          key: const ValueKey('audio-rec-start'),
-          onPressed: onStart,
-          icon: const Icon(Icons.mic),
-          label: const Text('Record'),
-        );
-      case SongAudioRecorderStatus.countIn:
-      case SongAudioRecorderStatus.recording:
-      case SongAudioRecorderStatus.finalising:
-        return FilledButton.icon(
-          key: const ValueKey('audio-rec-stop'),
-          onPressed:
-              status == SongAudioRecorderStatus.recording ? onStop : null,
-          icon: const Icon(Icons.stop),
-          label: const Text('Stop'),
-        );
-      case SongAudioRecorderStatus.preview:
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton(
-              key: const ValueKey('audio-rec-discard'),
-              onPressed: onDiscard,
-              child: const Text('Discard'),
+              key: const ValueKey('audio-rec-cancel'),
+              onPressed: onCancel,
+              child: const Text('Close'),
             ),
-            TextButton(
-              key: const ValueKey('audio-rec-retry'),
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
-            FilledButton(
-              key: const ValueKey('audio-rec-confirm'),
-              onPressed: onConfirm,
-              child: const Text('Confirm'),
+            FilledButton.icon(
+              key: const ValueKey('audio-rec-start'),
+              onPressed: onStart,
+              icon: const Icon(Icons.mic),
+              label: const Text('Record'),
             ),
           ],
+        );
+      case SongAudioRecorderStatus.countIn:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton(
+              key: const ValueKey('audio-rec-cancel'),
+              onPressed: onCancel,
+              child: const Text('Cancel'),
+            ),
+            FilledButton.tonalIcon(
+              key: const ValueKey('audio-rec-stop'),
+              onPressed: null,
+              icon: const Icon(Icons.stop),
+              label: const Text('Stop'),
+            ),
+          ],
+        );
+      case SongAudioRecorderStatus.recording:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton(
+              key: const ValueKey('audio-rec-cancel'),
+              onPressed: onCancel,
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              key: const ValueKey('audio-rec-stop'),
+              onPressed: onStop,
+              icon: const Icon(Icons.stop),
+              label: const Text('Stop'),
+            ),
+          ],
+        );
+      case SongAudioRecorderStatus.finalising:
+      case SongAudioRecorderStatus.ready:
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
         );
     }
   }

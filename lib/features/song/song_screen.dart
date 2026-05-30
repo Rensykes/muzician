@@ -9,8 +9,11 @@ import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
+import '../../store/song_session_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/transport_strip.dart' as transport;
+import '../../utils/note_utils.dart' as note_utils;
 import '../_mockup_shell.dart' show showWidgetSheet, showPickerSheet;
 import 'song_arranger_timeline.dart';
 import 'song_clip_action_bar.dart';
@@ -78,6 +81,15 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  _SongScaleChip(config: project.config),
+                  IconButton(
+                    tooltip: 'New Song',
+                    icon: const Icon(
+                      Icons.note_add_outlined,
+                      color: MuzicianTheme.sky,
+                    ),
+                    onPressed: () => _confirmNewSong(context),
                   ),
                   IconButton(
                     tooltip: 'Add Track',
@@ -249,6 +261,38 @@ class _SongScreenState extends ConsumerState<SongScreen> {
       ),
     );
   }
+
+  Future<void> _confirmNewSong(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: MuzicianTheme.surface,
+        title: const Text(
+          'Start a new song?',
+          style: TextStyle(color: MuzicianTheme.textPrimary),
+        ),
+        content: const Text(
+          'This overwrites your current session. Save it first from the Save / '
+          'Load panel if you want to keep it.',
+          style: TextStyle(color: MuzicianTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('New Song'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    ref.read(songPlaybackProvider.notifier).stopPlayback();
+    await ref.read(songSessionProvider).clearAndReset();
+  }
 }
 
 class _SongTransportStrip extends ConsumerWidget {
@@ -272,7 +316,7 @@ class _SongTransportStrip extends ConsumerWidget {
 
     void onRewind() {
       HapticFeedback.selectionClick();
-      playbackNotifier.stopPlayback();
+      playbackNotifier.seek(0);
     }
 
     void onStop() {
@@ -285,7 +329,11 @@ class _SongTransportStrip extends ConsumerWidget {
       if (playing) {
         playbackNotifier.stopPlayback();
       } else {
-        playbackNotifier.startPlayback();
+        // Resume from a parked cursor (set by rewind or a ruler tap) when the
+        // transport is idle; otherwise start from the top.
+        final cursor =
+            playback.status == SongPlaybackStatus.idle ? playback.currentTick : null;
+        playbackNotifier.startPlayback(startTick: cursor);
       }
     }
 
@@ -341,3 +389,339 @@ class _SongTransportStrip extends ConsumerWidget {
     );
   }
 }
+
+// ── Song Scale Chip & Picker ─────────────────────────────────────────────────
+
+class _SongScaleChip extends ConsumerWidget {
+  final SongProjectConfig config;
+  const _SongScaleChip({required this.config});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final root = config.scaleRoot;
+    final name = config.scaleName;
+    final isSet = root != null && name != null;
+    final label = isSet ? '$root ${_scaleLabel(name)}' : 'Set scale';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          showWidgetSheet(
+            context: context,
+            title: 'Song Scale',
+            child: _SongScalePickerSheet(config: config),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSet
+                ? MuzicianTheme.teal.withValues(alpha: 0.14)
+                : Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSet
+                  ? MuzicianTheme.teal.withValues(alpha: 0.45)
+                  : MuzicianTheme.glassBorder,
+              width: 0.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.piano_rounded,
+                size: 14,
+                color: isSet ? MuzicianTheme.teal : MuzicianTheme.textMuted,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSet ? MuzicianTheme.teal : MuzicianTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _scaleLabel(String name) => note_utils.scaleGroups.values
+    .expand((v) => v)
+    .firstWhere((s) => s.$1 == name, orElse: () => (name, name))
+    .$2;
+
+class _SongScalePickerSheet extends ConsumerStatefulWidget {
+  final SongProjectConfig config;
+  const _SongScalePickerSheet({required this.config});
+
+  @override
+  ConsumerState<_SongScalePickerSheet> createState() =>
+      _SongScalePickerSheetState();
+}
+
+class _SongScalePickerSheetState extends ConsumerState<_SongScalePickerSheet> {
+  String? _selectedRoot;
+  String? _selectedScale;
+  note_utils.ScaleCategory _activeCategory = note_utils.ScaleCategory.common;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRoot = widget.config.scaleRoot;
+    _selectedScale = widget.config.scaleName;
+    if (_selectedScale != null) {
+      for (final entry in note_utils.scaleGroups.entries) {
+        if (entry.value.any((s) => s.$1 == _selectedScale)) {
+          _activeCategory = entry.key;
+          break;
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scalesForCategory =
+        note_utils.scaleGroups[_activeCategory] ?? const [];
+    final isActive = _selectedRoot != null && _selectedScale != null;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Inherited by every note pattern',
+              style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 11),
+            ),
+            const Spacer(),
+            if (isActive)
+              TextButton(onPressed: _clearScale, child: const Text('Clear')),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: note_utils.chromaticNotes.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
+            itemBuilder: (_, i) {
+              final note = note_utils.chromaticNotes[i];
+              final active = note == _selectedRoot;
+              return GestureDetector(
+                onTap: () => _onRootTap(note),
+                child: Container(
+                  alignment: Alignment.center,
+                  constraints: const BoxConstraints(minWidth: 42),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: active
+                        ? MuzicianTheme.sky.withValues(alpha: 0.14)
+                        : Colors.white.withValues(alpha: 0.04),
+                    border: Border.all(
+                      color: active
+                          ? MuzicianTheme.sky
+                          : Colors.white.withValues(alpha: 0.08),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Text(
+                    note,
+                    style: TextStyle(
+                      color: active
+                          ? MuzicianTheme.sky
+                          : const Color(0xFF64748B),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: note_utils.ScaleCategory.values.map((cat) {
+            final isTab = cat == _activeCategory;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _activeCategory = cat),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: isTab ? MuzicianTheme.sky : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      note_utils.scaleCategoryLabels[cat]!,
+                      style: TextStyle(
+                        color: isTab
+                            ? MuzicianTheme.sky
+                            : const Color(0xFF475569),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: scalesForCategory.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
+            itemBuilder: (_, i) {
+              final (name, label) = scalesForCategory[i];
+              final active = name == _selectedScale;
+              return GestureDetector(
+                onTap: () => _onScaleTap(name),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: active
+                        ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                        : Colors.white.withValues(alpha: 0.04),
+                    border: Border.all(
+                      color: active
+                          ? MuzicianTheme.sky
+                          : Colors.white.withValues(alpha: 0.08),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: active
+                          ? MuzicianTheme.sky
+                          : const Color(0xFF64748B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onRootTap(String root) {
+    HapticFeedback.lightImpact();
+    final newRoot = root == _selectedRoot ? null : root;
+    if (newRoot == null) {
+      _clearScale();
+      return;
+    }
+    if (_selectedScale != null) {
+      _applyScale(newRoot, _selectedScale!);
+    } else {
+      setState(() => _selectedRoot = newRoot);
+    }
+  }
+
+  void _onScaleTap(String scale) {
+    HapticFeedback.lightImpact();
+    final newScale = scale == _selectedScale ? null : scale;
+    if (newScale == null) {
+      _clearScale();
+      return;
+    }
+    if (_selectedRoot != null) {
+      _applyScale(_selectedRoot!, newScale);
+    } else {
+      setState(() => _selectedScale = newScale);
+    }
+  }
+
+  void _clearScale() {
+    setState(() {
+      _selectedRoot = null;
+      _selectedScale = null;
+    });
+    ref.read(songProjectProvider.notifier).setScale();
+  }
+
+  Future<void> _applyScale(String root, String scaleName) async {
+    final scaleNotes = note_utils.getScaleNotes(root, scaleName);
+    if (scaleNotes.isEmpty) return;
+    final scaleSet = scaleNotes.toSet();
+    final project = ref.read(songProjectProvider);
+    final conflicts = <String>{
+      for (final pattern in project.notePatterns)
+        for (final n in pattern.notes) _midiToPitchClass(n.midiNote),
+    }.where((pc) => !scaleSet.contains(pc)).toList();
+
+    if (conflicts.isEmpty) {
+      _commitScale(root, scaleName);
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
+    );
+    if (confirmed != true) return;
+    ref
+        .read(songProjectProvider.notifier)
+        .removeNotesByPitchClassAcrossPatterns(conflicts);
+    _commitScale(root, scaleName);
+  }
+
+  void _commitScale(String root, String scaleName) {
+    setState(() {
+      _selectedRoot = root;
+      _selectedScale = scaleName;
+    });
+    ref
+        .read(songProjectProvider.notifier)
+        .setScale(root: root, scaleName: scaleName);
+  }
+}
+
+const _kPitchClasses = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
+
+String _midiToPitchClass(int midi) => _kPitchClasses[midi % 12];

@@ -11,6 +11,11 @@ void main() {
   testWidgets('SongNotePatternEditor shows pattern name and Make unique', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(600, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
@@ -73,6 +78,11 @@ void main() {
   testWidgets('failed save keeps editor open and shows feedback', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(600, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final container = ProviderContainer();
     addTearDown(container.dispose);
 

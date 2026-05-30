@@ -52,12 +52,14 @@ void main() {
     final tmp = await Directory.systemTemp.createTemp('rec_test_');
     addTearDown(() => tmp.deleteSync(recursive: true));
 
-    final container = ProviderContainer(overrides: [
-      songAudioRecorderDriverProvider.overrideWithValue(driver),
-      songAudioRepositoryProvider.overrideWithValue(
-        SongAudioRepository.testWith(rootDirectory: tmp),
-      ),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(driver),
+        songAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(rootDirectory: tmp),
+        ),
+      ],
+    );
     addTearDown(container.dispose);
 
     // Need a track so auto-mute can find it.
@@ -65,11 +67,7 @@ void main() {
     final trackId = project.addTrack(SongTrackType.audio);
 
     final notifier = container.read(songAudioRecorderProvider.notifier);
-    await notifier.start(
-      trackId: trackId,
-      startTick: 16,
-      countInMs: 0,
-    );
+    await notifier.start(trackId: trackId, startTick: 16, countInMs: 0);
 
     expect(driver.started, isTrue);
     final state = container.read(songAudioRecorderProvider);
@@ -78,112 +76,113 @@ void main() {
     expect(state.startTick, 16);
   });
 
-  test('stop transitions recording → finalising → preview with asset',
-      () async {
+  test('stop transitions recording → finalising → ready with asset', () async {
     final driver = _FakeRecorderDriver();
     final tmp = await Directory.systemTemp.createTemp('rec_test_');
     addTearDown(() => tmp.deleteSync(recursive: true));
 
-    final container = ProviderContainer(overrides: [
-      songAudioRecorderDriverProvider.overrideWithValue(driver),
-      songAudioRepositoryProvider.overrideWithValue(
-        SongAudioRepository.testWith(rootDirectory: tmp),
-      ),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(driver),
+        songAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(rootDirectory: tmp),
+        ),
+      ],
+    );
     addTearDown(container.dispose);
 
     final project = container.read(songProjectProvider.notifier);
     final trackId = project.addTrack(SongTrackType.audio);
     final notifier = container.read(songAudioRecorderProvider.notifier);
-    await notifier.start(
-      trackId: trackId,
-      startTick: 0,
-      countInMs: 0,
-    );
+    await notifier.start(trackId: trackId, startTick: 0, countInMs: 0);
     await notifier.stop();
 
     expect(driver.stopped, isTrue);
     final state = container.read(songAudioRecorderProvider);
-    expect(state.status, SongAudioRecorderStatus.preview);
+    expect(state.status, SongAudioRecorderStatus.ready);
     expect(state.pendingAsset, isNotNull);
     expect(state.pendingAsset!.format, 'wav');
     expect(state.pendingAsset!.durationMs, closeTo(1000, 10));
   });
 
-  test('discard deletes the stored file and returns to idle', () async {
+  test('cancel mid-recording stops the driver and clears state', () async {
     final driver = _FakeRecorderDriver();
     final tmp = await Directory.systemTemp.createTemp('rec_test_');
     addTearDown(() => tmp.deleteSync(recursive: true));
 
     final repo = SongAudioRepository.testWith(rootDirectory: tmp);
-    final container = ProviderContainer(overrides: [
-      songAudioRecorderDriverProvider.overrideWithValue(driver),
-      songAudioRepositoryProvider.overrideWithValue(repo),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(driver),
+        songAudioRepositoryProvider.overrideWithValue(repo),
+      ],
+    );
     addTearDown(container.dispose);
     final project = container.read(songProjectProvider.notifier);
     final trackId = project.addTrack(SongTrackType.audio);
     final notifier = container.read(songAudioRecorderProvider.notifier);
     await notifier.start(trackId: trackId, startTick: 0, countInMs: 0);
-    await notifier.stop();
-    final asset = container.read(songAudioRecorderProvider).pendingAsset!;
+    expect(
+      container.read(songAudioRecorderProvider).status,
+      SongAudioRecorderStatus.recording,
+    );
 
-    await notifier.discard();
+    await notifier.cancel();
 
+    expect(driver.stopped, isTrue);
     expect(
       container.read(songAudioRecorderProvider).status,
       SongAudioRecorderStatus.idle,
     );
-    final file = await repo.resolvePath(asset.id, asset.format);
-    expect(file.existsSync(), isFalse);
+    expect(container.read(songAudioRecorderProvider).pendingAsset, isNull);
+    expect(container.read(songProjectProvider).tracks.first.isMuted, isFalse);
+    // Repository is untouched – there is no leftover file to clean up.
+    expect(repo, isNotNull);
   });
 
-  test('mutes the target track during recording and restores on preview',
-      () async {
-    final driver = _FakeRecorderDriver();
-    final tmp = await Directory.systemTemp.createTemp('rec_mute_test_');
-    addTearDown(() => tmp.deleteSync(recursive: true));
+  test(
+    'mutes the target track during recording and restores on finalise',
+    () async {
+      final driver = _FakeRecorderDriver();
+      final tmp = await Directory.systemTemp.createTemp('rec_mute_test_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
 
-    final container = ProviderContainer(overrides: [
-      songAudioRecorderDriverProvider.overrideWithValue(driver),
-      songAudioRepositoryProvider.overrideWithValue(
-        SongAudioRepository.testWith(rootDirectory: tmp),
-      ),
-    ]);
-    addTearDown(container.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          songAudioRepositoryProvider.overrideWithValue(
+            SongAudioRepository.testWith(rootDirectory: tmp),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final project = container.read(songProjectProvider.notifier);
-    final trackId = project.addTrack(SongTrackType.audio);
-    expect(
-      container.read(songProjectProvider).tracks.first.isMuted,
-      isFalse,
-    );
+      final project = container.read(songProjectProvider.notifier);
+      final trackId = project.addTrack(SongTrackType.audio);
+      expect(container.read(songProjectProvider).tracks.first.isMuted, isFalse);
 
-    final notifier = container.read(songAudioRecorderProvider.notifier);
-    await notifier.start(trackId: trackId, startTick: 0, countInMs: 0);
-    expect(
-      container.read(songProjectProvider).tracks.first.isMuted,
-      isTrue,
-    );
+      final notifier = container.read(songAudioRecorderProvider.notifier);
+      await notifier.start(trackId: trackId, startTick: 0, countInMs: 0);
+      expect(container.read(songProjectProvider).tracks.first.isMuted, isTrue);
 
-    await notifier.stop();
-    expect(
-      container.read(songProjectProvider).tracks.first.isMuted,
-      isFalse,
-    );
-  });
+      await notifier.stop();
+      expect(container.read(songProjectProvider).tracks.first.isMuted, isFalse);
+    },
+  );
 
   test('consumePendingAsset returns asset and resets to idle', () async {
     final driver = _FakeRecorderDriver();
     final tmp = await Directory.systemTemp.createTemp('rec_test_');
     addTearDown(() => tmp.deleteSync(recursive: true));
 
-    final container = ProviderContainer(overrides: [
-      songAudioRecorderDriverProvider.overrideWithValue(driver),
-      songAudioRepositoryProvider.overrideWithValue(
-        SongAudioRepository.testWith(rootDirectory: tmp),
-      ),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(driver),
+        songAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(rootDirectory: tmp),
+        ),
+      ],
+    );
     addTearDown(container.dispose);
     final project = container.read(songProjectProvider.notifier);
     final trackId = project.addTrack(SongTrackType.audio);

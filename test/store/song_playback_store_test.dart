@@ -56,11 +56,13 @@ void main() {
 
   test('schedules audio clip starts/stops as the transport ticks', () async {
     final sink = _RecordingAudioSink();
-    final container = ProviderContainer(overrides: [
-      songNotePlaybackSinkProvider.overrideWith((_) => (notes, vol) async {}),
-      songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
-      songAudioClipSinkProvider.overrideWithValue(sink),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        songNotePlaybackSinkProvider.overrideWith((_) => (notes, vol) async {}),
+        songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
+        songAudioClipSinkProvider.overrideWithValue(sink),
+      ],
+    );
     addTearDown(container.dispose);
 
     final project = container.read(songProjectProvider.notifier);
@@ -96,10 +98,18 @@ class _AudioCall {
 class _RecordingAudioSink implements SongAudioClipSink {
   final List<_AudioCall> startCalls = [];
   final List<_AudioCall> stopCalls = [];
+  final List<String> preparedAssetIds = [];
 
   @override
-  Future<void> startClip(
-      {required AudioAsset asset, required int offsetMs}) async {
+  Future<void> prepare(Iterable<AudioAsset> assets) async {
+    preparedAssetIds.addAll(assets.map((a) => a.id));
+  }
+
+  @override
+  Future<void> startClip({
+    required AudioAsset asset,
+    required int offsetMs,
+  }) async {
     startCalls.add(_AudioCall(asset.id));
   }
 

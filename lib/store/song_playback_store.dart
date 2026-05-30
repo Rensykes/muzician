@@ -46,6 +46,11 @@ final songDrumPlaybackSinkProvider = Provider<SongDrumPlaybackSink>((ref) {
 /// no-op so unit tests do not need to touch real audio playback; production
 /// code overrides this with [AudioPlayersClipSink].
 abstract class SongAudioClipSink {
+  /// Pre-warm internal players so the tick loop's [startClip] calls can fire
+  /// in parallel without racing on platform-channel source preparation.  The
+  /// production implementation pre-loads one `AudioPlayer` per asset; the
+  /// no-op default returns immediately.
+  Future<void> prepare(Iterable<AudioAsset> assets);
   Future<void> startClip({required AudioAsset asset, required int offsetMs});
   Future<void> stopClip({required AudioAsset asset});
   Future<void> stopAll();
@@ -54,16 +59,21 @@ abstract class SongAudioClipSink {
 class _NoopAudioSink implements SongAudioClipSink {
   const _NoopAudioSink();
   @override
-  Future<void> startClip(
-      {required AudioAsset asset, required int offsetMs}) async {}
+  Future<void> prepare(Iterable<AudioAsset> assets) async {}
+  @override
+  Future<void> startClip({
+    required AudioAsset asset,
+    required int offsetMs,
+  }) async {}
   @override
   Future<void> stopClip({required AudioAsset asset}) async {}
   @override
   Future<void> stopAll() async {}
 }
 
-final songAudioClipSinkProvider =
-    Provider<SongAudioClipSink>((ref) => const _NoopAudioSink());
+final songAudioClipSinkProvider = Provider<SongAudioClipSink>(
+  (ref) => const _NoopAudioSink(),
+);
 
 class _PendingAudioStop {
   final AudioAsset asset;
@@ -98,6 +108,12 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
       ..sort((a, b) => a.startMs.compareTo(b.startMs));
     final pendingStops = <_PendingAudioStop>[];
 
+    // Pre-load every audio player synchronously before the tick loop so the
+    // parallel startClip calls in fireAudioForTick only have to seek + resume
+    // — eliminates the iOS race where two concurrent setSource calls cause
+    // one player to silently never start.
+    await audioSink.prepare(scheduled.map((c) => c.asset));
+
     final totalTicks = song_rules.songTotalTicks(project.config);
     final start = startTick ?? 0;
     final end = endTickExclusive ?? totalTicks;
@@ -126,8 +142,8 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
           .toList();
 
       void fireAudioForTick(int tick) {
-        final nowMs =
-            ((tick - start) * tickDuration.inMicroseconds / 1000).round();
+        final nowMs = ((tick - start) * tickDuration.inMicroseconds / 1000)
+            .round();
         while (scheduled.isNotEmpty && scheduled.first.startMs <= nowMs) {
           final clip = scheduled.removeAt(0);
           final offset = nowMs - clip.startMs;
@@ -206,6 +222,26 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
         errorMessage: e.toString(),
       );
     }
+  }
+
+  /// Moves the idle playhead cursor to [tick] without starting playback.
+  ///
+  /// If playback is active, it is stopped first (so the audible position does
+  /// not fight the scrub) and the cursor is parked at [tick]; pressing play
+  /// then resumes from there.  [tick] is clamped into the project's range.
+  void seek(int tick) {
+    final project = ref.read(songProjectProvider);
+    final totalTicks = song_rules.songTotalTicks(project.config);
+    final maxTick = totalTicks > 0 ? totalTicks - 1 : 0;
+    final clamped = tick.clamp(0, maxTick);
+    if (state.status == SongPlaybackStatus.playing) {
+      _playbackVersion++;
+      unawaited(ref.read(songAudioClipSinkProvider).stopAll());
+    }
+    state = SongPlaybackState(
+      status: SongPlaybackStatus.idle,
+      currentTick: clamped,
+    );
   }
 
   /// Stops active playback and resets the transport to idle.

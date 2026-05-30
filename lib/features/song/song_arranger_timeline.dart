@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
+import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'song_audio_actions.dart';
@@ -109,6 +110,11 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
               gutterWidth: gutterWidth,
               hScroll: _hScroll,
               currentPlaybackTick: widget.currentPlaybackTick,
+              onSeekToDx: (dx) {
+                final tick = (dx / _kTickWidth).round();
+                HapticFeedback.selectionClick();
+                ref.read(songPlaybackProvider.notifier).seek(tick);
+              },
             ),
             Expanded(
               child: ListView.builder(
@@ -150,6 +156,10 @@ class _MeasureRuler extends StatelessWidget {
   final ScrollController hScroll;
   final int? currentPlaybackTick;
 
+  /// Called with the local x-offset (in the timeline's coordinate space) when
+  /// the user taps the ruler to move the playhead.
+  final ValueChanged<double> onSeekToDx;
+
   const _MeasureRuler({
     required this.totalMeasures,
     required this.measureTicks,
@@ -157,6 +167,7 @@ class _MeasureRuler extends StatelessWidget {
     required this.gutterWidth,
     required this.hScroll,
     required this.currentPlaybackTick,
+    required this.onSeekToDx,
   });
 
   @override
@@ -180,13 +191,18 @@ class _MeasureRuler extends StatelessWidget {
               child: SizedBox(
                 width: timelineWidth,
                 height: _kRulerHeight,
-                child: CustomPaint(
-                  painter: _RulerPainter(
-                    totalMeasures: totalMeasures,
-                    measureTicks: measureTicks,
-                    currentPlaybackTick: currentPlaybackTick,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (details) =>
+                      onSeekToDx(details.localPosition.dx),
+                  child: CustomPaint(
+                    painter: _RulerPainter(
+                      totalMeasures: totalMeasures,
+                      measureTicks: measureTicks,
+                      currentPlaybackTick: currentPlaybackTick,
+                    ),
+                    size: Size(timelineWidth, _kRulerHeight),
                   ),
-                  size: Size(timelineWidth, _kRulerHeight),
                 ),
               ),
             ),

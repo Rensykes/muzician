@@ -1,6 +1,7 @@
 /// State machine for the song audio overdub flow: count-in → recording →
-/// preview → commit/discard.  All side effects (mic, files) are injected via
-/// providers so tests can swap them.
+/// ready (auto-commits via sheet pop).  All side effects (mic, files,
+/// background song transport) are injected via providers so tests can swap
+/// them.
 library;
 
 import 'dart:async';
@@ -11,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song_project.dart';
 import '../utils/note_player.dart';
 import 'song_audio_repository.dart';
+import 'song_playback_store.dart';
 import 'song_project_store.dart';
 
 enum SongAudioRecorderStatus {
@@ -18,7 +20,7 @@ enum SongAudioRecorderStatus {
   countIn,
   recording,
   finalising,
-  preview,
+  ready,
   error,
 }
 
@@ -48,14 +50,11 @@ class SongAudioRecorderState {
     String? Function()? errorMessage,
   }) => SongAudioRecorderState(
     status: status ?? this.status,
-    targetTrackId:
-        targetTrackId != null ? targetTrackId() : this.targetTrackId,
+    targetTrackId: targetTrackId != null ? targetTrackId() : this.targetTrackId,
     startTick: startTick != null ? startTick() : this.startTick,
     elapsedMs: elapsedMs ?? this.elapsedMs,
-    pendingAsset:
-        pendingAsset != null ? pendingAsset() : this.pendingAsset,
-    errorMessage:
-        errorMessage != null ? errorMessage() : this.errorMessage,
+    pendingAsset: pendingAsset != null ? pendingAsset() : this.pendingAsset,
+    errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
   );
 }
 
@@ -67,8 +66,9 @@ abstract class SongAudioRecorderDriver {
   Future<void> dispose();
 }
 
-final songAudioRecorderDriverProvider =
-    Provider<SongAudioRecorderDriver>((ref) {
+final songAudioRecorderDriverProvider = Provider<SongAudioRecorderDriver>((
+  ref,
+) {
   throw UnimplementedError(
     'Override songAudioRecorderDriverProvider in real launches and tests',
   );
@@ -101,9 +101,7 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
 
     final projectNotifier = ref.read(songProjectProvider.notifier);
     final project = ref.read(songProjectProvider);
-    final track = project.tracks
-        .where((t) => t.id == trackId)
-        .firstOrNull;
+    final track = project.tracks.where((t) => t.id == trackId).firstOrNull;
     if (track == null) {
       state = state.copyWith(
         status: SongAudioRecorderStatus.error,
@@ -133,19 +131,21 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
 
     if (state.status != SongAudioRecorderStatus.countIn) return;
     state = state.copyWith(status: SongAudioRecorderStatus.recording);
+    _startBackgroundPlayback(startTick);
     await driver.start();
   }
 
   Future<void> stop() async {
     if (state.status != SongAudioRecorderStatus.recording) return;
     state = state.copyWith(status: SongAudioRecorderStatus.finalising);
+    _stopBackgroundPlayback();
     final driver = ref.read(songAudioRecorderDriverProvider);
     try {
       final bytes = await driver.stop();
       final repo = ref.read(songAudioRepositoryProvider);
       final asset = await repo.writeRecording(bytes);
       state = state.copyWith(
-        status: SongAudioRecorderStatus.preview,
+        status: SongAudioRecorderStatus.ready,
         pendingAsset: () => asset,
         elapsedMs: asset.durationMs,
       );
@@ -158,12 +158,28 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
     _restoreTargetTrackMute();
   }
 
-  /// Discards the pending take and returns the recorder to idle.
-  Future<void> discard() async {
+  /// Cancels an active count-in or recording without producing an asset.
+  /// Safe to call in any state.
+  Future<void> cancel() async {
+    final st = state.status;
+    if (st == SongAudioRecorderStatus.idle) return;
+    _stopBackgroundPlayback();
+    if (st == SongAudioRecorderStatus.recording) {
+      final driver = ref.read(songAudioRecorderDriverProvider);
+      try {
+        await driver.stop();
+      } catch (_) {
+        // ignore: cancellation should not surface driver errors.
+      }
+    }
     final asset = state.pendingAsset;
     if (asset != null) {
       final repo = ref.read(songAudioRepositoryProvider);
-      await repo.delete(asset.id);
+      try {
+        await repo.delete(asset.id);
+      } catch (_) {
+        // ignore
+      }
     }
     _restoreTargetTrackMute();
     state = const SongAudioRecorderState();
@@ -178,8 +194,19 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
   }
 
   Future<void> reset() async {
+    _stopBackgroundPlayback();
     _restoreTargetTrackMute();
     state = const SongAudioRecorderState();
+  }
+
+  void _startBackgroundPlayback(int startTick) {
+    final playback = ref.read(songPlaybackProvider.notifier);
+    playback.stopPlayback();
+    unawaited(playback.startPlayback(startTick: startTick));
+  }
+
+  void _stopBackgroundPlayback() {
+    ref.read(songPlaybackProvider.notifier).stopPlayback();
   }
 
   /// Restores the target track's mute state to what it was before the
@@ -200,5 +227,5 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
 
 final songAudioRecorderProvider =
     NotifierProvider<SongAudioRecorderNotifier, SongAudioRecorderState>(
-  SongAudioRecorderNotifier.new,
-);
+      SongAudioRecorderNotifier.new,
+    );

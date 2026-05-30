@@ -175,7 +175,8 @@ class PianoRollStackBuilderNotifier
   bool addStack() {
     final prState = ref.read(pianoRollProvider);
     final prNotifier = ref.read(pianoRollProvider.notifier);
-    final startTick = prState.selectedColumnTick ?? 0;
+    final startTick =
+        prState.selectedColumnTick ?? prNotifier.firstEmptyColumnTick();
     final createdCount = prNotifier.addNoteStack(
       state.midiNotes,
       startTick,
