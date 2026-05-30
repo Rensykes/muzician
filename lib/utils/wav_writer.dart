@@ -32,8 +32,8 @@ Uint8List writeWavPcm16Mono(Int16List samples, {required int sampleRate}) {
   bytes.add(_u32(fileSize));
   bytes.add(_ascii('WAVE'));
   bytes.add(_ascii('fmt '));
-  bytes.add(_u32(16));            // PCM fmt chunk size
-  bytes.add(_u16(1));             // PCM format
+  bytes.add(_u32(16)); // PCM fmt chunk size
+  bytes.add(_u16(1)); // PCM format
   bytes.add(_u16(channels));
   bytes.add(_u32(sampleRate));
   bytes.add(_u32(byteRate));
@@ -41,17 +41,21 @@ Uint8List writeWavPcm16Mono(Int16List samples, {required int sampleRate}) {
   bytes.add(_u16(bitsPerSample));
   bytes.add(_ascii('data'));
   bytes.add(_u32(dataSize));
-  bytes.add(samples.buffer.asUint8List(
-    samples.offsetInBytes,
-    samples.lengthInBytes,
-  ));
+  bytes.add(
+    samples.buffer.asUint8List(samples.offsetInBytes, samples.lengthInBytes),
+  );
   return bytes.toBytes();
 }
 
-/// Parses the RIFF/WAVE header at the start of [wav] and returns the audio
-/// metadata.  Only PCM is supported (most recordings from `record` are PCM).
+/// Parses the RIFF/WAVE header of [wav] and returns the audio metadata.
+///
+/// Scans the RIFF chunk list rather than assuming a canonical
+/// `RIFF | WAVE | fmt ` layout — the iOS `record` backend prepends `JUNK` or
+/// `LIST` chunks before `fmt ` (legitimate per RIFF spec), which a strict
+/// fixed-offset reader rejects.  Only PCM (and IEEE float as a passthrough on
+/// the same fields) is supported.
 WavHeader parseWavHeader(Uint8List wav) {
-  if (wav.length < 44) {
+  if (wav.length < 12) {
     throw const FormatException('WAV too short');
   }
   final bd = ByteData.sublistView(wav);
@@ -59,34 +63,52 @@ WavHeader parseWavHeader(Uint8List wav) {
       String.fromCharCodes(wav.sublist(8, 12)) != 'WAVE') {
     throw const FormatException('Not a RIFF/WAVE file');
   }
-  if (String.fromCharCodes(wav.sublist(12, 16)) != 'fmt ') {
-    throw const FormatException('Missing fmt chunk at canonical offset');
-  }
-  final channels = bd.getUint16(22, Endian.little);
-  final sampleRate = bd.getUint32(24, Endian.little);
-  final bitsPerSample = bd.getUint16(34, Endian.little);
 
-  var cursor = 36;
+  int? sampleRate;
+  int? channels;
+  int? bitsPerSample;
+  int? dataSize;
+
+  var cursor = 12;
   while (cursor + 8 <= wav.length) {
     final tag = String.fromCharCodes(wav.sublist(cursor, cursor + 4));
     final size = bd.getUint32(cursor + 4, Endian.little);
-    if (tag == 'data') {
-      final bytesPerFrame = channels * (bitsPerSample ~/ 8);
-      if (bytesPerFrame == 0 || sampleRate == 0) {
-        throw const FormatException('Invalid WAV metadata');
+    final payloadStart = cursor + 8;
+    if (tag == 'fmt ') {
+      if (payloadStart + 16 > wav.length) {
+        throw const FormatException('Truncated fmt chunk');
       }
-      final frames = size ~/ bytesPerFrame;
-      final durationMs = (frames * 1000) ~/ sampleRate;
-      return WavHeader(
-        sampleRate: sampleRate,
-        channels: channels,
-        bitsPerSample: bitsPerSample,
-        durationMs: durationMs,
-      );
+      channels = bd.getUint16(payloadStart + 2, Endian.little);
+      sampleRate = bd.getUint32(payloadStart + 4, Endian.little);
+      bitsPerSample = bd.getUint16(payloadStart + 14, Endian.little);
+    } else if (tag == 'data') {
+      dataSize = size;
+      if (sampleRate != null) break;
     }
-    cursor += 8 + size;
+    // RIFF chunks are word-aligned: payload is padded to an even length but
+    // the size field reports the unpadded payload size.
+    final padded = size + (size.isOdd ? 1 : 0);
+    cursor = payloadStart + padded;
   }
-  throw const FormatException('Missing data chunk');
+
+  if (sampleRate == null || channels == null || bitsPerSample == null) {
+    throw const FormatException('Missing fmt chunk');
+  }
+  if (dataSize == null) {
+    throw const FormatException('Missing data chunk');
+  }
+  final bytesPerFrame = channels * (bitsPerSample ~/ 8);
+  if (bytesPerFrame == 0 || sampleRate == 0) {
+    throw const FormatException('Invalid WAV metadata');
+  }
+  final frames = dataSize ~/ bytesPerFrame;
+  final durationMs = (frames * 1000) ~/ sampleRate;
+  return WavHeader(
+    sampleRate: sampleRate,
+    channels: channels,
+    bitsPerSample: bitsPerSample,
+    durationMs: durationMs,
+  );
 }
 
 List<int> _ascii(String s) => s.codeUnits;

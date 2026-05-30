@@ -38,6 +38,56 @@ class SongProjectNotifier extends Notifier<SongProject> {
     );
   }
 
+  /// Set or clear the song-level scale.  Passing both [root] and [scaleName]
+  /// applies the scale (and propagates it into every note pattern as
+  /// `highlightedNotes`); passing nulls clears it and leaves each pattern's
+  /// own highlight fallback intact.
+  void setScale({String? root, String? scaleName}) {
+    state = state.copyWith(
+      config: state.config.copyWith(
+        scaleRoot: () => root,
+        scaleName: () => scaleName,
+      ),
+    );
+  }
+
+  /// Drop every note in every note pattern whose pitch class is in
+  /// [pitchClasses].  Used when the user applies a song-level scale that
+  /// conflicts with notes already placed in patterns.
+  void removeNotesByPitchClassAcrossPatterns(List<String> pitchClasses) {
+    if (pitchClasses.isEmpty) return;
+    final unwanted = pitchClasses.toSet();
+    final pcOf = _pitchClassOfMidi;
+    state = state.copyWith(
+      notePatterns: state.notePatterns
+          .map(
+            (p) => p.copyWith(
+              notes: p.notes
+                  .where((n) => !unwanted.contains(pcOf(n.midiNote)))
+                  .toList(),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  static const _pitchClasses = [
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
+  ];
+
+  static String _pitchClassOfMidi(int midi) => _pitchClasses[midi % 12];
+
   // ── Track Mutations ─────────────────────────────────────────────────────────
 
   String addTrack(SongTrackType type, {String? name}) {
@@ -90,8 +140,9 @@ class SongProjectNotifier extends Notifier<SongProject> {
   }
 
   void deleteTrack(String trackId) {
-    final removedClips =
-        state.clips.where((c) => c.trackId == trackId).toList();
+    final removedClips = state.clips
+        .where((c) => c.trackId == trackId)
+        .toList();
     final keptClips = state.clips.where((c) => c.trackId != trackId).toList();
     final removedAudioPatternIds = removedClips
         .where((c) => c.patternType == SongPatternType.audio)
@@ -448,7 +499,8 @@ class SongProjectNotifier extends Notifier<SongProject> {
     String? clipName,
   }) {
     final patternId = _id('ap');
-    final effectiveName = clipName ??
+    final effectiveName =
+        clipName ??
         (asset.sourceLabel.isNotEmpty ? asset.sourceLabel : 'Audio');
     final pattern = AudioClipPattern(
       id: patternId,
@@ -500,9 +552,7 @@ class SongProjectNotifier extends Notifier<SongProject> {
     final effective = trimmed.isEmpty ? 'Audio' : trimmed;
     state = state.copyWith(
       audioPatterns: state.audioPatterns
-          .map(
-            (p) => p.id == clip.patternId ? p.copyWith(name: effective) : p,
-          )
+          .map((p) => p.id == clip.patternId ? p.copyWith(name: effective) : p)
           .toList(),
     );
   }

@@ -1,6 +1,6 @@
 /// Production implementation of [SongAudioRecorderDriver] backed by the
-/// `record` and `permission_handler` packages.  Always records mono WAV 16-bit
-/// at 44.1 kHz so the in-app peak/waveform pipeline can decode the bytes.
+/// `record` package.  Always records mono WAV 16-bit at 44.1 kHz so the in-app
+/// peak/waveform pipeline can decode the bytes.
 library;
 
 import 'dart:io';
@@ -8,7 +8,6 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
 import 'song_audio_recorder_store.dart';
@@ -18,10 +17,7 @@ class RecordPackageDriver implements SongAudioRecorderDriver {
   File? _currentFile;
 
   @override
-  Future<bool> ensurePermission() async {
-    final status = await Permission.microphone.request();
-    return status.isGranted;
-  }
+  Future<bool> ensurePermission() => _recorder.hasPermission();
 
   @override
   Future<void> start() async {

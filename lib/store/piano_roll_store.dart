@@ -390,6 +390,26 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     );
   }
 
+  /// Returns the first column tick (on the snap grid) that has no notes, or
+  /// the next free tick past the last note when every grid column is occupied.
+  /// Used when adding a stack with no explicitly-selected column.
+  int firstEmptyColumnTick() {
+    final maxTick = rules.totalTicks(
+      state.config.timeSignature,
+      state.config.totalMeasures,
+    );
+    final snap = state.snapTicks <= 0 ? 1 : state.snapTicks;
+    final occupied = state.notes.map((n) => n.startTick).toSet();
+    for (var tick = 0; tick < maxTick; tick += snap) {
+      if (!occupied.contains(tick)) return tick;
+    }
+    if (state.notes.isEmpty) return 0;
+    final lastTick = state.notes
+        .map((n) => n.startTick)
+        .reduce((a, b) => a > b ? a : b);
+    return (lastTick + snap).clamp(0, maxTick - 1).toInt();
+  }
+
   int addNoteStack(List<int> midiNotes, int startTick, int durationTicks) {
     final maxTick = rules.totalTicks(
       state.config.timeSignature,

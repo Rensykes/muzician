@@ -39,9 +39,16 @@ class SongClipActionBar extends ConsumerWidget {
         .length;
     final isShared = patternRefs > 1;
     final track = project.tracks.firstWhere((t) => t.id == clip.trackId);
-    final accent = track.type == SongTrackType.note
-        ? MuzicianTheme.sky
-        : MuzicianTheme.orange;
+    final accent = switch (track.type) {
+      SongTrackType.note => MuzicianTheme.sky,
+      SongTrackType.drum => MuzicianTheme.orange,
+      SongTrackType.audio => MuzicianTheme.teal,
+    };
+    final clipTypeLabel = switch (track.type) {
+      SongTrackType.note => 'NOTE CLIP',
+      SongTrackType.drum => 'DRUM CLIP',
+      SongTrackType.audio => 'AUDIO CLIP',
+    };
 
     void deselect() {
       ref.read(songSelectedClipIdProvider.notifier).state = null;
@@ -75,7 +82,7 @@ class SongClipActionBar extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    track.type == SongTrackType.note ? 'NOTE CLIP' : 'DRUM CLIP',
+                    clipTypeLabel,
                     style: TextStyle(
                       color: accent,
                       fontSize: 9,
@@ -97,7 +104,7 @@ class SongClipActionBar extends ConsumerWidget {
                       ),
                       if (isShared) ...[
                         const SizedBox(width: 6),
-                        Icon(
+                        const Icon(
                           Icons.link,
                           size: 12,
                           color: MuzicianTheme.textMuted,

@@ -15,6 +15,7 @@ import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
+import 'store/song_session_store.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
@@ -33,8 +34,9 @@ void main() {
   runApp(
     ProviderScope(
       overrides: [
-        songAudioRecorderDriverProvider
-            .overrideWith((ref) => RecordPackageDriver()),
+        songAudioRecorderDriverProvider.overrideWith(
+          (ref) => RecordPackageDriver(),
+        ),
         songAudioClipSinkProvider.overrideWith(
           (ref) => ref.watch(productionSongAudioClipSinkProvider),
         ),
@@ -76,6 +78,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
     Future.microtask(() async {
       await ref.read(saveSystemProvider.notifier).hydrate();
       await ref.read(settingsProvider.notifier).hydrate();
+      await ref.read(songSessionProvider).hydrate();
       await NotePlayer.instance.init();
     });
   }

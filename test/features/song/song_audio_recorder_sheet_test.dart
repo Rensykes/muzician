@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/song/song_audio_recorder_sheet.dart';
-import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/song_audio_recorder_store.dart';
 
 /// Pushes the recorder state machine into specific statuses without touching
@@ -16,7 +15,7 @@ class _ScriptedRecorderNotifier extends SongAudioRecorderNotifier {
 }
 
 void main() {
-  testWidgets('shows Record button when idle', (tester) async {
+  testWidgets('shows Record + Close buttons when idle', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -33,9 +32,10 @@ void main() {
     );
     expect(find.text('Ready'), findsOneWidget);
     expect(find.byKey(const ValueKey('audio-rec-start')), findsOneWidget);
+    expect(find.byKey(const ValueKey('audio-rec-cancel')), findsOneWidget);
   });
 
-  testWidgets('shows Stop button when recording', (tester) async {
+  testWidgets('shows Stop + Cancel buttons when recording', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -58,31 +58,19 @@ void main() {
     );
     expect(find.text('Recording…'), findsOneWidget);
     expect(find.byKey(const ValueKey('audio-rec-stop')), findsOneWidget);
+    expect(find.byKey(const ValueKey('audio-rec-cancel')), findsOneWidget);
   });
 
-  testWidgets(
-      'preview renders waveform body and Discard / Retry / Confirm actions',
-      (tester) async {
-    const asset = AudioAsset(
-      id: 'a1',
-      durationMs: 4321,
-      sampleRate: 44100,
-      channels: 1,
-      format: 'wav',
-      peaks: [0, 64, 128, 192, 255],
-      sourceLabel: 'Recording',
-    );
+  testWidgets('shows spinner when finalising', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           songAudioRecorderProvider.overrideWith(
             () => _ScriptedRecorderNotifier(
               const SongAudioRecorderState(
-                status: SongAudioRecorderStatus.preview,
+                status: SongAudioRecorderStatus.finalising,
                 targetTrackId: 't1',
                 startTick: 0,
-                pendingAsset: asset,
-                elapsedMs: 4321,
               ),
             ),
           ),
@@ -94,12 +82,8 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Review the take'), findsOneWidget);
-    expect(find.byKey(const ValueKey('audio-rec-discard')), findsOneWidget);
-    expect(find.byKey(const ValueKey('audio-rec-retry')), findsOneWidget);
-    expect(find.byKey(const ValueKey('audio-rec-confirm')), findsOneWidget);
-    expect(find.text('Preview'), findsOneWidget);
-    expect(find.text('WAV'), findsOneWidget);
+    expect(find.text('Finalising…'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
   testWidgets('shows error message in error state', (tester) async {

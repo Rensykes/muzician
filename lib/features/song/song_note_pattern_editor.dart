@@ -3,6 +3,11 @@
 /// Creates an isolated [ProviderContainer] seeded from the pattern so that edits
 /// never leak into the standalone Piano Roll screen.  On save the edited state
 /// is converted back to a [NotePattern] and applied via [songProjectProvider].
+///
+/// The editor mounts the full [PianoRollScreenV2] shell (stack builder,
+/// detection, hum recorder, transport, tools, snap, pitch range), but hides the
+/// per-pattern scale picker — the scale is inherited from the song.  Save/Load
+/// panels are also hidden because loading would smash the host pattern length.
 library;
 
 import 'package:flutter/material.dart';
@@ -13,10 +18,8 @@ import '../../schema/rules/song_pattern_bridge_rules.dart' as bridge;
 import '../../store/piano_roll_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
-import '../piano_roll/piano_roll_detection_panel.dart';
-import '../piano_roll/piano_roll_grid.dart';
-
-// ── Seeded PianoRollNotifier ──────────────────────────────────────────────────
+import '../../utils/note_utils.dart';
+import '../piano_roll/piano_roll_screen_v2.dart';
 
 class _SeededPianoRollNotifier extends PianoRollNotifier {
   _SeededPianoRollNotifier(this.seedState);
@@ -25,8 +28,6 @@ class _SeededPianoRollNotifier extends PianoRollNotifier {
   @override
   PianoRollState build() => seedState;
 }
-
-// ── Editor Widget ─────────────────────────────────────────────────────────────
 
 class SongNotePatternEditor extends ConsumerStatefulWidget {
   final String clipId;
@@ -47,6 +48,11 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
   ProviderContainer? _isolatedContainer;
   String _patternName = '';
 
+  /// Snapshot of the pattern's per-pattern `highlightedNotes` taken at open
+  /// time.  Preserved through save so the pattern keeps its own fallback when
+  /// the song scale is cleared later.
+  List<String> _patternHighlightFallback = const [];
+
   @override
   void dispose() {
     _isolatedContainer?.dispose();
@@ -57,11 +63,16 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
     if (_isolatedContainer != null) return;
 
     _patternName = pattern.name;
+    _patternHighlightFallback = List<String>.from(pattern.highlightedNotes);
+
+    final scale = _songScaleFromConfig(project.config);
 
     final seedState = bridge.pianoRollStateFromNotePattern(
       pattern,
       tempo: project.config.tempo,
       timeSignature: project.config.timeSignature,
+      songHighlightedNotes: scale?.notes,
+      songKey: scale?.label,
     );
 
     _isolatedContainer = ProviderContainer(
@@ -79,11 +90,14 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
     final currentPattern = project.notePatterns.firstWhere(
       (p) => p.id == widget.patternId,
     );
+    final hasSongScale =
+        project.config.scaleRoot != null && project.config.scaleName != null;
     final nextPattern = bridge.notePatternFromPianoRollState(
       pianoRollState,
       patternId: widget.patternId,
       patternName: _patternName,
       minimumLengthTicks: currentPattern.lengthTicks,
+      highlightedNotesOverride: hasSongScale ? _patternHighlightFallback : null,
     );
     final applied = ref
         .read(songProjectProvider.notifier)
@@ -112,13 +126,11 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
 
     NotePattern pattern;
     try {
-      // Verify clip exists (will throw if missing).
       project.clips.firstWhere((c) => c.id == widget.clipId);
       pattern = project.notePatterns.firstWhere(
         (p) => p.id == widget.patternId,
       );
     } catch (_) {
-      // Clip or pattern removed concurrently — pop back.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.pop(context);
       });
@@ -131,13 +143,30 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
         .where((c) => c.patternId == widget.patternId)
         .length;
 
+    final songScale = _songScaleFromConfig(project.config);
+    final scaleLabel = songScale?.label ?? 'No song scale';
+
     return Scaffold(
       backgroundColor: MuzicianTheme.surface,
       appBar: AppBar(
         backgroundColor: MuzicianTheme.surface,
-        title: Text(
-          _patternName,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _patternName,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
+            Text(
+              scaleLabel,
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
         actions: [
           Text(
@@ -167,16 +196,29 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
       ),
       body: UncontrolledProviderScope(
         container: _isolatedContainer!,
-        child: Column(
-          children: [
-            const Expanded(child: PianoRollGrid()),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: PianoRollDetectionPanel(),
-            ),
-          ],
+        child: const PianoRollScreenV2(
+          showScale: false,
+          showSavePanels: false,
+          showBackground: false,
         ),
       ),
     );
   }
+}
+
+/// Compact view-model derived from [SongProjectConfig.scaleRoot] /
+/// [SongProjectConfig.scaleName].  Returns `null` when the song has no scale.
+({String label, List<String> notes})? _songScaleFromConfig(
+  SongProjectConfig config,
+) {
+  final root = config.scaleRoot;
+  final name = config.scaleName;
+  if (root == null || name == null) return null;
+  final notes = getScaleNotes(root, name);
+  if (notes.isEmpty) return null;
+  final scaleLabel = scaleGroups.values
+      .expand((v) => v)
+      .firstWhere((s) => s.$1 == name, orElse: () => (name, name))
+      .$2;
+  return (label: '$root $scaleLabel', notes: notes);
 }

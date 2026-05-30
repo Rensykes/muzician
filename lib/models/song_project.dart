@@ -28,27 +28,37 @@ class SongProjectConfig {
   final int tempo;
   final TimeSignature timeSignature;
   final int totalMeasures;
+  final String? scaleRoot;
+  final String? scaleName;
 
   const SongProjectConfig({
     required this.tempo,
     required this.timeSignature,
     required this.totalMeasures,
+    this.scaleRoot,
+    this.scaleName,
   });
 
   SongProjectConfig copyWith({
     int? tempo,
     TimeSignature? timeSignature,
     int? totalMeasures,
+    String? Function()? scaleRoot,
+    String? Function()? scaleName,
   }) => SongProjectConfig(
     tempo: tempo ?? this.tempo,
     timeSignature: timeSignature ?? this.timeSignature,
     totalMeasures: totalMeasures ?? this.totalMeasures,
+    scaleRoot: scaleRoot != null ? scaleRoot() : this.scaleRoot,
+    scaleName: scaleName != null ? scaleName() : this.scaleName,
   );
 
   Map<String, dynamic> toJson() => {
     'tempo': tempo,
     'timeSignature': timeSignature.toJson(),
     'totalMeasures': totalMeasures,
+    if (scaleRoot != null) 'scaleRoot': scaleRoot,
+    if (scaleName != null) 'scaleName': scaleName,
   };
 
   factory SongProjectConfig.fromJson(Map<String, dynamic> json) =>
@@ -58,6 +68,8 @@ class SongProjectConfig {
           json['timeSignature'] as Map<String, dynamic>,
         ),
         totalMeasures: json['totalMeasures'] as int,
+        scaleRoot: json['scaleRoot'] as String?,
+        scaleName: json['scaleName'] as String?,
       );
 }
 
@@ -427,11 +439,7 @@ class AudioClipPattern {
         assetId: assetId ?? this.assetId,
       );
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'assetId': assetId,
-  };
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'assetId': assetId};
 
   factory AudioClipPattern.fromJson(Map<String, dynamic> json) =>
       AudioClipPattern(

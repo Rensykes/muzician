@@ -52,7 +52,26 @@ String _headerChipLabel(PianoRollState state) {
 }
 
 class PianoRollScreenV2 extends ConsumerStatefulWidget {
-  const PianoRollScreenV2({super.key});
+  /// Whether to show the scale picker entry points (landscape section, portrait
+  /// chip).  The Song workspace mounts this shell with [showScale] = false so
+  /// the active scale is inherited from the song.
+  final bool showScale;
+
+  /// Whether to show the save/load and import-from-saves panels.  Disabled in
+  /// embedded contexts (Song workspace) where loading would smash the host's
+  /// pattern length and scale state.
+  final bool showSavePanels;
+
+  /// Whether to draw the outer SafeArea gradient background.  Disabled when
+  /// the shell is mounted inside another scaffold that already provides one.
+  final bool showBackground;
+
+  const PianoRollScreenV2({
+    super.key,
+    this.showScale = true,
+    this.showSavePanels = true,
+    this.showBackground = true,
+  });
 
   @override
   ConsumerState<PianoRollScreenV2> createState() => _PianoRollScreenV2State();
@@ -66,6 +85,10 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
 
     // V2 is hosted as a top-level tab body — the parent app scaffold owns
     // the bottom navigation, so we render only the gradient surface here.
+    final body = isLandscape ? _buildLandscape() : _buildPortrait();
+    if (!widget.showBackground) {
+      return Theme(data: MuzicianTheme.dark(), child: body);
+    }
     return Theme(
       data: MuzicianTheme.dark(),
       child: Container(
@@ -76,10 +99,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
             colors: MuzicianTheme.gradientColors,
           ),
         ),
-        child: SafeArea(
-          bottom: false,
-          child: isLandscape ? _buildLandscape() : _buildPortrait(),
-        ),
+        child: SafeArea(bottom: false, child: body),
       ),
     );
   }
@@ -88,6 +108,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
     HapticFeedback.selectionClick();
     switch (key) {
       case 'scale':
+        if (!widget.showScale) return;
         showWidgetSheet(
           context: context,
           title: 'Scale Highlight',
@@ -100,12 +121,14 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           child: const PianoRollHumRecorderPanel(),
         );
       case 'save':
+        if (!widget.showSavePanels) return;
         showWidgetSheet(
           context: context,
           title: 'Save / Load',
           child: const PianoRollSavePanel(),
         );
       case 'import':
+        if (!widget.showSavePanels) return;
         showWidgetSheet(
           context: context,
           title: 'Import from Saves',
@@ -199,9 +222,11 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                       Divider(color: MuzicianTheme.glassBorder),
                       _EditPitchControls(state: state),
                       const SizedBox(height: 12),
-                      const _PanelSectionHeader('Scale'),
-                      Divider(color: MuzicianTheme.glassBorder),
-                      const PianoRollScalePicker(),
+                      if (widget.showScale) ...[
+                        const _PanelSectionHeader('Scale'),
+                        Divider(color: MuzicianTheme.glassBorder),
+                        const PianoRollScalePicker(),
+                      ],
                       if (state.selectedColumnTick != null) ...[
                         const SizedBox(height: 12),
                         const _PanelSectionHeader('Detection'),
@@ -212,14 +237,16 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                       const _PanelSectionHeader('Hum Recorder'),
                       Divider(color: MuzicianTheme.glassBorder),
                       const PianoRollHumRecorderPanel(),
-                      const SizedBox(height: 12),
-                      const _PanelSectionHeader('Save / Load'),
-                      Divider(color: MuzicianTheme.glassBorder),
-                      const PianoRollSavePanel(),
-                      const SizedBox(height: 12),
-                      const _PanelSectionHeader('Import from Saves'),
-                      Divider(color: MuzicianTheme.glassBorder),
-                      const PianoRollSaveStackLoader(),
+                      if (widget.showSavePanels) ...[
+                        const SizedBox(height: 12),
+                        const _PanelSectionHeader('Save / Load'),
+                        Divider(color: MuzicianTheme.glassBorder),
+                        const PianoRollSavePanel(),
+                        const SizedBox(height: 12),
+                        const _PanelSectionHeader('Import from Saves'),
+                        Divider(color: MuzicianTheme.glassBorder),
+                        const PianoRollSaveStackLoader(),
+                      ],
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -267,6 +294,8 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           state: state,
           hasSelection: state.selectedColumnTick != null,
           onOpenPanel: _openPanel,
+          showScale: widget.showScale,
+          showSavePanels: widget.showSavePanels,
         ),
       ],
     );
@@ -280,11 +309,15 @@ class _PortraitActionBar extends ConsumerWidget {
   final PianoRollState state;
   final bool hasSelection;
   final ValueChanged<String> onOpenPanel;
+  final bool showScale;
+  final bool showSavePanels;
 
   const _PortraitActionBar({
     required this.state,
     required this.hasSelection,
     required this.onOpenPanel,
+    this.showScale = true,
+    this.showSavePanels = true,
   });
 
   @override
@@ -333,13 +366,15 @@ class _PortraitActionBar extends ConsumerWidget {
                       .quickAddStack();
                 },
               ),
-              const SizedBox(width: 6),
-              _QuickChip(
-                label: 'Scale',
-                icon: Icons.piano_rounded,
-                color: MuzicianTheme.teal,
-                onTap: () => onOpenPanel('scale'),
-              ),
+              if (showScale) ...[
+                const SizedBox(width: 6),
+                _QuickChip(
+                  label: 'Scale',
+                  icon: Icons.piano_rounded,
+                  color: MuzicianTheme.teal,
+                  onTap: () => onOpenPanel('scale'),
+                ),
+              ],
               const SizedBox(width: 6),
               _QuickChip(
                 label: 'Detect',
@@ -360,20 +395,22 @@ class _PortraitActionBar extends ConsumerWidget {
                 color: MuzicianTheme.orange,
                 onTap: () => onOpenPanel('hum'),
               ),
-              const SizedBox(width: 6),
-              _QuickChip(
-                label: 'Save',
-                icon: Icons.save_rounded,
-                color: MuzicianTheme.sky,
-                onTap: () => onOpenPanel('save'),
-              ),
-              const SizedBox(width: 6),
-              _QuickChip(
-                label: 'Import',
-                icon: Icons.folder_open_rounded,
-                color: MuzicianTheme.emerald,
-                onTap: () => onOpenPanel('import'),
-              ),
+              if (showSavePanels) ...[
+                const SizedBox(width: 6),
+                _QuickChip(
+                  label: 'Save',
+                  icon: Icons.save_rounded,
+                  color: MuzicianTheme.sky,
+                  onTap: () => onOpenPanel('save'),
+                ),
+                const SizedBox(width: 6),
+                _QuickChip(
+                  label: 'Import',
+                  icon: Icons.folder_open_rounded,
+                  color: MuzicianTheme.emerald,
+                  onTap: () => onOpenPanel('import'),
+                ),
+              ],
             ],
           ),
         ],
