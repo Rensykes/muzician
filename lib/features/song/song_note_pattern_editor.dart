@@ -13,7 +13,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart';
-import '../../models/piano_roll_playback.dart';
 import '../../models/song_playback.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_pattern_bridge_rules.dart' as bridge;
