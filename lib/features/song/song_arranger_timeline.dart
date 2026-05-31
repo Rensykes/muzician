@@ -347,6 +347,43 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
   /// (i.e. neither moving nor resizing the selected clip).
   bool _isScrolling = false;
 
+  /// This lane's own horizontal controller.  A single shared controller cannot
+  /// be attached to the ruler *and* every lane scroll view at once — reading
+  /// `.offset`/`.position` then trips `_positions.length == 1`.  Instead each
+  /// lane owns a controller and mirrors the master ([widget.hScroll], attached
+  /// only to the ruler) via a listener; lane pan-scroll drives the master.
+  final ScrollController _laneScroll = ScrollController();
+
+  void _syncFromMaster() {
+    if (!_laneScroll.hasClients || !widget.hScroll.hasClients) return;
+    final target = widget.hScroll.offset;
+    if ((_laneScroll.offset - target).abs() > 0.01) {
+      _laneScroll.jumpTo(target);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.hScroll.addListener(_syncFromMaster);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrackLane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.hScroll != widget.hScroll) {
+      oldWidget.hScroll.removeListener(_syncFromMaster);
+      widget.hScroll.addListener(_syncFromMaster);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.hScroll.removeListener(_syncFromMaster);
+    _laneScroll.dispose();
+    super.dispose();
+  }
+
   int _tickAtDx(double dx) => (dx / _kTickWidth).round().clamp(
     0,
     widget.measureTicks * widget.totalMeasures,
@@ -589,6 +626,9 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
   @override
   Widget build(BuildContext context) {
     final selectedClipId = ref.watch(songSelectedClipIdProvider);
+    // A lane recycled into view by the ListView must catch up to the master
+    // scroll offset once it has a position.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncFromMaster());
     return Container(
       height: _kLaneHeight,
       decoration: BoxDecoration(
@@ -605,7 +645,7 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
           _VerticalDivider(),
           Expanded(
             child: SingleChildScrollView(
-              controller: widget.hScroll,
+              controller: _laneScroll,
               scrollDirection: Axis.horizontal,
               physics: const NeverScrollableScrollPhysics(),
               child: SizedBox(
