@@ -38,7 +38,13 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
   @override
   void dispose() {
     // Stop the audition loop so it does not keep playing after the editor pops.
-    ref.read(drumPatternPlaybackProvider.notifier).stop();
+    // Guarded: in widget tests the enclosing ProviderScope container can be
+    // torn down before this widget unmounts, which makes `ref` unusable.
+    try {
+      ref.read(drumPatternPlaybackProvider.notifier).stop();
+    } catch (_) {
+      // Provider container already disposed — nothing left to stop.
+    }
     super.dispose();
   }
 
