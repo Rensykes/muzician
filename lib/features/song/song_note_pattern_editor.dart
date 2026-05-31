@@ -65,9 +65,15 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
   @override
   void dispose() {
     // Stop any song-context playback this editor started so it does not keep
-    // running after the editor is dismissed.
+    // running after the editor is dismissed.  Guarded: in widget tests the
+    // enclosing ProviderScope container can be torn down before this widget
+    // unmounts, which makes `ref` unusable.
     if (_songContext) {
-      ref.read(songPlaybackProvider.notifier).stopPlayback();
+      try {
+        ref.read(songPlaybackProvider.notifier).stopPlayback();
+      } catch (_) {
+        // Provider container already disposed — nothing left to stop.
+      }
     }
     _isolatedContainer?.dispose();
     super.dispose();
@@ -233,28 +239,6 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
           ],
         ),
         actions: [
-          _PlaybackModeToggle(
-            songContext: _songContext,
-            onChanged: _setSongContext,
-          ),
-          if (_songContext) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              tooltip: songPlaying ? 'Stop' : 'Play in song',
-              icon: Icon(songPlaying ? Icons.stop : Icons.play_arrow),
-              color: MuzicianTheme.sky,
-              onPressed: () => _toggleSongPlayback(clipStartTick),
-            ),
-          ],
-          const SizedBox(width: 8),
-          Text(
-            'Used in $usageCount clips',
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(width: 12),
           TextButton.icon(
             onPressed: _onMakeUnique,
             icon: const Icon(Icons.content_copy, size: 16),
@@ -271,6 +255,41 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
           ),
           const SizedBox(width: 8),
         ],
+        // Playback controls + usage live on a dedicated sub-bar so the action
+        // row never overflows on narrow widths.
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(44),
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                _PlaybackModeToggle(
+                  songContext: _songContext,
+                  onChanged: _setSongContext,
+                ),
+                if (_songContext) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: songPlaying ? 'Stop' : 'Play in song',
+                    icon: Icon(songPlaying ? Icons.stop : Icons.play_arrow),
+                    color: MuzicianTheme.sky,
+                    onPressed: () => _toggleSongPlayback(clipStartTick),
+                  ),
+                ],
+                const Spacer(),
+                Text(
+                  'Used in $usageCount clips',
+                  style: const TextStyle(
+                    color: MuzicianTheme.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       body: UncontrolledProviderScope(
         container: _isolatedContainer!,
