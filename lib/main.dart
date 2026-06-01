@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/_mockup_shell.dart';
 import 'features/fretboard/fretboard_feature.dart';
+import 'features/instrument_shared/shared_detection_panel.dart';
 import 'features/instrument_shared/shared_scale_picker.dart';
 import 'ui/core/app_info_panel.dart';
 import 'features/piano/piano_feature.dart';
@@ -406,8 +407,9 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
                   ),
                 ),
                 child: state.selectedNotes.isNotEmpty
-                    ? NoteDetectionPanel(
+                    ? SharedDetectionPanel(
                         key: const ValueKey('fret-detect'),
+                        binding: fretboardBinding,
                         onChordPanelRequested: () => showWidgetSheet(
                           context: context,
                           title: 'Chord voicings',
@@ -705,8 +707,9 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
                   ),
                 ),
                 child: state.selectedNotes.isNotEmpty
-                    ? PianoNoteDetectionPanel(
+                    ? SharedDetectionPanel(
                         key: const ValueKey('piano-detect'),
+                        binding: pianoBinding,
                         onChordPanelRequested: () => showWidgetSheet(
                           context: context,
                           title: 'Chords',

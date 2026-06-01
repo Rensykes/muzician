@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/features/piano/piano_note_detection_panel.dart';
+import 'package:muzician/features/instrument_shared/shared_detection_panel.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/store/piano_store.dart';
 
@@ -46,8 +46,8 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          home: Scaffold(body: PianoNoteDetectionPanel()),
+        child: MaterialApp(
+          home: Scaffold(body: SharedDetectionPanel(binding: pianoBinding)),
         ),
       ),
     );
