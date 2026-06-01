@@ -75,8 +75,13 @@ class FretboardSavePanel extends ConsumerWidget {
         root: snap.pendingScale!.root,
         scaleName: snap.pendingScale!.scaleName,
       );
+      ref.read(activeScaleProvider.notifier).state = (
+        root: snap.pendingScale!.root,
+        scaleName: snap.pendingScale!.scaleName,
+      );
     } else {
       ref.read(pendingScaleProvider.notifier).state = null;
+      ref.read(activeScaleProvider.notifier).state = null;
     }
 
     // Scroll fretboard to the capo position.
