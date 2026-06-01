@@ -56,11 +56,9 @@ void main() {
       activeChord: activeChord,
       manualEdit: manualEdit,
       chordCommitted: committed,
-      chordQualitySymbols: const ['', 'm', '7'],
     );
 
     final ScalePickerBinding scaleView = binding;
     expect(scaleView.activeScale, same(activeScale));
-    expect(binding.chordQualitySymbols, contains('m'));
   });
 }

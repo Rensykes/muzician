@@ -283,5 +283,4 @@ final fretboardBinding = InstrumentBinding(
   activeChord: activeChordProvider,
   manualEdit: fretboardManualEditProvider,
   chordCommitted: fretboardChordCommittedProvider,
-  chordQualitySymbols: kInstrumentChordQualitySymbols,
 );
