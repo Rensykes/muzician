@@ -48,10 +48,14 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
 
     final hasNotes = selectedNotes.isNotEmpty;
 
-    final chordResults = exactNotes.length >= 2
+    // Detection runs on the same threshold the empty-state branch checks
+    // (>= 2 distinct pitch classes), so the two never drift. exactNotes carries
+    // the per-cell/per-key midi info the detectors need.
+    final canDetect = selectedNotes.length >= 2 && exactNotes.isNotEmpty;
+    final chordResults = canDetect
         ? detectChordResultsFromExactNotes(exactNotes)
         : const <ChordDetectionResult>[];
-    final scaleResults = exactNotes.length >= 2
+    final scaleResults = canDetect
         ? detectScaleResultsFromExactNotes(exactNotes)
         : const <ScaleDetectionResult>[];
     final hasResults = chordResults.isNotEmpty || scaleResults.isNotEmpty;
