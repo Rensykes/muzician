@@ -2,11 +2,13 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../features/instrument_shared/instrument_binding.dart';
+import '../models/harmonic_analysis.dart';
 import '../models/piano.dart';
 import '../models/save_system.dart' show PianoSnapshot;
 import '../schema/rules/piano_rules.dart';
 
-class PianoNotifier extends Notifier<PianoState> {
+class PianoNotifier extends Notifier<PianoState> implements SelectionActions {
   @override
   PianoState build() => getDefaultPianoState();
 
@@ -17,6 +19,7 @@ class PianoNotifier extends Notifier<PianoState> {
   void setRange(PianoRangeName range) =>
       state = state.copyWith(currentRange: range);
 
+  @override
   void setHighlightedNotes(List<String> notes) =>
       state = state.copyWith(highlightedNotes: notes);
 
@@ -48,12 +51,14 @@ class PianoNotifier extends Notifier<PianoState> {
     ref.read(pianoManualEditProvider.notifier).state++;
   }
 
+  @override
   void clearSelectedNotes() => state = state.copyWith(
     selectedNotes: [],
     selectedKeys: [],
     focusedNotes: {},
   );
 
+  @override
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);
     final newKeys = state.selectedKeys
@@ -66,6 +71,7 @@ class PianoNotifier extends Notifier<PianoState> {
   void setViewMode(PianoViewMode mode) =>
       state = state.copyWith(viewMode: mode);
 
+  @override
   void toggleFocusedNote(String note) {
     final next = Set<String>.from(state.focusedNotes);
     if (next.contains(note)) {
@@ -139,3 +145,38 @@ final pianoManualEditProvider = StateProvider<int>((_) => 0);
 /// True while the user has committed a piano chord voicing (tapped a voicing card).
 /// Cleared when the user manually edits the keyboard.
 final pianoChordCommittedProvider = StateProvider<bool>((_) => false);
+
+final pianoSelectedNotesProvider = Provider<List<String>>(
+  (ref) => ref.watch(pianoProvider.select((s) => s.selectedNotes)),
+);
+final pianoFocusedNotesProvider = Provider<Set<String>>(
+  (ref) => ref.watch(pianoProvider.select((s) => s.focusedNotes)),
+);
+final pianoHighlightedNotesProvider = Provider<List<String>>(
+  (ref) => ref.watch(pianoProvider.select((s) => s.highlightedNotes)),
+);
+final pianoExactNotesProvider = Provider<List<ExactSelectionNote>>((ref) {
+  final keys = ref.watch(pianoProvider.select((s) => s.selectedKeys));
+  return keys
+      .map((k) => ExactSelectionNote(midiNote: k.midiNote, pitchClass: k.noteName))
+      .toList();
+});
+
+final pianoBinding = InstrumentBinding(
+  selectedPitchClasses: pianoSelectedNotesProvider,
+  highlightedNotes: pianoHighlightedNotesProvider,
+  actions: (ref) => ref.read(pianoProvider.notifier),
+  pendingScale: pianoPendingScaleProvider,
+  activeScale: pianoActiveScaleProvider,
+  selectedNotes: pianoSelectedNotesProvider,
+  focusedNotes: pianoFocusedNotesProvider,
+  exactNotes: pianoExactNotesProvider,
+  pendingChord: pianoPendingChordProvider,
+  activeChord: pianoActiveChordProvider,
+  manualEdit: pianoManualEditProvider,
+  chordCommitted: pianoChordCommittedProvider,
+  chordQualitySymbols: const [
+    '5', '', 'm', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug',
+    'm7b5', 'add9', 'maj9', '6', 'm6', 'dim7', '7sus4',
+  ],
+);

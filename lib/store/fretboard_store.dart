@@ -3,11 +3,14 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../features/instrument_shared/instrument_binding.dart';
 import '../models/fretboard.dart';
+import '../models/harmonic_analysis.dart';
 import '../models/save_system.dart' show FretboardSnapshot;
 import '../schema/rules/fretboard_rules.dart';
 
-class FretboardNotifier extends Notifier<FretboardState> {
+class FretboardNotifier extends Notifier<FretboardState>
+    implements SelectionActions {
   @override
   FretboardState build() => getDefaultFretboardState();
 
@@ -83,6 +86,7 @@ class FretboardNotifier extends Notifier<FretboardState> {
     );
   }
 
+  @override
   void setHighlightedNotes(List<String> notes) =>
       state = state.copyWith(highlightedNotes: notes);
 
@@ -141,12 +145,14 @@ class FretboardNotifier extends Notifier<FretboardState> {
     ref.read(fretboardManualEditProvider.notifier).state++;
   }
 
+  @override
   void clearSelectedNotes() => state = state.copyWith(
     selectedNotes: [],
     selectedCells: [],
     focusedNotes: {},
   );
 
+  @override
   void removeNotesByPitchClass(List<String> noteNames) {
     final bad = Set<String>.from(noteNames);
     final newCells = state.selectedCells
@@ -162,6 +168,7 @@ class FretboardNotifier extends Notifier<FretboardState> {
   void setInputMode(FretboardInputMode mode) =>
       state = state.copyWith(inputMode: mode);
 
+  @override
   void toggleFocusedNote(String note) {
     final next = Set<String>.from(state.focusedNotes);
     if (next.contains(note)) {
@@ -238,3 +245,44 @@ final fretboardManualEditProvider = StateProvider<int>((_) => 0);
 /// True while the user has committed a chord voicing (tapped a voicing card).
 /// Cleared when the user manually edits the fretboard.
 final fretboardChordCommittedProvider = StateProvider<bool>((_) => false);
+
+final fretboardSelectedNotesProvider = Provider<List<String>>(
+  (ref) => ref.watch(fretboardProvider.select((s) => s.selectedNotes)),
+);
+final fretboardFocusedNotesProvider = Provider<Set<String>>(
+  (ref) => ref.watch(fretboardProvider.select((s) => s.focusedNotes)),
+);
+final fretboardHighlightedNotesProvider = Provider<List<String>>(
+  (ref) => ref.watch(fretboardProvider.select((s) => s.highlightedNotes)),
+);
+final fretboardExactNotesProvider = Provider<List<ExactSelectionNote>>((ref) {
+  final state = ref.watch(fretboardProvider);
+  final tuning = tunings[state.currentTuning]!;
+  return state.selectedCells
+      .map(
+        (cell) => ExactSelectionNote(
+          midiNote: tuning.strings[cell.stringIndex].midiNote + cell.fret,
+          pitchClass: cell.noteName,
+        ),
+      )
+      .toList();
+});
+
+final fretboardBinding = InstrumentBinding(
+  selectedPitchClasses: fretboardSelectedNotesProvider,
+  highlightedNotes: fretboardHighlightedNotesProvider,
+  actions: (ref) => ref.read(fretboardProvider.notifier),
+  pendingScale: pendingScaleProvider,
+  activeScale: activeScaleProvider,
+  selectedNotes: fretboardSelectedNotesProvider,
+  focusedNotes: fretboardFocusedNotesProvider,
+  exactNotes: fretboardExactNotesProvider,
+  pendingChord: pendingChordProvider,
+  activeChord: activeChordProvider,
+  manualEdit: fretboardManualEditProvider,
+  chordCommitted: fretboardChordCommittedProvider,
+  chordQualitySymbols: const [
+    '5', '', 'm', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug',
+    'm7b5', 'add9', 'maj9', '6', 'm6', 'dim7', '7sus4',
+  ],
+);
