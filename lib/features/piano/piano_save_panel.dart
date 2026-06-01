@@ -73,8 +73,13 @@ class PianoSavePanel extends ConsumerWidget {
         root: snap.pendingScale!.root,
         scaleName: snap.pendingScale!.scaleName,
       );
+      ref.read(pianoActiveScaleProvider.notifier).state = (
+        root: snap.pendingScale!.root,
+        scaleName: snap.pendingScale!.scaleName,
+      );
     } else {
       ref.read(pianoPendingScaleProvider.notifier).state = null;
+      ref.read(pianoActiveScaleProvider.notifier).state = null;
     }
 
     // Scroll piano to make the first selected key visible.
