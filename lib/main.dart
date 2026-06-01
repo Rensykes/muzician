@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/_mockup_shell.dart';
 import 'features/fretboard/fretboard_feature.dart';
+import 'features/instrument_shared/shared_scale_picker.dart';
 import 'ui/core/app_info_panel.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
@@ -434,9 +435,9 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
                   onTap: () => showWidgetSheet(
                     context: context,
                     title: 'Scale',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: ScalePicker(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SharedScalePicker(binding: fretboardBinding),
                     ),
                   ),
                 ),
@@ -733,9 +734,9 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
                   onTap: () => showWidgetSheet(
                     context: context,
                     title: 'Scale',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: PianoScalePicker(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SharedScalePicker(binding: pianoBinding),
                     ),
                   ),
                 ),
