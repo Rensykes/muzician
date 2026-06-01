@@ -21,12 +21,12 @@ import '../../ui/transport_strip.dart' as transport;
 import '../../ui/core/app_info_panel.dart';
 import '../../utils/note_utils.dart';
 import '../_mockup_shell.dart';
+import '../instrument_shared/shared_scale_picker.dart';
 import 'piano_roll_detection_panel.dart';
 import 'piano_roll_grid.dart';
 import 'piano_roll_hum_recorder.dart';
 import 'piano_roll_save_panel.dart';
 import 'piano_roll_save_stack_loader.dart';
-import 'piano_roll_scale_picker.dart';
 import 'piano_roll_stack_builder.dart';
 
 const _landscapeWidthThreshold = 600.0;
@@ -112,7 +112,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
         showWidgetSheet(
           context: context,
           title: 'Scale Highlight',
-          child: const PianoRollScalePicker(),
+          child: SharedScalePicker(binding: pianoRollScaleBinding),
         );
       case 'hum':
         showWidgetSheet(
@@ -225,7 +225,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                       if (widget.showScale) ...[
                         const _PanelSectionHeader('Scale'),
                         Divider(color: MuzicianTheme.glassBorder),
-                        const PianoRollScalePicker(),
+                        SharedScalePicker(binding: pianoRollScaleBinding),
                       ],
                       if (state.selectedColumnTick != null) ...[
                         const SizedBox(height: 12),
