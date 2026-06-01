@@ -1,15 +1,16 @@
-/// ScalePicker – root note + scale type selector that highlights pitch classes
-/// across the fretboard.
+/// SharedScalePicker – binding-parameterized root note + scale type selector
+/// that highlights pitch-class rows across any instrument grid. Verbatim port
+/// of the Piano Roll scale picker, generalized over [ScalePickerBinding].
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmonic_analysis.dart';
-import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../utils/note_utils.dart';
+import 'instrument_binding.dart';
 
 const _catColor = {
   ScaleCategory.common: MuzicianTheme.sky,
@@ -17,28 +18,72 @@ const _catColor = {
   ScaleCategory.extended: MuzicianTheme.emerald,
 };
 
-class ScalePicker extends ConsumerStatefulWidget {
-  const ScalePicker({super.key});
+class SharedScalePicker extends ConsumerStatefulWidget {
+  final ScalePickerBinding binding;
+
+  const SharedScalePicker({super.key, required this.binding});
 
   @override
-  ConsumerState<ScalePicker> createState() => _ScalePickerState();
+  ConsumerState<SharedScalePicker> createState() => _SharedScalePickerState();
 }
 
-class _ScalePickerState extends ConsumerState<ScalePicker> {
+class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
   String? _selectedRoot;
   String? _selectedScale;
   ScaleCategory _activeCategory = ScaleCategory.common;
+  bool _initialSyncDone = false;
+
+  bool _samePitchClassSet(List<String> a, List<String> b) {
+    final left = a.toSet();
+    final right = b.toSet();
+    return left.length == right.length && left.containsAll(right);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(fretboardProvider);
-    final notifier = ref.read(fretboardProvider.notifier);
-    final pendingScale = ref.watch(pendingScaleProvider);
+    final highlightedNotes = ref.watch(widget.binding.highlightedNotes);
+    final pendingScale = ref.watch(widget.binding.pendingScale);
+    final activeScale = ref.watch(widget.binding.activeScale);
+
+    // Restore from committed active state once per widget lifecycle.
+    if (!_initialSyncDone && activeScale != null && pendingScale == null) {
+      final notes = getScaleNotes(activeScale.root, activeScale.scaleName);
+      final highlightLooksStale =
+          highlightedNotes.isNotEmpty &&
+          notes.isNotEmpty &&
+          !_samePitchClassSet(highlightedNotes, notes);
+      _initialSyncDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (highlightLooksStale) {
+          ref.read(widget.binding.activeScale.notifier).state = null;
+          setState(() {
+            _selectedRoot = null;
+            _selectedScale = null;
+          });
+          return;
+        }
+        var cat = ScaleCategory.common;
+        for (final entry in scaleGroups.entries) {
+          if (entry.value.any((s) => s.$1 == activeScale.scaleName)) {
+            cat = entry.key;
+            break;
+          }
+        }
+        setState(() {
+          _selectedRoot = activeScale.root;
+          _selectedScale = activeScale.scaleName;
+          _activeCategory = cat;
+        });
+        if (notes.isNotEmpty) {
+          widget.binding.actions(ref).setHighlightedNotes(notes);
+        }
+      });
+    }
 
     // Sync from detection panel
     if (pendingScale != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Find category
         var cat = ScaleCategory.common;
         for (final entry in scaleGroups.entries) {
           if (entry.value.any((s) => s.$1 == pendingScale.scaleName)) {
@@ -50,31 +95,32 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
           _selectedRoot = pendingScale.root;
           _selectedScale = pendingScale.scaleName;
           _activeCategory = cat;
+          _initialSyncDone = true;
         });
-        // Apply highlight
         final notes = getScaleNotes(pendingScale.root, pendingScale.scaleName);
-        if (notes.isNotEmpty) notifier.setHighlightedNotes(notes);
-        ref.read(pendingScaleProvider.notifier).state = null;
+        if (notes.isNotEmpty) {
+          widget.binding.actions(ref).setHighlightedNotes(notes);
+        }
+        ref.read(widget.binding.activeScale.notifier).state = pendingScale;
+        ref.read(widget.binding.pendingScale.notifier).state = null;
       });
     }
 
-    // Reset pills if highlight was cleared from outside (e.g. out-of-key guard).
-    ref.listen(fretboardProvider.select((s) => s.highlightedNotes), (
-      prev,
-      next,
-    ) {
+    // Reset pills if highlight was cleared from outside.
+    ref.listen(widget.binding.highlightedNotes, (prev, next) {
       if (next.isEmpty && (prev?.isNotEmpty ?? false)) {
         setState(() {
           _selectedRoot = null;
           _selectedScale = null;
+          _initialSyncDone = false;
         });
-        ref.read(activeScaleProvider.notifier).state = null;
+        ref.read(widget.binding.activeScale.notifier).state = null;
       }
     });
-    final activeColor = _catColor[_activeCategory]!;
+
     final scalesForCategory = scaleGroups[_activeCategory] ?? [];
     final isActive =
-        state.highlightedNotes.isNotEmpty &&
+        highlightedNotes.isNotEmpty &&
         _selectedRoot != null &&
         _selectedScale != null;
 
@@ -103,10 +149,10 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.12),
+                    color: MuzicianTheme.emerald.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: MuzicianTheme.sky.withValues(alpha: 0.4),
+                      color: MuzicianTheme.emerald.withValues(alpha: 0.4),
                       width: 0.5,
                     ),
                   ),
@@ -121,7 +167,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                           ),
                         ),
                         style: const TextStyle(
-                          color: MuzicianTheme.sky,
+                          color: MuzicianTheme.emerald,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -133,21 +179,24 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                           setState(() {
                             _selectedRoot = null;
                             _selectedScale = null;
+                            _initialSyncDone = false;
                           });
-                          notifier.setHighlightedNotes([]);
+                          widget.binding.actions(ref).setHighlightedNotes([]);
+                          ref.read(widget.binding.activeScale.notifier).state =
+                              null;
                         },
                         child: Container(
                           width: 16,
                           height: 16,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: MuzicianTheme.sky.withValues(alpha: 0.2),
+                            color: MuzicianTheme.emerald.withValues(alpha: 0.2),
                           ),
                           child: const Center(
                             child: Text(
                               '✕',
                               style: TextStyle(
-                                color: MuzicianTheme.sky,
+                                color: MuzicianTheme.emerald,
                                 fontSize: 9,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -183,7 +232,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                   final newRoot = note == _selectedRoot ? null : note;
                   if (newRoot == null) {
                     setState(() => _selectedRoot = null);
-                    notifier.setHighlightedNotes([]);
+                    widget.binding.actions(ref).setHighlightedNotes([]);
                   } else if (_selectedScale != null) {
                     _tryApplyScale(newRoot, _selectedScale!);
                   } else {
@@ -200,20 +249,20 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     color: active
-                        ? MuzicianTheme.sky.withValues(alpha: 0.14)
+                        ? MuzicianTheme.emerald.withValues(alpha: 0.14)
                         : Colors.white.withValues(alpha: 0.04),
                     border: Border.all(
                       color: active
-                          ? MuzicianTheme.sky
+                          ? MuzicianTheme.emerald
                           : Colors.white.withValues(alpha: 0.08),
                       width: 0.5,
                     ),
                   ),
                   child: Text(
-                    formatRootChoiceLabel(note),
+                    note,
                     style: TextStyle(
                       color: active
-                          ? MuzicianTheme.sky
+                          ? MuzicianTheme.emerald
                           : const Color(0xFF64748B),
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -286,8 +335,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                   final newScale = name == _selectedScale ? null : name;
                   if (newScale == null) {
                     setState(() => _selectedScale = null);
-                    notifier.setHighlightedNotes([]);
-                    ref.read(activeScaleProvider.notifier).state = null;
+                    widget.binding.actions(ref).setHighlightedNotes([]);
                   } else if (_selectedRoot != null) {
                     _tryApplyScale(_selectedRoot!, newScale);
                   } else {
@@ -303,11 +351,11 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     color: active
-                        ? activeColor.withValues(alpha: 0.12)
+                        ? MuzicianTheme.emerald.withValues(alpha: 0.12)
                         : Colors.white.withValues(alpha: 0.04),
                     border: Border.all(
                       color: active
-                          ? activeColor
+                          ? MuzicianTheme.emerald
                           : Colors.white.withValues(alpha: 0.08),
                       width: 0.5,
                     ),
@@ -315,7 +363,9 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: active ? activeColor : const Color(0xFF64748B),
+                      color: active
+                          ? MuzicianTheme.emerald
+                          : const Color(0xFF64748B),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -325,6 +375,7 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
             },
           ),
         ),
+        const SizedBox(height: 8),
       ],
     );
   }
@@ -332,17 +383,19 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
   Future<void> _tryApplyScale(String root, String scaleName) async {
     final scaleNotes = getScaleNotes(root, scaleName);
     if (scaleNotes.isEmpty) return;
-    final currentSelected = ref.read(fretboardProvider).selectedNotes;
-    final conflicts = currentSelected
-        .where((n) => !scaleNotes.contains(n))
+    final scaleSet = scaleNotes.toSet();
+    final conflicts = ref
+        .read(widget.binding.selectedPitchClasses)
+        .toSet()
+        .where((pc) => !scaleSet.contains(pc))
         .toList();
     if (conflicts.isEmpty) {
       setState(() {
         _selectedRoot = root;
         _selectedScale = scaleName;
       });
-      ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
-      ref.read(activeScaleProvider.notifier).state = (
+      widget.binding.actions(ref).setHighlightedNotes(scaleNotes);
+      ref.read(widget.binding.activeScale.notifier).state = (
         root: root,
         scaleName: scaleName,
       );
@@ -354,13 +407,13 @@ class _ScalePickerState extends ConsumerState<ScalePicker> {
       builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
     );
     if (confirmed == true) {
-      ref.read(fretboardProvider.notifier).removeNotesByPitchClass(conflicts);
+      widget.binding.actions(ref).removeNotesByPitchClass(conflicts);
       setState(() {
         _selectedRoot = root;
         _selectedScale = scaleName;
       });
-      ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
-      ref.read(activeScaleProvider.notifier).state = (
+      widget.binding.actions(ref).setHighlightedNotes(scaleNotes);
+      ref.read(widget.binding.activeScale.notifier).state = (
         root: root,
         scaleName: scaleName,
       );

@@ -15,24 +15,20 @@ int resolvePlaybackStartTick(PianoRollState state) =>
     state.selectedColumnTick ?? 0;
 
 /// Returns the exclusive end tick for playback — the full timeline end.
-int resolvePlaybackEndTick(PianoRollState state) => pr.totalTicks(
-  state.config.timeSignature,
-  state.config.totalMeasures,
-);
+int resolvePlaybackEndTick(PianoRollState state) =>
+    pr.totalTicks(state.config.timeSignature, state.config.totalMeasures);
 
 /// Returns milliseconds per single tick at the given [tempo] (in BPM).
 ///
 /// Formula: `60000 / tempo / ticksPerQuarter`
 /// where [pr.ticksPerQuarter] is 4 (sixteenth-note grid).
-double millisecondsPerTick(int tempo) =>
-    60000 / tempo / pr.ticksPerQuarter;
+double millisecondsPerTick(int tempo) => 60000 / tempo / pr.ticksPerQuarter;
 
 /// Returns the [Duration] spanned by [tickDelta] ticks at [tempo] BPM.
 ///
 /// Rounds fractional milliseconds to the nearest millisecond.
-Duration durationForTickDelta(int tickDelta, int tempo) => Duration(
-  milliseconds: (millisecondsPerTick(tempo) * tickDelta).round(),
-);
+Duration durationForTickDelta(int tickDelta, int tempo) =>
+    Duration(milliseconds: (millisecondsPerTick(tempo) * tickDelta).round());
 
 /// Groups [notes] into a sorted list of [PianoRollPlaybackEvent]s.
 ///

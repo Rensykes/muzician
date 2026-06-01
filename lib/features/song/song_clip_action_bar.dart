@@ -21,9 +21,7 @@ class SongClipActionBar extends ConsumerWidget {
     if (selectedId == null) return const SizedBox.shrink();
 
     final project = ref.watch(songProjectProvider);
-    final clip = project.clips
-        .where((c) => c.id == selectedId)
-        .firstOrNull;
+    final clip = project.clips.where((c) => c.id == selectedId).firstOrNull;
     if (clip == null) {
       // Defensive: stale selection (e.g. clip was deleted). Clear it.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -137,8 +135,9 @@ class SongClipActionBar extends ConsumerWidget {
               tooltip: 'Duplicate',
               onTap: () {
                 HapticFeedback.selectionClick();
-                final newId =
-                    ref.read(songProjectProvider.notifier).duplicateClip(clip.id);
+                final newId = ref
+                    .read(songProjectProvider.notifier)
+                    .duplicateClip(clip.id);
                 ref.read(songSelectedClipIdProvider.notifier).state = newId;
               },
             ),

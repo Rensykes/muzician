@@ -17,10 +17,7 @@ class PianoRollPlaybackEvent {
   final int tick;
   final List<int> midiNotes;
 
-  const PianoRollPlaybackEvent({
-    required this.tick,
-    required this.midiNotes,
-  });
+  const PianoRollPlaybackEvent({required this.tick, required this.midiNotes});
 
   @override
   bool operator ==(Object other) =>
@@ -66,18 +63,14 @@ class PianoRollPlaybackState {
     int? Function()? endTickExclusive,
     String? Function()? message,
     String? Function()? errorMessage,
-  }) =>
-      PianoRollPlaybackState(
-        status: status ?? this.status,
-        startTick:
-            startTick != null ? startTick() : this.startTick,
-        currentTick:
-            currentTick != null ? currentTick() : this.currentTick,
-        endTickExclusive: endTickExclusive != null
-            ? endTickExclusive()
-            : this.endTickExclusive,
-        message: message != null ? message() : this.message,
-        errorMessage:
-            errorMessage != null ? errorMessage() : this.errorMessage,
-      );
+  }) => PianoRollPlaybackState(
+    status: status ?? this.status,
+    startTick: startTick != null ? startTick() : this.startTick,
+    currentTick: currentTick != null ? currentTick() : this.currentTick,
+    endTickExclusive: endTickExclusive != null
+        ? endTickExclusive()
+        : this.endTickExclusive,
+    message: message != null ? message() : this.message,
+    errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
+  );
 }

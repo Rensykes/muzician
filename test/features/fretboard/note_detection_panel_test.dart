@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/features/fretboard/note_detection_panel.dart';
+import 'package:muzician/features/instrument_shared/shared_detection_panel.dart';
 import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/store/fretboard_store.dart';
 
@@ -45,7 +45,9 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: Scaffold(body: NoteDetectionPanel())),
+        child: MaterialApp(
+          home: Scaffold(body: SharedDetectionPanel(binding: fretboardBinding)),
+        ),
       ),
     );
 
