@@ -94,16 +94,8 @@ void main() {
       'trims overlapping imported hum notes into a monophonic two-note sequence',
       () {
         final imported = [
-          const QuantizedHumNote(
-            midiNote: 69,
-            startTick: 8,
-            durationTicks: 4,
-          ),
-          const QuantizedHumNote(
-            midiNote: 71,
-            startTick: 10,
-            durationTicks: 4,
-          ),
+          const QuantizedHumNote(midiNote: 69, startTick: 8, durationTicks: 4),
+          const QuantizedHumNote(midiNote: 71, startTick: 10, durationTicks: 4),
         ];
 
         final normalized = rules.normalizeQuantizedHumNotesMonophonically(
@@ -124,16 +116,8 @@ void main() {
       'drops the earlier imported hum note when two notes quantize to the same tick',
       () {
         final imported = [
-          const QuantizedHumNote(
-            midiNote: 69,
-            startTick: 12,
-            durationTicks: 2,
-          ),
-          const QuantizedHumNote(
-            midiNote: 71,
-            startTick: 12,
-            durationTicks: 3,
-          ),
+          const QuantizedHumNote(midiNote: 69, startTick: 12, durationTicks: 2),
+          const QuantizedHumNote(midiNote: 71, startTick: 12, durationTicks: 3),
         ];
 
         final normalized = rules.normalizeQuantizedHumNotesMonophonically(
@@ -274,16 +258,8 @@ void main() {
       'sorts imported hum notes by start tick before monophonic normalization',
       () {
         final imported = [
-          const QuantizedHumNote(
-            midiNote: 71,
-            startTick: 10,
-            durationTicks: 4,
-          ),
-          const QuantizedHumNote(
-            midiNote: 69,
-            startTick: 8,
-            durationTicks: 4,
-          ),
+          const QuantizedHumNote(midiNote: 71, startTick: 10, durationTicks: 4),
+          const QuantizedHumNote(midiNote: 69, startTick: 8, durationTicks: 4),
         ];
 
         final normalized = rules.normalizeQuantizedHumNotesMonophonically(

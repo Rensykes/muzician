@@ -43,9 +43,7 @@ class AudioClipBody extends StatelessWidget {
           if (isBroken)
             Positioned.fill(
               key: const ValueKey('audio-clip-broken'),
-              child: CustomPaint(
-                painter: _BrokenStripePainter(),
-              ),
+              child: CustomPaint(painter: _BrokenStripePainter()),
             ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

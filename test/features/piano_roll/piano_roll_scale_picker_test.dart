@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/features/piano_roll/piano_roll_scale_picker.dart';
+import 'package:muzician/features/instrument_shared/shared_scale_picker.dart';
 import 'package:muzician/store/piano_roll_store.dart';
 
 Widget _wrap(ProviderContainer container) {
@@ -12,10 +12,10 @@ Widget _wrap(ProviderContainer container) {
         textDirection: TextDirection.ltr,
         child: MediaQuery(
           data: const MediaQueryData(size: Size(800, 600)),
-          child: const SizedBox(
+          child: SizedBox(
             width: 800,
             height: 600,
-            child: PianoRollScalePicker(),
+            child: SharedScalePicker(binding: pianoRollScaleBinding),
           ),
         ),
       ),
@@ -42,8 +42,8 @@ void main() {
     // Second pump: setState from callback triggers rebuild
     await tester.pump();
 
-    // Pill should show the selected scale (C Major)
-    expect(find.text('C Major'), findsOneWidget);
+    // Pill should show the selected scale (SharedScalePicker uses formatScaleLabel -> 'C major')
+    expect(find.text('C major'), findsOneWidget);
 
     // Re-simulate drawer close/reopen by rebuilding widget tree
     await tester.pumpWidget(_wrap(container));
@@ -51,7 +51,7 @@ void main() {
     await tester.pump();
 
     // Pill should still be visible
-    expect(find.text('C Major'), findsOneWidget);
+    expect(find.text('C major'), findsOneWidget);
   });
 
   testWidgets('pending scale prefill takes priority over active then clears', (
@@ -77,8 +77,8 @@ void main() {
     // Second pump: rebuild from setState
     await tester.pump();
 
-    // Pending prefill should take priority -> D Dorian shown
-    expect(find.text('D Dorian'), findsOneWidget);
+    // Pending prefill should take priority -> D dorian shown (formatScaleLabel format)
+    expect(find.text('D dorian'), findsOneWidget);
 
     // After processing, pending should be null
     expect(container.read(pianoRollPendingScaleProvider), isNull);
@@ -132,15 +132,15 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    // Pill should be visible
-    expect(find.text('C Major'), findsOneWidget);
+    // Pill should be visible (formatScaleLabel format)
+    expect(find.text('C major'), findsOneWidget);
 
     // Tap the clear (✕) button on the pill
     await tester.tap(find.text('✕'));
     await tester.pump();
 
-    // Pill should be gone (C Major no longer visible)
-    expect(find.text('C Major'), findsNothing);
+    // Pill should be gone (C major no longer visible)
+    expect(find.text('C major'), findsNothing);
     // Active should be null
     expect(container.read(pianoRollActiveScaleProvider), isNull);
   });

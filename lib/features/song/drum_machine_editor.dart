@@ -346,10 +346,7 @@ class _DrumGridState extends State<_DrumGrid> {
               width: totalGridWidth,
               child: Column(
                 children: [
-                  _BeatHeader(
-                    stepCount: stepCount,
-                    beatTicks: beatTicks,
-                  ),
+                  _BeatHeader(stepCount: stepCount, beatTicks: beatTicks),
                   for (final lane in widget.pattern.lanes)
                     _DrumLaneRow(
                       lane: lane,

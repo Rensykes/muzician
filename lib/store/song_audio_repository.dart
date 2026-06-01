@@ -29,8 +29,8 @@ class SongAudioRepository {
   Directory? _rootCache;
 
   SongAudioRepository._({Directory? root, Uuid? uuid})
-      : _rootOverride = root,
-        _uuid = uuid ?? const Uuid();
+    : _rootOverride = root,
+      _uuid = uuid ?? const Uuid();
 
   factory SongAudioRepository.production() => SongAudioRepository._();
 
@@ -116,7 +116,7 @@ class SongAudioRepository {
     } else {
       durationMs = explicitDurationMs ?? 0;
       sampleRate = 44100; // unknown without a decoder
-      channels = 2;       // safe default
+      channels = 2; // safe default
       peaks = const [];
     }
 

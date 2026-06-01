@@ -17,7 +17,9 @@ typedef DrumPatternPlaybackSink =
 
 /// Injected playback sink backed by [NotePlayer].  Override in tests to capture
 /// events without real audio.
-final drumPatternPlaybackSinkProvider = Provider<DrumPatternPlaybackSink>((ref) {
+final drumPatternPlaybackSinkProvider = Provider<DrumPatternPlaybackSink>((
+  ref,
+) {
   return (lanes, volume) async {
     for (final lane in lanes) {
       NotePlayer.instance.playDrumLane(lane, volume: volume);
@@ -59,10 +61,7 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
   /// Starts looping [pattern] at [tempo] BPM.  No-op if already playing or the
   /// pattern is empty.  The loop wraps back to tick 0 after [DrumPattern.lengthTicks]
   /// and runs until [stop] is called.
-  Future<void> start({
-    required DrumPattern pattern,
-    required int tempo,
-  }) async {
+  Future<void> start({required DrumPattern pattern, required int tempo}) async {
     if (state.status == DrumPatternPlaybackStatus.playing) return;
     final length = pattern.lengthTicks;
     if (length <= 0) return;

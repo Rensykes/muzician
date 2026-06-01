@@ -59,23 +59,15 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
     for (final clip in project.clips) {
       final len = song_rules.patternLengthForClip(project, clip);
       if (len != null) clipLengths[clip.id] = len;
-      patternRefCount.update(
-        clip.patternId,
-        (v) => v + 1,
-        ifAbsent: () => 1,
-      );
+      patternRefCount.update(clip.patternId, (v) => v + 1, ifAbsent: () => 1);
     }
     final sharedPatternIds = <String>{
       for (final entry in patternRefCount.entries)
         if (entry.value > 1) entry.key,
     };
 
-    final audioPatternById = {
-      for (final p in project.audioPatterns) p.id: p,
-    };
-    final audioAssetById = {
-      for (final a in project.audioAssets) a.id: a,
-    };
+    final audioPatternById = {for (final p in project.audioPatterns) p.id: p};
+    final audioAssetById = {for (final a in project.audioAssets) a.id: a};
     final audioPeaksByClipId = <String, List<int>>{};
     final audioBrokenClipIds = <String>{};
     for (final clip in project.clips) {
@@ -193,8 +185,7 @@ class _MeasureRuler extends StatelessWidget {
                 height: _kRulerHeight,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTapDown: (details) =>
-                      onSeekToDx(details.localPosition.dx),
+                  onTapDown: (details) => onSeekToDx(details.localPosition.dx),
                   child: CustomPaint(
                     painter: _RulerPainter(
                       totalMeasures: totalMeasures,
@@ -552,14 +543,11 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
       return;
     }
     if (_pendingMove != null) {
-      final clip = widget.clips.firstWhere(
-        (c) => c.id == _pendingMove!.clipId,
-      );
+      final clip = widget.clips.firstWhere((c) => c.id == _pendingMove!.clipId);
       final length = widget.clipLengths[clip.id] ?? widget.measureTicks;
       final grab = _grabOffsetTicks ?? 0;
       final rawStart = tick - grab;
-      final maxStart =
-          (widget.measureTicks * widget.totalMeasures) - length;
+      final maxStart = (widget.measureTicks * widget.totalMeasures) - length;
       final snapped = _snapToMeasure(rawStart).clamp(0, maxStart);
       if (snapped == _pendingMove!.startTick) return;
       setState(() {
@@ -573,10 +561,13 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
     if (_pendingResize != null) {
       final pendingResize = _pendingResize!;
       final project = ref.read(songProjectProvider);
-      final clip = project.clips.firstWhere((c) => c.id == pendingResize.clipId);
+      final clip = project.clips.firstWhere(
+        (c) => c.id == pendingResize.clipId,
+      );
       if (clip.patternType == SongPatternType.note) {
-        final pattern = project.notePatterns
-            .firstWhere((p) => p.id == clip.patternId);
+        final pattern = project.notePatterns.firstWhere(
+          (p) => p.id == clip.patternId,
+        );
         if (pattern.lengthTicks != pendingResize.lengthTicks) {
           notifier.applyNotePattern(
             clip.patternId,
@@ -584,8 +575,9 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
           );
         }
       } else {
-        final pattern = project.drumPatterns
-            .firstWhere((p) => p.id == clip.patternId);
+        final pattern = project.drumPatterns.firstWhere(
+          (p) => p.id == clip.patternId,
+        );
         if (pattern.lengthTicks != pendingResize.lengthTicks) {
           notifier.applyDrumPattern(
             clip.patternId,
@@ -596,8 +588,7 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
       HapticFeedback.mediumImpact();
     } else if (_pendingMove != null) {
       final pendingMove = _pendingMove!;
-      final clip = widget.clips
-          .firstWhere((c) => c.id == pendingMove.clipId);
+      final clip = widget.clips.firstWhere((c) => c.id == pendingMove.clipId);
       if (clip.startTick != pendingMove.startTick) {
         notifier.moveClip(pendingMove.clipId, pendingMove.startTick);
       }

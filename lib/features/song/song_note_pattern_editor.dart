@@ -196,7 +196,8 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
       if (!_songContext) return;
       final solo = _soloPlayback;
       if (solo == null) return;
-      if (next.status == SongPlaybackStatus.playing && next.currentTick != null) {
+      if (next.status == SongPlaybackStatus.playing &&
+          next.currentTick != null) {
         final local = next.currentTick! - clipStartTick;
         solo.mirrorExternalTick(
           local >= 0 && local < patternLength ? local : null,
