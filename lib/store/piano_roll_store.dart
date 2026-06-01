@@ -3,12 +3,14 @@ library;
 
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../features/instrument_shared/instrument_binding.dart';
 import '../models/hum_to_midi.dart';
 import '../models/piano_roll.dart';
 import '../models/save_system.dart' show PianoRollSnapshot;
 import '../schema/rules/piano_roll_rules.dart' as rules;
 
-class PianoRollNotifier extends Notifier<PianoRollState> {
+class PianoRollNotifier extends Notifier<PianoRollState>
+    implements ScaleActions {
   @override
   PianoRollState build() => rules.getDefaultPianoRollState();
 
@@ -458,9 +460,11 @@ class PianoRollNotifier extends Notifier<PianoRollState> {
     latestImportedRange: () => null,
   );
 
+  @override
   void setHighlightedNotes(List<String> notes) =>
       state = state.copyWith(highlightedNotes: notes);
 
+  @override
   void removeNotesByPitchClass(List<String> pitchClasses) {
     final bad = Set<String>.from(pitchClasses);
     final removed = state.notes.where((n) => bad.contains(n.pitchClass));
@@ -632,3 +636,22 @@ final pianoRollActiveScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
 
 final pianoRollScrollToTickProvider = StateProvider<int?>((_) => null);
+
+final pianoRollSelectedPitchClassesProvider = Provider<List<String>>(
+  (ref) => ref
+      .watch(pianoRollProvider.select((s) => s.notes))
+      .map((n) => n.pitchClass)
+      .toSet()
+      .toList(),
+);
+final pianoRollHighlightedNotesProvider = Provider<List<String>>(
+  (ref) => ref.watch(pianoRollProvider.select((s) => s.highlightedNotes)),
+);
+
+final pianoRollScaleBinding = ScalePickerBinding(
+  selectedPitchClasses: pianoRollSelectedPitchClassesProvider,
+  highlightedNotes: pianoRollHighlightedNotesProvider,
+  actions: (ref) => ref.read(pianoRollProvider.notifier),
+  pendingScale: pianoRollPendingScaleProvider,
+  activeScale: pianoRollActiveScaleProvider,
+);
