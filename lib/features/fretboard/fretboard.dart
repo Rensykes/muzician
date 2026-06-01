@@ -20,10 +20,18 @@ const double _labelW = 32;
 const double _openColW = 52;
 const double _nutW = 7;
 const double _fretW = 66;
-const double _stringH = 50;
+const double _stringH = 42;
 const double _headerH = 30;
 const double _vPad = 14;
 const int _numStrings = 6;
+
+/// Height the board needs to render every string without clipping: the
+/// painter's intrinsic height (`_headerH + _numStrings * _stringH + _vPad`)
+/// plus the glass-frame margin/padding and the horizontal scroll view's
+/// vertical padding the host wraps it in. Pin the board to this so the low-E
+/// row is always visible and the detection area takes the remaining space.
+const double fretboardBoardHeight =
+    _headerH + _numStrings * _stringH + _vPad + 32;
 
 double _stringY(int idx) => _headerH + idx * _stringH + _stringH / 2;
 double _noteX(int fret) {
@@ -164,33 +172,35 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
           _ViewModeBar(current: state.viewMode, onSelect: notifier.setViewMode),
           const SizedBox(height: 4),
         ],
-        SingleChildScrollView(
-          controller: _scrollController,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Listener(
-            onPointerDown: (e) => _pointerDownLocal = e.localPosition,
-            onPointerUp: (e) {
-              final down = _pointerDownLocal;
-              if (down == null) return;
-              final delta = (e.localPosition - down).distance;
-              if (delta >= _scrollThreshold) return;
-              _handleTap(e.localPosition, cells, numFrets, capo, notifier);
-            },
-            onPointerCancel: (_) => _pointerDownLocal = null,
-            child: CustomPaint(
-              size: Size(svgWidth, svgHeight),
-              painter: _FretboardPainter(
-                tuning: tuning,
-                cells: cells,
-                numFrets: numFrets,
-                capo: capo,
-                highlightedNotes: state.highlightedNotes,
-                selectedNotes: state.selectedNotes,
-                selectedCells: state.selectedCells,
-                viewMode: state.viewMode,
-                focusedNotes: state.focusedNotes,
-                palette: widget.palette,
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Listener(
+              onPointerDown: (e) => _pointerDownLocal = e.localPosition,
+              onPointerUp: (e) {
+                final down = _pointerDownLocal;
+                if (down == null) return;
+                final delta = (e.localPosition - down).distance;
+                if (delta >= _scrollThreshold) return;
+                _handleTap(e.localPosition, cells, numFrets, capo, notifier);
+              },
+              onPointerCancel: (_) => _pointerDownLocal = null,
+              child: CustomPaint(
+                size: Size(svgWidth, svgHeight),
+                painter: _FretboardPainter(
+                  tuning: tuning,
+                  cells: cells,
+                  numFrets: numFrets,
+                  capo: capo,
+                  highlightedNotes: state.highlightedNotes,
+                  selectedNotes: state.selectedNotes,
+                  selectedCells: state.selectedCells,
+                  viewMode: state.viewMode,
+                  focusedNotes: state.focusedNotes,
+                  palette: widget.palette,
+                ),
               ),
             ),
           ),

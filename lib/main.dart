@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'features/_mockup_shell.dart';
 import 'features/fretboard/fretboard_feature.dart';
 import 'ui/core/app_info_panel.dart';
-import 'features/fretboard/fretboard_screen_v2_mockup.dart';
 import 'features/piano/piano_feature.dart';
-import 'features/piano/piano_screen_v2_mockup.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
 import 'features/song/song_screen.dart';
-import 'models/fretboard.dart' show TuningName;
-import 'models/piano.dart' show PianoRangeName;
+import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
+import 'models/piano.dart' show PianoViewMode;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/save_system_store.dart';
@@ -205,13 +204,11 @@ class _GradientScaffold extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<Widget> children;
-  final Widget? trailing;
 
   const _GradientScaffold({
     required this.title,
     required this.subtitle,
     required this.children,
-    this.trailing,
   });
 
   @override
@@ -260,7 +257,6 @@ class _GradientScaffold extends StatelessWidget {
                       ],
                     ),
                   ),
-                  ?trailing,
                 ],
               ),
             ),
@@ -276,7 +272,7 @@ class _GradientScaffold extends StatelessWidget {
 class _Card extends StatelessWidget {
   final Widget child;
 
-  const _Card({super.key, required this.child});
+  const _Card({required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -296,75 +292,7 @@ class _Card extends StatelessWidget {
   }
 }
 
-// ── Help Button ─────────────────────────────────────────────────────────────
-
-class _HelpButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _HelpButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: MuzicianTheme.sky.withValues(alpha: 0.1),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: MuzicianTheme.sky.withValues(alpha: 0.25),
-            width: 0.5,
-          ),
-        ),
-        child: const Icon(
-          Icons.help_outline_rounded,
-          color: MuzicianTheme.sky,
-          size: 17,
-        ),
-      ),
-    );
-  }
-}
-
-/// Trailing-action group: sparkle icon opens the V2 mockup, then [_HelpButton].
-class _MockupLauncher extends StatelessWidget {
-  final WidgetBuilder builder;
-  final int helpTab;
-  const _MockupLauncher({required this.builder, required this.helpTab});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          tooltip: 'V2 mockup',
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          icon: const Icon(
-            Icons.auto_awesome,
-            size: 18,
-            color: MuzicianTheme.sky,
-          ),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: builder, fullscreenDialog: true),
-          ),
-        ),
-        const SizedBox(width: 4),
-        _HelpButton(
-          onTap: () => showAppInfoPanel(context, initialTab: helpTab),
-        ),
-      ],
-    );
-  }
-}
-
 // ── Fretboard Screen ────────────────────────────────────────────────────────
-
-enum _FretPanel { tuning, capo, chord, scale, saves }
 
 class _FretboardScreen extends ConsumerStatefulWidget {
   const _FretboardScreen();
@@ -374,146 +302,224 @@ class _FretboardScreen extends ConsumerStatefulWidget {
 }
 
 class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
-  _FretPanel? _activePanel;
-
-  void _togglePanel(_FretPanel panel) {
-    HapticFeedback.selectionClick();
-    setState(() => _activePanel = _activePanel == panel ? null : panel);
-  }
-
-  Widget _activePanelWidget() => switch (_activePanel) {
-    _FretPanel.tuning => const _Card(child: TuningSelector()),
-    _FretPanel.capo => const _Card(child: CapoControl()),
-    _FretPanel.chord => const _Card(
-      key: ValueKey('fret-chord'),
-      child: ChordVoicingPicker(),
-    ),
-    _FretPanel.scale => const _Card(
-      key: ValueKey('fret-scale'),
-      child: ScalePicker(),
-    ),
-    _FretPanel.saves => const _Card(
-      key: ValueKey('fret-saves'),
-      child: FretboardSavePanel(),
-    ),
-    null => const SizedBox.shrink(),
-  };
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
+    final notifier = ref.read(fretboardProvider.notifier);
+    final activeScale = ref.watch(activeScaleProvider);
+    final activeChord = ref.watch(activeChordProvider);
+    final chordCommitted = ref.watch(fretboardChordCommittedProvider);
 
-    return _GradientScaffold(
-      title: 'Fretboard',
-      subtitle: state.selectedNotes.isEmpty
-          ? 'Tap notes to select them'
-          : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
-      trailing: _MockupLauncher(
-        builder: (_) => const FretboardScreenV2Mockup(),
-        helpTab: 0,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: MuzicianTheme.gradientColors,
+        ),
       ),
-      children: [
-        const _Card(child: GuitarFretboard()),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 320),
-          reverseDuration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-            child: SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0, -0.08),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            CompactAppBar(
+              title: 'Fretboard',
+              chipLabel: state.selectedNotes.isEmpty
+                  ? null
+                  : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+              actions: [
+                IconBtn(
+                  icon: Icons.help_outline_rounded,
+                  onTap: () => showAppInfoPanel(context, initialTab: 0),
+                ),
+                IconBtn(
+                  icon: Icons.bookmark_border_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Saves',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: FretboardSavePanel(),
                     ),
                   ),
-              child: child,
-            ),
-          ),
-          child: state.selectedNotes.isNotEmpty
-              ? _Card(
-                  key: const ValueKey('fret-detect'),
-                  child: NoteDetectionPanel(
-                    onChordPanelRequested: () =>
-                        setState(() => _activePanel = _FretPanel.chord),
+                ),
+                IconBtn(
+                  icon: Icons.tune_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Settings',
+                    child: _FretSettingsSheetContent(),
                   ),
-                )
-              : const SizedBox.shrink(key: ValueKey('fret-detect-empty')),
+                ),
+              ],
+            ),
+            ModeSegment<FretboardInputMode>(
+              current: state.inputMode,
+              onSelect: notifier.setInputMode,
+              options: const [
+                (FretboardInputMode.free, Icons.touch_app_rounded, 'Free'),
+                (
+                  FretboardInputMode.chord,
+                  Icons.library_music_rounded,
+                  'Chord',
+                ),
+              ],
+            ),
+            // Board is pinned to its intrinsic height (fretboardBoardHeight)
+            // so it never clips a string, and the detection area below takes
+            // all remaining space. _stringH is sized so board + detection fit
+            // without scrolling.
+            SizedBox(
+              height: fretboardBoardHeight,
+              child: GlassFrame(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: const GuitarFretboard(
+                  hideToolbar: true,
+                  palette: FretboardPalette.wood,
+                ),
+              ),
+            ),
+            // Detection fills the space between board and docked toolbar. No
+            // scroll: content fits. Empty state shows a centered insight hint.
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 320),
+                reverseDuration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOut,
+                  ),
+                  child: SlideTransition(
+                    position:
+                        Tween<Offset>(
+                          begin: const Offset(0, -0.08),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
+                    child: child,
+                  ),
+                ),
+                child: state.selectedNotes.isNotEmpty
+                    ? NoteDetectionPanel(
+                        key: const ValueKey('fret-detect'),
+                        onChordPanelRequested: () => showWidgetSheet(
+                          context: context,
+                          title: 'Chord voicings',
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: ChordVoicingPicker(),
+                          ),
+                        ),
+                      )
+                    : const _InsightHint(
+                        key: ValueKey('fret-detect-empty'),
+                        title: 'Tap the fretboard to begin',
+                        subtitle:
+                            'Selected notes turn into detected chords and scales here.',
+                      ),
+              ),
+            ),
+            DockedToolbar(
+              children: [
+                DockTab(
+                  icon: Icons.stacked_line_chart,
+                  label: 'Scale',
+                  color: MuzicianTheme.emerald,
+                  hasValue: activeScale != null,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Scale',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: ScalePicker(),
+                    ),
+                  ),
+                ),
+                DockTab(
+                  icon: Icons.library_music_outlined,
+                  label: 'Chord',
+                  color: MuzicianTheme.violet,
+                  hasValue: activeChord != null || chordCommitted,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Chord voicings',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: ChordVoicingPicker(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        _PanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          child: _activePanelWidget(),
-        ),
-      ],
+      ),
     );
   }
 }
 
-// ── Fretboard Panel Access Bar ───────────────────────────────────────────────
+// ── Insight Hint (empty state) ──────────────────────────────────────────────
 
-class _PanelAccessBar extends ConsumerWidget {
-  final _FretPanel? activePanel;
-  final void Function(_FretPanel) onToggle;
-
-  const _PanelAccessBar({required this.activePanel, required this.onToggle});
+/// Fills the space between an instrument and the docked toolbar before any
+/// notes are tapped, so the area reads as intentional rather than empty.
+class _InsightHint extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _InsightHint({
+    super.key,
+    required this.title,
+    required this.subtitle,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(fretboardProvider);
-    final chordCommitted = ref.watch(fretboardChordCommittedProvider);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: Row(
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _PanelTab(
-            icon: Icons.tune,
-            label: 'Tuning',
-            color: MuzicianTheme.sky,
-            active: activePanel == _FretPanel.tuning,
-            hasValue: state.currentTuning != TuningName.standard,
-            onTap: () => onToggle(_FretPanel.tuning),
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: MuzicianTheme.sky.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: MuzicianTheme.sky.withValues(alpha: 0.2),
+                width: 0.5,
+              ),
+            ),
+            child: const Icon(
+              Icons.touch_app_rounded,
+              color: MuzicianTheme.sky,
+              size: 26,
+            ),
           ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.compress,
-            label: 'Capo',
-            color: MuzicianTheme.orange,
-            active: activePanel == _FretPanel.capo,
-            hasValue: state.capo > 0,
-            onTap: () => onToggle(_FretPanel.capo),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: const TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.library_music_outlined,
-            label: 'Chord',
-            color: MuzicianTheme.violet,
-            active: activePanel == _FretPanel.chord,
-            hasValue: chordCommitted,
-            onTap: () => onToggle(_FretPanel.chord),
-          ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.stacked_line_chart,
-            label: 'Scale',
-            color: MuzicianTheme.emerald,
-            active: activePanel == _FretPanel.scale,
-            hasValue: state.highlightedNotes.isNotEmpty,
-            onTap: () => onToggle(_FretPanel.scale),
-          ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.save_outlined,
-            label: 'Saves',
-            color: MuzicianTheme.teal,
-            active: activePanel == _FretPanel.saves,
-            hasValue: false,
-            onTap: () => onToggle(_FretPanel.saves),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),
@@ -521,94 +527,81 @@ class _PanelAccessBar extends ConsumerWidget {
   }
 }
 
-class _PanelTab extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final bool active;
-  final bool hasValue;
-  final VoidCallback onTap;
+// ── Fret Settings Sheet Content ─────────────────────────────────────────────
 
-  const _PanelTab({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.active,
-    required this.hasValue,
-    required this.onTap,
-  });
+class _FretSettingsSheetContent extends ConsumerWidget {
+  const _FretSettingsSheetContent();
 
   @override
-  Widget build(BuildContext context) {
-    final showDot = hasValue && !active;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: active
-                ? color.withValues(alpha: 0.15)
-                : hasValue
-                ? color.withValues(alpha: 0.07)
-                : Colors.white.withValues(alpha: 0.04),
-            border: Border.all(
-              color: active
-                  ? color.withValues(alpha: 0.4)
-                  : hasValue
-                  ? color.withValues(alpha: 0.25)
-                  : Colors.white.withValues(alpha: 0.08),
-              width: 0.5,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(fretboardProvider);
+    final notifier = ref.read(fretboardProvider.notifier);
+    final hasFilters =
+        state.selectedCells.isNotEmpty ||
+        state.highlightedNotes.isNotEmpty ||
+        state.focusedNotes.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasFilters) ...[
+            ClearAllButton(
+              onClear: () {
+                HapticFeedback.mediumImpact();
+                notifier.clearSelectedNotes();
+                notifier.setHighlightedNotes([]);
+                ref.read(activeScaleProvider.notifier).state = null;
+                ref.read(activeChordProvider.notifier).state = null;
+                ref.read(fretboardChordCommittedProvider.notifier).state =
+                    false;
+                Navigator.of(context).maybePop();
+              },
             ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(
-                    icon,
-                    size: 18,
-                    color: active
-                        ? color
-                        : hasValue
-                        ? color.withValues(alpha: 0.7)
-                        : MuzicianTheme.textMuted,
-                  ),
-                  if (showDot)
-                    Positioned(
-                      top: -2,
-                      right: -4,
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: active
-                      ? color
-                      : hasValue
-                      ? color.withValues(alpha: 0.7)
-                      : MuzicianTheme.textMuted,
-                ),
+            const SizedBox(height: 16),
+          ],
+          const _TuneSectionLabel('View mode'),
+          ModeSegment<FretboardViewMode>(
+            current: state.viewMode,
+            onSelect: notifier.setViewMode,
+            options: const [
+              (FretboardViewMode.exact, Icons.visibility_rounded, 'Exact'),
+              (
+                FretboardViewMode.exactFocus,
+                Icons.center_focus_strong_rounded,
+                'Solo',
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          const _TuneSectionLabel('Tuning'),
+          const TuningSelector(),
+          const SizedBox(height: 16),
+          const _TuneSectionLabel('Capo'),
+          const CapoControl(),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Tune Section Label ──────────────────────────────────────────────────────
+
+class _TuneSectionLabel extends StatelessWidget {
+  final String label;
+  const _TuneSectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: MuzicianTheme.textMuted,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
         ),
       ),
     );
@@ -616,8 +609,6 @@ class _PanelTab extends StatelessWidget {
 }
 
 // ── Piano Screen ────────────────────────────────────────────────────────────
-
-enum _PianoPanel { range, chord, scale, saves }
 
 class _PianoScreen extends ConsumerStatefulWidget {
   const _PianoScreen();
@@ -627,140 +618,198 @@ class _PianoScreen extends ConsumerStatefulWidget {
 }
 
 class _PianoScreenState extends ConsumerState<_PianoScreen> {
-  _PianoPanel? _activePanel;
-
-  void _togglePanel(_PianoPanel panel) {
-    HapticFeedback.selectionClick();
-    setState(() => _activePanel = _activePanel == panel ? null : panel);
-  }
-
-  Widget _activePanelWidget() => switch (_activePanel) {
-    _PianoPanel.range => const _Card(child: PianoRangeSelector()),
-    _PianoPanel.chord => const _Card(
-      key: ValueKey('piano-chord'),
-      child: PianoChordPicker(),
-    ),
-    _PianoPanel.scale => const _Card(
-      key: ValueKey('piano-scale'),
-      child: PianoScalePicker(),
-    ),
-    _PianoPanel.saves => const _Card(
-      key: ValueKey('piano-saves'),
-      child: PianoSavePanel(),
-    ),
-    null => const SizedBox.shrink(),
-  };
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoProvider);
+    final activeScale = ref.watch(pianoActiveScaleProvider);
+    final activeChord = ref.watch(pianoActiveChordProvider);
+    final chordCommitted = ref.watch(pianoChordCommittedProvider);
 
-    return _GradientScaffold(
-      title: 'Piano',
-      trailing: _MockupLauncher(
-        builder: (_) => const PianoScreenV2Mockup(),
-        helpTab: 1,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: MuzicianTheme.gradientColors,
+        ),
       ),
-      subtitle: state.selectedNotes.isEmpty
-          ? 'Tap keys to select them'
-          : '${state.selectedNotes.length} note${state.selectedNotes.length != 1 ? 's' : ''} selected',
-      children: [
-        const _Card(child: PianoKeyboard()),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 320),
-          reverseDuration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-            child: SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0, -0.08),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            CompactAppBar(
+              title: 'Piano',
+              chipLabel: state.selectedNotes.isEmpty
+                  ? null
+                  : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+              actions: [
+                IconBtn(
+                  icon: Icons.help_outline_rounded,
+                  onTap: () => showAppInfoPanel(context, initialTab: 1),
+                ),
+                IconBtn(
+                  icon: Icons.bookmark_border_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Saves',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoSavePanel(),
                     ),
                   ),
-              child: child,
-            ),
-          ),
-          child: state.selectedNotes.isNotEmpty
-              ? _Card(
-                  key: const ValueKey('piano-detect'),
-                  child: PianoNoteDetectionPanel(
-                    onChordPanelRequested: () =>
-                        setState(() => _activePanel = _PianoPanel.chord),
+                ),
+                IconBtn(
+                  icon: Icons.tune_rounded,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Settings',
+                    child: _PianoSettingsSheetContent(),
                   ),
-                )
-              : const SizedBox.shrink(key: ValueKey('piano-detect-empty')),
+                ),
+              ],
+            ),
+            // Keyboard is pinned to its intrinsic height (pianoKeyboardHeight)
+            // so it never clips a key, and the detection area below takes the
+            // remaining space.
+            SizedBox(
+              height: pianoKeyboardHeight,
+              child: GlassFrame(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: const PianoKeyboard(hideToolbar: true),
+              ),
+            ),
+            // Detection fills the space between keyboard and docked toolbar. No
+            // scroll: content fits. Empty state shows a centered insight hint.
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 320),
+                reverseDuration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOut,
+                  ),
+                  child: SlideTransition(
+                    position:
+                        Tween<Offset>(
+                          begin: const Offset(0, -0.08),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
+                    child: child,
+                  ),
+                ),
+                child: state.selectedNotes.isNotEmpty
+                    ? PianoNoteDetectionPanel(
+                        key: const ValueKey('piano-detect'),
+                        onChordPanelRequested: () => showWidgetSheet(
+                          context: context,
+                          title: 'Chords',
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: PianoChordPicker(),
+                          ),
+                        ),
+                      )
+                    : const _InsightHint(
+                        key: ValueKey('piano-detect-empty'),
+                        title: 'Tap the keyboard to begin',
+                        subtitle:
+                            'Selected notes turn into detected chords and scales here.',
+                      ),
+              ),
+            ),
+            DockedToolbar(
+              children: [
+                DockTab(
+                  icon: Icons.stacked_line_chart,
+                  label: 'Scale',
+                  color: MuzicianTheme.emerald,
+                  hasValue: activeScale != null,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Scale',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoScalePicker(),
+                    ),
+                  ),
+                ),
+                DockTab(
+                  icon: Icons.library_music_outlined,
+                  label: 'Chord',
+                  color: MuzicianTheme.violet,
+                  hasValue: activeChord != null || chordCommitted,
+                  onTap: () => showWidgetSheet(
+                    context: context,
+                    title: 'Chords',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: PianoChordPicker(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        _PianoPanelAccessBar(activePanel: _activePanel, onToggle: _togglePanel),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          child: _activePanelWidget(),
-        ),
-      ],
+      ),
     );
   }
 }
 
-// ── Piano Panel Access Bar ───────────────────────────────────────────────────
+// ── Piano Settings Sheet Content ────────────────────────────────────────────
 
-class _PianoPanelAccessBar extends ConsumerWidget {
-  final _PianoPanel? activePanel;
-  final void Function(_PianoPanel) onToggle;
-
-  const _PianoPanelAccessBar({
-    required this.activePanel,
-    required this.onToggle,
-  });
+class _PianoSettingsSheetContent extends ConsumerWidget {
+  const _PianoSettingsSheetContent();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(pianoProvider);
-    final chordCommitted = ref.watch(pianoChordCommittedProvider);
-
+    final notifier = ref.read(pianoProvider.notifier);
+    final hasFilters =
+        state.selectedKeys.isNotEmpty ||
+        state.highlightedNotes.isNotEmpty ||
+        state.focusedNotes.isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _PanelTab(
-            icon: Icons.piano_outlined,
-            label: 'Range',
-            color: MuzicianTheme.sky,
-            active: activePanel == _PianoPanel.range,
-            hasValue: state.currentRange != PianoRangeName.key88,
-            onTap: () => onToggle(_PianoPanel.range),
+          if (hasFilters) ...[
+            ClearAllButton(
+              onClear: () {
+                HapticFeedback.mediumImpact();
+                notifier.clearSelectedNotes();
+                notifier.setHighlightedNotes([]);
+                ref.read(pianoActiveScaleProvider.notifier).state = null;
+                ref.read(pianoActiveChordProvider.notifier).state = null;
+                ref.read(pianoChordCommittedProvider.notifier).state = false;
+                Navigator.of(context).maybePop();
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+          const _TuneSectionLabel('View mode'),
+          ModeSegment<PianoViewMode>(
+            current: state.viewMode,
+            onSelect: notifier.setViewMode,
+            options: const [
+              (PianoViewMode.exact, Icons.visibility_rounded, 'Exact'),
+              (
+                PianoViewMode.exactFocus,
+                Icons.center_focus_strong_rounded,
+                'Solo',
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.library_music_outlined,
-            label: 'Chord',
-            color: MuzicianTheme.violet,
-            active: activePanel == _PianoPanel.chord,
-            hasValue: chordCommitted,
-            onTap: () => onToggle(_PianoPanel.chord),
-          ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.stacked_line_chart,
-            label: 'Scale',
-            color: MuzicianTheme.emerald,
-            active: activePanel == _PianoPanel.scale,
-            hasValue: state.highlightedNotes.isNotEmpty,
-            onTap: () => onToggle(_PianoPanel.scale),
-          ),
-          const SizedBox(width: 8),
-          _PanelTab(
-            icon: Icons.save_outlined,
-            label: 'Saves',
-            color: MuzicianTheme.teal,
-            active: activePanel == _PianoPanel.saves,
-            hasValue: false,
-            onTap: () => onToggle(_PianoPanel.saves),
-          ),
+          const SizedBox(height: 16),
+          const _TuneSectionLabel('Range'),
+          const PianoRangeSelector(),
         ],
       ),
     );
