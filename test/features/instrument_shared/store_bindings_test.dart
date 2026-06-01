@@ -17,8 +17,14 @@ void main() {
   test('bindings expose live reads', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    expect(container.read(fretboardBinding.selectedPitchClasses), isA<List<String>>());
+    expect(
+      container.read(fretboardBinding.selectedPitchClasses),
+      isA<List<String>>(),
+    );
     expect(container.read(pianoBinding.exactNotes), isNotNull);
-    expect(container.read(pianoRollScaleBinding.highlightedNotes), isA<List<String>>());
+    expect(
+      container.read(pianoRollScaleBinding.highlightedNotes),
+      isA<List<String>>(),
+    );
   });
 }

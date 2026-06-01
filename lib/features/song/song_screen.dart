@@ -331,8 +331,9 @@ class _SongTransportStrip extends ConsumerWidget {
       } else {
         // Resume from a parked cursor (set by rewind or a ruler tap) when the
         // transport is idle; otherwise start from the top.
-        final cursor =
-            playback.status == SongPlaybackStatus.idle ? playback.currentTick : null;
+        final cursor = playback.status == SongPlaybackStatus.idle
+            ? playback.currentTick
+            : null;
         playbackNotifier.startPlayback(startTick: cursor);
       }
     }

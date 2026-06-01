@@ -27,14 +27,18 @@ void main() {
     final highlighted = Provider<List<String>>((_) => const <String>[]);
     final focused = Provider<Set<String>>((_) => const <String>{});
     final exact = Provider<List<ExactSelectionNote>>((_) => const []);
-    final pendingScale =
-        StateProvider<({String root, String scaleName})?>((_) => null);
-    final activeScale =
-        StateProvider<({String root, String scaleName})?>((_) => null);
-    final pendingChord =
-        StateProvider<({String root, String quality})?>((_) => null);
-    final activeChord =
-        StateProvider<({String root, String quality})?>((_) => null);
+    final pendingScale = StateProvider<({String root, String scaleName})?>(
+      (_) => null,
+    );
+    final activeScale = StateProvider<({String root, String scaleName})?>(
+      (_) => null,
+    );
+    final pendingChord = StateProvider<({String root, String quality})?>(
+      (_) => null,
+    );
+    final activeChord = StateProvider<({String root, String quality})?>(
+      (_) => null,
+    );
     final manualEdit = StateProvider<int>((_) => 0);
     final committed = StateProvider<bool>((_) => false);
 

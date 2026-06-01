@@ -11,7 +11,11 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: ChordPickerHeader(title: 'CHORD VOICINGS', root: 'C', quality: 'm7'),
+          body: ChordPickerHeader(
+            title: 'CHORD VOICINGS',
+            root: 'C',
+            quality: 'm7',
+          ),
         ),
       ),
     );

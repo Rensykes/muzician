@@ -217,8 +217,10 @@ mixin ChordPickerSync<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     if (pending != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        applyDetectedChord((root: pending.root, quality: pending.quality),
-            committed: true);
+        applyDetectedChord((
+          root: pending.root,
+          quality: pending.quality,
+        ), committed: true);
         ref.read(binding.chordCommitted.notifier).state = true;
         ref.read(binding.pendingChord.notifier).state = null;
       });

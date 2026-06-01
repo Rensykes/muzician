@@ -182,9 +182,7 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                             _initialSyncDone = false;
                           });
                           widget.binding.actions(ref).setHighlightedNotes([]);
-                          ref
-                                  .read(widget.binding.activeScale.notifier)
-                                  .state =
+                          ref.read(widget.binding.activeScale.notifier).state =
                               null;
                         },
                         child: Container(

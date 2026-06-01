@@ -361,17 +361,18 @@ void main() {
         writeWavPcm16Mono(samples, sampleRate: 44100),
       );
 
-      final container = ProviderContainer(overrides: [
-        songAudioRepositoryProvider.overrideWithValue(repo),
-      ]);
+      final container = ProviderContainer(
+        overrides: [songAudioRepositoryProvider.overrideWithValue(repo)],
+      );
       addTearDown(container.dispose);
 
-      await container.read(songProjectProvider.notifier).loadProject(
+      await container
+          .read(songProjectProvider.notifier)
+          .loadProject(
             const SongProject(
               config: SongProjectConfig(
                 tempo: 120,
-                timeSignature:
-                    TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+                timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
                 totalMeasures: 4,
               ),
               tracks: [],

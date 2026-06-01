@@ -120,8 +120,8 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
   @override
   ({String root, String quality})? get currentActiveChord =>
       _selectedRoot != null
-          ? (root: _selectedRoot!, quality: _selectedQuality)
-          : null;
+      ? (root: _selectedRoot!, quality: _selectedQuality)
+      : null;
 
   @override
   bool get isChordCommitted => _voicingCommitted;

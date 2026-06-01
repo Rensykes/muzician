@@ -158,7 +158,9 @@ final pianoHighlightedNotesProvider = Provider<List<String>>(
 final pianoExactNotesProvider = Provider<List<ExactSelectionNote>>((ref) {
   final keys = ref.watch(pianoProvider.select((s) => s.selectedKeys));
   return keys
-      .map((k) => ExactSelectionNote(midiNote: k.midiNote, pitchClass: k.noteName))
+      .map(
+        (k) => ExactSelectionNote(midiNote: k.midiNote, pitchClass: k.noteName),
+      )
       .toList();
 });
 

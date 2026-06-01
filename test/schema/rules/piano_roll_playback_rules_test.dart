@@ -116,110 +116,119 @@ void main() {
   });
 
   group('groupPlaybackEvents', () {
-    test('groups same-tick notes into one playback event with sorted MIDI notes', () {
-      final notes = [
-        PianoRollNote(
-          id: '1',
-          midiNote: 60,
-          pitchClass: 'C',
-          noteWithOctave: 'C4',
-          startTick: 8,
-          durationTicks: 4,
-        ),
-        PianoRollNote(
-          id: '2',
-          midiNote: 64,
-          pitchClass: 'E',
-          noteWithOctave: 'E4',
-          startTick: 8,
-          durationTicks: 4,
-        ),
-        PianoRollNote(
-          id: '3',
-          midiNote: 67,
-          pitchClass: 'G',
-          noteWithOctave: 'G4',
-          startTick: 8,
-          durationTicks: 4,
-        ),
-      ];
-      final events = rules.groupPlaybackEvents(notes, 0);
-      expect(events, hasLength(1));
-      expect(events.first.tick, 8);
-      expect(events.first.midiNotes, [60, 64, 67]);
-    });
+    test(
+      'groups same-tick notes into one playback event with sorted MIDI notes',
+      () {
+        final notes = [
+          PianoRollNote(
+            id: '1',
+            midiNote: 60,
+            pitchClass: 'C',
+            noteWithOctave: 'C4',
+            startTick: 8,
+            durationTicks: 4,
+          ),
+          PianoRollNote(
+            id: '2',
+            midiNote: 64,
+            pitchClass: 'E',
+            noteWithOctave: 'E4',
+            startTick: 8,
+            durationTicks: 4,
+          ),
+          PianoRollNote(
+            id: '3',
+            midiNote: 67,
+            pitchClass: 'G',
+            noteWithOctave: 'G4',
+            startTick: 8,
+            durationTicks: 4,
+          ),
+        ];
+        final events = rules.groupPlaybackEvents(notes, 0);
+        expect(events, hasLength(1));
+        expect(events.first.tick, 8);
+        expect(events.first.midiNotes, [60, 64, 67]);
+      },
+    );
 
-    test('excludes notes whose startTick is before the playback start tick', () {
-      final notes = [
-        PianoRollNote(
-          id: '1',
-          midiNote: 60,
-          pitchClass: 'C',
-          noteWithOctave: 'C4',
-          startTick: 0,
-          durationTicks: 4,
-        ),
-        PianoRollNote(
-          id: '2',
-          midiNote: 64,
-          pitchClass: 'E',
-          noteWithOctave: 'E4',
-          startTick: 4,
-          durationTicks: 4,
-        ),
-        PianoRollNote(
-          id: '3',
-          midiNote: 67,
-          pitchClass: 'G',
-          noteWithOctave: 'G4',
-          startTick: 8,
-          durationTicks: 4,
-        ),
-      ];
-      final events = rules.groupPlaybackEvents(notes, 4);
-      expect(events, hasLength(2));
-      expect(events[0].tick, 4);
-      expect(events[0].midiNotes, [64]);
-      expect(events[1].tick, 8);
-      expect(events[1].midiNotes, [67]);
-    });
+    test(
+      'excludes notes whose startTick is before the playback start tick',
+      () {
+        final notes = [
+          PianoRollNote(
+            id: '1',
+            midiNote: 60,
+            pitchClass: 'C',
+            noteWithOctave: 'C4',
+            startTick: 0,
+            durationTicks: 4,
+          ),
+          PianoRollNote(
+            id: '2',
+            midiNote: 64,
+            pitchClass: 'E',
+            noteWithOctave: 'E4',
+            startTick: 4,
+            durationTicks: 4,
+          ),
+          PianoRollNote(
+            id: '3',
+            midiNote: 67,
+            pitchClass: 'G',
+            noteWithOctave: 'G4',
+            startTick: 8,
+            durationTicks: 4,
+          ),
+        ];
+        final events = rules.groupPlaybackEvents(notes, 4);
+        expect(events, hasLength(2));
+        expect(events[0].tick, 4);
+        expect(events[0].midiNotes, [64]);
+        expect(events[1].tick, 8);
+        expect(events[1].midiNotes, [67]);
+      },
+    );
 
-    test('returns events in ascending tick order regardless of input order', () {
-      final notes = [
-        PianoRollNote(
-          id: '3',
-          midiNote: 67,
-          pitchClass: 'G',
-          noteWithOctave: 'G4',
-          startTick: 8,
-          durationTicks: 4,
-        ),
-        PianoRollNote(
-          id: '1',
-          midiNote: 60,
-          pitchClass: 'C',
-          noteWithOctave: 'C4',
-          startTick: 0,
-          durationTicks: 4,
-        ),
-        PianoRollNote(
-          id: '2',
-          midiNote: 64,
-          pitchClass: 'E',
-          noteWithOctave: 'E4',
-          startTick: 4,
-          durationTicks: 4,
-        ),
-      ];
-      final events = rules.groupPlaybackEvents(notes, 0);
-      expect(events, hasLength(3));
-      expect(events[0].tick, 0);
-      expect(events[0].midiNotes, [60]);
-      expect(events[1].tick, 4);
-      expect(events[1].midiNotes, [64]);
-      expect(events[2].tick, 8);
-      expect(events[2].midiNotes, [67]);
-    });
+    test(
+      'returns events in ascending tick order regardless of input order',
+      () {
+        final notes = [
+          PianoRollNote(
+            id: '3',
+            midiNote: 67,
+            pitchClass: 'G',
+            noteWithOctave: 'G4',
+            startTick: 8,
+            durationTicks: 4,
+          ),
+          PianoRollNote(
+            id: '1',
+            midiNote: 60,
+            pitchClass: 'C',
+            noteWithOctave: 'C4',
+            startTick: 0,
+            durationTicks: 4,
+          ),
+          PianoRollNote(
+            id: '2',
+            midiNote: 64,
+            pitchClass: 'E',
+            noteWithOctave: 'E4',
+            startTick: 4,
+            durationTicks: 4,
+          ),
+        ];
+        final events = rules.groupPlaybackEvents(notes, 0);
+        expect(events, hasLength(3));
+        expect(events[0].tick, 0);
+        expect(events[0].midiNotes, [60]);
+        expect(events[1].tick, 4);
+        expect(events[1].midiNotes, [64]);
+        expect(events[2].tick, 8);
+        expect(events[2].midiNotes, [67]);
+      },
+    );
 
     test('deduplicates MIDI notes at the same tick', () {
       final notes = [

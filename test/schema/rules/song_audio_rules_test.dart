@@ -159,12 +159,7 @@ void main() {
             order: 0,
             isSolo: true,
           ),
-          SongTrack(
-            id: 't2',
-            name: 'B',
-            type: SongTrackType.audio,
-            order: 1,
-          ),
+          SongTrack(id: 't2', name: 'B', type: SongTrackType.audio, order: 1),
         ],
         clips: [
           SongClipInstance(
@@ -218,9 +213,7 @@ void main() {
 
   group('computePeaksFromInt16', () {
     test('downsamples to requested bin count', () {
-      final samples = Int16List.fromList(
-        List<int>.filled(1000, 32767),
-      );
+      final samples = Int16List.fromList(List<int>.filled(1000, 32767));
       final peaks = computePeaksFromInt16(samples, targetBins: 100);
       expect(peaks.length, 100);
       expect(peaks.every((p) => p == 255), isTrue);

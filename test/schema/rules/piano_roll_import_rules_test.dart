@@ -88,9 +88,21 @@ void main() {
         numFrets: 12,
         capo: 0,
         selectedCells: [
-          const FretCoordinate(stringIndex: 5, fret: 0, noteName: 'E'), // low E → 40
-          const FretCoordinate(stringIndex: 4, fret: 0, noteName: 'A'), // A → 45
-          const FretCoordinate(stringIndex: 3, fret: 0, noteName: 'D'), // D → 50
+          const FretCoordinate(
+            stringIndex: 5,
+            fret: 0,
+            noteName: 'E',
+          ), // low E → 40
+          const FretCoordinate(
+            stringIndex: 4,
+            fret: 0,
+            noteName: 'A',
+          ), // A → 45
+          const FretCoordinate(
+            stringIndex: 3,
+            fret: 0,
+            noteName: 'D',
+          ), // D → 50
         ],
         selectedNotes: ['E', 'A', 'D'],
         viewMode: FretboardViewMode.exact,

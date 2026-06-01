@@ -35,22 +35,24 @@ _createContainer({
 
   final container = ProviderContainer(
     overrides: [
-      pianoRollPlaybackSinkProvider.overrideWithValue(
-        (List<int> midiNotes, double volume) async {
-          sinkCalls.add(List<int>.unmodifiable(midiNotes));
-        },
-      ),
-      pianoRollMetronomeSinkProvider.overrideWithValue(
-        ({required bool accent}) async {
-          clickCalls.add(accent);
-        },
-      ),
+      pianoRollPlaybackSinkProvider.overrideWithValue((
+        List<int> midiNotes,
+        double volume,
+      ) async {
+        sinkCalls.add(List<int>.unmodifiable(midiNotes));
+      }),
+      pianoRollMetronomeSinkProvider.overrideWithValue(({
+        required bool accent,
+      }) async {
+        clickCalls.add(accent);
+      }),
     ],
   );
 
   // ignore: invalid_use_of_protected_member
-  container.read(settingsProvider.notifier).state =
-      AppSettings(metronomeEnabled: metronomeEnabled);
+  container.read(settingsProvider.notifier).state = AppSettings(
+    metronomeEnabled: metronomeEnabled,
+  );
 
   final pr = container.read(pianoRollProvider.notifier);
   pr.setTempo(tempo);
@@ -62,8 +64,9 @@ _createContainer({
 
   if (humStatus != HumToMidiStatus.idle) {
     // ignore: invalid_use_of_protected_member
-    container.read(humToMidiProvider.notifier).state =
-        HumToMidiState(status: humStatus);
+    container.read(humToMidiProvider.notifier).state = HumToMidiState(
+      status: humStatus,
+    );
   }
 
   return (container: container, sinkCalls: sinkCalls, clickCalls: clickCalls);
@@ -71,30 +74,26 @@ _createContainer({
 
 void main() {
   group('PianoRollPlaybackNotifier', () {
-    test(
-      'startPlayback emits note groups from selectedColumnTick to '
-      'timeline end',
-      () async {
-        final env = _createContainer(
-          selectedColumnTick: 4,
-          notes: [(60, 0), (64, 4), (67, 8)],
-        );
+    test('startPlayback emits note groups from selectedColumnTick to '
+        'timeline end', () async {
+      final env = _createContainer(
+        selectedColumnTick: 4,
+        notes: [(60, 0), (64, 4), (67, 8)],
+      );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
-        await notifier.startPlayback();
+      final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
+      await notifier.startPlayback();
 
-        expect(env.sinkCalls, hasLength(2));
-        expect(env.sinkCalls[0], [64]);
-        expect(env.sinkCalls[1], [67]);
+      expect(env.sinkCalls, hasLength(2));
+      expect(env.sinkCalls[0], [64]);
+      expect(env.sinkCalls[1], [67]);
 
-        final state = env.container.read(pianoRollPlaybackProvider);
-        expect(state.status, PianoRollPlaybackStatus.completed);
-        expect(state.startTick, 4);
-        // 1 measure = 16 ticks at 4/4 time (4 beats * 4 ticks/beat)
-        expect(state.endTickExclusive, 16);
-      },
-    );
+      final state = env.container.read(pianoRollPlaybackProvider);
+      expect(state.status, PianoRollPlaybackStatus.completed);
+      expect(state.startTick, 4);
+      // 1 measure = 16 ticks at 4/4 time (4 beats * 4 ticks/beat)
+      expect(state.endTickExclusive, 16);
+    });
 
     test(
       'stopPlayback cancels pending transport work and returns to idle',
@@ -104,8 +103,7 @@ void main() {
           notes: [(60, 0), (64, 4)],
         );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
+        final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
 
         // Start without awaiting completion.
         final playbackFuture = notifier.startPlayback();
@@ -139,8 +137,7 @@ void main() {
           notes: [(60, 0), (64, 4)],
         );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
+        final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
         await notifier.startPlayback();
 
         expect(
@@ -156,13 +153,9 @@ void main() {
     test(
       'playback does nothing when there are no notes at or after the start tick',
       () async {
-        final env = _createContainer(
-          selectedColumnTick: 8,
-          notes: [(60, 0)],
-        );
+        final env = _createContainer(selectedColumnTick: 8, notes: [(60, 0)]);
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
+        final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
         await notifier.startPlayback();
 
         expect(env.sinkCalls, isEmpty);
@@ -184,8 +177,7 @@ void main() {
         notes: [(60, 0)],
       );
 
-      final notifier =
-          env.container.read(pianoRollPlaybackProvider.notifier);
+      final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
       await notifier.startPlayback();
 
       expect(env.sinkCalls, isEmpty);
@@ -199,114 +191,97 @@ void main() {
       );
     });
 
-    test(
-      'playback snapshots piano roll notes at start so mid-run edits '
-      'do not affect the active transport',
-      () async {
-        final env = _createContainer(
-          selectedColumnTick: 0,
-          notes: [(60, 0), (64, 4)],
-        );
+    test('playback snapshots piano roll notes at start so mid-run edits '
+        'do not affect the active transport', () async {
+      final env = _createContainer(
+        selectedColumnTick: 0,
+        notes: [(60, 0), (64, 4)],
+      );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
-        final prNotifier =
-            env.container.read(pianoRollProvider.notifier);
+      final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
+      final prNotifier = env.container.read(pianoRollProvider.notifier);
 
-        // Start playback without awaiting completion.
-        final playbackFuture = notifier.startPlayback();
+      // Start playback without awaiting completion.
+      final playbackFuture = notifier.startPlayback();
 
-        // Let the first event (tick 0) fire before mutating.
-        await Future<void>.delayed(Duration.zero);
+      // Let the first event (tick 0) fire before mutating.
+      await Future<void>.delayed(Duration.zero);
 
-        // Mutate piano-roll state mid-playback.
-        prNotifier.addNote(67, 8, 1);
+      // Mutate piano-roll state mid-playback.
+      prNotifier.addNote(67, 8, 1);
 
-        // Wait for the transport to finish.
-        await playbackFuture;
+      // Wait for the transport to finish.
+      await playbackFuture;
 
-        // Only the original snapshotted notes should have played.
-        expect(env.sinkCalls, hasLength(2));
-        expect(env.sinkCalls[0], [60]);
-        expect(env.sinkCalls[1], [64]);
-        expect(
-          env.container.read(pianoRollPlaybackProvider).status,
-          PianoRollPlaybackStatus.completed,
-        );
-      },
-    );
+      // Only the original snapshotted notes should have played.
+      expect(env.sinkCalls, hasLength(2));
+      expect(env.sinkCalls[0], [60]);
+      expect(env.sinkCalls[1], [64]);
+      expect(
+        env.container.read(pianoRollPlaybackProvider).status,
+        PianoRollPlaybackStatus.completed,
+      );
+    });
 
-    test(
-      'metronome plays a click on each beat with accent on the downbeat '
-      '(4/4, no notes)',
-      () async {
-        final env = _createContainer(
-          selectedColumnTick: 0,
-          notes: const [],
-          totalMeasures: 1,
-          metronomeEnabled: true,
-        );
+    test('metronome plays a click on each beat with accent on the downbeat '
+        '(4/4, no notes)', () async {
+      final env = _createContainer(
+        selectedColumnTick: 0,
+        notes: const [],
+        totalMeasures: 1,
+        metronomeEnabled: true,
+      );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
-        await notifier.startPlayback();
+      final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
+      await notifier.startPlayback();
 
-        // 4/4 1 measure = 16 ticks; beats at ticks 0,4,8,12 → 4 clicks total.
-        // Tick 0 is the downbeat (accent=true); others are weak (accent=false).
-        expect(env.clickCalls, [true, false, false, false]);
-        expect(env.sinkCalls, isEmpty);
-        expect(
-          env.container.read(pianoRollPlaybackProvider).status,
-          PianoRollPlaybackStatus.completed,
-        );
-      },
-    );
+      // 4/4 1 measure = 16 ticks; beats at ticks 0,4,8,12 → 4 clicks total.
+      // Tick 0 is the downbeat (accent=true); others are weak (accent=false).
+      expect(env.clickCalls, [true, false, false, false]);
+      expect(env.sinkCalls, isEmpty);
+      expect(
+        env.container.read(pianoRollPlaybackProvider).status,
+        PianoRollPlaybackStatus.completed,
+      );
+    });
 
-    test(
-      'metronome aligns clicks to absolute tick boundaries even when '
-      'playback starts mid-measure',
-      () async {
-        final env = _createContainer(
-          selectedColumnTick: 8,
-          notes: const [],
-          totalMeasures: 1,
-          metronomeEnabled: true,
-        );
+    test('metronome aligns clicks to absolute tick boundaries even when '
+        'playback starts mid-measure', () async {
+      final env = _createContainer(
+        selectedColumnTick: 8,
+        notes: const [],
+        totalMeasures: 1,
+        metronomeEnabled: true,
+      );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
-        await notifier.startPlayback();
+      final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
+      await notifier.startPlayback();
 
-        // Start at tick 8 (beat 3 of 4/4). Remaining beats: 8 (weak), 12 (weak).
-        expect(env.clickCalls, [false, false]);
-      },
-    );
+      // Start at tick 8 (beat 3 of 4/4). Remaining beats: 8 (weak), 12 (weak).
+      expect(env.clickCalls, [false, false]);
+    });
 
-    test(
-      'metronome respects the time signature beat unit (6/8 → eighth-note '
-      'beats every 2 ticks)',
-      () async {
-        final env = _createContainer(
-          selectedColumnTick: 0,
-          notes: const [],
-          totalMeasures: 1,
-          metronomeEnabled: true,
-        );
-        env.container
-            .read(pianoRollProvider.notifier)
-            .setTimeSignature(
-              const TimeSignature(beatsPerMeasure: 6, beatUnit: 8),
-            );
+    test('metronome respects the time signature beat unit (6/8 → eighth-note '
+        'beats every 2 ticks)', () async {
+      final env = _createContainer(
+        selectedColumnTick: 0,
+        notes: const [],
+        totalMeasures: 1,
+        metronomeEnabled: true,
+      );
+      env.container
+          .read(pianoRollProvider.notifier)
+          .setTimeSignature(
+            const TimeSignature(beatsPerMeasure: 6, beatUnit: 8),
+          );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
-        await notifier.startPlayback();
+      final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
+      await notifier.startPlayback();
 
-        // 6/8 1 measure = 6 beats × 2 ticks = 12 ticks.
-        // Clicks at ticks 0,2,4,6,8,10 → 6 clicks; first is accent.
-        expect(env.clickCalls, [true, false, false, false, false, false]);
-      },
-    );
+      // 6/8 1 measure = 6 beats × 2 ticks = 12 ticks.
+      // Clicks at ticks 0,2,4,6,8,10 → 6 clicks; first is accent.
+      expect(env.clickCalls, [true, false, false, false, false, false]);
+    });
 
     test(
       'currentTick advances during silent spans before the next note event',
@@ -317,8 +292,7 @@ void main() {
           tempo: 300,
         );
 
-        final notifier =
-            env.container.read(pianoRollPlaybackProvider.notifier);
+        final notifier = env.container.read(pianoRollPlaybackProvider.notifier);
 
         final playbackFuture = notifier.startPlayback();
 
