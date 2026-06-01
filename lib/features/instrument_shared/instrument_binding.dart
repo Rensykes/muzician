@@ -47,6 +47,9 @@ class ScalePickerBinding {
 /// Adds the detection panel + chord picker surface. Fretboard + Piano only.
 class InstrumentBinding extends ScalePickerBinding {
   final ProviderListenable<List<ExactSelectionNote>> exactNotes;
+
+  /// Full selected note-name list shown as chips in the detection panel.
+  /// (Pitch-class names; see [selectedPitchClasses] for the conflict-check set.)
   final ProviderListenable<List<String>> selectedNotes;
   final ProviderListenable<Set<String>> focusedNotes;
 
@@ -76,5 +79,7 @@ class InstrumentBinding extends ScalePickerBinding {
         super(actions: actions);
 
   /// Same callback as [actions] but typed to the wider [SelectionActions].
+  /// Prefer this over [ScalePickerBinding.actions] when holding an
+  /// [InstrumentBinding] so the full selection surface stays in scope.
   final SelectionActions Function(WidgetRef) selectionActions;
 }
