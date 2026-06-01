@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
-import '../../models/harmonic_analysis.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../utils/note_utils.dart';
+import '../instrument_shared/chord_picker_parts.dart';
 import 'chord_diagram.dart';
 
 const _qualities = [
@@ -148,7 +148,8 @@ class ChordVoicingPicker extends ConsumerStatefulWidget {
   ConsumerState<ChordVoicingPicker> createState() => _ChordVoicingPickerState();
 }
 
-class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
+class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
+    with ChordPickerSync {
   String? _selectedRoot;
   String _selectedQuality = '';
   int? _selectedVoicingIdx;
@@ -156,6 +157,26 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
   /// True once the user has explicitly tapped a voicing card.
   /// When false, the picker mirrors the first detected chord automatically.
   bool _voicingCommitted = false;
+
+  @override
+  DetectedChord detectFirstChordFromState() =>
+      detectFirstChord(ref.read(fretboardProvider).selectedNotes);
+
+  @override
+  void applyDetectedChord(DetectedChord chord, {required bool committed}) {
+    setState(() {
+      _voicingCommitted = committed;
+      _selectedRoot = chord?.root;
+      _selectedQuality = chord?.quality ?? '';
+      _selectedVoicingIdx = null;
+    });
+  }
+
+  @override
+  ({String root, String quality})? get currentActiveChord =>
+      _selectedRoot != null
+          ? (root: _selectedRoot!, quality: _selectedQuality)
+          : null;
 
   @override
   void initState() {
@@ -172,31 +193,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
 
-    // Live-sync root/quality to first detected chord while not committed.
-    ref.listen(fretboardProvider.select((s) => s.selectedNotes), (_, notes) {
-      if (_voicingCommitted) return;
-      final detected = detectFirstChord(notes);
-      setState(() {
-        _selectedRoot = detected?.root;
-        _selectedQuality = detected?.quality ?? '';
-        _selectedVoicingIdx = null;
-      });
-    });
-
-    // When the user manually taps a fretboard note, drop the commit and
-    // revert to whatever detection now says.
-    ref.listen(fretboardManualEditProvider, (_, _) {
-      final detected = detectFirstChord(
-        ref.read(fretboardProvider).selectedNotes,
-      );
-      setState(() {
-        _voicingCommitted = false;
-        _selectedRoot = detected?.root;
-        _selectedQuality = detected?.quality ?? '';
-        _selectedVoicingIdx = null;
-      });
-      ref.read(fretboardChordCommittedProvider.notifier).state = false;
-    });
+    installChordSync(fretboardBinding, committed: _voicingCommitted);
 
     // When the capo moves, transpose the committed chord root by the same
     // delta. When not committed, detection re-runs via selectedNotes listener.
@@ -211,22 +208,6 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
         _selectedVoicingIdx = null;
       });
     });
-    // Sync when the user explicitly taps a chord chip in the detection panel.
-    // This counts as a manual override (commits the selection).
-    final pendingChord = ref.watch(pendingChordProvider);
-    if (pendingChord != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _voicingCommitted = true;
-          _selectedRoot = pendingChord.root;
-          _selectedQuality = pendingChord.quality;
-          _selectedVoicingIdx = null;
-        });
-        ref.read(fretboardChordCommittedProvider.notifier).state = true;
-        ref.read(pendingChordProvider.notifier).state = null;
-      });
-    }
 
     final tuning = tunings[state.currentTuning]!;
     final stringMidis = tuning.strings.map((s) => s.midiNote).toList();
@@ -240,17 +221,6 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
         ? getChordNotes(_selectedRoot!, _selectedQuality)
         : <String>[];
 
-    // Publish to active provider so external surfaces (e.g. V2 dock) can show it.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final newActive = _selectedRoot != null
-          ? (root: _selectedRoot!, quality: _selectedQuality)
-          : null;
-      final cur = ref.read(activeChordProvider);
-      if (cur?.root != newActive?.root || cur?.quality != newActive?.quality) {
-        ref.read(activeChordProvider.notifier).state = newActive;
-      }
-    });
     final voicings = chordNotes.isNotEmpty
         ? _generateVoicings(chordNotes, stringMidis, capo: state.capo)
         : <ChordVoicing>[];
@@ -261,149 +231,37 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker> {
         // Header
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-          child: Row(
-            children: [
-              const Text(
-                'CHORD VOICINGS',
-                style: TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const Spacer(),
-              if (chordName != null && chordNotes.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _selectedRoot != null
-                        ? formatChordSymbol(
-                            ChordDetectionResult(
-                              root: _selectedRoot!,
-                              quality: _selectedQuality,
-                            ),
-                          )
-                        : '',
-                    style: const TextStyle(
-                      color: MuzicianTheme.sky,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-            ],
+          child: ChordPickerHeader(
+            title: 'CHORD VOICINGS',
+            root: chordNotes.isNotEmpty ? _selectedRoot : null,
+            quality: _selectedQuality,
           ),
         ),
         // Root pills
-        SizedBox(
-          height: 38,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: chromaticNotes.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 6),
-            itemBuilder: (_, i) {
-              final root = chromaticNotes[i];
-              final active = _selectedRoot == root;
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  setState(() {
-                    _selectedRoot = _selectedRoot == root ? null : root;
-                    _selectedVoicingIdx = null;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: active
-                        ? MuzicianTheme.sky.withValues(alpha: 0.15)
-                        : Colors.white.withValues(alpha: 0.05),
-                    border: Border.all(
-                      color: active
-                          ? MuzicianTheme.sky.withValues(alpha: 0.4)
-                          : Colors.white.withValues(alpha: 0.1),
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Text(
-                    formatRootChoiceLabel(root),
-                    style: TextStyle(
-                      color: active
-                          ? MuzicianTheme.sky
-                          : const Color(0xFF64748B),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              );
-            },
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: RootPillRow(
+            selectedRoot: _selectedRoot,
+            accent: MuzicianTheme.violet,
+            onTap: (root) => setState(() {
+              _selectedRoot = _selectedRoot == root ? null : root;
+              _selectedVoicingIdx = null;
+            }),
           ),
         ),
         // Quality pills
         if (_selectedRoot != null) ...[
           const SizedBox(height: 8),
-          SizedBox(
-            height: 34,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _qualities.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 6),
-              itemBuilder: (_, i) {
-                final (symbol, label) = _qualities[i];
-                final active = _selectedQuality == symbol;
-                return GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    setState(() {
-                      _selectedQuality = symbol;
-                      _selectedVoicingIdx = null;
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: active
-                          ? const Color(0x337C3AED)
-                          : Colors.white.withValues(alpha: 0.04),
-                      border: Border.all(
-                        color: active
-                            ? const Color(0x807C3AED)
-                            : Colors.white.withValues(alpha: 0.08),
-                        width: 0.5,
-                      ),
-                    ),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: active
-                            ? MuzicianTheme.violet
-                            : const Color(0xFF475569),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                );
-              },
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: QualityPillRow(
+              qualities: _qualities,
+              selectedQuality: _selectedQuality,
+              accent: MuzicianTheme.violet,
+              onTap: (symbol) => setState(() {
+                _selectedQuality = symbol;
+                _selectedVoicingIdx = null;
+              }),
             ),
           ),
         ],
