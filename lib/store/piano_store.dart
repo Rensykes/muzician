@@ -127,7 +127,7 @@ final pianoPendingChordProvider =
 final pianoPendingScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
 
-/// Currently committed scale selection (published by [PianoScalePicker]).
+/// Currently committed scale selection (published by [SharedScalePicker]).
 final pianoActiveScaleProvider =
     StateProvider<({String root, String scaleName})?>((_) => null);
 
