@@ -179,6 +179,9 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
           : null;
 
   @override
+  bool get isChordCommitted => _voicingCommitted;
+
+  @override
   void initState() {
     super.initState();
     // Seed from detection so the picker is populated on first render.
@@ -193,7 +196,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
     final state = ref.watch(fretboardProvider);
     final notifier = ref.read(fretboardProvider.notifier);
 
-    installChordSync(fretboardBinding, committed: _voicingCommitted);
+    installChordSync(fretboardBinding);
 
     // When the capo moves, transpose the committed chord root by the same
     // delta. When not committed, detection re-runs via selectedNotes listener.
@@ -238,31 +241,27 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
           ),
         ),
         // Root pills
-        Padding(
+        RootPillRow(
+          selectedRoot: _selectedRoot,
+          accent: MuzicianTheme.violet,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: RootPillRow(
-            selectedRoot: _selectedRoot,
-            accent: MuzicianTheme.violet,
-            onTap: (root) => setState(() {
-              _selectedRoot = _selectedRoot == root ? null : root;
-              _selectedVoicingIdx = null;
-            }),
-          ),
+          onTap: (root) => setState(() {
+            _selectedRoot = _selectedRoot == root ? null : root;
+            _selectedVoicingIdx = null;
+          }),
         ),
         // Quality pills
         if (_selectedRoot != null) ...[
           const SizedBox(height: 8),
-          Padding(
+          QualityPillRow(
+            qualities: _qualities,
+            selectedQuality: _selectedQuality,
+            accent: MuzicianTheme.violet,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: QualityPillRow(
-              qualities: _qualities,
-              selectedQuality: _selectedQuality,
-              accent: MuzicianTheme.violet,
-              onTap: (symbol) => setState(() {
-                _selectedQuality = symbol;
-                _selectedVoicingIdx = null;
-              }),
-            ),
+            onTap: (symbol) => setState(() {
+              _selectedQuality = symbol;
+              _selectedVoicingIdx = null;
+            }),
           ),
         ],
         // Voicings carousel

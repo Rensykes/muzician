@@ -63,11 +63,13 @@ class RootPillRow extends StatelessWidget {
   final String? selectedRoot;
   final Color accent;
   final ValueChanged<String> onTap;
+  final EdgeInsetsGeometry padding;
   const RootPillRow({
     super.key,
     required this.selectedRoot,
     required this.accent,
     required this.onTap,
+    this.padding = EdgeInsets.zero,
   });
 
   @override
@@ -76,6 +78,7 @@ class RootPillRow extends StatelessWidget {
       height: 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        padding: padding,
         itemCount: chromaticNotes.length,
         separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (_, i) {
@@ -123,12 +126,14 @@ class QualityPillRow extends StatelessWidget {
   final String selectedQuality;
   final Color accent;
   final ValueChanged<String> onTap;
+  final EdgeInsetsGeometry padding;
   const QualityPillRow({
     super.key,
     required this.qualities,
     required this.selectedQuality,
     required this.accent,
     required this.onTap,
+    this.padding = EdgeInsets.zero,
   });
 
   @override
@@ -137,6 +142,7 @@ class QualityPillRow extends StatelessWidget {
       height: 34,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        padding: padding,
         itemCount: qualities.length,
         separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (_, i) {
@@ -194,9 +200,13 @@ mixin ChordPickerSync<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   /// Picker's current (root, quality) for publishing to activeChord.
   ({String root, String quality})? get currentActiveChord;
 
-  void installChordSync(InstrumentBinding binding, {required bool committed}) {
+  /// Live commit flag. Read on every listener fire so the [selectedNotes]
+  /// guard never uses a stale build-time snapshot.
+  bool get isChordCommitted;
+
+  void installChordSync(InstrumentBinding binding) {
     ref.listen(binding.selectedNotes, (_, _) {
-      if (committed) return;
+      if (isChordCommitted) return;
       applyDetectedChord(detectFirstChordFromState(), committed: false);
     });
     ref.listen(binding.manualEdit, (_, _) {

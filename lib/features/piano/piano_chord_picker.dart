@@ -124,6 +124,9 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
           : null;
 
   @override
+  bool get isChordCommitted => _voicingCommitted;
+
+  @override
   void initState() {
     super.initState();
     final notes = ref.read(pianoProvider).selectedNotes;
@@ -137,7 +140,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
     final notifier = ref.read(pianoProvider.notifier);
     final keyMidis = notifier.getKeys().map((k) => k.midiNote).toSet();
 
-    installChordSync(pianoBinding, committed: _voicingCommitted);
+    installChordSync(pianoBinding);
 
     final chordNotes = _selectedRoot != null
         ? getChordNotes(_selectedRoot!, _selectedQuality)
