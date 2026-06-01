@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/_mockup_shell.dart';
 import 'features/fretboard/fretboard_feature.dart';
-import 'features/instrument_shared/shared_detection_panel.dart';
+import 'features/instrument_shared/instrument_screen.dart';
 import 'features/instrument_shared/shared_scale_picker.dart';
 import 'ui/core/app_info_panel.dart';
 import 'features/piano/piano_feature.dart';
@@ -312,219 +312,71 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
     final activeChord = ref.watch(activeChordProvider);
     final chordCommitted = ref.watch(fretboardChordCommittedProvider);
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: MuzicianTheme.gradientColors,
+    return InstrumentScreen(
+      binding: fretboardBinding,
+      title: 'Fretboard',
+      appBarChipLabel: state.selectedNotes.isEmpty
+          ? null
+          : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+      appBarActions: [
+        IconBtn(
+          icon: Icons.help_outline_rounded,
+          onTap: () => showAppInfoPanel(context, initialTab: 0),
         ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            CompactAppBar(
-              title: 'Fretboard',
-              chipLabel: state.selectedNotes.isEmpty
-                  ? null
-                  : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
-              actions: [
-                IconBtn(
-                  icon: Icons.help_outline_rounded,
-                  onTap: () => showAppInfoPanel(context, initialTab: 0),
-                ),
-                IconBtn(
-                  icon: Icons.bookmark_border_rounded,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Saves',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: FretboardSavePanel(),
-                    ),
-                  ),
-                ),
-                IconBtn(
-                  icon: Icons.tune_rounded,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Settings',
-                    child: _FretSettingsSheetContent(),
-                  ),
-                ),
-              ],
+        IconBtn(
+          icon: Icons.bookmark_border_rounded,
+          onTap: () => showWidgetSheet(
+            context: context,
+            title: 'Saves',
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: FretboardSavePanel(),
             ),
-            ModeSegment<FretboardInputMode>(
-              current: state.inputMode,
-              onSelect: notifier.setInputMode,
-              options: const [
-                (FretboardInputMode.free, Icons.touch_app_rounded, 'Free'),
-                (
-                  FretboardInputMode.chord,
-                  Icons.library_music_rounded,
-                  'Chord',
-                ),
-              ],
-            ),
-            // Board is pinned to its intrinsic height (fretboardBoardHeight)
-            // so it never clips a string, and the detection area below takes
-            // all remaining space. _stringH is sized so board + detection fit
-            // without scrolling.
-            SizedBox(
-              height: fretboardBoardHeight,
-              child: GlassFrame(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: const GuitarFretboard(
-                  hideToolbar: true,
-                  palette: FretboardPalette.wood,
-                ),
-              ),
-            ),
-            // Detection fills the space between board and docked toolbar. No
-            // scroll: content fits. Empty state shows a centered insight hint.
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                reverseDuration: const Duration(milliseconds: 220),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOut,
-                  ),
-                  child: SlideTransition(
-                    position:
-                        Tween<Offset>(
-                          begin: const Offset(0, -0.08),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                          ),
-                        ),
-                    child: child,
-                  ),
-                ),
-                child: state.selectedNotes.isNotEmpty
-                    ? SharedDetectionPanel(
-                        key: const ValueKey('fret-detect'),
-                        binding: fretboardBinding,
-                        onChordPanelRequested: () => showWidgetSheet(
-                          context: context,
-                          title: 'Chord voicings',
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: ChordVoicingPicker(),
-                          ),
-                        ),
-                      )
-                    : const _InsightHint(
-                        key: ValueKey('fret-detect-empty'),
-                        title: 'Tap the fretboard to begin',
-                        subtitle:
-                            'Selected notes turn into detected chords and scales here.',
-                      ),
-              ),
-            ),
-            DockedToolbar(
-              children: [
-                DockTab(
-                  icon: Icons.stacked_line_chart,
-                  label: 'Scale',
-                  color: MuzicianTheme.emerald,
-                  hasValue: activeScale != null,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Scale',
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SharedScalePicker(binding: fretboardBinding),
-                    ),
-                  ),
-                ),
-                DockTab(
-                  icon: Icons.library_music_outlined,
-                  label: 'Chord',
-                  color: MuzicianTheme.violet,
-                  hasValue: activeChord != null || chordCommitted,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Chord voicings',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: ChordVoicingPicker(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Insight Hint (empty state) ──────────────────────────────────────────────
-
-/// Fills the space between an instrument and the docked toolbar before any
-/// notes are tapped, so the area reads as intentional rather than empty.
-class _InsightHint extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  const _InsightHint({
-    super.key,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: MuzicianTheme.sky.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: MuzicianTheme.sky.withValues(alpha: 0.2),
-                width: 0.5,
-              ),
-            ),
-            child: const Icon(
-              Icons.touch_app_rounded,
-              color: MuzicianTheme.sky,
-              size: 26,
-            ),
+        IconBtn(
+          icon: Icons.tune_rounded,
+          onTap: () => showWidgetSheet(
+            context: context,
+            title: 'Settings',
+            child: _FretSettingsSheetContent(),
           ),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            child: Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ),
+        ),
+      ],
+      modeSegment: ModeSegment<FretboardInputMode>(
+        current: state.inputMode,
+        onSelect: notifier.setInputMode,
+        options: const [
+          (FretboardInputMode.free, Icons.touch_app_rounded, 'Free'),
+          (FretboardInputMode.chord, Icons.library_music_rounded, 'Chord'),
         ],
+      ),
+      board: const GlassFrame(
+        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child:
+            GuitarFretboard(hideToolbar: true, palette: FretboardPalette.wood),
+      ),
+      boardHeight: fretboardBoardHeight,
+      emptyTitle: 'Tap the fretboard to begin',
+      emptySubtitle: 'Selected notes turn into detected chords and scales here.',
+      detectionKey: const ValueKey('fret-detect'),
+      scaleHasValue: activeScale != null,
+      chordHasValue: activeChord != null || chordCommitted,
+      onScalePanelRequested: () => showWidgetSheet(
+        context: context,
+        title: 'Scale',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SharedScalePicker(binding: fretboardBinding),
+        ),
+      ),
+      onChordPanelRequested: () => showWidgetSheet(
+        context: context,
+        title: 'Chord voicings',
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: ChordVoicingPicker(),
+        ),
       ),
     );
   }
@@ -628,138 +480,61 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
     final activeChord = ref.watch(pianoActiveChordProvider);
     final chordCommitted = ref.watch(pianoChordCommittedProvider);
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: MuzicianTheme.gradientColors,
+    return InstrumentScreen(
+      binding: pianoBinding,
+      title: 'Piano',
+      appBarChipLabel: state.selectedNotes.isEmpty
+          ? null
+          : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+      appBarActions: [
+        IconBtn(
+          icon: Icons.help_outline_rounded,
+          onTap: () => showAppInfoPanel(context, initialTab: 1),
+        ),
+        IconBtn(
+          icon: Icons.bookmark_border_rounded,
+          onTap: () => showWidgetSheet(
+            context: context,
+            title: 'Saves',
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: PianoSavePanel(),
+            ),
+          ),
+        ),
+        IconBtn(
+          icon: Icons.tune_rounded,
+          onTap: () => showWidgetSheet(
+            context: context,
+            title: 'Settings',
+            child: _PianoSettingsSheetContent(),
+          ),
+        ),
+      ],
+      board: const GlassFrame(
+        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: PianoKeyboard(hideToolbar: true),
+      ),
+      boardHeight: pianoKeyboardHeight,
+      emptyTitle: 'Tap the keyboard to begin',
+      emptySubtitle: 'Selected notes turn into detected chords and scales here.',
+      detectionKey: const ValueKey('piano-detect'),
+      scaleHasValue: activeScale != null,
+      chordHasValue: activeChord != null || chordCommitted,
+      onScalePanelRequested: () => showWidgetSheet(
+        context: context,
+        title: 'Scale',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SharedScalePicker(binding: pianoBinding),
         ),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            CompactAppBar(
-              title: 'Piano',
-              chipLabel: state.selectedNotes.isEmpty
-                  ? null
-                  : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
-              actions: [
-                IconBtn(
-                  icon: Icons.help_outline_rounded,
-                  onTap: () => showAppInfoPanel(context, initialTab: 1),
-                ),
-                IconBtn(
-                  icon: Icons.bookmark_border_rounded,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Saves',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: PianoSavePanel(),
-                    ),
-                  ),
-                ),
-                IconBtn(
-                  icon: Icons.tune_rounded,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Settings',
-                    child: _PianoSettingsSheetContent(),
-                  ),
-                ),
-              ],
-            ),
-            // Keyboard is pinned to its intrinsic height (pianoKeyboardHeight)
-            // so it never clips a key, and the detection area below takes the
-            // remaining space.
-            SizedBox(
-              height: pianoKeyboardHeight,
-              child: GlassFrame(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: const PianoKeyboard(hideToolbar: true),
-              ),
-            ),
-            // Detection fills the space between keyboard and docked toolbar. No
-            // scroll: content fits. Empty state shows a centered insight hint.
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                reverseDuration: const Duration(milliseconds: 220),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOut,
-                  ),
-                  child: SlideTransition(
-                    position:
-                        Tween<Offset>(
-                          begin: const Offset(0, -0.08),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                          ),
-                        ),
-                    child: child,
-                  ),
-                ),
-                child: state.selectedNotes.isNotEmpty
-                    ? SharedDetectionPanel(
-                        key: const ValueKey('piano-detect'),
-                        binding: pianoBinding,
-                        onChordPanelRequested: () => showWidgetSheet(
-                          context: context,
-                          title: 'Chords',
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: PianoChordPicker(),
-                          ),
-                        ),
-                      )
-                    : const _InsightHint(
-                        key: ValueKey('piano-detect-empty'),
-                        title: 'Tap the keyboard to begin',
-                        subtitle:
-                            'Selected notes turn into detected chords and scales here.',
-                      ),
-              ),
-            ),
-            DockedToolbar(
-              children: [
-                DockTab(
-                  icon: Icons.stacked_line_chart,
-                  label: 'Scale',
-                  color: MuzicianTheme.emerald,
-                  hasValue: activeScale != null,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Scale',
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SharedScalePicker(binding: pianoBinding),
-                    ),
-                  ),
-                ),
-                DockTab(
-                  icon: Icons.library_music_outlined,
-                  label: 'Chord',
-                  color: MuzicianTheme.violet,
-                  hasValue: activeChord != null || chordCommitted,
-                  onTap: () => showWidgetSheet(
-                    context: context,
-                    title: 'Chords',
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: PianoChordPicker(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+      onChordPanelRequested: () => showWidgetSheet(
+        context: context,
+        title: 'Chords',
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: PianoChordPicker(),
         ),
       ),
     );
