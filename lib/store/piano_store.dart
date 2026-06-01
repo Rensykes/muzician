@@ -175,8 +175,5 @@ final pianoBinding = InstrumentBinding(
   activeChord: pianoActiveChordProvider,
   manualEdit: pianoManualEditProvider,
   chordCommitted: pianoChordCommittedProvider,
-  chordQualitySymbols: const [
-    '5', '', 'm', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug',
-    'm7b5', 'add9', 'maj9', '6', 'm6', 'dim7', '7sus4',
-  ],
+  chordQualitySymbols: kInstrumentChordQualitySymbols,
 );
