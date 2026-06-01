@@ -256,9 +256,11 @@ final fretboardHighlightedNotesProvider = Provider<List<String>>(
   (ref) => ref.watch(fretboardProvider.select((s) => s.highlightedNotes)),
 );
 final fretboardExactNotesProvider = Provider<List<ExactSelectionNote>>((ref) {
-  final state = ref.watch(fretboardProvider);
-  final tuning = tunings[state.currentTuning]!;
-  return state.selectedCells
+  final (currentTuning, selectedCells) = ref.watch(
+    fretboardProvider.select((s) => (s.currentTuning, s.selectedCells)),
+  );
+  final tuning = tunings[currentTuning]!;
+  return selectedCells
       .map(
         (cell) => ExactSelectionNote(
           midiNote: tuning.strings[cell.stringIndex].midiNote + cell.fret,
@@ -281,8 +283,5 @@ final fretboardBinding = InstrumentBinding(
   activeChord: activeChordProvider,
   manualEdit: fretboardManualEditProvider,
   chordCommitted: fretboardChordCommittedProvider,
-  chordQualitySymbols: const [
-    '5', '', 'm', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug',
-    'm7b5', 'add9', 'maj9', '6', 'm6', 'dim7', '7sus4',
-  ],
+  chordQualitySymbols: kInstrumentChordQualitySymbols,
 );
