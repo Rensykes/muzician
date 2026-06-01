@@ -10,6 +10,7 @@ import '../../theme/muzician_theme.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
 import '../instrument_shared/instrument_binding.dart';
+import 'piano_chord_diagram.dart';
 
 /// Qualities shown in the piano chord picker UI (subset of [chordIntervals]).
 const _pianoQualities = [
@@ -31,7 +32,6 @@ const _pianoQualities = [
   ('dim7', 'dim7'),
   ('7sus4', '7sus4'),
 ];
-
 
 List<int> _buildVoicingMidis(
   List<String> notes,
@@ -234,16 +234,22 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
               ),
             ),
             SizedBox(
-              height: 70,
+              height: 116,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: voicings.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
                   final v = voicings[i];
-                  final isSelected = _selectedVoicingIdx == i;
-                  return GestureDetector(
-                    onTap: () {
+                  return PianoChordDiagram(
+                    midis: v.midis,
+                    rootPc: _selectedRoot != null
+                        ? noteToPC[_selectedRoot!]
+                        : null,
+                    label: v.label,
+                    noteLabels: chordNotes,
+                    isSelected: _selectedVoicingIdx == i,
+                    onPress: () {
                       HapticFeedback.mediumImpact();
                       setState(() {
                         _voicingCommitted = true;
@@ -258,49 +264,6 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
                             .reduce(math.min);
                       }
                     },
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 110),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: isSelected
-                            ? MuzicianTheme.violet.withValues(alpha: 0.12)
-                            : Colors.white.withValues(alpha: 0.05),
-                        border: Border.all(
-                          color: isSelected
-                              ? MuzicianTheme.violet.withValues(alpha: 0.45)
-                              : Colors.white.withValues(alpha: 0.14),
-                          width: isSelected ? 1.0 : 0.5,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            v.label,
-                            style: TextStyle(
-                              color: isSelected
-                                  ? MuzicianTheme.violet
-                                  : const Color(0xFFE2E8F0),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            chordNotes.join(' '),
-                            style: const TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   );
                 },
               ),
