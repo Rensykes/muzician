@@ -223,7 +223,7 @@ final pendingScaleProvider = StateProvider<({String root, String scaleName})?>(
   (_) => null,
 );
 
-/// Currently committed scale selection (published by [ScalePicker]).
+/// Currently committed scale selection (published by [SharedScalePicker]).
 /// Cleared when the user clears the picker. Read by the V2 dock to show the
 /// active scale name (e.g. "C major") instead of a generic "Scale" label.
 final activeScaleProvider = StateProvider<({String root, String scaleName})?>(
