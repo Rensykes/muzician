@@ -21,7 +21,7 @@ abstract final class MuzicianTheme {
   // ── Text ────────────────────────────────────────────────────────────────
   static const Color textPrimary = Color(0xFFF1F5F9);
   static const Color textSecondary = Color(0xFF94A3B8);
-  static const Color textMuted = Color(0xFF475569);
+  static const Color textMuted = Color(0xFF8B9DC3);
   static const Color textDim = Color(0xFF334155);
 
   // ── Accent Colors ───────────────────────────────────────────────────────

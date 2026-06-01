@@ -76,6 +76,7 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
               key: const ValueKey(true),
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header
@@ -118,7 +119,7 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   // Selected notes chips
                   Row(
                     children: [
@@ -186,7 +187,7 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
                       }).toList(),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   // Results
                   if (state.selectedNotes.length < 2)
                     const Text(
@@ -270,7 +271,7 @@ class _NoteDetectionPanelState extends ConsumerState<NoteDetectionPanel> {
                       ),
                     ],
                     if (scaleResults.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           const Text(

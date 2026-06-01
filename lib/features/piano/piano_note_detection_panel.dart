@@ -71,6 +71,7 @@ class _PianoNoteDetectionPanelState
               key: const ValueKey(true),
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -112,7 +113,7 @@ class _PianoNoteDetectionPanelState
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   // Notes chips
                   Row(
                     children: [
@@ -179,7 +180,7 @@ class _PianoNoteDetectionPanelState
                       }).toList(),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   if (state.selectedNotes.length < 2)
                     const Text(
                       'Tap at least 2 notes to detect.',
@@ -271,7 +272,7 @@ class _PianoNoteDetectionPanelState
                       ),
                     ],
                     if (scaleResults.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           const Text(

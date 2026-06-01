@@ -18,6 +18,13 @@ const double _blackKeyW = 26;
 const double _whiteKeyH = 210;
 const double _blackKeyH = 130;
 
+/// Height the keyboard needs to render without clipping a key: the tallest
+/// (white) key plus the horizontal scroll view's vertical padding (12), the
+/// glass-frame padding (8) and margin (8) the host wraps it in, plus a small
+/// safety buffer. Pin the keyboard to this so no key clips and the detection
+/// area below takes the remaining space.
+const double pianoKeyboardHeight = _whiteKeyH + 12 + 8 + 8 + 6;
+
 /// Returns the horizontal scroll offset that places [midi] near the left edge.
 double _scrollOffsetForMidi(int midi, PianoRangeName range) {
   final startMidi = pianoRanges[range]!.startMidi;
