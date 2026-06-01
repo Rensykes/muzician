@@ -44,8 +44,10 @@ class SongAudioPickerSheet extends ConsumerWidget {
             const SizedBox(height: 16),
             if (recordSupported)
               ListTile(
-                leading:
-                    const Icon(Icons.mic, color: MuzicianTheme.textPrimary),
+                leading: const Icon(
+                  Icons.mic,
+                  color: MuzicianTheme.textPrimary,
+                ),
                 title: const Text(
                   'Record audio',
                   style: TextStyle(color: MuzicianTheme.textPrimary),

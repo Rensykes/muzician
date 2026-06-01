@@ -80,14 +80,21 @@ class InstrumentScreen extends ConsumerWidget {
                 duration: const Duration(milliseconds: 320),
                 reverseDuration: const Duration(milliseconds: 220),
                 transitionBuilder: (child, animation) => FadeTransition(
-                  opacity:
-                      CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOut,
+                  ),
                   child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, -0.08),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                        parent: animation, curve: Curves.easeOutCubic)),
+                    position:
+                        Tween<Offset>(
+                          begin: const Offset(0, -0.08),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
                     child: child,
                   ),
                 ),

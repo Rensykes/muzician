@@ -44,10 +44,7 @@ void main() {
 
     // Drag horizontally over a track lane to trigger the pan-to-scroll path
     // that reads hScroll.offset / position / jumpTo.
-    await tester.drag(
-      find.byType(SongArrangerTimeline),
-      const Offset(-200, 0),
-    );
+    await tester.drag(find.byType(SongArrangerTimeline), const Offset(-200, 0));
     await tester.pump();
 
     // No exception thrown => controller no longer shared across scroll views.

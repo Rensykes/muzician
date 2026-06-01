@@ -9,8 +9,23 @@ import '../../models/harmonic_analysis.dart';
 /// The chord qualities both the Fretboard and Piano chord pickers offer.
 /// Shared so the two bindings stay in lock-step.
 const kInstrumentChordQualitySymbols = <String>[
-  '5', '', 'm', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug',
-  'm7b5', 'add9', 'maj9', '6', 'm6', 'dim7', '7sus4',
+  '5',
+  '',
+  'm',
+  '7',
+  'maj7',
+  'm7',
+  'sus2',
+  'sus4',
+  'dim',
+  'aug',
+  'm7b5',
+  'add9',
+  'maj9',
+  '6',
+  'm6',
+  'dim7',
+  '7sus4',
 ];
 
 /// Minimal mutation surface the shared scale picker needs. Satisfied by every
@@ -82,8 +97,8 @@ class InstrumentBinding extends ScalePickerBinding {
     required this.manualEdit,
     required this.chordCommitted,
     required this.chordQualitySymbols,
-  })  : selectionActions = actions,
-        super(actions: actions);
+  }) : selectionActions = actions,
+       super(actions: actions);
 
   /// Same callback as [actions] but typed to the wider [SelectionActions].
   /// Prefer this over [ScalePickerBinding.actions] when holding an

@@ -48,6 +48,7 @@ class HumSensitivityTuning {
         HumSensitivity.forgiving => _forgiving,
       };
 }
+
 const _noteNames = [
   'C',
   'C#',
@@ -94,8 +95,10 @@ double? estimateDominantFrequency(Uint8List bytes, {required int sampleRate}) {
   for (var i = 0; i < samples.length; i++) {
     samples[i] = data.getInt16(i * 2, Endian.little) / 32768.0;
   }
-  return estimateDominantFrequencyFromSamples(samples, sampleRate: sampleRate)
-      ?.frequencyHz;
+  return estimateDominantFrequencyFromSamples(
+    samples,
+    sampleRate: sampleRate,
+  )?.frequencyHz;
 }
 
 class PitchEstimate {
@@ -165,7 +168,6 @@ PitchEstimate? estimateDominantFrequencyFromSamples(
   return PitchEstimate(frequencyHz: frequency, confidence: confidence);
 }
 
-
 List<DetectedMonoNote> segmentStableNotes(
   List<PitchFrame> frames, {
   HumSensitivity sensitivity = HumSensitivity.strict,
@@ -196,7 +198,9 @@ List<DetectedMonoNote> segmentStableNotes(
         startMs: start,
         endMs: start + duration,
         midiNote: midi,
-        confidence: confidenceCount == 0 ? 0 : confidenceTotal / confidenceCount,
+        confidence: confidenceCount == 0
+            ? 0
+            : confidenceTotal / confidenceCount,
       ),
     );
   }

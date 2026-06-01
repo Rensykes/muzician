@@ -46,18 +46,19 @@ Future<void> importAudioFile(
       sourceLabel: file.name,
       explicitDurationMs: null,
     );
-    ref.read(songProjectProvider.notifier).addAudioClip(
+    ref
+        .read(songProjectProvider.notifier)
+        .addAudioClip(
           trackId: trackId,
           startTick: startTick,
           asset: asset,
-          clipName:
-              file.name.replaceAll(RegExp(r'\.(wav|mp3|m4a)$'), ''),
+          clipName: file.name.replaceAll(RegExp(r'\.(wav|mp3|m4a)$'), ''),
         );
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Import failed: $e')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
   }
 }
 
@@ -73,15 +74,11 @@ Future<void> openAudioRecorder(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => SongAudioRecorderSheet(
-      trackId: trackId,
-      startTick: startTick,
-    ),
+    builder: (_) =>
+        SongAudioRecorderSheet(trackId: trackId, startTick: startTick),
   );
   if (asset == null) return;
-  ref.read(songProjectProvider.notifier).addAudioClip(
-        trackId: trackId,
-        startTick: startTick,
-        asset: asset,
-      );
+  ref
+      .read(songProjectProvider.notifier)
+      .addAudioClip(trackId: trackId, startTick: startTick, asset: asset);
 }

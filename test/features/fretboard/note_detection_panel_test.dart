@@ -46,9 +46,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          home: Scaffold(
-            body: SharedDetectionPanel(binding: fretboardBinding),
-          ),
+          home: Scaffold(body: SharedDetectionPanel(binding: fretboardBinding)),
         ),
       ),
     );

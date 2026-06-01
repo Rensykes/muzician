@@ -13,7 +13,10 @@ void main() {
       events = [];
       final c = ProviderContainer(
         overrides: [
-          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, volume) async {
+          drumPatternPlaybackSinkProvider.overrideWithValue((
+            lanes,
+            volume,
+          ) async {
             events.add((lanes: lanes, volume: volume));
           }),
         ],
@@ -23,14 +26,14 @@ void main() {
     }
 
     DrumPattern pattern() => const DrumPattern(
-          id: 'dp1',
-          name: 'Beat',
-          lengthTicks: 4,
-          lanes: [
-            DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
-            DrumLaneSequence(laneId: DrumLaneId.snare, activeTicks: [2]),
-          ],
-        );
+      id: 'dp1',
+      name: 'Beat',
+      lengthTicks: 4,
+      lanes: [
+        DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
+        DrumLaneSequence(laneId: DrumLaneId.snare, activeTicks: [2]),
+      ],
+    );
 
     test('starts idle with no current tick', () {
       final c = makeContainer();

@@ -10,7 +10,9 @@ const _majorLabel = 'Major';
 
 Future<void> _pump(WidgetTester tester, Widget child) async {
   await tester.pumpWidget(
-    ProviderScope(child: MaterialApp(home: Scaffold(body: child))),
+    ProviderScope(
+      child: MaterialApp(home: Scaffold(body: child)),
+    ),
   );
   await tester.pumpAndSettle();
 }
@@ -24,7 +26,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(_majorLabel).first);
     await tester.pumpAndSettle();
-    expect(find.textContaining('major'), findsWidgets);
+    expect(find.text('C major'), findsOneWidget);
     expect(find.text('✕'), findsOneWidget);
   });
 
@@ -36,7 +38,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(_majorLabel).first);
     await tester.pumpAndSettle();
-    expect(find.textContaining('major'), findsWidgets);
+    expect(find.text('C major'), findsOneWidget);
     expect(find.text('✕'), findsOneWidget);
   });
 }

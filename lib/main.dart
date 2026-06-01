@@ -353,12 +353,15 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       ),
       board: const GlassFrame(
         padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        child:
-            GuitarFretboard(hideToolbar: true, palette: FretboardPalette.wood),
+        child: GuitarFretboard(
+          hideToolbar: true,
+          palette: FretboardPalette.wood,
+        ),
       ),
       boardHeight: fretboardBoardHeight,
       emptyTitle: 'Tap the fretboard to begin',
-      emptySubtitle: 'Selected notes turn into detected chords and scales here.',
+      emptySubtitle:
+          'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('fret-detect'),
       scaleHasValue: activeScale != null,
       chordHasValue: activeChord != null || chordCommitted,
@@ -517,7 +520,8 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
       ),
       boardHeight: pianoKeyboardHeight,
       emptyTitle: 'Tap the keyboard to begin',
-      emptySubtitle: 'Selected notes turn into detected chords and scales here.',
+      emptySubtitle:
+          'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('piano-detect'),
       scaleHasValue: activeScale != null,
       chordHasValue: activeChord != null || chordCommitted,

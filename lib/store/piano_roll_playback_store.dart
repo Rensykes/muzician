@@ -187,5 +187,5 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
 
 final pianoRollPlaybackProvider =
     NotifierProvider<PianoRollPlaybackNotifier, PianoRollPlaybackState>(
-  PianoRollPlaybackNotifier.new,
-);
+      PianoRollPlaybackNotifier.new,
+    );

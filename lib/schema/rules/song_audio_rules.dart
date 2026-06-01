@@ -16,8 +16,7 @@ int _ticksPerBeat(TimeSignature ts) => ts.beatUnit == 8 ? 2 : 4;
 int audioClipLengthTicks(AudioAsset asset, SongProjectConfig config) {
   final beatsPerSecond = config.tempo / 60.0;
   final ticksPerBeat = _ticksPerBeat(config.timeSignature);
-  final ticks =
-      (asset.durationMs / 1000.0) * beatsPerSecond * ticksPerBeat;
+  final ticks = (asset.durationMs / 1000.0) * beatsPerSecond * ticksPerBeat;
   return math.max(1, ticks.round());
 }
 
@@ -60,8 +59,7 @@ List<ScheduledAudioClip> schedulableAudioClips(SongProject project) {
   final hasSolo = project.tracks.any((t) => t.isSolo);
   final audible = <String>{
     for (final t in project.tracks)
-      if (t.type == SongTrackType.audio &&
-          (hasSolo ? t.isSolo : !t.isMuted))
+      if (t.type == SongTrackType.audio && (hasSolo ? t.isSolo : !t.isMuted))
         t.id,
   };
   final patternById = {for (final p in project.audioPatterns) p.id: p};
