@@ -80,9 +80,6 @@ class InstrumentBinding extends ScalePickerBinding {
   final StateProvider<int> manualEdit;
   final StateProvider<bool> chordCommitted;
 
-  /// Chord qualities this instrument's chord picker offers.
-  final List<String> chordQualitySymbols;
-
   const InstrumentBinding({
     required super.selectedPitchClasses,
     required super.highlightedNotes,
@@ -96,7 +93,6 @@ class InstrumentBinding extends ScalePickerBinding {
     required this.activeChord,
     required this.manualEdit,
     required this.chordCommitted,
-    required this.chordQualitySymbols,
   }) : selectionActions = actions,
        super(actions: actions);
 

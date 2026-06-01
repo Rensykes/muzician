@@ -9,6 +9,7 @@ import '../../store/piano_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
+import '../instrument_shared/instrument_binding.dart';
 
 /// Qualities shown in the piano chord picker UI (subset of [chordIntervals]).
 const _pianoQualities = [
@@ -31,26 +32,6 @@ const _pianoQualities = [
   ('7sus4', '7sus4'),
 ];
 
-/// Symbols for the chord types the piano picker supports.
-const _pianoQualitySymbols = [
-  '5',
-  '',
-  'm',
-  '7',
-  'maj7',
-  'm7',
-  'sus2',
-  'sus4',
-  'dim',
-  'aug',
-  'm7b5',
-  'add9',
-  'maj9',
-  '6',
-  'm6',
-  'dim7',
-  '7sus4',
-];
 
 List<int> _buildVoicingMidis(
   List<String> notes,
@@ -80,7 +61,7 @@ List<int> _buildVoicingMidis(
 /// [notes], or null when no chord matches or notes has fewer than 2 members.
 ({String root, String quality})? _detectFirstChordForPiano(
   List<String> notes,
-) => detectFirstChord(notes, qualitySymbols: _pianoQualitySymbols);
+) => detectFirstChord(notes, qualitySymbols: kInstrumentChordQualitySymbols);
 
 class PianoChordPicker extends ConsumerStatefulWidget {
   const PianoChordPicker({super.key});
@@ -286,11 +267,11 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         color: isSelected
-                            ? MuzicianTheme.emerald.withValues(alpha: 0.12)
+                            ? MuzicianTheme.violet.withValues(alpha: 0.12)
                             : Colors.white.withValues(alpha: 0.05),
                         border: Border.all(
                           color: isSelected
-                              ? MuzicianTheme.emerald.withValues(alpha: 0.45)
+                              ? MuzicianTheme.violet.withValues(alpha: 0.45)
                               : Colors.white.withValues(alpha: 0.14),
                           width: isSelected ? 1.0 : 0.5,
                         ),
@@ -303,7 +284,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
                             v.label,
                             style: TextStyle(
                               color: isSelected
-                                  ? MuzicianTheme.emerald
+                                  ? MuzicianTheme.violet
                                   : const Color(0xFFE2E8F0),
                               fontSize: 12,
                               fontWeight: FontWeight.w700,

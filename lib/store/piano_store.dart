@@ -177,5 +177,4 @@ final pianoBinding = InstrumentBinding(
   activeChord: pianoActiveChordProvider,
   manualEdit: pianoManualEditProvider,
   chordCommitted: pianoChordCommittedProvider,
-  chordQualitySymbols: kInstrumentChordQualitySymbols,
 );
