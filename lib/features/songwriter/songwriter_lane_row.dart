@@ -23,20 +23,30 @@ int _nextFreeBar(SongLane lane, int lengthBars) {
 }
 
 class SongwriterLaneRow extends ConsumerWidget {
-  const SongwriterLaneRow(
-      {super.key, required this.sectionId, required this.laneId});
+  const SongwriterLaneRow({
+    super.key,
+    required this.sectionId,
+    required this.laneId,
+  });
   final String sectionId;
   final String laneId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(songwriterProvider.select((p) {
-      final s = p.sections.firstWhere((s) => s.id == sectionId,
-          orElse: () => const SongSection(id: '', lengthBars: 0, order: 0));
-      final l = s.lanes.firstWhere((l) => l.id == laneId,
-          orElse: () => const SongLane(id: '', kind: SongLaneKind.save, order: 0));
-      return (lengthBars: s.lengthBars, lane: l);
-    }));
+    final data = ref.watch(
+      songwriterProvider.select((p) {
+        final s = p.sections.firstWhere(
+          (s) => s.id == sectionId,
+          orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
+        );
+        final l = s.lanes.firstWhere(
+          (l) => l.id == laneId,
+          orElse: () =>
+              const SongLane(id: '', kind: SongLaneKind.save, order: 0),
+        );
+        return (lengthBars: s.lengthBars, lane: l);
+      }),
+    );
     final lane = data.lane;
     final lengthBars = data.lengthBars < 1 ? 1 : data.lengthBars;
     if (lane.id.isEmpty) return const SizedBox.shrink();
@@ -47,8 +57,10 @@ class SongwriterLaneRow extends ConsumerWidget {
         children: [
           SizedBox(
             width: 72,
-            child: Text(lane.label ??
-                (lane.kind == SongLaneKind.harmony ? 'Harmony' : 'Lane')),
+            child: Text(
+              lane.label ??
+                  (lane.kind == SongLaneKind.harmony ? 'Harmony' : 'Lane'),
+            ),
           ),
           Expanded(
             child: SizedBox(
@@ -90,8 +102,13 @@ class SongwriterLaneRow extends ConsumerWidget {
                   keyScaleName: config.keyScaleName,
                 );
                 if (block != null) {
-                  ref.read(songwriterProvider.notifier).addHarmonyBlock(
-                      sectionId: sectionId, laneId: laneId, block: block);
+                  ref
+                      .read(songwriterProvider.notifier)
+                      .addHarmonyBlock(
+                        sectionId: sectionId,
+                        laneId: laneId,
+                        block: block,
+                      );
                 }
               } else if (lane.kind == SongLaneKind.save) {
                 final startBar = _nextFreeBar(lane, lengthBars);
@@ -104,7 +121,9 @@ class SongwriterLaneRow extends ConsumerWidget {
                   ),
                 );
                 if (picked != null) {
-                  ref.read(songwriterProvider.notifier).addSaveBlock(
+                  ref
+                      .read(songwriterProvider.notifier)
+                      .addSaveBlock(
                         sectionId: sectionId,
                         laneId: laneId,
                         saveId: picked.id,

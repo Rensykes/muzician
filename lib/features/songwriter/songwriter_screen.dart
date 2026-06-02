@@ -13,18 +13,17 @@ class SongwriterScreen extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const SizedBox(
-        height: 480,
-        child: SongwriterSavePanel(),
-      ),
+      builder: (_) => const SizedBox(height: 480, child: SongwriterSavePanel()),
     );
   }
 
   void _openStructure(BuildContext context) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => const SongwriterStructureEditor(),
-      fullscreenDialog: true,
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const SongwriterStructureEditor(),
+        fullscreenDialog: true,
+      ),
+    );
   }
 
   @override

@@ -92,19 +92,26 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   void renameSection(String sectionId, String? label) => _replaceSection(
-        sectionId,
-        (s) => label == null ? s.copyWith(clearLabel: true) : s.copyWith(label: label),
-      );
+    sectionId,
+    (s) =>
+        label == null ? s.copyWith(clearLabel: true) : s.copyWith(label: label),
+  );
 
   void setSectionLength(String sectionId, int lengthBars) => _replaceSection(
-      sectionId, (s) => s.copyWith(lengthBars: lengthBars < 1 ? 1 : lengthBars));
+    sectionId,
+    (s) => s.copyWith(lengthBars: lengthBars < 1 ? 1 : lengthBars),
+  );
 
   void setSectionRepeat(String sectionId, int repeat) => _replaceSection(
-      sectionId, (s) => s.copyWith(repeat: repeat < 1 ? 1 : repeat));
+    sectionId,
+    (s) => s.copyWith(repeat: repeat < 1 ? 1 : repeat),
+  );
 
-  void removeSection(String sectionId) => _set(state.copyWith(
-        sections: state.sections.where((s) => s.id != sectionId).toList(),
-      ));
+  void removeSection(String sectionId) => _set(
+    state.copyWith(
+      sections: state.sections.where((s) => s.id != sectionId).toList(),
+    ),
+  );
 
   void reorderSections(int oldIndex, int newIndex) {
     final list = [...state.sections];
@@ -113,9 +120,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     if (target > oldIndex) target -= 1;
     final moved = list.removeAt(oldIndex);
     list.insert(target.clamp(0, list.length), moved);
-    _set(state.copyWith(
-      sections: [for (var i = 0; i < list.length; i++) list[i].copyWith(order: i)],
-    ));
+    _set(
+      state.copyWith(
+        sections: [
+          for (var i = 0; i < list.length; i++) list[i].copyWith(order: i),
+        ],
+      ),
+    );
   }
 
   void reorderLanes(String sectionId, int oldIndex, int newIndex) {
@@ -126,9 +137,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (target > oldIndex) target -= 1;
       final moved = list.removeAt(oldIndex);
       list.insert(target.clamp(0, list.length), moved);
-      return s.copyWith(lanes: [
-        for (var i = 0; i < list.length; i++) list[i].copyWith(order: i),
-      ]);
+      return s.copyWith(
+        lanes: [
+          for (var i = 0; i < list.length; i++) list[i].copyWith(order: i),
+        ],
+      );
     });
   }
 
@@ -157,16 +170,21 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
-  void setLaneRepeat(
-          {required String sectionId,
-          required String laneId,
-          required int repeat}) =>
-      _replaceLane(sectionId, laneId,
-          (l) => l.copyWith(repeat: repeat < 1 ? 1 : repeat));
+  void setLaneRepeat({
+    required String sectionId,
+    required String laneId,
+    required int repeat,
+  }) => _replaceLane(
+    sectionId,
+    laneId,
+    (l) => l.copyWith(repeat: repeat < 1 ? 1 : repeat),
+  );
 
   void removeLane({required String sectionId, required String laneId}) =>
-      _replaceSection(sectionId,
-          (s) => s.copyWith(lanes: s.lanes.where((l) => l.id != laneId).toList()));
+      _replaceSection(
+        sectionId,
+        (s) => s.copyWith(lanes: s.lanes.where((l) => l.id != laneId).toList()),
+      );
 
   // ── blocks ──
   void addSaveBlock({

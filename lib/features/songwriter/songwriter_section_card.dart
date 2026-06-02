@@ -10,10 +10,14 @@ class SongwriterSectionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final section = ref.watch(songwriterProvider.select(
-      (p) => p.sections.firstWhere((s) => s.id == sectionId,
-          orElse: () => const SongSection(id: '', lengthBars: 0, order: 0)),
-    ));
+    final section = ref.watch(
+      songwriterProvider.select(
+        (p) => p.sections.firstWhere(
+          (s) => s.id == sectionId,
+          orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
+        ),
+      ),
+    );
     if (section.id.isEmpty) return const SizedBox.shrink();
     final notifier = ref.read(songwriterProvider.notifier);
 
@@ -39,13 +43,15 @@ class SongwriterSectionCard extends ConsumerWidget {
                   ),
                 ),
                 _Stepper(
-                    label: 'bars',
-                    value: section.lengthBars,
-                    onChanged: (v) => notifier.setSectionLength(sectionId, v)),
+                  label: 'bars',
+                  value: section.lengthBars,
+                  onChanged: (v) => notifier.setSectionLength(sectionId, v),
+                ),
                 _Stepper(
-                    label: '×',
-                    value: section.repeat,
-                    onChanged: (v) => notifier.setSectionRepeat(sectionId, v)),
+                  label: '×',
+                  value: section.repeat,
+                  onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
+                ),
                 IconButton(
                   key: Key('removeSection_$sectionId'),
                   icon: const Icon(Icons.close, size: 18),
@@ -60,14 +66,24 @@ class SongwriterSectionCard extends ConsumerWidget {
               child: PopupMenuButton<SongLaneKind>(
                 key: Key('addLane_$sectionId'),
                 onSelected: (kind) => notifier.addLane(
-                    sectionId: sectionId,
-                    kind: kind,
-                    label: kind == SongLaneKind.harmony ? 'Harmony' : null),
+                  sectionId: sectionId,
+                  kind: kind,
+                  label: kind == SongLaneKind.harmony ? 'Harmony' : null,
+                ),
                 itemBuilder: (_) => const [
-                  PopupMenuItem(value: SongLaneKind.harmony, child: Text('+ Harmony lane')),
-                  PopupMenuItem(value: SongLaneKind.save, child: Text('+ Save lane')),
+                  PopupMenuItem(
+                    value: SongLaneKind.harmony,
+                    child: Text('+ Harmony lane'),
+                  ),
+                  PopupMenuItem(
+                    value: SongLaneKind.save,
+                    child: Text('+ Save lane'),
+                  ),
                 ],
-                child: const Padding(padding: EdgeInsets.all(8), child: Text('+ lane')),
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text('+ lane'),
+                ),
               ),
             ),
           ],
@@ -78,7 +94,11 @@ class SongwriterSectionCard extends ConsumerWidget {
 }
 
 class _Stepper extends StatelessWidget {
-  const _Stepper({required this.label, required this.value, required this.onChanged});
+  const _Stepper({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
@@ -87,9 +107,15 @@ class _Stepper extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(icon: const Icon(Icons.remove, size: 16), onPressed: () => onChanged(value - 1)),
+        IconButton(
+          icon: const Icon(Icons.remove, size: 16),
+          onPressed: () => onChanged(value - 1),
+        ),
         Text('$value$label'),
-        IconButton(icon: const Icon(Icons.add, size: 16), onPressed: () => onChanged(value + 1)),
+        IconButton(
+          icon: const Icon(Icons.add, size: 16),
+          onPressed: () => onChanged(value + 1),
+        ),
       ],
     );
   }
