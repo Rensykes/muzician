@@ -12,7 +12,13 @@ import '../schema/rules/songwriter_rules.dart';
 const _sessionKey = '@muzician/songwriter_session/v1';
 
 SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
-  config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+  config: SongwriterConfig(
+    tempo: 120,
+    beatsPerBar: 4,
+    beatUnit: 4,
+    keyRoot: 0,
+    keyScaleName: 'major',
+  ),
   sections: [],
 );
 
