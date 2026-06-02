@@ -5,7 +5,6 @@ import 'save_system.dart';
 
 enum SongLaneKind { harmony, save }
 
-// ignore: unused_element — used by SongLane in B1.3
 SongLaneKind _laneKindFromName(String? raw) {
   for (final v in SongLaneKind.values) {
     if (v.name == raw) return v;
@@ -147,5 +146,116 @@ class SongwriterConfig {
         beatUnit: json['beatUnit'] as int? ?? 4,
         keyRoot: json['keyRoot'] as int?,
         keyScaleName: json['keyScaleName'] as String?,
+      );
+}
+
+class SongLane {
+  final String id;
+  final SongLaneKind kind;
+  final String? label;
+  final int order;
+  final int repeat; // tiles this lane's block pattern N times
+  final List<SongBlock> blocks;
+
+  const SongLane({
+    required this.id,
+    required this.kind,
+    required this.order,
+    this.label,
+    this.repeat = 1,
+    this.blocks = const [],
+  });
+
+  SongLane copyWith({
+    SongLaneKind? kind,
+    String? label,
+    int? order,
+    int? repeat,
+    List<SongBlock>? blocks,
+  }) =>
+      SongLane(
+        id: id,
+        kind: kind ?? this.kind,
+        label: label ?? this.label,
+        order: order ?? this.order,
+        repeat: repeat ?? this.repeat,
+        blocks: blocks ?? this.blocks,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind.name,
+        'label': label,
+        'order': order,
+        'repeat': repeat,
+        'blocks': blocks.map((b) => b.toJson()).toList(),
+      };
+
+  factory SongLane.fromJson(Map<String, dynamic> json) => SongLane(
+        id: json['id'] as String,
+        kind: _laneKindFromName(json['kind'] as String?),
+        label: json['label'] as String?,
+        order: json['order'] as int? ?? 0,
+        repeat: json['repeat'] as int? ?? 1,
+        blocks: (json['blocks'] as List?)
+                ?.map((b) => SongBlock.fromJson(b as Map<String, dynamic>))
+                .toList() ??
+            const [],
+      );
+}
+
+class SongSection {
+  final String id;
+  final String? label; // optional free text
+  final int lengthBars;
+  final int order;
+  final int repeat; // loops the whole section N times
+  final List<SongLane> lanes;
+
+  const SongSection({
+    required this.id,
+    required this.lengthBars,
+    required this.order,
+    this.label,
+    this.repeat = 1,
+    this.lanes = const [],
+  });
+
+  SongSection copyWith({
+    String? label,
+    int? lengthBars,
+    int? order,
+    int? repeat,
+    List<SongLane>? lanes,
+    bool clearLabel = false,
+  }) =>
+      SongSection(
+        id: id,
+        label: clearLabel ? null : (label ?? this.label),
+        lengthBars: lengthBars ?? this.lengthBars,
+        order: order ?? this.order,
+        repeat: repeat ?? this.repeat,
+        lanes: lanes ?? this.lanes,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'lengthBars': lengthBars,
+        'order': order,
+        'repeat': repeat,
+        'lanes': lanes.map((l) => l.toJson()).toList(),
+      };
+
+  factory SongSection.fromJson(Map<String, dynamic> json) => SongSection(
+        id: json['id'] as String,
+        label: json['label'] as String?,
+        lengthBars: json['lengthBars'] as int? ?? 4,
+        order: json['order'] as int? ?? 0,
+        repeat: json['repeat'] as int? ?? 1,
+        lanes: (json['lanes'] as List?)
+                ?.map((l) => SongLane.fromJson(l as Map<String, dynamic>))
+                .toList() ??
+            const [],
       );
 }
