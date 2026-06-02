@@ -522,8 +522,6 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                     context,
                     subFolders,
                     saves,
-                    activeSession,
-                    notifier,
                     insideFolder,
                   )
                 : _buildList(
@@ -616,10 +614,24 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     BuildContext context,
     List<SaveFolder> subFolders,
     List<SaveEntry> saves,
-    ActiveSession? activeSession,
-    SaveSystemNotifier notifier,
     bool insideFolder,
   ) {
+    if (subFolders.isEmpty && saves.isEmpty) {
+      if (!insideFolder) {
+        return _EmptyHint(
+          message: widget.captureSnapshot != null
+              ? 'Create a folder, then navigate into it to save.'
+              : 'No folders yet.',
+        );
+      } else {
+        return _EmptyHint(
+          message: widget.captureSnapshot != null
+              ? 'No saves here. Tap "Save here" to add one.'
+              : 'No saves in this folder.',
+        );
+      }
+    }
+
     final cards = <Widget>[
       ...subFolders.map((folder) => _FolderCard(
             name: folder.name,
