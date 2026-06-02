@@ -8,6 +8,7 @@ import '../utils/note_utils.dart';
 import 'fretboard.dart';
 import 'piano.dart';
 import 'song_project.dart';
+import 'songwriter.dart';
 
 // ─── Musical Context ──────────────────────────────────────────────────────────
 
@@ -51,7 +52,9 @@ class PendingScale {
 
 // ─── Snapshots ────────────────────────────────────────────────────────────────
 
-sealed class InstrumentSnapshot {
+abstract class InstrumentSnapshot {
+  const InstrumentSnapshot();
+
   String get instrument;
   List<String> get selectedNotes;
   PendingChord? get pendingChord;
@@ -62,6 +65,9 @@ sealed class InstrumentSnapshot {
   static InstrumentSnapshot fromJson(Map<String, dynamic> json) {
     final type = json['type'] as String?;
     final instrument = json['instrument'] as String? ?? 'fretboard';
+    if (type == 'songwriter' || instrument == 'songwriter') {
+      return SongwriterProjectSnapshot.fromJson(json);
+    }
     if (type == 'piano_roll' || instrument == 'piano_roll') {
       return PianoRollSnapshot.fromJson(json);
     }
