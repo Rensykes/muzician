@@ -93,3 +93,45 @@ SongBlock makeHarmonyBlock({
       chordNotes: chordNotes,
       romanNumeral: romanNumeral,
     );
+
+// ─── Timeline Flattening ──────────────────────────────────────────────────────
+
+/// Total bar length of the whole project after expanding section repeats.
+int flattenedBarCount(List<SongSection> sections) {
+  var total = 0;
+  for (final s in sections) {
+    total += s.lengthBars * s.repeat;
+  }
+  return total;
+}
+
+/// Natural pattern length of a lane = the max block end bar (0 if empty).
+int laneNaturalLength(SongLane lane) {
+  var max = 0;
+  for (final b in lane.blocks) {
+    if (b.endBar > max) max = b.endBar;
+  }
+  return max;
+}
+
+/// Expands a lane's blocks into concrete placements, tiling the block pattern
+/// [lane.repeat] times from bar 0, clipped to [sectionLengthBars]. A placement
+/// offsets each block's startBar by the tile origin. A tile whose origin is at
+/// or beyond the section length is not emitted; within a tile, a block whose
+/// (offset) startBar is at or beyond the section length is skipped. Blocks that
+/// start inside the section but span past its end are kept.
+List<SongBlock> tileLaneBlocks(SongLane lane, {required int sectionLengthBars}) {
+  final pattern = laneNaturalLength(lane);
+  if (pattern <= 0) return const [];
+  final out = <SongBlock>[];
+  for (var tile = 0; tile < lane.repeat; tile++) {
+    final origin = tile * pattern;
+    if (origin >= sectionLengthBars) break;
+    for (final b in lane.blocks) {
+      final start = origin + b.startBar;
+      if (start >= sectionLengthBars) continue;
+      out.add(b.copyWith(startBar: start));
+    }
+  }
+  return out;
+}
