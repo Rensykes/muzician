@@ -6,6 +6,7 @@ import '../../store/songwriter_store.dart';
 import '../../ui/save_browser_panel.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_block_tile.dart';
+import 'songwriter_grid.dart';
 
 int _nextFreeBar(SongLane lane, int lengthBars) {
   // first bar not covered by an existing block, capped at lengthBars-1
@@ -70,6 +71,16 @@ class SongwriterLaneRow extends ConsumerWidget {
                   final barWidth = constraints.maxWidth / lengthBars;
                   return Stack(
                     children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: BarGridPainter(
+                            lengthBars: lengthBars,
+                            color: Theme.of(
+                              context,
+                            ).dividerColor.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ),
                       for (final block in lane.blocks)
                         Positioned(
                           left: block.startBar * barWidth,
