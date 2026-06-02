@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
+import '../../ui/save_browser_panel.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_block_tile.dart';
 
@@ -92,7 +94,24 @@ class SongwriterLaneRow extends ConsumerWidget {
                       sectionId: sectionId, laneId: laneId, block: block);
                 }
               } else if (lane.kind == SongLaneKind.save) {
-                // TODO(B2a.6): open save palette
+                final startBar = _nextFreeBar(lane, lengthBars);
+                final picked = await showModalBottomSheet<SaveEntry>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (sheetCtx) => SaveBrowserPanel(
+                    instrumentFilter: 'fretboard',
+                    onPick: (entry) => Navigator.pop(sheetCtx, entry),
+                  ),
+                );
+                if (picked != null) {
+                  ref.read(songwriterProvider.notifier).addSaveBlock(
+                        sectionId: sectionId,
+                        laneId: laneId,
+                        saveId: picked.id,
+                        startBar: startBar,
+                        spanBars: 2,
+                      );
+                }
               }
             },
           ),
