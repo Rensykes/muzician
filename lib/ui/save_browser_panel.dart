@@ -523,12 +523,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           constraints: const BoxConstraints(maxHeight: 240),
           child: SingleChildScrollView(
             child: gridMode
-                ? _buildGrid(
-                    context,
-                    subFolders,
-                    saves,
-                    insideFolder,
-                  )
+                ? _buildGrid(context, subFolders, saves, insideFolder)
                 : _buildList(
                     context,
                     subFolders,
@@ -605,8 +600,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                 return;
               }
               setState(() {
-                _selectedSaveId =
-                    _selectedSaveId == save.id ? null : save.id;
+                _selectedSaveId = _selectedSaveId == save.id ? null : save.id;
               });
             },
             onRename: () => _handleRenameSave(save),
@@ -645,25 +639,26 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     }
 
     final cards = <Widget>[
-      ...subFolders.map((folder) => _FolderCard(
-            name: folder.name,
-            childCount: getChildFolders(
-              ref.read(saveSystemProvider).folders,
-              folder.id,
-            ).length,
-            onTap: () => setState(() {
-              _currentFolderId = folder.id;
-              _selectedSaveId = null;
-            }),
-            onLongPress: () => _handleRenameFolder(folder),
-          )),
+      ...subFolders.map(
+        (folder) => _FolderCard(
+          name: folder.name,
+          childCount: getChildFolders(
+            ref.read(saveSystemProvider).folders,
+            folder.id,
+          ).length,
+          onTap: () => setState(() {
+            _currentFolderId = folder.id;
+            _selectedSaveId = null;
+          }),
+          onLongPress: () => _handleRenameFolder(folder),
+        ),
+      ),
       ...saves.map((save) {
         final label = saveCardLabel(save.snapshot);
         return _SaveCard(
           name: save.name,
           instrument: save.snapshot.instrument,
-          labelText:
-              label.kind == SaveCardLabelKind.notes ? null : label.text,
+          labelText: label.kind == SaveCardLabelKind.notes ? null : label.text,
           noteChips: label.notes,
           selected: _selectedSaveId == save.id,
           onTap: () {
@@ -1546,10 +1541,12 @@ class _SaveCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(children: [
-              Icon(saveInstrumentIcon(instrument), size: 16),
-              const Spacer(),
-            ]),
+            Row(
+              children: [
+                Icon(saveInstrumentIcon(instrument), size: 16),
+                const Spacer(),
+              ],
+            ),
             const SizedBox(height: 6),
             if (labelText != null)
               Text(
@@ -1632,11 +1629,10 @@ Widget SaveCardForTest({
   required String? labelText,
   required List<String> noteChips,
   required VoidCallback onTap,
-}) =>
-    _SaveCard(
-      name: name,
-      instrument: instrument,
-      labelText: labelText,
-      noteChips: noteChips,
-      onTap: onTap,
-    );
+}) => _SaveCard(
+  name: name,
+  instrument: instrument,
+  labelText: labelText,
+  noteChips: noteChips,
+  onTap: onTap,
+);

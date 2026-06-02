@@ -5,8 +5,8 @@ enum SaveCardLabelKind { chord, scale, notes, highlight }
 
 class SaveCardLabel {
   final SaveCardLabelKind kind;
-  final String? text;          // chord symbol, scale name, or 'Highlight'
-  final List<String> notes;    // populated only for kind == notes
+  final String? text; // chord symbol, scale name, or 'Highlight'
+  final List<String> notes; // populated only for kind == notes
   const SaveCardLabel(this.kind, {this.text, this.notes = const []});
 }
 
@@ -26,7 +26,10 @@ SaveCardLabel saveCardLabel(InstrumentSnapshot snapshot) {
     );
   }
   if (snapshot.selectedNotes.isNotEmpty) {
-    return SaveCardLabel(SaveCardLabelKind.notes, notes: snapshot.selectedNotes);
+    return SaveCardLabel(
+      SaveCardLabelKind.notes,
+      notes: snapshot.selectedNotes,
+    );
   }
   return const SaveCardLabel(SaveCardLabelKind.highlight, text: 'Highlight');
 }
