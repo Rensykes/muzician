@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/save_system.dart';
+import 'save_card_label.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/fretboard_store.dart';
 import '../store/piano_roll_store.dart';
@@ -1370,3 +1371,144 @@ class _NavButton extends StatelessWidget {
     ),
   );
 }
+
+// ─── Grid Card Sub-widgets ────────────────────────────────────────────────────
+
+/// Grid card for a single save. Self-contained so it can be widget-tested
+/// without the full panel; the panel passes resolved label/notes in.
+class _SaveCard extends StatelessWidget {
+  final String name;
+  final String instrument;
+  final String? labelText; // chord symbol / scale / 'Highlight'
+  final List<String> noteChips; // shown when labelText is null
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  const _SaveCard({
+    required this.name,
+    required this.instrument,
+    required this.labelText,
+    required this.noteChips,
+    required this.onTap,
+    this.selected = false,
+    this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? theme.colorScheme.primary : theme.dividerColor,
+            width: selected ? 2 : 1,
+          ),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              Icon(saveInstrumentIcon(instrument), size: 16),
+              const Spacer(),
+            ]),
+            const SizedBox(height: 6),
+            if (labelText != null)
+              Text(
+                labelText!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium,
+              )
+            else
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: noteChips
+                    .take(6)
+                    .map((n) => Text(n, style: theme.textTheme.bodySmall))
+                    .toList(),
+              ),
+            const SizedBox(height: 4),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Folder card — navigates into the folder on tap.
+class _FolderCard extends StatelessWidget {
+  final String name;
+  final int childCount;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  const _FolderCard({
+    required this.name,
+    required this.childCount,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.folder, size: 18),
+            const SizedBox(height: 6),
+            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text('$childCount', style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Test-only re-export so the card can be widget-tested in isolation.
+@visibleForTesting
+// ignore: non_constant_identifier_names
+Widget SaveCardForTest({
+  required String name,
+  required String instrument,
+  required String? labelText,
+  required List<String> noteChips,
+  required VoidCallback onTap,
+}) =>
+    _SaveCard(
+      name: name,
+      instrument: instrument,
+      labelText: labelText,
+      noteChips: noteChips,
+      onTap: onTap,
+    );
