@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/songwriter_store.dart';
+import 'songwriter_header.dart';
 
 class SongwriterScreen extends ConsumerWidget {
   const SongwriterScreen({super.key});
+
+  void _openSaveLoad(BuildContext context) {}
+  void _openStructure(BuildContext context) {}
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -14,6 +18,10 @@ class SongwriterScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            SongwriterHeader(
+              onOpenSaveLoad: () => _openSaveLoad(context),
+              onOpenStructure: () => _openStructure(context),
+            ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(12),
