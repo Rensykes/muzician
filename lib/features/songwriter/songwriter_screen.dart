@@ -2,13 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/songwriter_store.dart';
 import 'songwriter_header.dart';
+import 'songwriter_save_panel.dart';
 import 'songwriter_section_card.dart';
 import 'songwriter_structure_editor.dart';
 
 class SongwriterScreen extends ConsumerWidget {
   const SongwriterScreen({super.key});
 
-  void _openSaveLoad(BuildContext context) {}
+  void _openSaveLoad(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const SizedBox(
+        height: 480,
+        child: SongwriterSavePanel(),
+      ),
+    );
+  }
 
   void _openStructure(BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(
