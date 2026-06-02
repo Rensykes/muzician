@@ -91,6 +91,33 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  void renameSection(String sectionId, String? label) => _replaceSection(
+        sectionId,
+        (s) => label == null ? s.copyWith(clearLabel: true) : s.copyWith(label: label),
+      );
+
+  void setSectionLength(String sectionId, int lengthBars) => _replaceSection(
+      sectionId, (s) => s.copyWith(lengthBars: lengthBars < 1 ? 1 : lengthBars));
+
+  void setSectionRepeat(String sectionId, int repeat) => _replaceSection(
+      sectionId, (s) => s.copyWith(repeat: repeat < 1 ? 1 : repeat));
+
+  void removeSection(String sectionId) => _set(state.copyWith(
+        sections: state.sections.where((s) => s.id != sectionId).toList(),
+      ));
+
+  void reorderSections(int oldIndex, int newIndex) {
+    final list = [...state.sections];
+    if (oldIndex < 0 || oldIndex >= list.length) return;
+    var target = newIndex;
+    if (target > oldIndex) target -= 1;
+    final moved = list.removeAt(oldIndex);
+    list.insert(target.clamp(0, list.length), moved);
+    _set(state.copyWith(
+      sections: [for (var i = 0; i < list.length; i++) list[i].copyWith(order: i)],
+    ));
+  }
+
   // ── lanes ──
   void addLane({
     required String sectionId,
