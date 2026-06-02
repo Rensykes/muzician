@@ -627,12 +627,16 @@ class AppSettings {
   /// Accent click on the downbeat (beat 1), softer click on other beats.
   final bool metronomeEnabled;
 
+  /// When true the save browser renders saves as a grid; false shows a list.
+  final bool saveBrowserGrid;
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
     this.showNoteLabels = true,
     this.humSensitivity = HumSensitivity.balanced,
     this.metronomeEnabled = true,
+    this.saveBrowserGrid = false,
   });
 
   AppSettings copyWith({
@@ -641,12 +645,14 @@ class AppSettings {
     bool? showNoteLabels,
     HumSensitivity? humSensitivity,
     bool? metronomeEnabled,
+    bool? saveBrowserGrid,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
     showNoteLabels: showNoteLabels ?? this.showNoteLabels,
     humSensitivity: humSensitivity ?? this.humSensitivity,
     metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
+    saveBrowserGrid: saveBrowserGrid ?? this.saveBrowserGrid,
   );
 
   Map<String, dynamic> toJson() => {
@@ -655,6 +661,7 @@ class AppSettings {
     'showNoteLabels': showNoteLabels,
     'humSensitivity': humSensitivity.name,
     'metronomeEnabled': metronomeEnabled,
+    'saveBrowserGrid': saveBrowserGrid,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -663,6 +670,7 @@ class AppSettings {
     showNoteLabels: json['showNoteLabels'] as bool? ?? true,
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
     metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,
+    saveBrowserGrid: json['saveBrowserGrid'] as bool? ?? false,
   );
 }
 
