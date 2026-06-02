@@ -235,6 +235,49 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  // ── inserters (for undo of deletes) ──
+  void insertSection(SongSection section, int index) {
+    final list = [...state.sections];
+    final i = index.clamp(0, list.length);
+    list.insert(i, section);
+    _set(
+      state.copyWith(
+        sections: [
+          for (var k = 0; k < list.length; k++) list[k].copyWith(order: k),
+        ],
+      ),
+    );
+  }
+
+  void insertLane({
+    required String sectionId,
+    required SongLane lane,
+    required int index,
+  }) {
+    _replaceSection(sectionId, (s) {
+      final list = [...s.lanes];
+      final i = index.clamp(0, list.length);
+      list.insert(i, lane);
+      return s.copyWith(
+        lanes: [
+          for (var k = 0; k < list.length; k++) list[k].copyWith(order: k),
+        ],
+      );
+    });
+  }
+
+  void insertBlock({
+    required String sectionId,
+    required String laneId,
+    required SongBlock block,
+  }) {
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) => l.copyWith(blocks: [...l.blocks, block]),
+    );
+  }
+
   /// Move/resize a block. Clamps to valid bounds; rejects (no-op) if the new
   /// placement would overlap another block in the same lane.
   void setBlockPlacement({
