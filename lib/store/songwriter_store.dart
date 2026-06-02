@@ -39,9 +39,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
   void _schedulePersist() {
     _debounce?.cancel();
+    final snapshot = state; // capture now, not when the timer fires
     _debounce = Timer(const Duration(milliseconds: 500), () async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_sessionKey, jsonEncode(state.toJson()));
+      await prefs.setString(_sessionKey, jsonEncode(snapshot.toJson()));
     });
   }
 
@@ -51,7 +52,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   Future<void> newProject() async {
-    _set(_emptyProject());
+    _debounce?.cancel();
+    state = _emptyProject();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_sessionKey);
   }
