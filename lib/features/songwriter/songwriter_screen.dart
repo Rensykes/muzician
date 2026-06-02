@@ -43,6 +43,16 @@ class SongwriterScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
+                  if (project.sections.isEmpty)
+                    const Padding(
+                      key: Key('songwriterEmptyHint'),
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'Build a song: add a section, add lanes '
+                        '(harmony + saves), then drop chord and voicing blocks.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
                   for (final section in project.sections)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),

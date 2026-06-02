@@ -31,6 +31,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Songwriter'), findsOneWidget);
+    // Title was dropped; the key chip still renders (key set to A# major).
+    expect(find.textContaining('major'), findsOneWidget);
   });
 }

@@ -25,15 +25,7 @@ class SongwriterHeader extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          const Flexible(
-            child: Text(
-              'Songwriter',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
+          const Spacer(),
           Flexible(
             child: _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
           ),
