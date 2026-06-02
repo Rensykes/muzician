@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/songwriter_store.dart';
 import 'songwriter_header.dart';
+import 'songwriter_section_card.dart';
 
 class SongwriterScreen extends ConsumerWidget {
   const SongwriterScreen({super.key});
@@ -29,8 +30,7 @@ class SongwriterScreen extends ConsumerWidget {
                   for (final section in project.sections)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(section.label ?? 'Section',
-                          key: Key('section_${section.id}')),
+                      child: SongwriterSectionCard(sectionId: section.id),
                     ),
                   Align(
                     alignment: Alignment.centerLeft,
