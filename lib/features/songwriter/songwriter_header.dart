@@ -25,23 +25,36 @@ class SongwriterHeader extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          const Text(
-            'Songwriter',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          const Flexible(
+            child: Text(
+              'Songwriter',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const Spacer(),
-          _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
           const SizedBox(width: 8),
-          _Chip(
-            label: '${config.tempo} BPM',
-            onTap: () => _editTempo(context, ref),
+          Flexible(
+            child: _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: _Chip(
+              label: '${config.tempo} BPM',
+              onTap: () => _editTempo(context, ref),
+            ),
           ),
           IconButton(
             tooltip: 'New project',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             icon: const Icon(Icons.add_box_outlined),
             onPressed: () => _confirmNew(context, notifier),
           ),
           PopupMenuButton<String>(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             onSelected: (v) {
               if (v == 'saveload') onOpenSaveLoad?.call();
               if (v == 'structure') onOpenStructure?.call();
@@ -107,8 +120,12 @@ class _Chip extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) =>
-      ActionChip(label: Text(label), onPressed: onTap);
+  Widget build(BuildContext context) => ActionChip(
+    visualDensity: VisualDensity.compact,
+    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    onPressed: onTap,
+  );
 }
 
 class _TempoSheet extends StatefulWidget {
