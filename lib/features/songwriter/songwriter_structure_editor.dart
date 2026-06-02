@@ -30,11 +30,14 @@ class SongwriterStructureEditor extends ConsumerWidget {
                 for (final s in sections)
                   ListTile(
                     key: ValueKey(s.id),
-                    title: Text(s.label == null || s.label!.isEmpty
-                        ? 'Section'
-                        : s.label!),
+                    title: Text(
+                      s.label == null || s.label!.isEmpty
+                          ? 'Section'
+                          : s.label!,
+                    ),
                     subtitle: Text(
-                        '${s.lengthBars} bars · ${s.repeat}× · ${s.lanes.length} lanes'),
+                      '${s.lengthBars} bars · ${s.repeat}× · ${s.lanes.length} lanes',
+                    ),
                     trailing: IconButton(
                       key: Key('structureRemove_${s.id}'),
                       icon: const Icon(Icons.close),

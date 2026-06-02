@@ -4,7 +4,11 @@ import '../../store/songwriter_store.dart';
 import '../../utils/note_utils.dart';
 
 class SongwriterHeader extends ConsumerWidget {
-  const SongwriterHeader({super.key, this.onOpenSaveLoad, this.onOpenStructure});
+  const SongwriterHeader({
+    super.key,
+    this.onOpenSaveLoad,
+    this.onOpenStructure,
+  });
 
   final VoidCallback? onOpenSaveLoad;
   final VoidCallback? onOpenStructure;
@@ -15,17 +19,23 @@ class SongwriterHeader extends ConsumerWidget {
     final notifier = ref.read(songwriterProvider.notifier);
     final keyLabel = config.keyRoot == null
         ? 'No key'
-        : '${chromaticNotes[config.keyRoot!]} ${config.keyScaleName ?? ''}'.trim();
+        : '${chromaticNotes[config.keyRoot!]} ${config.keyScaleName ?? ''}'
+              .trim();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          const Text('Songwriter',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const Text(
+            'Songwriter',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
           const Spacer(),
           _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
           const SizedBox(width: 8),
-          _Chip(label: '${config.tempo} BPM', onTap: () => _editTempo(context, ref)),
+          _Chip(
+            label: '${config.tempo} BPM',
+            onTap: () => _editTempo(context, ref),
+          ),
           IconButton(
             tooltip: 'New project',
             icon: const Icon(Icons.add_box_outlined),
@@ -46,15 +56,24 @@ class SongwriterHeader extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmNew(BuildContext context, SongwriterNotifier notifier) async {
+  Future<void> _confirmNew(
+    BuildContext context,
+    SongwriterNotifier notifier,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('New project?'),
         content: const Text('This clears the current songwriter session.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('New project')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('New project'),
+          ),
         ],
       ),
     );
@@ -66,7 +85,8 @@ class SongwriterHeader extends ConsumerWidget {
     final current = ref.read(songwriterProvider).config.tempo;
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => _TempoSheet(initial: current, onChanged: notifier.setTempo),
+      builder: (_) =>
+          _TempoSheet(initial: current, onChanged: notifier.setTempo),
     );
   }
 
@@ -136,7 +156,11 @@ class _KeySheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final scale in scales) ...[
-            Text(scale.isEmpty ? scale : scale[0].toUpperCase() + scale.substring(1)),
+            Text(
+              scale.isEmpty
+                  ? scale
+                  : scale[0].toUpperCase() + scale.substring(1),
+            ),
             Wrap(
               spacing: 6,
               children: [

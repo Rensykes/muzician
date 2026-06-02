@@ -67,8 +67,12 @@ class _HarmonySheetState extends State<_HarmonySheet> {
       chordQuality: quality,
       chordRootPc: rootPc,
       chordNotes: getChordNotes(rootName, quality),
-      romanNumeral:
-          romanNumeralFor(rootPc, quality, widget.keyRoot, widget.keyScaleName),
+      romanNumeral: romanNumeralFor(
+        rootPc,
+        quality,
+        widget.keyRoot,
+        widget.keyScaleName,
+      ),
     );
     Navigator.pop(context, block);
   }

@@ -6,40 +6,43 @@ import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
 
 class SongwriterBlockTile extends ConsumerWidget {
-  const SongwriterBlockTile(
-      {super.key,
-      required this.sectionId,
-      required this.laneId,
-      required this.blockId});
+  const SongwriterBlockTile({
+    super.key,
+    required this.sectionId,
+    required this.laneId,
+    required this.blockId,
+  });
   final String sectionId;
   final String laneId;
   final String blockId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final block = ref.watch(songwriterProvider.select((p) {
-      for (final s in p.sections) {
-        if (s.id != sectionId) continue;
-        for (final l in s.lanes) {
-          if (l.id != laneId) continue;
-          for (final b in l.blocks) {
-            if (b.id == blockId) return b;
+    final block = ref.watch(
+      songwriterProvider.select((p) {
+        for (final s in p.sections) {
+          if (s.id != sectionId) continue;
+          for (final l in s.lanes) {
+            if (l.id != laneId) continue;
+            for (final b in l.blocks) {
+              if (b.id == blockId) return b;
+            }
           }
         }
-      }
-      return null;
-    }));
+        return null;
+      }),
+    );
     if (block == null) return const SizedBox.shrink();
 
     final saves = ref.watch(saveSystemProvider).saves;
-    final broken = block.embedded == null &&
+    final broken =
+        block.embedded == null &&
         block.saveId != null &&
         !saves.any((e) => e.id == block.saveId);
 
     // PRIMARY label: chordSymbol first, then romanNumeral, then save label
-    final primary = block.chordSymbol ??
-        block.romanNumeral ??
-        _saveLabel(saves, block);
+    final primary =
+        block.chordSymbol ?? block.romanNumeral ?? _saveLabel(saves, block);
     final secondary = block.chordSymbol != null ? block.romanNumeral : null;
 
     return GestureDetector(
@@ -57,10 +60,12 @@ class SongwriterBlockTile extends ConsumerWidget {
           children: [
             Text(primary, maxLines: 1, overflow: TextOverflow.ellipsis),
             if (secondary != null)
-              Text(secondary,
-                  style: const TextStyle(fontSize: 10),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
+              Text(
+                secondary,
+                style: const TextStyle(fontSize: 10),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
           ],
         ),
       ),
@@ -87,8 +92,13 @@ class SongwriterBlockTile extends ConsumerWidget {
               title: const Text('Delete'),
               onTap: () {
                 Navigator.pop(sheetCtx);
-                ref.read(songwriterProvider.notifier).removeBlock(
-                    sectionId: sectionId, laneId: laneId, blockId: blockId);
+                ref
+                    .read(songwriterProvider.notifier)
+                    .removeBlock(
+                      sectionId: sectionId,
+                      laneId: laneId,
+                      blockId: blockId,
+                    );
               },
             ),
           ],
@@ -103,14 +113,15 @@ class SongwriterBlockTile extends ConsumerWidget {
       builder: (_) => _PlacementDialog(
         initialStart: block.startBar,
         initialSpan: block.spanBars,
-        onApply: (start, span) =>
-            ref.read(songwriterProvider.notifier).setBlockPlacement(
-                  sectionId: sectionId,
-                  laneId: laneId,
-                  blockId: blockId,
-                  startBar: start,
-                  spanBars: span,
-                ),
+        onApply: (start, span) => ref
+            .read(songwriterProvider.notifier)
+            .setBlockPlacement(
+              sectionId: sectionId,
+              laneId: laneId,
+              blockId: blockId,
+              startBar: start,
+              spanBars: span,
+            ),
       ),
     );
   }
@@ -152,10 +163,18 @@ class _PlacementDialogState extends State<_PlacementDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _row('Start bar', _start, 0,
-              (v) => setState(() => _start = v < 0 ? 0 : v)),
-          _row('Span (bars)', _span, 1,
-              (v) => setState(() => _span = v < 1 ? 1 : v)),
+          _row(
+            'Start bar',
+            _start,
+            0,
+            (v) => setState(() => _start = v < 0 ? 0 : v),
+          ),
+          _row(
+            'Span (bars)',
+            _span,
+            1,
+            (v) => setState(() => _span = v < 1 ? 1 : v),
+          ),
         ],
       ),
       actions: [
