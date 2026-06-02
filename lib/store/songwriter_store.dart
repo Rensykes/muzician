@@ -65,7 +65,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         ? state.config.copyWith(clearKey: true)
         : state.config.copyWith(keyRoot: root, keyScaleName: scaleName);
     _set(state.copyWith(config: cfg));
-    if (root != null) _recomputeNumerals();
+    _recomputeNumerals();
   }
 
   void setTempo(int tempo) =>
@@ -194,13 +194,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                                     b.chordQuality == null) {
                                   return b;
                                 }
+                                final numeral = romanNumeralFor(
+                                  b.chordRootPc!,
+                                  b.chordQuality!,
+                                  key.keyRoot,
+                                  key.keyScaleName,
+                                );
                                 return b.copyWith(
-                                  romanNumeral: romanNumeralFor(
-                                    b.chordRootPc!,
-                                    b.chordQuality!,
-                                    key.keyRoot,
-                                    key.keyScaleName,
-                                  ),
+                                  romanNumeral: numeral,
+                                  clearRomanNumeral: numeral == null,
                                 );
                               }).toList(),
                             ),
