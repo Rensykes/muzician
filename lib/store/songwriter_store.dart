@@ -197,6 +197,29 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  /// Move/resize a block. Clamps to valid bounds; rejects (no-op) if the new
+  /// placement would overlap another block in the same lane.
+  void setBlockPlacement({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+    required int startBar,
+    required int spanBars,
+  }) {
+    _replaceLane(sectionId, laneId, (l) {
+      final current = l.blocks.firstWhere((b) => b.id == blockId);
+      final moved = current.copyWith(
+        startBar: startBar < 0 ? 0 : startBar,
+        spanBars: spanBars < 1 ? 1 : spanBars,
+      );
+      final others = l.blocks.where((b) => b.id != blockId).toList();
+      if (blocksOverlap(others, moved)) return l; // reject overlap
+      return l.copyWith(
+        blocks: l.blocks.map((b) => b.id == blockId ? moved : b).toList(),
+      );
+    });
+  }
+
   /// Make Unique: detach a block from its live save by embedding a snapshot.
   void makeBlockUnique({
     required String sectionId,
