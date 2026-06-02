@@ -3,12 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/songwriter_store.dart';
 import 'songwriter_header.dart';
 import 'songwriter_section_card.dart';
+import 'songwriter_structure_editor.dart';
 
 class SongwriterScreen extends ConsumerWidget {
   const SongwriterScreen({super.key});
 
   void _openSaveLoad(BuildContext context) {}
-  void _openStructure(BuildContext context) {}
+
+  void _openStructure(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const SongwriterStructureEditor(),
+      fullscreenDialog: true,
+    ));
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
