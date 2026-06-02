@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
+import 'songwriter_grid.dart';
 import 'songwriter_lane_row.dart';
 import 'songwriter_undo.dart';
 
@@ -85,6 +86,8 @@ class SongwriterSectionCard extends ConsumerWidget {
                 ),
               ],
             ),
+            if (section.lanes.isNotEmpty)
+              BarRuler(lengthBars: section.lengthBars, gutter: 72),
             for (final lane in section.lanes)
               Row(
                 children: [
