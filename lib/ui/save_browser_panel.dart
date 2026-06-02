@@ -15,6 +15,7 @@ import '../store/fretboard_store.dart';
 import '../store/piano_roll_store.dart';
 import '../store/piano_store.dart';
 import '../store/save_system_store.dart';
+import '../store/settings_store.dart';
 import '../theme/muzician_theme.dart';
 import '../utils/note_utils.dart';
 
@@ -449,6 +450,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   Widget build(BuildContext context) {
     final ssState = ref.watch(saveSystemProvider);
     final notifier = ref.read(saveSystemProvider.notifier);
+    final gridMode = ref.watch(settingsProvider).saveBrowserGrid;
 
     final breadcrumb = _breadcrumb(ssState.folders);
     final subFolders = _childFolders(ssState.folders);
@@ -476,6 +478,9 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           insideFolder: insideFolder,
           editMode: _editMode,
           canSave: widget.captureSnapshot != null && insideFolder,
+          gridMode: gridMode,
+          onToggleGrid: () =>
+              ref.read(settingsProvider.notifier).setSaveBrowserGrid(!gridMode),
           onToggleEdit: () => setState(() {
             _editMode = !_editMode;
             if (_editMode) _selectedSaveId = null;
@@ -508,73 +513,155 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
 
         const SizedBox(height: 8),
 
-        // ── Folder + Save list ──
+        // ── Folder + Save list / grid ──
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 240),
           child: SingleChildScrollView(
-            child: Column(
-              children: [
-                if (subFolders.isEmpty && saves.isEmpty && !insideFolder)
-                  _EmptyHint(
-                    message: widget.captureSnapshot != null
-                        ? 'Create a folder, then navigate into it to save.'
-                        : 'No folders yet.',
+            child: gridMode
+                ? _buildGrid(
+                    context,
+                    subFolders,
+                    saves,
+                    activeSession,
+                    notifier,
+                    insideFolder,
+                  )
+                : _buildList(
+                    context,
+                    subFolders,
+                    saves,
+                    activeSession,
+                    notifier,
+                    hasPrev,
+                    hasNext,
+                    insideFolder,
                   ),
-                if (insideFolder && subFolders.isEmpty && saves.isEmpty)
-                  _EmptyHint(
-                    message: widget.captureSnapshot != null
-                        ? 'No saves here. Tap "Save here" to add one.'
-                        : 'No saves in this folder.',
-                  ),
-                // folders
-                ...subFolders.map(
-                  (folder) => _FolderRow(
-                    folder: folder,
-                    editMode: _editMode,
-                    isFirst: subFolders.first == folder,
-                    isLast: subFolders.last == folder,
-                    onTap: () => setState(() {
-                      _currentFolderId = folder.id;
-                      _selectedSaveId = null;
-                    }),
-                    onRename: () => _handleRenameFolder(folder),
-                    onDelete: () => _handleDeleteFolder(folder),
-                    onMoveUp: () => notifier.moveFolderUp(folder.id),
-                    onMoveDown: () => notifier.moveFolderDown(folder.id),
-                  ),
-                ),
-                // saves
-                ...saves.map((save) {
-                  final isSelected = _selectedSaveId == save.id;
-                  return _SaveRow(
-                    save: save,
-                    isSelected: isSelected,
-                    isActiveSession: activeSession?.saveId == save.id,
-                    editMode: _editMode,
-                    isFirst: saves.first == save,
-                    isLast: saves.last == save,
-                    canLoad: widget.onLoad != null,
-                    hasPrev: isSelected && hasPrev,
-                    hasNext: isSelected && hasNext,
-                    onTap: () => setState(() {
-                      _selectedSaveId = _selectedSaveId == save.id
-                          ? null
-                          : save.id;
-                    }),
-                    onRename: () => _handleRenameSave(save),
-                    onDelete: () => _handleDeleteSave(save),
-                    onMoveUp: () => notifier.moveSaveUp(save.id),
-                    onMoveDown: () => notifier.moveSaveDown(save.id),
-                    onLoad: () => _handleLoad(save),
-                    onPrev: _navigatePrev,
-                    onNext: _navigateNext,
-                  );
-                }),
-              ],
-            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context,
+    List<SaveFolder> subFolders,
+    List<SaveEntry> saves,
+    ActiveSession? activeSession,
+    SaveSystemNotifier notifier,
+    bool hasPrev,
+    bool hasNext,
+    bool insideFolder,
+  ) {
+    return Column(
+      children: [
+        if (subFolders.isEmpty && saves.isEmpty && !insideFolder)
+          _EmptyHint(
+            message: widget.captureSnapshot != null
+                ? 'Create a folder, then navigate into it to save.'
+                : 'No folders yet.',
+          ),
+        if (insideFolder && subFolders.isEmpty && saves.isEmpty)
+          _EmptyHint(
+            message: widget.captureSnapshot != null
+                ? 'No saves here. Tap "Save here" to add one.'
+                : 'No saves in this folder.',
+          ),
+        // folders
+        ...subFolders.map(
+          (folder) => _FolderRow(
+            folder: folder,
+            editMode: _editMode,
+            isFirst: subFolders.first == folder,
+            isLast: subFolders.last == folder,
+            onTap: () => setState(() {
+              _currentFolderId = folder.id;
+              _selectedSaveId = null;
+            }),
+            onRename: () => _handleRenameFolder(folder),
+            onDelete: () => _handleDeleteFolder(folder),
+            onMoveUp: () => notifier.moveFolderUp(folder.id),
+            onMoveDown: () => notifier.moveFolderDown(folder.id),
+          ),
+        ),
+        // saves
+        ...saves.map((save) {
+          final isSelected = _selectedSaveId == save.id;
+          return _SaveRow(
+            save: save,
+            isSelected: isSelected,
+            isActiveSession: activeSession?.saveId == save.id,
+            editMode: _editMode,
+            isFirst: saves.first == save,
+            isLast: saves.last == save,
+            canLoad: widget.onLoad != null,
+            hasPrev: isSelected && hasPrev,
+            hasNext: isSelected && hasNext,
+            onTap: () => setState(() {
+              _selectedSaveId = _selectedSaveId == save.id ? null : save.id;
+            }),
+            onRename: () => _handleRenameSave(save),
+            onDelete: () => _handleDeleteSave(save),
+            onMoveUp: () => notifier.moveSaveUp(save.id),
+            onMoveDown: () => notifier.moveSaveDown(save.id),
+            onLoad: () => _handleLoad(save),
+            onPrev: _navigatePrev,
+            onNext: _navigateNext,
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildGrid(
+    BuildContext context,
+    List<SaveFolder> subFolders,
+    List<SaveEntry> saves,
+    ActiveSession? activeSession,
+    SaveSystemNotifier notifier,
+    bool insideFolder,
+  ) {
+    final cards = <Widget>[
+      ...subFolders.map((folder) => _FolderCard(
+            name: folder.name,
+            childCount: getChildFolders(
+              ref.read(saveSystemProvider).folders,
+              folder.id,
+            ).length,
+            onTap: () => setState(() {
+              _currentFolderId = folder.id;
+              _selectedSaveId = null;
+            }),
+            onLongPress: () => _handleRenameFolder(folder),
+          )),
+      ...saves.map((save) {
+        final label = saveCardLabel(save.snapshot);
+        return _SaveCard(
+          name: save.name,
+          instrument: save.snapshot.instrument,
+          labelText:
+              label.kind == SaveCardLabelKind.notes ? null : label.text,
+          noteChips: label.notes,
+          selected: _selectedSaveId == save.id,
+          onTap: () {
+            if (widget.onLoad != null) {
+              _handleLoad(save);
+            } else {
+              setState(() => _selectedSaveId = save.id);
+            }
+          },
+          onLongPress: () => _handleRenameSave(save),
+        );
+      }),
+    ];
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: MediaQuery.of(context).size.width < 360 ? 2 : 3,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 1.3,
+      children: cards,
     );
   }
 }
@@ -585,6 +672,8 @@ class _Header extends StatelessWidget {
   final bool insideFolder;
   final bool editMode;
   final bool canSave;
+  final bool gridMode;
+  final VoidCallback onToggleGrid;
   final VoidCallback onToggleEdit;
   final VoidCallback onNewFolder;
   final VoidCallback onSaveHere;
@@ -593,6 +682,8 @@ class _Header extends StatelessWidget {
     required this.insideFolder,
     required this.editMode,
     required this.canSave,
+    required this.gridMode,
+    required this.onToggleGrid,
     required this.onToggleEdit,
     required this.onNewFolder,
     required this.onSaveHere,
@@ -612,6 +703,17 @@ class _Header extends StatelessWidget {
           ),
         ),
         const Spacer(),
+        IconButton(
+          key: const Key('saveBrowserGridToggle'),
+          icon: Icon(gridMode ? Icons.view_list : Icons.grid_view),
+          iconSize: 16,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          color: MuzicianTheme.textSecondary,
+          tooltip: gridMode ? 'List view' : 'Grid view',
+          onPressed: onToggleGrid,
+        ),
+        const SizedBox(width: 6),
         if (canSave) ...[
           _ActionChip(
             label: 'Save here',
