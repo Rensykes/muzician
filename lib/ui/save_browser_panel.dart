@@ -34,11 +34,16 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   /// Called when the user taps "Load" on a selected save.
   final void Function(InstrumentSnapshot snap)? onLoad;
 
+  /// Palette mode: when set, tapping a save returns it to the caller instead
+  /// of running the normal load/select action.
+  final void Function(SaveEntry entry)? onPick;
+
   const SaveBrowserPanel({
     super.key,
     this.instrumentFilter,
     this.captureSnapshot,
     this.onLoad,
+    this.onPick,
   });
 
   @override
@@ -594,9 +599,16 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
             canLoad: widget.onLoad != null,
             hasPrev: isSelected && hasPrev,
             hasNext: isSelected && hasNext,
-            onTap: () => setState(() {
-              _selectedSaveId = _selectedSaveId == save.id ? null : save.id;
-            }),
+            onTap: () {
+              if (widget.onPick != null) {
+                widget.onPick!(save);
+                return;
+              }
+              setState(() {
+                _selectedSaveId =
+                    _selectedSaveId == save.id ? null : save.id;
+              });
+            },
             onRename: () => _handleRenameSave(save),
             onDelete: () => _handleDeleteSave(save),
             onMoveUp: () => notifier.moveSaveUp(save.id),
@@ -655,7 +667,9 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           noteChips: label.notes,
           selected: _selectedSaveId == save.id,
           onTap: () {
-            if (widget.onLoad != null) {
+            if (widget.onPick != null) {
+              widget.onPick!(save);
+            } else if (widget.onLoad != null) {
               _handleLoad(save);
             } else {
               setState(() => _selectedSaveId = save.id);
