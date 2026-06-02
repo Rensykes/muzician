@@ -143,6 +143,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  void setLaneRepeat(
+          {required String sectionId,
+          required String laneId,
+          required int repeat}) =>
+      _replaceLane(sectionId, laneId,
+          (l) => l.copyWith(repeat: repeat < 1 ? 1 : repeat));
+
+  void removeLane({required String sectionId, required String laneId}) =>
+      _replaceSection(sectionId,
+          (s) => s.copyWith(lanes: s.lanes.where((l) => l.id != laneId).toList()));
+
   // ── blocks ──
   void addSaveBlock({
     required String sectionId,
