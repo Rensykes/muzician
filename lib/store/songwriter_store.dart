@@ -118,6 +118,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     ));
   }
 
+  void reorderLanes(String sectionId, int oldIndex, int newIndex) {
+    _replaceSection(sectionId, (s) {
+      final list = [...s.lanes];
+      if (oldIndex < 0 || oldIndex >= list.length) return s;
+      var target = newIndex;
+      if (target > oldIndex) target -= 1;
+      final moved = list.removeAt(oldIndex);
+      list.insert(target.clamp(0, list.length), moved);
+      return s.copyWith(lanes: [
+        for (var i = 0; i < list.length; i++) list[i].copyWith(order: i),
+      ]);
+    });
+  }
+
   // ── lanes ──
   void addLane({
     required String sectionId,
