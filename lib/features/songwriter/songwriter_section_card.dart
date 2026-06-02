@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
 import 'songwriter_lane_row.dart';
+import 'songwriter_undo.dart';
 
 class SongwriterSectionCard extends ConsumerWidget {
   const SongwriterSectionCard({super.key, required this.sectionId});
@@ -55,12 +56,56 @@ class SongwriterSectionCard extends ConsumerWidget {
                 IconButton(
                   key: Key('removeSection_$sectionId'),
                   icon: const Icon(Icons.close, size: 18),
-                  onPressed: () => notifier.removeSection(sectionId),
+                  onPressed: () {
+                    final sections = ref.read(songwriterProvider).sections;
+                    final index =
+                        sections.indexWhere((s) => s.id == sectionId);
+                    if (index < 0) return;
+                    final removed = sections[index];
+                    notifier.removeSection(sectionId);
+                    showUndoSnack(
+                      context,
+                      'Section deleted',
+                      () => notifier.insertSection(removed, index),
+                    );
+                  },
                 ),
               ],
             ),
             for (final lane in section.lanes)
-              SongwriterLaneRow(sectionId: sectionId, laneId: lane.id),
+              Row(
+                children: [
+                  Expanded(
+                    child: SongwriterLaneRow(
+                      sectionId: sectionId,
+                      laneId: lane.id,
+                    ),
+                  ),
+                  IconButton(
+                    key: Key('removeLane_${lane.id}'),
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: () {
+                      final s = ref
+                          .read(songwriterProvider)
+                          .sections
+                          .firstWhere((x) => x.id == sectionId);
+                      final idx = s.lanes.indexWhere((l) => l.id == lane.id);
+                      if (idx < 0) return;
+                      final removed = s.lanes[idx];
+                      notifier.removeLane(sectionId: sectionId, laneId: lane.id);
+                      showUndoSnack(
+                        context,
+                        'Lane deleted',
+                        () => notifier.insertLane(
+                          sectionId: sectionId,
+                          lane: removed,
+                          index: idx,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             Align(
               alignment: Alignment.centerLeft,
               child: PopupMenuButton<SongLaneKind>(

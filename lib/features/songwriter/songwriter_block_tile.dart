@@ -4,6 +4,7 @@ import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
+import 'songwriter_undo.dart';
 
 class SongwriterBlockTile extends ConsumerWidget {
   const SongwriterBlockTile({
@@ -92,13 +93,21 @@ class SongwriterBlockTile extends ConsumerWidget {
               title: const Text('Delete'),
               onTap: () {
                 Navigator.pop(sheetCtx);
-                ref
-                    .read(songwriterProvider.notifier)
-                    .removeBlock(
-                      sectionId: sectionId,
-                      laneId: laneId,
-                      blockId: blockId,
-                    );
+                final n = ref.read(songwriterProvider.notifier);
+                n.removeBlock(
+                  sectionId: sectionId,
+                  laneId: laneId,
+                  blockId: blockId,
+                );
+                showUndoSnack(
+                  context,
+                  'Block deleted',
+                  () => n.insertBlock(
+                    sectionId: sectionId,
+                    laneId: laneId,
+                    block: block,
+                  ),
+                );
               },
             ),
           ],

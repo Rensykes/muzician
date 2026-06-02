@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/songwriter_store.dart';
+import 'songwriter_undo.dart';
 
 /// "Modifica struttura della canzone" — bulk reorder/remove of sections.
 /// Reuses the same store mutations as the inline section cards.
@@ -41,7 +42,18 @@ class SongwriterStructureEditor extends ConsumerWidget {
                     trailing: IconButton(
                       key: Key('structureRemove_${s.id}'),
                       icon: const Icon(Icons.close),
-                      onPressed: () => notifier.removeSection(s.id),
+                      onPressed: () {
+                        final all = ref.read(songwriterProvider).sections;
+                        final index = all.indexWhere((x) => x.id == s.id);
+                        if (index < 0) return;
+                        final removed = all[index];
+                        notifier.removeSection(s.id);
+                        showUndoSnack(
+                          context,
+                          'Section deleted',
+                          () => notifier.insertSection(removed, index),
+                        );
+                      },
                     ),
                   ),
               ],
