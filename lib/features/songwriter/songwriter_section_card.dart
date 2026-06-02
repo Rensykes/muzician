@@ -72,8 +72,7 @@ class SongwriterSectionCard extends ConsumerWidget {
                   icon: const Icon(Icons.close, size: 18),
                   onPressed: () {
                     final sections = ref.read(songwriterProvider).sections;
-                    final index =
-                        sections.indexWhere((s) => s.id == sectionId);
+                    final index = sections.indexWhere((s) => s.id == sectionId);
                     if (index < 0) return;
                     final removed = sections[index];
                     notifier.removeSection(sectionId);
@@ -108,7 +107,10 @@ class SongwriterSectionCard extends ConsumerWidget {
                       final idx = s.lanes.indexWhere((l) => l.id == lane.id);
                       if (idx < 0) return;
                       final removed = s.lanes[idx];
-                      notifier.removeLane(sectionId: sectionId, laneId: lane.id);
+                      notifier.removeLane(
+                        sectionId: sectionId,
+                        laneId: lane.id,
+                      );
                       showUndoSnack(
                         context,
                         'Lane deleted',
@@ -190,10 +192,7 @@ class _ValuePill extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label),
-            const Icon(Icons.arrow_drop_down, size: 16),
-          ],
+          children: [Text(label), const Icon(Icons.arrow_drop_down, size: 16)],
         ),
       ),
     );
