@@ -54,50 +54,48 @@ class SongBlock {
     int? chordRootPc,
     List<String>? chordNotes,
     String? romanNumeral,
-  }) =>
-      SongBlock(
-        id: id,
-        startBar: startBar ?? this.startBar,
-        spanBars: spanBars ?? this.spanBars,
-        saveId: saveId ?? this.saveId,
-        embedded: embedded ?? this.embedded,
-        chordSymbol: chordSymbol ?? this.chordSymbol,
-        chordQuality: chordQuality ?? this.chordQuality,
-        chordRootPc: chordRootPc ?? this.chordRootPc,
-        chordNotes: chordNotes ?? this.chordNotes,
-        romanNumeral: romanNumeral ?? this.romanNumeral,
-      );
+  }) => SongBlock(
+    id: id,
+    startBar: startBar ?? this.startBar,
+    spanBars: spanBars ?? this.spanBars,
+    saveId: saveId ?? this.saveId,
+    embedded: embedded ?? this.embedded,
+    chordSymbol: chordSymbol ?? this.chordSymbol,
+    chordQuality: chordQuality ?? this.chordQuality,
+    chordRootPc: chordRootPc ?? this.chordRootPc,
+    chordNotes: chordNotes ?? this.chordNotes,
+    romanNumeral: romanNumeral ?? this.romanNumeral,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'startBar': startBar,
-        'spanBars': spanBars,
-        'saveId': saveId,
-        'embedded': embedded?.toJson(),
-        'chordSymbol': chordSymbol,
-        'chordQuality': chordQuality,
-        'chordRootPc': chordRootPc,
-        'chordNotes': chordNotes,
-        'romanNumeral': romanNumeral,
-      };
+    'id': id,
+    'startBar': startBar,
+    'spanBars': spanBars,
+    'saveId': saveId,
+    'embedded': embedded?.toJson(),
+    'chordSymbol': chordSymbol,
+    'chordQuality': chordQuality,
+    'chordRootPc': chordRootPc,
+    'chordNotes': chordNotes,
+    'romanNumeral': romanNumeral,
+  };
 
   factory SongBlock.fromJson(Map<String, dynamic> json) => SongBlock(
-        id: json['id'] as String,
-        startBar: json['startBar'] as int? ?? 0,
-        spanBars: json['spanBars'] as int? ?? 1,
-        saveId: json['saveId'] as String?,
-        embedded: json['embedded'] == null
-            ? null
-            : InstrumentSnapshot.fromJson(
-                json['embedded'] as Map<String, dynamic>),
-        chordSymbol: json['chordSymbol'] as String?,
-        chordQuality: json['chordQuality'] as String?,
-        chordRootPc: json['chordRootPc'] as int?,
-        chordNotes:
-            (json['chordNotes'] as List?)?.map((e) => e as String).toList() ??
-                const [],
-        romanNumeral: json['romanNumeral'] as String?,
-      );
+    id: json['id'] as String,
+    startBar: json['startBar'] as int? ?? 0,
+    spanBars: json['spanBars'] as int? ?? 1,
+    saveId: json['saveId'] as String?,
+    embedded: json['embedded'] == null
+        ? null
+        : InstrumentSnapshot.fromJson(json['embedded'] as Map<String, dynamic>),
+    chordSymbol: json['chordSymbol'] as String?,
+    chordQuality: json['chordQuality'] as String?,
+    chordRootPc: json['chordRootPc'] as int?,
+    chordNotes:
+        (json['chordNotes'] as List?)?.map((e) => e as String).toList() ??
+        const [],
+    romanNumeral: json['romanNumeral'] as String?,
+  );
 }
 
 class SongwriterConfig {
@@ -122,22 +120,21 @@ class SongwriterConfig {
     int? keyRoot,
     String? keyScaleName,
     bool clearKey = false,
-  }) =>
-      SongwriterConfig(
-        tempo: tempo ?? this.tempo,
-        beatsPerBar: beatsPerBar ?? this.beatsPerBar,
-        beatUnit: beatUnit ?? this.beatUnit,
-        keyRoot: clearKey ? null : (keyRoot ?? this.keyRoot),
-        keyScaleName: clearKey ? null : (keyScaleName ?? this.keyScaleName),
-      );
+  }) => SongwriterConfig(
+    tempo: tempo ?? this.tempo,
+    beatsPerBar: beatsPerBar ?? this.beatsPerBar,
+    beatUnit: beatUnit ?? this.beatUnit,
+    keyRoot: clearKey ? null : (keyRoot ?? this.keyRoot),
+    keyScaleName: clearKey ? null : (keyScaleName ?? this.keyScaleName),
+  );
 
   Map<String, dynamic> toJson() => {
-        'tempo': tempo,
-        'beatsPerBar': beatsPerBar,
-        'beatUnit': beatUnit,
-        'keyRoot': keyRoot,
-        'keyScaleName': keyScaleName,
-      };
+    'tempo': tempo,
+    'beatsPerBar': beatsPerBar,
+    'beatUnit': beatUnit,
+    'keyRoot': keyRoot,
+    'keyScaleName': keyScaleName,
+  };
 
   factory SongwriterConfig.fromJson(Map<String, dynamic> json) =>
       SongwriterConfig(
@@ -172,36 +169,36 @@ class SongLane {
     int? order,
     int? repeat,
     List<SongBlock>? blocks,
-  }) =>
-      SongLane(
-        id: id,
-        kind: kind ?? this.kind,
-        label: label ?? this.label,
-        order: order ?? this.order,
-        repeat: repeat ?? this.repeat,
-        blocks: blocks ?? this.blocks,
-      );
+  }) => SongLane(
+    id: id,
+    kind: kind ?? this.kind,
+    label: label ?? this.label,
+    order: order ?? this.order,
+    repeat: repeat ?? this.repeat,
+    blocks: blocks ?? this.blocks,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': kind.name,
-        'label': label,
-        'order': order,
-        'repeat': repeat,
-        'blocks': blocks.map((b) => b.toJson()).toList(),
-      };
+    'id': id,
+    'kind': kind.name,
+    'label': label,
+    'order': order,
+    'repeat': repeat,
+    'blocks': blocks.map((b) => b.toJson()).toList(),
+  };
 
   factory SongLane.fromJson(Map<String, dynamic> json) => SongLane(
-        id: json['id'] as String,
-        kind: _laneKindFromName(json['kind'] as String?),
-        label: json['label'] as String?,
-        order: json['order'] as int? ?? 0,
-        repeat: json['repeat'] as int? ?? 1,
-        blocks: (json['blocks'] as List?)
-                ?.map((b) => SongBlock.fromJson(b as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    id: json['id'] as String,
+    kind: _laneKindFromName(json['kind'] as String?),
+    label: json['label'] as String?,
+    order: json['order'] as int? ?? 0,
+    repeat: json['repeat'] as int? ?? 1,
+    blocks:
+        (json['blocks'] as List?)
+            ?.map((b) => SongBlock.fromJson(b as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }
 
 class SongwriterProjectSnapshot extends InstrumentSnapshot {
@@ -238,25 +235,26 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
   SongwriterProjectSnapshot copyWith({
     SongwriterConfig? config,
     List<SongSection>? sections,
-  }) =>
-      SongwriterProjectSnapshot(
-        config: config ?? this.config,
-        sections: sections ?? this.sections,
-      );
+  }) => SongwriterProjectSnapshot(
+    config: config ?? this.config,
+    sections: sections ?? this.sections,
+  );
 
   @override
   Map<String, dynamic> toJson() => {
-        'type': 'songwriter',
-        'instrument': 'songwriter',
-        'config': config.toJson(),
-        'sections': sections.map((s) => s.toJson()).toList(),
-      };
+    'type': 'songwriter',
+    'instrument': 'songwriter',
+    'config': config.toJson(),
+    'sections': sections.map((s) => s.toJson()).toList(),
+  };
 
   factory SongwriterProjectSnapshot.fromJson(Map<String, dynamic> json) =>
       SongwriterProjectSnapshot(
         config: SongwriterConfig.fromJson(
-            json['config'] as Map<String, dynamic>? ?? const {}),
-        sections: (json['sections'] as List?)
+          json['config'] as Map<String, dynamic>? ?? const {},
+        ),
+        sections:
+            (json['sections'] as List?)
                 ?.map((s) => SongSection.fromJson(s as Map<String, dynamic>))
                 .toList() ??
             const [],
@@ -287,34 +285,34 @@ class SongSection {
     int? repeat,
     List<SongLane>? lanes,
     bool clearLabel = false,
-  }) =>
-      SongSection(
-        id: id,
-        label: clearLabel ? null : (label ?? this.label),
-        lengthBars: lengthBars ?? this.lengthBars,
-        order: order ?? this.order,
-        repeat: repeat ?? this.repeat,
-        lanes: lanes ?? this.lanes,
-      );
+  }) => SongSection(
+    id: id,
+    label: clearLabel ? null : (label ?? this.label),
+    lengthBars: lengthBars ?? this.lengthBars,
+    order: order ?? this.order,
+    repeat: repeat ?? this.repeat,
+    lanes: lanes ?? this.lanes,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'label': label,
-        'lengthBars': lengthBars,
-        'order': order,
-        'repeat': repeat,
-        'lanes': lanes.map((l) => l.toJson()).toList(),
-      };
+    'id': id,
+    'label': label,
+    'lengthBars': lengthBars,
+    'order': order,
+    'repeat': repeat,
+    'lanes': lanes.map((l) => l.toJson()).toList(),
+  };
 
   factory SongSection.fromJson(Map<String, dynamic> json) => SongSection(
-        id: json['id'] as String,
-        label: json['label'] as String?,
-        lengthBars: json['lengthBars'] as int? ?? 4,
-        order: json['order'] as int? ?? 0,
-        repeat: json['repeat'] as int? ?? 1,
-        lanes: (json['lanes'] as List?)
-                ?.map((l) => SongLane.fromJson(l as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    id: json['id'] as String,
+    label: json['label'] as String?,
+    lengthBars: json['lengthBars'] as int? ?? 4,
+    order: json['order'] as int? ?? 0,
+    repeat: json['repeat'] as int? ?? 1,
+    lanes:
+        (json['lanes'] as List?)
+            ?.map((l) => SongLane.fromJson(l as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }

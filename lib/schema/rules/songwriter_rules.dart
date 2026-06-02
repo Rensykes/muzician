@@ -54,25 +54,33 @@ bool blocksOverlap(List<SongBlock> existing, SongBlock candidate) {
 
 // ─── Factory Helpers ─────────────────────────────────────────────────────────
 
-SongSection makeSection(
-        {String? label, required int lengthBars, required int order}) =>
-    SongSection(
-        id: generateId(), label: label, lengthBars: lengthBars, order: order);
+SongSection makeSection({
+  String? label,
+  required int lengthBars,
+  required int order,
+}) => SongSection(
+  id: generateId(),
+  label: label,
+  lengthBars: lengthBars,
+  order: order,
+);
 
-SongLane makeLane(
-        {required SongLaneKind kind, String? label, required int order}) =>
-    SongLane(id: generateId(), kind: kind, label: label, order: order);
+SongLane makeLane({
+  required SongLaneKind kind,
+  String? label,
+  required int order,
+}) => SongLane(id: generateId(), kind: kind, label: label, order: order);
 
 SongBlock makeSaveBlock({
   required String saveId,
   required int startBar,
   required int spanBars,
-}) =>
-    SongBlock(
-        id: generateId(),
-        saveId: saveId,
-        startBar: startBar,
-        spanBars: spanBars);
+}) => SongBlock(
+  id: generateId(),
+  saveId: saveId,
+  startBar: startBar,
+  spanBars: spanBars,
+);
 
 SongBlock makeHarmonyBlock({
   required int startBar,
@@ -82,17 +90,16 @@ SongBlock makeHarmonyBlock({
   required int chordRootPc,
   required List<String> chordNotes,
   String? romanNumeral,
-}) =>
-    SongBlock(
-      id: generateId(),
-      startBar: startBar,
-      spanBars: spanBars,
-      chordSymbol: chordSymbol,
-      chordQuality: chordQuality,
-      chordRootPc: chordRootPc,
-      chordNotes: chordNotes,
-      romanNumeral: romanNumeral,
-    );
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  chordSymbol: chordSymbol,
+  chordQuality: chordQuality,
+  chordRootPc: chordRootPc,
+  chordNotes: chordNotes,
+  romanNumeral: romanNumeral,
+);
 
 // ─── Timeline Flattening ──────────────────────────────────────────────────────
 
@@ -120,7 +127,10 @@ int laneNaturalLength(SongLane lane) {
 /// or beyond the section length is not emitted; within a tile, a block whose
 /// (offset) startBar is at or beyond the section length is skipped. Blocks that
 /// start inside the section but span past its end are kept.
-List<SongBlock> tileLaneBlocks(SongLane lane, {required int sectionLengthBars}) {
+List<SongBlock> tileLaneBlocks(
+  SongLane lane, {
+  required int sectionLengthBars,
+}) {
   final pattern = laneNaturalLength(lane);
   if (pattern <= 0) return const [];
   final out = <SongBlock>[];
