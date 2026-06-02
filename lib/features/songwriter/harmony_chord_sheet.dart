@@ -1,0 +1,114 @@
+import 'package:flutter/material.dart';
+import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_rules.dart';
+import '../../utils/note_utils.dart';
+
+const _qualities = <(String value, String label)>[
+  ('', 'maj'),
+  ('m', 'min'),
+  ('7', '7'),
+  ('maj7', 'maj7'),
+  ('m7', 'm7'),
+  ('dim', 'dim'),
+  ('aug', 'aug'),
+  ('sus2', 'sus2'),
+  ('sus4', 'sus4'),
+  ('m7b5', 'm7b5'),
+  ('dim7', 'dim7'),
+];
+
+/// Opens the harmony chord picker. Returns a ready-to-add [SongBlock], or null
+/// if dismissed. Pick a root, then a quality (which commits).
+Future<SongBlock?> showHarmonyChordSheet(
+  BuildContext context, {
+  required int startBar,
+  required int spanBars,
+  required int? keyRoot,
+  required String? keyScaleName,
+}) {
+  return showModalBottomSheet<SongBlock>(
+    context: context,
+    builder: (_) => _HarmonySheet(
+      startBar: startBar,
+      spanBars: spanBars,
+      keyRoot: keyRoot,
+      keyScaleName: keyScaleName,
+    ),
+  );
+}
+
+class _HarmonySheet extends StatefulWidget {
+  const _HarmonySheet({
+    required this.startBar,
+    required this.spanBars,
+    required this.keyRoot,
+    required this.keyScaleName,
+  });
+  final int startBar;
+  final int spanBars;
+  final int? keyRoot;
+  final String? keyScaleName;
+
+  @override
+  State<_HarmonySheet> createState() => _HarmonySheetState();
+}
+
+class _HarmonySheetState extends State<_HarmonySheet> {
+  int? _rootPc;
+
+  void _commit(String quality) {
+    final rootPc = _rootPc;
+    if (rootPc == null) return;
+    final rootName = chromaticNotes[rootPc];
+    final block = makeHarmonyBlock(
+      startBar: widget.startBar,
+      spanBars: widget.spanBars,
+      chordSymbol: '$rootName$quality',
+      chordQuality: quality,
+      chordRootPc: rootPc,
+      chordNotes: getChordNotes(rootName, quality),
+      romanNumeral:
+          romanNumeralFor(rootPc, quality, widget.keyRoot, widget.keyScaleName),
+    );
+    Navigator.pop(context, block);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Root'),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (var pc = 0; pc < 12; pc++)
+                ChoiceChip(
+                  key: Key('harmonyRoot_$pc'),
+                  label: Text(chromaticNotes[pc]),
+                  selected: _rootPc == pc,
+                  onSelected: (_) => setState(() => _rootPc = pc),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('Quality'),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final q in _qualities)
+                ActionChip(
+                  key: Key('harmonyQuality_${q.$1}'),
+                  label: Text(q.$2),
+                  onPressed: _rootPc == null ? null : () => _commit(q.$1),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
