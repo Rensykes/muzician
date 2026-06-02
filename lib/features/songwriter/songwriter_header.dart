@@ -100,7 +100,7 @@ class _TempoSheet extends StatefulWidget {
 }
 
 class _TempoSheetState extends State<_TempoSheet> {
-  late double _bpm = widget.initial.toDouble();
+  late double _bpm = widget.initial.toDouble().clamp(40, 240).toDouble();
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -112,7 +112,7 @@ class _TempoSheetState extends State<_TempoSheet> {
           Slider(
             min: 40,
             max: 240,
-            value: _bpm,
+            value: _bpm.clamp(40, 240).toDouble(),
             onChanged: (v) => setState(() => _bpm = v),
             onChangeEnd: (v) => widget.onChanged(v.round()),
           ),
@@ -136,7 +136,7 @@ class _KeySheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final scale in scales) ...[
-            Text(scale),
+            Text(scale.isEmpty ? scale : scale[0].toUpperCase() + scale.substring(1)),
             Wrap(
               spacing: 6,
               children: [
