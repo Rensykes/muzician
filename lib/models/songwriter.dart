@@ -204,6 +204,65 @@ class SongLane {
       );
 }
 
+class SongwriterProjectSnapshot extends InstrumentSnapshot {
+  final SongwriterConfig config;
+  final List<SongSection> sections;
+
+  const SongwriterProjectSnapshot({
+    required this.config,
+    this.sections = const [],
+  });
+
+  @override
+  String get instrument => 'songwriter';
+
+  @override
+  List<String> get selectedNotes {
+    final set = <String>{};
+    for (final section in sections) {
+      for (final lane in section.lanes) {
+        for (final block in lane.blocks) {
+          set.addAll(block.chordNotes);
+        }
+      }
+    }
+    return set.toList();
+  }
+
+  @override
+  PendingChord? get pendingChord => null;
+
+  @override
+  PendingScale? get pendingScale => null;
+
+  SongwriterProjectSnapshot copyWith({
+    SongwriterConfig? config,
+    List<SongSection>? sections,
+  }) =>
+      SongwriterProjectSnapshot(
+        config: config ?? this.config,
+        sections: sections ?? this.sections,
+      );
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'songwriter',
+        'instrument': 'songwriter',
+        'config': config.toJson(),
+        'sections': sections.map((s) => s.toJson()).toList(),
+      };
+
+  factory SongwriterProjectSnapshot.fromJson(Map<String, dynamic> json) =>
+      SongwriterProjectSnapshot(
+        config: SongwriterConfig.fromJson(
+            json['config'] as Map<String, dynamic>? ?? const {}),
+        sections: (json['sections'] as List?)
+                ?.map((s) => SongSection.fromJson(s as Map<String, dynamic>))
+                .toList() ??
+            const [],
+      );
+}
+
 class SongSection {
   final String id;
   final String? label; // optional free text
