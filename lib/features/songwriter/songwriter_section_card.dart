@@ -43,15 +43,28 @@ class SongwriterSectionCard extends ConsumerWidget {
                         notifier.renameSection(sectionId, v.isEmpty ? null : v),
                   ),
                 ),
-                _Stepper(
-                  label: 'bars',
-                  value: section.lengthBars,
-                  onChanged: (v) => notifier.setSectionLength(sectionId, v),
+                _ValuePill(
+                  key: Key('barsPill_$sectionId'),
+                  label: '${section.lengthBars} bars',
+                  onTap: () => _openStepper(
+                    context,
+                    title: 'Bars',
+                    value: section.lengthBars,
+                    min: 1,
+                    onChanged: (v) => notifier.setSectionLength(sectionId, v),
+                  ),
                 ),
-                _Stepper(
-                  label: '×',
-                  value: section.repeat,
-                  onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
+                const SizedBox(width: 6),
+                _ValuePill(
+                  key: Key('repeatPill_$sectionId'),
+                  label: '${section.repeat}×',
+                  onTap: () => _openStepper(
+                    context,
+                    title: 'Repeat',
+                    value: section.repeat,
+                    min: 1,
+                    onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
+                  ),
                 ),
                 IconButton(
                   key: Key('removeSection_$sectionId'),
@@ -138,28 +151,99 @@ class SongwriterSectionCard extends ConsumerWidget {
   }
 }
 
-class _Stepper extends StatelessWidget {
-  const _Stepper({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
+void _openStepper(
+  BuildContext context, {
+  required String title,
+  required int value,
+  required int min,
+  required ValueChanged<int> onChanged,
+}) {
+  showDialog<void>(
+    context: context,
+    builder: (_) => _StepperDialog(
+      title: title,
+      initial: value,
+      min: min,
+      onChanged: onChanged,
+    ),
+  );
+}
+
+class _ValuePill extends StatelessWidget {
+  const _ValuePill({super.key, required this.label, required this.onTap});
   final String label;
-  final int value;
-  final ValueChanged<int> onChanged;
+  final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.remove, size: 16),
-          onPressed: () => onChanged(value - 1),
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: theme.dividerColor),
         ),
-        Text('$value$label'),
-        IconButton(
-          icon: const Icon(Icons.add, size: 16),
-          onPressed: () => onChanged(value + 1),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label),
+            const Icon(Icons.arrow_drop_down, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepperDialog extends StatefulWidget {
+  const _StepperDialog({
+    required this.title,
+    required this.initial,
+    required this.min,
+    required this.onChanged,
+  });
+  final String title;
+  final int initial;
+  final int min;
+  final ValueChanged<int> onChanged;
+  @override
+  State<_StepperDialog> createState() => _StepperDialogState();
+}
+
+class _StepperDialogState extends State<_StepperDialog> {
+  late int _v = widget.initial;
+  void _set(int next) {
+    if (next < widget.min) return;
+    setState(() => _v = next);
+    widget.onChanged(_v); // live-apply
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            key: const Key('stepperMinus'),
+            icon: const Icon(Icons.remove),
+            onPressed: () => _set(_v - 1),
+          ),
+          Text('$_v', style: Theme.of(context).textTheme.headlineSmall),
+          IconButton(
+            key: const Key('stepperPlus'),
+            icon: const Icon(Icons.add),
+            onPressed: () => _set(_v + 1),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Done'),
         ),
       ],
     );
