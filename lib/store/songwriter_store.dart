@@ -12,9 +12,9 @@ import '../schema/rules/songwriter_rules.dart';
 const _sessionKey = '@muzician/songwriter_session/v1';
 
 SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
-      config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
-      sections: [],
-    );
+  config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+  sections: [],
+);
 
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   Timer? _debounce;
@@ -32,7 +32,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     if (raw != null) {
       try {
         state = SongwriterProjectSnapshot.fromJson(
-            jsonDecode(raw) as Map<String, dynamic>);
+          jsonDecode(raw) as Map<String, dynamic>,
+        );
       } catch (_) {}
     }
   }
@@ -73,20 +74,29 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   // ── sections ──
   void addSection({String? label, required int lengthBars}) {
     final section = makeSection(
-        label: label, lengthBars: lengthBars, order: state.sections.length);
+      label: label,
+      lengthBars: lengthBars,
+      order: state.sections.length,
+    );
     _set(state.copyWith(sections: [...state.sections, section]));
   }
 
   void _replaceSection(String sectionId, SongSection Function(SongSection) f) {
-    _set(state.copyWith(
-      sections:
-          state.sections.map((s) => s.id == sectionId ? f(s) : s).toList(),
-    ));
+    _set(
+      state.copyWith(
+        sections: state.sections
+            .map((s) => s.id == sectionId ? f(s) : s)
+            .toList(),
+      ),
+    );
   }
 
   // ── lanes ──
-  void addLane(
-      {required String sectionId, required SongLaneKind kind, String? label}) {
+  void addLane({
+    required String sectionId,
+    required SongLaneKind kind,
+    String? label,
+  }) {
     _replaceSection(sectionId, (s) {
       final lane = makeLane(kind: kind, label: label, order: s.lanes.length);
       return s.copyWith(lanes: [...s.lanes, lane]);
@@ -94,10 +104,16 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   void _replaceLane(
-      String sectionId, String laneId, SongLane Function(SongLane) f) {
-    _replaceSection(sectionId, (s) => s.copyWith(
-          lanes: s.lanes.map((l) => l.id == laneId ? f(l) : l).toList(),
-        ));
+    String sectionId,
+    String laneId,
+    SongLane Function(SongLane) f,
+  ) {
+    _replaceSection(
+      sectionId,
+      (s) => s.copyWith(
+        lanes: s.lanes.map((l) => l.id == laneId ? f(l) : l).toList(),
+      ),
+    );
   }
 
   // ── blocks ──
@@ -109,8 +125,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required int spanBars,
   }) {
     _replaceLane(sectionId, laneId, (l) {
-      final candidate =
-          makeSaveBlock(saveId: saveId, startBar: startBar, spanBars: spanBars);
+      final candidate = makeSaveBlock(
+        saveId: saveId,
+        startBar: startBar,
+        spanBars: spanBars,
+      );
       if (blocksOverlap(l.blocks, candidate)) return l; // ignore overlaps
       return l.copyWith(blocks: [...l.blocks, candidate]);
     });
@@ -127,12 +146,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     });
   }
 
-  void removeBlock(
-      {required String sectionId,
-      required String laneId,
-      required String blockId}) {
-    _replaceLane(sectionId, laneId,
-        (l) => l.copyWith(blocks: l.blocks.where((b) => b.id != blockId).toList()));
+  void removeBlock({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+  }) {
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) =>
+          l.copyWith(blocks: l.blocks.where((b) => b.id != blockId).toList()),
+    );
   }
 
   /// Make Unique: detach a block from its live save by embedding a snapshot.
@@ -142,42 +166,51 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String blockId,
     required InstrumentSnapshot snapshot,
   }) {
-    _replaceLane(sectionId, laneId, (l) => l.copyWith(
-          blocks: l.blocks
-              .map((b) =>
-                  b.id == blockId ? b.copyWith(embedded: snapshot) : b)
-              .toList(),
-        ));
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) => l.copyWith(
+        blocks: l.blocks
+            .map((b) => b.id == blockId ? b.copyWith(embedded: snapshot) : b)
+            .toList(),
+      ),
+    );
   }
 
   void _recomputeNumerals() {
     final key = state.config;
-    _set(state.copyWith(
-      sections: state.sections
-          .map((s) => s.copyWith(
+    _set(
+      state.copyWith(
+        sections: state.sections
+            .map(
+              (s) => s.copyWith(
                 lanes: s.lanes
-                    .map((l) => l.kind != SongLaneKind.harmony
-                        ? l
-                        : l.copyWith(
-                            blocks: l.blocks.map((b) {
-                              if (b.chordRootPc == null ||
-                                  b.chordQuality == null) {
-                                return b;
-                              }
-                              return b.copyWith(
-                                romanNumeral: romanNumeralFor(
-                                  b.chordRootPc!,
-                                  b.chordQuality!,
-                                  key.keyRoot,
-                                  key.keyScaleName,
-                                ),
-                              );
-                            }).toList(),
-                          ))
+                    .map(
+                      (l) => l.kind != SongLaneKind.harmony
+                          ? l
+                          : l.copyWith(
+                              blocks: l.blocks.map((b) {
+                                if (b.chordRootPc == null ||
+                                    b.chordQuality == null) {
+                                  return b;
+                                }
+                                return b.copyWith(
+                                  romanNumeral: romanNumeralFor(
+                                    b.chordRootPc!,
+                                    b.chordQuality!,
+                                    key.keyRoot,
+                                    key.keyScaleName,
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                    )
                     .toList(),
-              ))
-          .toList(),
-    ));
+              ),
+            )
+            .toList(),
+      ),
+    );
   }
 
   /// Replace the whole project (used when loading a named save).
@@ -186,5 +219,5 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
 final songwriterProvider =
     NotifierProvider<SongwriterNotifier, SongwriterProjectSnapshot>(
-  SongwriterNotifier.new,
-);
+      SongwriterNotifier.new,
+    );
