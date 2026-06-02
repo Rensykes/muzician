@@ -8,6 +8,7 @@ import '../utils/note_utils.dart';
 import 'fretboard.dart';
 import 'piano.dart';
 import 'song_project.dart';
+import 'songwriter.dart';
 
 // ─── Musical Context ──────────────────────────────────────────────────────────
 
@@ -51,7 +52,9 @@ class PendingScale {
 
 // ─── Snapshots ────────────────────────────────────────────────────────────────
 
-sealed class InstrumentSnapshot {
+abstract class InstrumentSnapshot {
+  const InstrumentSnapshot();
+
   String get instrument;
   List<String> get selectedNotes;
   PendingChord? get pendingChord;
@@ -62,6 +65,9 @@ sealed class InstrumentSnapshot {
   static InstrumentSnapshot fromJson(Map<String, dynamic> json) {
     final type = json['type'] as String?;
     final instrument = json['instrument'] as String? ?? 'fretboard';
+    if (type == 'songwriter' || instrument == 'songwriter') {
+      return SongwriterProjectSnapshot.fromJson(json);
+    }
     if (type == 'piano_roll' || instrument == 'piano_roll') {
       return PianoRollSnapshot.fromJson(json);
     }
@@ -627,12 +633,16 @@ class AppSettings {
   /// Accent click on the downbeat (beat 1), softer click on other beats.
   final bool metronomeEnabled;
 
+  /// When true the save browser renders saves as a grid; false shows a list.
+  final bool saveBrowserGrid;
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
     this.showNoteLabels = true,
     this.humSensitivity = HumSensitivity.balanced,
     this.metronomeEnabled = true,
+    this.saveBrowserGrid = false,
   });
 
   AppSettings copyWith({
@@ -641,12 +651,14 @@ class AppSettings {
     bool? showNoteLabels,
     HumSensitivity? humSensitivity,
     bool? metronomeEnabled,
+    bool? saveBrowserGrid,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
     showNoteLabels: showNoteLabels ?? this.showNoteLabels,
     humSensitivity: humSensitivity ?? this.humSensitivity,
     metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
+    saveBrowserGrid: saveBrowserGrid ?? this.saveBrowserGrid,
   );
 
   Map<String, dynamic> toJson() => {
@@ -655,6 +667,7 @@ class AppSettings {
     'showNoteLabels': showNoteLabels,
     'humSensitivity': humSensitivity.name,
     'metronomeEnabled': metronomeEnabled,
+    'saveBrowserGrid': saveBrowserGrid,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -663,6 +676,7 @@ class AppSettings {
     showNoteLabels: json['showNoteLabels'] as bool? ?? true,
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
     metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,
+    saveBrowserGrid: json['saveBrowserGrid'] as bool? ?? false,
   );
 }
 

@@ -52,6 +52,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(metronomeEnabled: enabled);
     await _persist();
   }
+
+  Future<void> setSaveBrowserGrid(bool grid) async {
+    state = state.copyWith(saveBrowserGrid: grid);
+    await _persist();
+  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
