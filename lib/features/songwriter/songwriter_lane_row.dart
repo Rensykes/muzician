@@ -2,7 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
+import 'harmony_chord_sheet.dart';
 import 'songwriter_block_tile.dart';
+
+int _nextFreeBar(SongLane lane, int lengthBars) {
+  // first bar not covered by an existing block, capped at lengthBars-1
+  var bar = 0;
+  final occupied = <int>{};
+  for (final b in lane.blocks) {
+    for (var i = b.startBar; i < b.endBar; i++) {
+      occupied.add(i);
+    }
+  }
+  while (bar < lengthBars && occupied.contains(bar)) {
+    bar++;
+  }
+  return bar >= lengthBars ? 0 : bar;
+}
 
 class SongwriterLaneRow extends ConsumerWidget {
   const SongwriterLaneRow(
@@ -57,6 +73,28 @@ class SongwriterLaneRow extends ConsumerWidget {
                 },
               ),
             ),
+          ),
+          IconButton(
+            key: Key('addBlock_$laneId'),
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              if (lane.kind == SongLaneKind.harmony) {
+                final config = ref.read(songwriterProvider).config;
+                final block = await showHarmonyChordSheet(
+                  context,
+                  startBar: _nextFreeBar(lane, lengthBars),
+                  spanBars: 2,
+                  keyRoot: config.keyRoot,
+                  keyScaleName: config.keyScaleName,
+                );
+                if (block != null) {
+                  ref.read(songwriterProvider.notifier).addHarmonyBlock(
+                      sectionId: sectionId, laneId: laneId, block: block);
+                }
+              } else if (lane.kind == SongLaneKind.save) {
+                // TODO(B2a.6): open save palette
+              }
+            },
           ),
         ],
       ),
