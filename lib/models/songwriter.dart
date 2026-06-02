@@ -54,6 +54,7 @@ class SongBlock {
     int? chordRootPc,
     List<String>? chordNotes,
     String? romanNumeral,
+    bool clearRomanNumeral = false,
   }) => SongBlock(
     id: id,
     startBar: startBar ?? this.startBar,
@@ -64,7 +65,7 @@ class SongBlock {
     chordQuality: chordQuality ?? this.chordQuality,
     chordRootPc: chordRootPc ?? this.chordRootPc,
     chordNotes: chordNotes ?? this.chordNotes,
-    romanNumeral: romanNumeral ?? this.romanNumeral,
+    romanNumeral: clearRomanNumeral ? null : (romanNumeral ?? this.romanNumeral),
   );
 
   Map<String, dynamic> toJson() => {
