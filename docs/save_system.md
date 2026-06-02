@@ -25,7 +25,7 @@ lib/
 |---|---|
 | `PendingChord` | Root + quality pending detection (`root`, `quality`, `symbol`) |
 | `PendingScale` | Root + scale name pending detection |
-| `InstrumentSnapshot` | Sealed class — `FretboardSnapshot`, `PianoSnapshot`, or `PianoRollSnapshot` |
+| `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot` |
 | `FretboardSnapshot` | Fretboard save: tuning, capo, selected cells, notes, view mode, pending chord/scale |
 | `PianoSnapshot` | Piano save: key range, selected keys, notes, view mode, pending chord/scale |
 | `PianoRollSnapshot` | Piano roll session: tempo, time signature, notes, range, snap, highlights, derivable chord/scale |
@@ -34,10 +34,10 @@ lib/
 | `ProgressionFolderMeta` | Metadata attached to a folder: source type, progression ID, key |
 | `ProgressionChordMeta` | Metadata attached to a save: chord symbol, root, Roman numeral, chord notes |
 | `ActiveSession` | Current navigation context: `saveId` + `folderId` |
-| `AppSettings` | User preferences — `suppressOutOfKeyAlert`, `noteVolume`, `showNoteLabels`, `humSensitivity`, `metronomeEnabled` |
+| `AppSettings` | User preferences — `suppressOutOfKeyAlert`, `noteVolume`, `showNoteLabels`, `humSensitivity`, `metronomeEnabled`, `saveBrowserGrid` |
 | `SaveSystemState` | Root state: `folders`, `saves`, `activeSession`, `hydrated` |
 
-> Snapshots use `sealed class` with `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, and `SongProjectSnapshot` subtypes. All types implement `toJson` / `fromJson` for `SharedPreferences` persistence.
+> Snapshots use an `abstract class InstrumentSnapshot` with `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, and `SongwriterProjectSnapshot` subtypes. (It was `sealed` until `SongwriterProjectSnapshot` was added from `lib/models/songwriter.dart`; Dart `sealed` restricts subtypes to the same library, and dispatch is done via `is`-checks + the `fromJson` factory rather than exhaustive `switch`, so the base was relaxed to `abstract`.) All types implement `toJson` / `fromJson` for `SharedPreferences` persistence.
 
 ---
 
@@ -68,6 +68,13 @@ Entire Song project with tracks, clips, note patterns, and drum patterns.
 - `selectedNotes` aggregates unique pitch classes across all note patterns.
 - `pendingChord` and `pendingScale` return `null` — Song saves do not produce chord/scale summaries.
 - Save browser shows track/clip/pattern counts instead of note chips.
+
+### SongwriterProjectSnapshot (`type: 'songwriter'`)
+
+Songwriter arrangement project — ordered `SongSection`s, each holding parallel `SongLane`s, each holding `SongBlock`s (live save references via `saveId`, or detached `embedded` snapshots). Defined in `lib/models/songwriter.dart`; see `docs/songwriter.md`.
+
+- `selectedNotes` aggregates unique pitch classes across all harmony-block `chordNotes`.
+- `pendingChord` and `pendingScale` return `null` — Songwriter saves do not produce chord/scale summaries.
 
 ---
 
