@@ -10,12 +10,14 @@ import 'ui/core/app_info_panel.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
 import 'features/song/song_screen.dart';
+import 'features/songwriter/songwriter_feature.dart';
 import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
 import 'models/piano.dart' show PianoViewMode;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
+import 'store/songwriter_store.dart';
 import 'store/song_session_store.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
@@ -80,6 +82,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
       await ref.read(saveSystemProvider.notifier).hydrate();
       await ref.read(settingsProvider.notifier).hydrate();
       await ref.read(songSessionProvider).hydrate();
+      await ref.read(songwriterProvider.notifier).hydrate();
       await NotePlayer.instance.init();
     });
   }
@@ -94,7 +97,8 @@ class _AppShellState extends ConsumerState<_AppShell> {
           _PianoScreen(), // index 1
           PianoRollScreenV2(), // index 2
           SongScreen(), // index 3
-          _SettingsScreen(), // index 4
+          SongwriterScreen(), // index 4
+          _SettingsScreen(), // index 5
         ],
       ),
       bottomNavigationBar: Container(
@@ -134,10 +138,16 @@ class _AppShellState extends ConsumerState<_AppShell> {
                   onTap: () => _setTab(3),
                 ),
                 _NavTab(
-                  icon: Icons.settings,
-                  label: 'Settings',
+                  icon: Icons.lyrics,
+                  label: 'Writer',
                   active: _tabIndex == 4,
                   onTap: () => _setTab(4),
+                ),
+                _NavTab(
+                  icon: Icons.settings,
+                  label: 'Settings',
+                  active: _tabIndex == 5,
+                  onTap: () => _setTab(5),
                 ),
               ],
             ),
