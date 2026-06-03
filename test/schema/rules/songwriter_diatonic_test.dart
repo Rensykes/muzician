@@ -45,6 +45,18 @@ void main() {
 
     expect(triads[2].symbol, 'C');
     expect(triads[2].romanNumeral, 'III');
+
+    expect(triads[3].symbol, 'Dm');
+    expect(triads[3].romanNumeral, 'iv');
+
+    expect(triads[4].symbol, 'Em');
+    expect(triads[4].romanNumeral, 'v');
+
+    expect(triads[5].symbol, 'F');
+    expect(triads[5].romanNumeral, 'VI');
+
+    expect(triads[6].symbol, 'G');
+    expect(triads[6].romanNumeral, 'VII');
   });
 
   test('diatonicTriads returns empty for unknown scale', () {
