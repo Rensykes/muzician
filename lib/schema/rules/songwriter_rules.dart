@@ -130,12 +130,14 @@ List<ExpandedSection> expandSections(List<SongSection> sections) {
   for (final s in sections) {
     final reps = s.repeat < 1 ? 1 : s.repeat;
     for (var r = 0; r < reps; r++) {
-      out.add(ExpandedSection(
-        sectionId: s.id,
-        repeatIndex: r,
-        globalStartBar: bar,
-        lengthBars: s.lengthBars,
-      ));
+      out.add(
+        ExpandedSection(
+          sectionId: s.id,
+          repeatIndex: r,
+          globalStartBar: bar,
+          lengthBars: s.lengthBars,
+        ),
+      );
       bar += s.lengthBars;
     }
   }
@@ -199,7 +201,9 @@ List<SongBlock> tileLaneBlocks(
 // ─── Snapshot Resolution ─────────────────────────────────────────────────────
 
 InstrumentSnapshot? resolveBlockSnapshot(
-    SongBlock block, List<SaveEntry> saves) {
+  SongBlock block,
+  List<SaveEntry> saves,
+) {
   if (block.embedded != null) return block.embedded;
   final id = block.saveId;
   if (id == null) return null;

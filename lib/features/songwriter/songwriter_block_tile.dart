@@ -34,24 +34,26 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
   double _resizeDx = 0;
 
   SongBlock? _watchBlock() => ref.watch(
-        songwriterProvider.select((p) {
-          for (final s in p.sections) {
-            if (s.id != widget.sectionId) continue;
-            for (final l in s.lanes) {
-              if (l.id != widget.laneId) continue;
-              for (final b in l.blocks) {
-                if (b.id == widget.blockId) return b;
-              }
-            }
+    songwriterProvider.select((p) {
+      for (final s in p.sections) {
+        if (s.id != widget.sectionId) continue;
+        for (final l in s.lanes) {
+          if (l.id != widget.laneId) continue;
+          for (final b in l.blocks) {
+            if (b.id == widget.blockId) return b;
           }
-          return null;
-        }),
-      );
+        }
+      }
+      return null;
+    }),
+  );
 
   void _applyMove(SongBlock block) {
     final deltaBars = (_dragDx / widget.barWidth).round();
     if (deltaBars == 0) return;
-    ref.read(songwriterProvider.notifier).setBlockPlacement(
+    ref
+        .read(songwriterProvider.notifier)
+        .setBlockPlacement(
           sectionId: widget.sectionId,
           laneId: widget.laneId,
           blockId: widget.blockId,
@@ -65,7 +67,9 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
     if (deltaBars == 0) return;
     final newSpan = block.spanBars + deltaBars;
     if (newSpan < 1) return;
-    ref.read(songwriterProvider.notifier).setBlockPlacement(
+    ref
+        .read(songwriterProvider.notifier)
+        .setBlockPlacement(
           sectionId: widget.sectionId,
           laneId: widget.laneId,
           blockId: widget.blockId,
@@ -80,7 +84,8 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
     if (block == null) return const SizedBox.shrink();
 
     final saves = ref.watch(saveSystemProvider).saves;
-    final broken = block.embedded == null &&
+    final broken =
+        block.embedded == null &&
         block.saveId != null &&
         !saves.any((e) => e.id == block.saveId);
 
@@ -101,8 +106,8 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
           color: broken
               ? Colors.red.withValues(alpha: 0.25)
               : widget.highlighted
-                  ? Colors.tealAccent
-                  : Colors.teal,
+              ? Colors.tealAccent
+              : Colors.teal,
           borderRadius: BorderRadius.circular(6),
           border: widget.highlighted
               ? Border.all(color: Colors.white, width: 1.5)
@@ -115,8 +120,7 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(primary,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(primary, maxLines: 1, overflow: TextOverflow.ellipsis),
                   if (secondary != null)
                     Text(
                       secondary,
@@ -137,7 +141,8 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.3),
                   borderRadius: const BorderRadius.horizontal(
-                      right: Radius.circular(6)),
+                    right: Radius.circular(6),
+                  ),
                 ),
               ),
             ),
@@ -155,7 +160,9 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
       showBrokenReferenceSheet(
         context,
         onDelete: () {
-          ref.read(songwriterProvider.notifier).removeBlock(
+          ref
+              .read(songwriterProvider.notifier)
+              .removeBlock(
                 sectionId: widget.sectionId,
                 laneId: widget.laneId,
                 blockId: widget.blockId,
@@ -189,7 +196,9 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                   final saves = ref.read(saveSystemProvider).saves;
                   final snap = resolveBlockSnapshot(block, saves);
                   if (snap != null) {
-                    ref.read(songwriterProvider.notifier).makeBlockUnique(
+                    ref
+                        .read(songwriterProvider.notifier)
+                        .makeBlockUnique(
                           sectionId: widget.sectionId,
                           laneId: widget.laneId,
                           blockId: widget.blockId,
@@ -212,7 +221,9 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                   ),
                 );
                 if (picked != null) {
-                  ref.read(songwriterProvider.notifier).relinkBlock(
+                  ref
+                      .read(songwriterProvider.notifier)
+                      .relinkBlock(
                         sectionId: widget.sectionId,
                         laneId: widget.laneId,
                         blockId: widget.blockId,

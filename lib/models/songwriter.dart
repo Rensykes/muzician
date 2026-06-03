@@ -67,7 +67,9 @@ class SongBlock {
     chordQuality: chordQuality ?? this.chordQuality,
     chordRootPc: chordRootPc ?? this.chordRootPc,
     chordNotes: chordNotes ?? this.chordNotes,
-    romanNumeral: clearRomanNumeral ? null : (romanNumeral ?? this.romanNumeral),
+    romanNumeral: clearRomanNumeral
+        ? null
+        : (romanNumeral ?? this.romanNumeral),
   );
 
   Map<String, dynamic> toJson() => {
