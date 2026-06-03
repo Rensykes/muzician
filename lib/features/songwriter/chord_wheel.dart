@@ -140,21 +140,25 @@ class _ChordWheelPainter extends CustomPainter {
         text: TextSpan(
           text: triad.symbol,
           style: TextStyle(
-              color: textColor, fontSize: 13, fontWeight: FontWeight.bold),
+            color: textColor,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
       symbolPainter.paint(
         canvas,
-        labelCenter -
-            Offset(symbolPainter.width / 2, symbolPainter.height + 1),
+        labelCenter - Offset(symbolPainter.width / 2, symbolPainter.height + 1),
       );
 
       final numeralPainter = TextPainter(
         text: TextSpan(
           text: triad.romanNumeral,
           style: TextStyle(
-              color: textColor.withValues(alpha: 0.7), fontSize: 11),
+            color: textColor.withValues(alpha: 0.7),
+            fontSize: 11,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
