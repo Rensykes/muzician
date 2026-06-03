@@ -101,6 +101,55 @@ SongBlock makeHarmonyBlock({
   romanNumeral: romanNumeral,
 );
 
+// ─── Expanded-Section Mapping ────────────────────────────────────────────────
+
+class ExpandedSection {
+  const ExpandedSection({
+    required this.sectionId,
+    required this.repeatIndex,
+    required this.globalStartBar,
+    required this.lengthBars,
+  });
+  final String sectionId;
+  final int repeatIndex;
+  final int globalStartBar;
+  final int lengthBars;
+  int get globalEndBar => globalStartBar + lengthBars;
+}
+
+class SectionHit {
+  const SectionHit({required this.section, required this.localBar});
+  final ExpandedSection section;
+  final int localBar;
+}
+
+List<ExpandedSection> expandSections(List<SongSection> sections) {
+  final out = <ExpandedSection>[];
+  var bar = 0;
+  for (final s in sections) {
+    final reps = s.repeat < 1 ? 1 : s.repeat;
+    for (var r = 0; r < reps; r++) {
+      out.add(ExpandedSection(
+        sectionId: s.id,
+        repeatIndex: r,
+        globalStartBar: bar,
+        lengthBars: s.lengthBars,
+      ));
+      bar += s.lengthBars;
+    }
+  }
+  return out;
+}
+
+SectionHit? sectionAtGlobalBar(List<ExpandedSection> expanded, int globalBar) {
+  for (final e in expanded) {
+    if (globalBar >= e.globalStartBar && globalBar < e.globalEndBar) {
+      return SectionHit(section: e, localBar: globalBar - e.globalStartBar);
+    }
+  }
+  return null;
+}
+
 // ─── Timeline Flattening ──────────────────────────────────────────────────────
 
 /// Total bar length of the whole project after expanding section repeats.
