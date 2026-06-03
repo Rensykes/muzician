@@ -63,8 +63,8 @@ class ChordWheel extends StatelessWidget {
           triads: triads,
           majorColor: scheme.primary,
           minorColor: scheme.secondary,
-          dimColor: Colors.grey,
-          textColor: scheme.onPrimary,
+          dimColor: Colors.grey.shade600,
+          textColor: Colors.white,
         ),
         size: Size.infinite,
       ),
@@ -175,5 +175,7 @@ class _ChordWheelPainter extends CustomPainter {
   bool shouldRepaint(_ChordWheelPainter old) =>
       old.triads != triads ||
       old.majorColor != majorColor ||
-      old.minorColor != minorColor;
+      old.minorColor != minorColor ||
+      old.dimColor != dimColor ||
+      old.textColor != textColor;
 }
