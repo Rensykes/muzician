@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../utils/note_utils.dart';
+import 'chord_wheel.dart';
 
 const _qualities = <(String value, String label)>[
   ('', 'maj'),
@@ -17,8 +18,6 @@ const _qualities = <(String value, String label)>[
   ('dim7', 'dim7'),
 ];
 
-/// Opens the harmony chord picker. Returns a ready-to-add [SongBlock], or null
-/// if dismissed. Pick a root, then a quality (which commits).
 Future<SongBlock?> showHarmonyChordSheet(
   BuildContext context, {
   required int startBar,
@@ -28,6 +27,7 @@ Future<SongBlock?> showHarmonyChordSheet(
 }) {
   return showModalBottomSheet<SongBlock>(
     context: context,
+    isScrollControlled: true,
     builder: (_) => _HarmonySheet(
       startBar: startBar,
       spanBars: spanBars,
@@ -54,9 +54,25 @@ class _HarmonySheet extends StatefulWidget {
 }
 
 class _HarmonySheetState extends State<_HarmonySheet> {
+  bool _showManual = false;
   int? _rootPc;
 
-  void _commit(String quality) {
+  bool get _hasKey => widget.keyRoot != null && widget.keyScaleName != null;
+
+  void _commitTriad(DiatonicTriad triad) {
+    final block = makeHarmonyBlock(
+      startBar: widget.startBar,
+      spanBars: widget.spanBars,
+      chordSymbol: triad.symbol,
+      chordQuality: triad.quality,
+      chordRootPc: triad.rootPc,
+      chordNotes: triad.notes,
+      romanNumeral: triad.romanNumeral,
+    );
+    Navigator.pop(context, block);
+  }
+
+  void _commitManual(String quality) {
     final rootPc = _rootPc;
     if (rootPc == null) return;
     final rootName = chromaticNotes[rootPc];
@@ -83,36 +99,72 @@ class _HarmonySheetState extends State<_HarmonySheet> {
       padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Root'),
-          Wrap(
-            spacing: 6,
-            children: [
-              for (var pc = 0; pc < 12; pc++)
-                ChoiceChip(
-                  key: Key('harmonyRoot_$pc'),
-                  label: Text(chromaticNotes[pc]),
-                  selected: _rootPc == pc,
-                  onSelected: (_) => setState(() => _rootPc = pc),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text('Quality'),
-          Wrap(
-            spacing: 6,
-            children: [
-              for (final q in _qualities)
-                ActionChip(
-                  key: Key('harmonyQuality_${q.$1}'),
-                  label: Text(q.$2),
-                  onPressed: _rootPc == null ? null : () => _commit(q.$1),
-                ),
-            ],
-          ),
+          if (_hasKey) ...[
+            SizedBox(
+              height: 240,
+              child: ChordWheel(
+                keyRootPc: widget.keyRoot!,
+                scaleName: widget.keyScaleName!,
+                onPick: _commitTriad,
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => setState(() => _showManual = !_showManual),
+              child: Row(
+                children: [
+                  Icon(
+                    _showManual ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('Other chord'),
+                ],
+              ),
+            ),
+          ],
+          if (!_hasKey || _showManual) ...[
+            const SizedBox(height: 8),
+            _manualPicker(),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _manualPicker() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Root'),
+        Wrap(
+          spacing: 6,
+          children: [
+            for (var pc = 0; pc < 12; pc++)
+              ChoiceChip(
+                key: Key('harmonyRoot_$pc'),
+                label: Text(chromaticNotes[pc]),
+                selected: _rootPc == pc,
+                onSelected: (_) => setState(() => _rootPc = pc),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Text('Quality'),
+        Wrap(
+          spacing: 6,
+          children: [
+            for (final q in _qualities)
+              ActionChip(
+                key: Key('harmonyQuality_${q.$1}'),
+                label: Text(q.$2),
+                onPressed: _rootPc == null ? null : () => _commitManual(q.$1),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
