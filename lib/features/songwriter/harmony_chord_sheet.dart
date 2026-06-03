@@ -18,6 +18,12 @@ const _qualities = <(String value, String label)>[
   ('dim7', 'dim7'),
 ];
 
+/// Opens the harmony chord picker. Returns a ready-to-add [SongBlock], or null
+/// if dismissed. Two modes:
+///  - **Key set:** primary picker is the diatonic [ChordWheel]; the
+///    root+quality grid hides behind an "Other chord" expander for borrowed
+///    or altered chords.
+///  - **No key:** the root+quality grid is shown directly.
 Future<SongBlock?> showHarmonyChordSheet(
   BuildContext context, {
   required int startBar,
