@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_rules.dart';
+import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import 'songwriter_grid.dart';
 import 'songwriter_lane_row.dart';
@@ -22,6 +24,17 @@ class SongwriterSectionCard extends ConsumerWidget {
     );
     if (section.id.isEmpty) return const SizedBox.shrink();
     final notifier = ref.read(songwriterProvider.notifier);
+
+    final globalBar = ref.watch(
+        songwriterPlaybackProvider.select((s) => s.currentBar));
+    int? activeLocalBar;
+    if (globalBar != null) {
+      final expanded = expandSections(ref.read(songwriterProvider).sections);
+      final hit = sectionAtGlobalBar(expanded, globalBar);
+      if (hit != null && hit.section.sectionId == sectionId) {
+        activeLocalBar = hit.localBar;
+      }
+    }
 
     return Card(
       child: Padding(
@@ -94,6 +107,7 @@ class SongwriterSectionCard extends ConsumerWidget {
                     child: SongwriterLaneRow(
                       sectionId: sectionId,
                       laneId: lane.id,
+                      activeBar: activeLocalBar,
                     ),
                   ),
                   IconButton(

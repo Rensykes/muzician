@@ -28,9 +28,11 @@ class SongwriterLaneRow extends ConsumerWidget {
     super.key,
     required this.sectionId,
     required this.laneId,
+    this.activeBar,
   });
   final String sectionId;
   final String laneId;
+  final int? activeBar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,6 +93,24 @@ class SongwriterLaneRow extends ConsumerWidget {
                             sectionId: sectionId,
                             laneId: laneId,
                             blockId: block.id,
+                            highlighted: activeBar != null &&
+                                activeBar! >= block.startBar &&
+                                activeBar! < block.endBar,
+                          ),
+                        ),
+                      if (activeBar != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: PlayheadPainter(
+                                bar: activeBar!.toDouble(),
+                                lengthBars: lengthBars,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.7),
+                              ),
+                            ),
                           ),
                         ),
                     ],
