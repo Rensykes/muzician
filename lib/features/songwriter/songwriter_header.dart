@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../store/settings_store.dart';
+import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../utils/note_utils.dart';
 
@@ -25,6 +27,34 @@ class SongwriterHeader extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
+          Consumer(builder: (context, ref, _) {
+            final playing = ref.watch(songwriterPlaybackProvider
+                .select((s) => s.status == SongwriterPlaybackStatus.playing));
+            final t = ref.read(songwriterPlaybackProvider.notifier);
+            return IconButton(
+              key: const Key('songwriterPlay'),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: Icon(playing ? Icons.stop : Icons.play_arrow),
+              onPressed: () =>
+                  playing ? t.stopPlayback() : t.startPlayback(),
+            );
+          }),
+          Consumer(builder: (context, ref, _) {
+            final on = ref.watch(
+                settingsProvider.select((s) => s.metronomeEnabled));
+            return IconButton(
+              key: const Key('songwriterMetronome'),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: Icon(on ? Icons.music_note : Icons.music_off),
+              onPressed: () => ref
+                  .read(settingsProvider.notifier)
+                  .setMetronomeEnabled(!on),
+            );
+          }),
           const Spacer(),
           Flexible(
             child: _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
