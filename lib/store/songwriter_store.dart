@@ -319,6 +319,25 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  void relinkBlock({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+    required String saveId,
+  }) {
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) => l.copyWith(
+        blocks: l.blocks
+            .map((b) => b.id == blockId
+                ? b.copyWith(saveId: saveId, clearEmbedded: true)
+                : b)
+            .toList(),
+      ),
+    );
+  }
+
   void _recomputeNumerals() {
     final key = state.config;
     _set(

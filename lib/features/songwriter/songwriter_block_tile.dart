@@ -5,6 +5,7 @@ import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
+import '../../ui/save_browser_panel.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_undo.dart';
 
@@ -177,6 +178,47 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
               onTap: () {
                 Navigator.pop(sheetCtx);
                 _editPlacement(context, block);
+              },
+            ),
+            if (block.embedded == null && block.saveId != null)
+              ListTile(
+                leading: const Icon(Icons.content_copy),
+                title: const Text('Make Unique'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  final saves = ref.read(saveSystemProvider).saves;
+                  final snap = resolveBlockSnapshot(block, saves);
+                  if (snap != null) {
+                    ref.read(songwriterProvider.notifier).makeBlockUnique(
+                          sectionId: widget.sectionId,
+                          laneId: widget.laneId,
+                          blockId: widget.blockId,
+                          snapshot: snap,
+                        );
+                  }
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Re-link'),
+              onTap: () async {
+                Navigator.pop(sheetCtx);
+                final picked = await showModalBottomSheet<SaveEntry>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (ctx) => SaveBrowserPanel(
+                    instrumentFilter: 'fretboard',
+                    onPick: (entry) => Navigator.pop(ctx, entry),
+                  ),
+                );
+                if (picked != null) {
+                  ref.read(songwriterProvider.notifier).relinkBlock(
+                        sectionId: widget.sectionId,
+                        laneId: widget.laneId,
+                        blockId: widget.blockId,
+                        saveId: picked.id,
+                      );
+                }
               },
             ),
             ListTile(
