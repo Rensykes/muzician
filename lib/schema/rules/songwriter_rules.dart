@@ -96,14 +96,16 @@ List<DiatonicTriad> diatonicTriads(int keyRootPc, String scaleName) {
     final numeral = _caseNumeral(_romanByDegree[d], quality);
     final notes = getChordNotes(rootName, quality);
 
-    out.add(DiatonicTriad(
-      degree: d,
-      rootPc: rootPc,
-      quality: quality,
-      symbol: symbol,
-      romanNumeral: numeral,
-      notes: notes,
-    ));
+    out.add(
+      DiatonicTriad(
+        degree: d,
+        rootPc: rootPc,
+        quality: quality,
+        symbol: symbol,
+        romanNumeral: numeral,
+        notes: notes,
+      ),
+    );
   }
   return out;
 }
