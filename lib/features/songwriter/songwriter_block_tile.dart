@@ -6,83 +6,144 @@ import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
 import 'songwriter_undo.dart';
 
-class SongwriterBlockTile extends ConsumerWidget {
+class SongwriterBlockTile extends ConsumerStatefulWidget {
   const SongwriterBlockTile({
     super.key,
     required this.sectionId,
     required this.laneId,
     required this.blockId,
+    this.barWidth = 40,
     this.highlighted = false,
   });
   final String sectionId;
   final String laneId;
   final String blockId;
+  final double barWidth;
   final bool highlighted;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final block = ref.watch(
-      songwriterProvider.select((p) {
-        for (final s in p.sections) {
-          if (s.id != sectionId) continue;
-          for (final l in s.lanes) {
-            if (l.id != laneId) continue;
-            for (final b in l.blocks) {
-              if (b.id == blockId) return b;
+  ConsumerState<SongwriterBlockTile> createState() =>
+      _SongwriterBlockTileState();
+}
+
+class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
+  double _dragDx = 0;
+  double _resizeDx = 0;
+
+  SongBlock? _watchBlock() => ref.watch(
+        songwriterProvider.select((p) {
+          for (final s in p.sections) {
+            if (s.id != widget.sectionId) continue;
+            for (final l in s.lanes) {
+              if (l.id != widget.laneId) continue;
+              for (final b in l.blocks) {
+                if (b.id == widget.blockId) return b;
+              }
             }
           }
-        }
-        return null;
-      }),
-    );
+          return null;
+        }),
+      );
+
+  void _applyMove(SongBlock block) {
+    final deltaBars = (_dragDx / widget.barWidth).round();
+    if (deltaBars == 0) return;
+    ref.read(songwriterProvider.notifier).setBlockPlacement(
+          sectionId: widget.sectionId,
+          laneId: widget.laneId,
+          blockId: widget.blockId,
+          startBar: block.startBar + deltaBars,
+          spanBars: block.spanBars,
+        );
+  }
+
+  void _applyResize(SongBlock block) {
+    final deltaBars = (_resizeDx / widget.barWidth).round();
+    if (deltaBars == 0) return;
+    final newSpan = block.spanBars + deltaBars;
+    if (newSpan < 1) return;
+    ref.read(songwriterProvider.notifier).setBlockPlacement(
+          sectionId: widget.sectionId,
+          laneId: widget.laneId,
+          blockId: widget.blockId,
+          startBar: block.startBar,
+          spanBars: newSpan,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final block = _watchBlock();
     if (block == null) return const SizedBox.shrink();
 
     final saves = ref.watch(saveSystemProvider).saves;
-    final broken =
-        block.embedded == null &&
+    final broken = block.embedded == null &&
         block.saveId != null &&
         !saves.any((e) => e.id == block.saveId);
 
-    // PRIMARY label: chordSymbol first, then romanNumeral, then save label
     final primary =
         block.chordSymbol ?? block.romanNumeral ?? _saveLabel(saves, block);
     final secondary = block.chordSymbol != null ? block.romanNumeral : null;
 
     return GestureDetector(
-      key: Key('block_$blockId'),
-      onLongPress: () => _openMenu(context, ref, block),
+      key: Key('block_${widget.blockId}'),
+      onLongPress: () => _openMenu(context, block),
+      onHorizontalDragStart: (_) => _dragDx = 0,
+      onHorizontalDragUpdate: (d) => _dragDx += d.delta.dx,
+      onHorizontalDragEnd: (_) => _applyMove(block),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 1),
         decoration: BoxDecoration(
           color: broken
               ? Colors.red.withValues(alpha: 0.25)
-              : highlighted
+              : widget.highlighted
                   ? Colors.tealAccent
                   : Colors.teal,
           borderRadius: BorderRadius.circular(6),
-          border: highlighted
+          border: widget.highlighted
               ? Border.all(color: Colors.white, width: 1.5)
               : null,
         ),
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            Text(primary, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (secondary != null)
-              Text(
-                secondary,
-                style: const TextStyle(fontSize: 10),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(primary,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (secondary != null)
+                    Text(
+                      secondary,
+                      style: const TextStyle(fontSize: 10),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
               ),
+            ),
+            GestureDetector(
+              key: Key('resizeHandle_${widget.blockId}'),
+              onHorizontalDragStart: (_) => _resizeDx = 0,
+              onHorizontalDragUpdate: (d) => _resizeDx += d.delta.dx,
+              onHorizontalDragEnd: (_) => _applyResize(block),
+              child: Container(
+                width: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(6)),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _openMenu(BuildContext context, WidgetRef ref, SongBlock block) {
+  void _openMenu(BuildContext context, SongBlock block) {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetCtx) => SafeArea(
@@ -94,7 +155,7 @@ class SongwriterBlockTile extends ConsumerWidget {
               title: const Text('Edit placement'),
               onTap: () {
                 Navigator.pop(sheetCtx);
-                _editPlacement(context, ref, block);
+                _editPlacement(context, block);
               },
             ),
             ListTile(
@@ -104,16 +165,16 @@ class SongwriterBlockTile extends ConsumerWidget {
                 Navigator.pop(sheetCtx);
                 final n = ref.read(songwriterProvider.notifier);
                 n.removeBlock(
-                  sectionId: sectionId,
-                  laneId: laneId,
-                  blockId: blockId,
+                  sectionId: widget.sectionId,
+                  laneId: widget.laneId,
+                  blockId: widget.blockId,
                 );
                 showUndoSnack(
                   context,
                   'Block deleted',
                   () => n.insertBlock(
-                    sectionId: sectionId,
-                    laneId: laneId,
+                    sectionId: widget.sectionId,
+                    laneId: widget.laneId,
                     block: block,
                   ),
                 );
@@ -125,7 +186,7 @@ class SongwriterBlockTile extends ConsumerWidget {
     );
   }
 
-  void _editPlacement(BuildContext context, WidgetRef ref, SongBlock block) {
+  void _editPlacement(BuildContext context, SongBlock block) {
     showDialog<void>(
       context: context,
       builder: (_) => _PlacementDialog(
@@ -134,9 +195,9 @@ class SongwriterBlockTile extends ConsumerWidget {
         onApply: (start, span) => ref
             .read(songwriterProvider.notifier)
             .setBlockPlacement(
-              sectionId: sectionId,
-              laneId: laneId,
-              blockId: blockId,
+              sectionId: widget.sectionId,
+              laneId: widget.laneId,
+              blockId: widget.blockId,
               startBar: start,
               spanBars: span,
             ),
