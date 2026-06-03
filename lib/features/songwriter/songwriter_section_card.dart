@@ -26,7 +26,8 @@ class SongwriterSectionCard extends ConsumerWidget {
     final notifier = ref.read(songwriterProvider.notifier);
 
     final globalBar = ref.watch(
-        songwriterPlaybackProvider.select((s) => s.currentBar));
+      songwriterPlaybackProvider.select((s) => s.currentBar),
+    );
     int? activeLocalBar;
     if (globalBar != null) {
       final expanded = expandSections(ref.read(songwriterProvider).sections);

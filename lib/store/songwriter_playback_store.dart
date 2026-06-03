@@ -12,7 +12,9 @@ import 'songwriter_store.dart';
 
 typedef SongwriterMetronomeSink = Future<void> Function({required bool accent});
 
-final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((ref) {
+final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((
+  ref,
+) {
   return ({required bool accent}) async {
     NotePlayer.instance.playClick(accent: accent);
   };
@@ -42,13 +44,12 @@ class SongwriterPlaybackState {
     int? Function()? currentTick,
     int? totalTicks,
     int? measureTicks,
-  }) =>
-      SongwriterPlaybackState(
-        status: status ?? this.status,
-        currentTick: currentTick != null ? currentTick() : this.currentTick,
-        totalTicks: totalTicks ?? this.totalTicks,
-        measureTicks: measureTicks ?? this.measureTicks,
-      );
+  }) => SongwriterPlaybackState(
+    status: status ?? this.status,
+    currentTick: currentTick != null ? currentTick() : this.currentTick,
+    totalTicks: totalTicks ?? this.totalTicks,
+    measureTicks: measureTicks ?? this.measureTicks,
+  );
 }
 
 // ─── Transport Notifier ──────────────────────────────────────────────────────
@@ -115,5 +116,5 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
 
 final songwriterPlaybackProvider =
     NotifierProvider<SongwriterPlaybackNotifier, SongwriterPlaybackState>(
-  SongwriterPlaybackNotifier.new,
-);
+      SongwriterPlaybackNotifier.new,
+    );

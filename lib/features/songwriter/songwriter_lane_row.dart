@@ -94,7 +94,8 @@ class SongwriterLaneRow extends ConsumerWidget {
                             laneId: laneId,
                             blockId: block.id,
                             barWidth: barWidth,
-                            highlighted: activeBar != null &&
+                            highlighted:
+                                activeBar != null &&
                                 activeBar! >= block.startBar &&
                                 activeBar! < block.endBar,
                           ),
@@ -106,10 +107,9 @@ class SongwriterLaneRow extends ConsumerWidget {
                               painter: PlayheadPainter(
                                 bar: activeBar!.toDouble(),
                                 lengthBars: lengthBars,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.7),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.7),
                               ),
                             ),
                           ),

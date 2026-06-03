@@ -28,11 +28,7 @@ void showBlockPreviewSheet(BuildContext context, InstrumentSnapshot snapshot) {
               ],
             ),
             const SizedBox(height: 12),
-            SavePreviewThumbnail(
-              snapshot: snapshot,
-              width: 200,
-              height: 120,
-            ),
+            SavePreviewThumbnail(snapshot: snapshot, width: 200, height: 120),
             if (snapshot.selectedNotes.isNotEmpty) ...[
               const SizedBox(height: 12),
               Wrap(
