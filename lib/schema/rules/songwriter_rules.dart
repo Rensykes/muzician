@@ -2,6 +2,7 @@
 /// factories, and timeline flattening.
 library;
 
+import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
 import 'save_system_rules.dart' show generateId;
@@ -193,4 +194,17 @@ List<SongBlock> tileLaneBlocks(
     }
   }
   return out;
+}
+
+// ─── Snapshot Resolution ─────────────────────────────────────────────────────
+
+InstrumentSnapshot? resolveBlockSnapshot(
+    SongBlock block, List<SaveEntry> saves) {
+  if (block.embedded != null) return block.embedded;
+  final id = block.saveId;
+  if (id == null) return null;
+  for (final e in saves) {
+    if (e.id == id) return e.snapshot;
+  }
+  return null;
 }

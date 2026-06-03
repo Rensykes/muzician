@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
+import 'songwriter_block_preview.dart';
 import 'songwriter_undo.dart';
 
 class SongwriterBlockTile extends ConsumerStatefulWidget {
@@ -87,6 +89,7 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
 
     return GestureDetector(
       key: Key('block_${widget.blockId}'),
+      onTap: () => _onTap(context, block, saves),
       onLongPress: () => _openMenu(context, block),
       onHorizontalDragStart: (_) => _dragDx = 0,
       onHorizontalDragUpdate: (d) => _dragDx += d.delta.dx,
@@ -141,6 +144,24 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
         ),
       ),
     );
+  }
+
+  void _onTap(BuildContext context, SongBlock block, List<SaveEntry> saves) {
+    final snapshot = resolveBlockSnapshot(block, saves);
+    if (snapshot != null) {
+      showBlockPreviewSheet(context, snapshot);
+    } else {
+      showBrokenReferenceSheet(
+        context,
+        onDelete: () {
+          ref.read(songwriterProvider.notifier).removeBlock(
+                sectionId: widget.sectionId,
+                laneId: widget.laneId,
+                blockId: widget.blockId,
+              );
+        },
+      );
+    }
   }
 
   void _openMenu(BuildContext context, SongBlock block) {
