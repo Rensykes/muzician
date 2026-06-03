@@ -58,3 +58,31 @@ class BarGridPainter extends CustomPainter {
   bool shouldRepaint(BarGridPainter old) =>
       old.lengthBars != lengthBars || old.color != color;
 }
+
+class PlayheadPainter extends CustomPainter {
+  PlayheadPainter({
+    required this.bar,
+    required this.lengthBars,
+    required this.color,
+  });
+  final double bar;
+  final int lengthBars;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bars = lengthBars < 1 ? 1 : lengthBars;
+    final x = (bar / bars) * size.width;
+    canvas.drawLine(
+      Offset(x, 0),
+      Offset(x, size.height),
+      Paint()
+        ..color = color
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(PlayheadPainter old) =>
+      old.bar != bar || old.lengthBars != lengthBars || old.color != color;
+}

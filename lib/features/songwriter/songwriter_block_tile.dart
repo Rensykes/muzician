@@ -12,10 +12,12 @@ class SongwriterBlockTile extends ConsumerWidget {
     required this.sectionId,
     required this.laneId,
     required this.blockId,
+    this.highlighted = false,
   });
   final String sectionId;
   final String laneId;
   final String blockId;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,8 +54,15 @@ class SongwriterBlockTile extends ConsumerWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 1),
         decoration: BoxDecoration(
-          color: broken ? Colors.red.withValues(alpha: 0.25) : Colors.teal,
+          color: broken
+              ? Colors.red.withValues(alpha: 0.25)
+              : highlighted
+                  ? Colors.tealAccent
+                  : Colors.teal,
           borderRadius: BorderRadius.circular(6),
+          border: highlighted
+              ? Border.all(color: Colors.white, width: 1.5)
+              : null,
         ),
         alignment: Alignment.center,
         child: Column(

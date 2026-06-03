@@ -15,4 +15,17 @@ void main() {
     expect(find.text('3'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
   });
+
+  testWidgets('playhead painter renders without error', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CustomPaint(
+          size: const Size(200, 40),
+          painter: PlayheadPainter(bar: 2, lengthBars: 8, color: Colors.cyan),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }
