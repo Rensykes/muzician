@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/features/songwriter/harmony_chord_sheet.dart';
+import 'package:muzician/features/songwriter/chord_wheel.dart';
 
 void main() {
-  testWidgets('picking C major returns a harmony block with notes + numeral',
+  testWidgets('picking C major via manual picker returns a harmony block',
       (tester) async {
     SongBlock? result;
     await tester.pumpWidget(MaterialApp(
@@ -16,8 +17,8 @@ void main() {
                 context,
                 startBar: 0,
                 spanBars: 2,
-                keyRoot: 0,
-                keyScaleName: 'major',
+                keyRoot: null,
+                keyScaleName: null,
               );
             },
             child: const Text('open'),
@@ -36,6 +37,51 @@ void main() {
     expect(result, isNotNull);
     expect(result!.chordRootPc, 0);
     expect(result!.chordNotes, contains('C'));
-    expect(result!.romanNumeral, 'I');
+    expect(result!.romanNumeral, isNull);
+  });
+
+  testWidgets('shows chord wheel when key is set', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showHarmonyChordSheet(
+              context,
+              startBar: 0,
+              spanBars: 2,
+              keyRoot: 0,
+              keyScaleName: 'major',
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChordWheel), findsOneWidget);
+  });
+
+  testWidgets('shows root+quality grid when no key is set', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showHarmonyChordSheet(
+              context,
+              startBar: 0,
+              spanBars: 2,
+              keyRoot: null,
+              keyScaleName: null,
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChordWheel), findsNothing);
+    expect(find.text('Root'), findsOneWidget);
   });
 }
