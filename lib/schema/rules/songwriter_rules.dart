@@ -85,13 +85,14 @@ List<DiatonicTriad> diatonicTriads(int keyRootPc, String scaleName) {
     } else if (i3 == 4 && i5 == 8) {
       quality = 'aug';
     } else {
+      // Non-tertian triad (e.g. whole-tone, diminished scales). Fall back to
+      // major for symbol display; chord notes still use scale-derived pcs.
       quality = '';
     }
 
     final rootPc = (keyRootPc + rootSemitone) % 12;
     final rootName = chromaticNotes[rootPc];
-    final qualitySuffix = quality == '' ? '' : quality;
-    final symbol = '$rootName$qualitySuffix';
+    final symbol = '$rootName$quality';
     final numeral = _caseNumeral(_romanByDegree[d], quality);
     final notes = getChordNotes(rootName, quality);
 
