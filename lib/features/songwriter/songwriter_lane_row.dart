@@ -93,6 +93,7 @@ class SongwriterLaneRow extends ConsumerWidget {
                             sectionId: sectionId,
                             laneId: laneId,
                             blockId: block.id,
+                            barWidth: barWidth,
                             highlighted: activeBar != null &&
                                 activeBar! >= block.startBar &&
                                 activeBar! < block.endBar,
