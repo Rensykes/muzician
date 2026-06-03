@@ -38,6 +38,75 @@ String? romanNumeralFor(
   return _caseNumeral(_romanByDegree[degree], quality);
 }
 
+// ─── Diatonic Triad Derivation ───────────────────────────────────────────────
+
+class DiatonicTriad {
+  const DiatonicTriad({
+    required this.degree,
+    required this.rootPc,
+    required this.quality,
+    required this.symbol,
+    required this.romanNumeral,
+    required this.notes,
+  });
+  final int degree;
+  final int rootPc;
+  final String quality;
+  final String symbol;
+  final String romanNumeral;
+  final List<String> notes;
+}
+
+/// Returns the 7 diatonic triads for [keyRootPc] / [scaleName].
+///
+/// Each triad's quality is derived by stacking thirds from the scale's
+/// interval set: the intervals root→3rd and root→5th classify the triad
+/// as major (''), minor ('m'), diminished ('dim'), or augmented ('aug').
+/// Returns an empty list when [scaleName] is unknown or has fewer than 7
+/// degrees.
+List<DiatonicTriad> diatonicTriads(int keyRootPc, String scaleName) {
+  final intervals = scaleIntervals[scaleName];
+  if (intervals == null || intervals.length < 7) return [];
+  final out = <DiatonicTriad>[];
+  for (var d = 0; d < 7; d++) {
+    final rootSemitone = intervals[d];
+    final thirdSemitone = intervals[(d + 2) % 7];
+    final fifthSemitone = intervals[(d + 4) % 7];
+    final i3 = ((thirdSemitone - rootSemitone) % 12 + 12) % 12;
+    final i5 = ((fifthSemitone - rootSemitone) % 12 + 12) % 12;
+
+    String quality;
+    if (i3 == 4 && i5 == 7) {
+      quality = '';
+    } else if (i3 == 3 && i5 == 7) {
+      quality = 'm';
+    } else if (i3 == 3 && i5 == 6) {
+      quality = 'dim';
+    } else if (i3 == 4 && i5 == 8) {
+      quality = 'aug';
+    } else {
+      quality = '';
+    }
+
+    final rootPc = (keyRootPc + rootSemitone) % 12;
+    final rootName = chromaticNotes[rootPc];
+    final qualitySuffix = quality == '' ? '' : quality;
+    final symbol = '$rootName$qualitySuffix';
+    final numeral = _caseNumeral(_romanByDegree[d], quality);
+    final notes = getChordNotes(rootName, quality);
+
+    out.add(DiatonicTriad(
+      degree: d,
+      rootPc: rootPc,
+      quality: quality,
+      symbol: symbol,
+      romanNumeral: numeral,
+      notes: notes,
+    ));
+  }
+  return out;
+}
+
 // ─── Overlap Validation ───────────────────────────────────────────────────────
 
 /// True if [candidate] overlaps any block in [existing] (same lane).
