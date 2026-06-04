@@ -19,7 +19,8 @@ A new **"Writer"** tab (6th nav tab) for arranging a song as **Sections → per-
 | **B2a polish** | Default C major, undo-snackbar deletes, value pills, bar ruler + gridlines, drop header title, empty hint | ✅ DONE on branch **`worktree-songwriter-ux-polish`** (8 commits) — **NOT merged, awaiting review** |
 | **B2b** | Playback transport + playhead + metronome, drag move/resize, tap-block→open-save, Make-Unique/Re-link | ✅ DONE on branch **`worktree-songwriter-ux-polish`** (9 commits on top of polish) — **NOT merged, awaiting review** |
 | **Chord wheel** | Radial diatonic picker feeding the harmony lane | ✅ DONE on branch **`worktree-songwriter-ux-polish`** (8 commits on top of B2b) — **NOT merged, awaiting review**. Plan: `docs/superpowers/plans/2026-06-03-songwriter-chord-wheel.md` |
-| **C** | Enrichment: arpeggio/sequence save type + suggestion rules | ⬜ spec sketch: `docs/superpowers/specs/2026-06-03-songwriter-c-enrichment-design.md` (**needs a brainstorm pass first**) |
+| **C v1 (CAGED voicings)** | Tap harmony block → CAGED voicing suggestions → 1-tap accept persists SaveEntry + bar-aligned save-lane block | ✅ DONE on branch **`worktree-songwriter-ux-polish`** (8 commits on top of chord wheel). Spec: `docs/superpowers/specs/2026-06-04-songwriter-c-voicings-design.md`. Plan: `docs/superpowers/plans/2026-06-04-songwriter-c-voicings.md`. **NOT merged, awaiting review.** |
+| **C v2+** | Arpeggio/sequence save type, 3rd-above harmony lines, library-match engine, dim/aug/7th voicings, piano voicings | ⬜ each needs brainstorm + spec + plan |
 
 ## 3. FIRST STEPS for the new session
 
