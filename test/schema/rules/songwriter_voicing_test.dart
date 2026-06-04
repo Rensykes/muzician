@@ -51,4 +51,25 @@ void main() {
     expect(snap.selectedNotes.toSet(), {'C', 'E', 'G'});
     expect(snap.selectedCells.length, 5);
   });
+
+  test('all cell stringIndex values are 0-based (0..5)', () {
+    final v = suggestVoicings(chordRootPc: 0, quality: '');
+    for (final s in v) {
+      for (final c in s.cells) {
+        expect(c.stringIndex, inInclusiveRange(0, 5),
+            reason: 'stringIndex must be 0-based to match the rest of the codebase');
+      }
+    }
+  });
+
+  test('open-string cells encode the correct pitch class', () {
+    // C-shape major for C: stringIndex 5 (low E) is muted (null in openShape).
+    // stringIndex 4 (A) plays fret 3 → C. stringIndex 3 (D) plays fret 2 → E.
+    final v = suggestVoicings(chordRootPc: 0, quality: '').first;
+    final byStringIndex = {for (final c in v.cells) c.stringIndex: c};
+    expect(byStringIndex[4]!.fret, 3);
+    expect(byStringIndex[4]!.noteName, 'C');
+    expect(byStringIndex[3]!.fret, 2);
+    expect(byStringIndex[3]!.noteName, 'E');
+  });
 }
