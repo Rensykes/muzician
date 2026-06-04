@@ -15,8 +15,9 @@ enum CagedShape { c, a, g, e, d }
 
 /// A CAGED shape template defined in its open-position fingering.
 ///
-/// [openShape] is indexed by [StringTuning.stringNumber]-1 with index 0 = high
-/// E (string 1) and index 5 = low E (string 6). `null` = muted/unplayed.
+/// [openShape] is indexed 0..5, matching `FretCoordinate.stringIndex` (0-based)
+/// and `tunings[TuningName.standard].strings`: 0 = high e (string 1),
+/// 5 = low E (string 6). `null` = muted/unplayed.
 class VoicingTemplate {
   const VoicingTemplate({
     required this.shape,
@@ -28,7 +29,7 @@ class VoicingTemplate {
   final String quality;
   final int anchorPc;
 
-  /// Indexed by `stringNumber - 1`: 0 = high e (string 1), 5 = low E (string 6).
+  /// 0-based, indexed 0..5: 0 = high e (string 1), 5 = low E (string 6).
   final List<int?> openShape;
 }
 
@@ -49,13 +50,17 @@ class VoicingSuggestion {
   final String label;
 }
 
+/// Fret value past which a CAGED shape will not fit on a 12-fret display.
+const _kMaxFret = 12;
+
 // ─── Templates ───────────────────────────────────────────────────────────────
 //
 // The spec table lists openShape in strings 6→1 order (low E first). We store
-// in stringNumber-1 order (high e first) for direct alignment with the model.
-// Each row below is the spec's `[s6, s5, s4, s3, s2, s1]` REVERSED, so:
+// in 0-based stringIndex order (high e first) for direct alignment with
+// `FretCoordinate.stringIndex` and `Tuning.strings`. Each row below is the
+// spec's `[s6, s5, s4, s3, s2, s1]` REVERSED, so:
 //   spec  C major: [null, 3, 2, 0, 1, 0]   (s6→s1)
-//   here  C major: [0, 1, 0, 2, 3, null]   (s1→s6, reversed)
+//   here  C major: [0, 1, 0, 2, 3, null]   (stringIndex 0..5, s1→s6)
 
 const _templates = <VoicingTemplate>[
   // ── Major ──────────────────────────────────────────────────────────────────
@@ -112,9 +117,9 @@ const _templates = <VoicingTemplate>[
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-/// Open-string pitch classes for standard tuning, indexed by `stringNumber - 1`.
-/// String 1 (high e) at index 0 → E (pc 4). String 6 (low E) at index 5 → E (pc 4).
-const _openPcByStringNumberMinus1 = <int>[4, 11, 7, 2, 9, 4];
+/// Open-string pitch classes for standard tuning, indexed by 0-based string
+/// index. Index 0 = high e (pc 4). Index 5 = low E (pc 4).
+const _standardTuningOpenPc = <int>[4, 11, 7, 2, 9, 4];
 
 List<VoicingSuggestion> suggestVoicings({
   required int chordRootPc,
@@ -136,7 +141,7 @@ List<VoicingSuggestion> suggestVoicings({
         continue;
       }
       final newFret = f + shift;
-      if (newFret > 12) {
+      if (newFret > _kMaxFret) {
         fits = false;
         break;
       }
@@ -150,12 +155,11 @@ List<VoicingSuggestion> suggestVoicings({
     for (var i = 0; i < transposedFrets.length; i++) {
       final f = transposedFrets[i];
       if (f == null) continue;
-      final stringNumber = i + 1;
-      final openPc = _openPcByStringNumberMinus1[i];
+      final openPc = _standardTuningOpenPc[i];
       final pc = (openPc + f) % 12;
       cells.add(
         FretCoordinate(
-          stringIndex: stringNumber,
+          stringIndex: i,
           fret: f,
           noteName: chromaticNotes[pc],
         ),
@@ -188,7 +192,7 @@ FretboardSnapshot voicingToSnapshot(VoicingSuggestion v) {
   }
   return FretboardSnapshot(
     tuning: TuningName.standard,
-    numFrets: 12,
+    numFrets: _kMaxFret,
     capo: 0,
     selectedCells: v.cells,
     selectedNotes: pcs.toList(),
