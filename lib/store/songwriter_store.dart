@@ -8,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/save_system.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/songwriter_rules.dart';
+import '../schema/rules/songwriter_voicing_rules.dart';
+import '../utils/note_utils.dart';
+import 'save_system_store.dart';
 
 const _sessionKey = '@muzician/songwriter_session/v1';
 
@@ -336,6 +339,78 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
             .toList(),
       ),
     );
+  }
+
+  /// Persists a voicing suggestion as a SaveEntry in the auto-created
+  /// "Songwriter voicings" folder and inserts a save-lane block in the section
+  /// aligned to the triggering harmony block's bars.
+  Future<void> acceptVoicingSuggestion({
+    required String sectionId,
+    required String harmonyBlockId,
+    required VoicingSuggestion suggestion,
+  }) async {
+    final section = state.sections.firstWhere(
+      (s) => s.id == sectionId,
+      orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
+    );
+    if (section.id.isEmpty) return;
+    SongBlock? harmonyBlock;
+    for (final lane in section.lanes) {
+      for (final b in lane.blocks) {
+        if (b.id == harmonyBlockId) {
+          harmonyBlock = b;
+          break;
+        }
+      }
+      if (harmonyBlock != null) break;
+    }
+    if (harmonyBlock == null) return;
+
+    final saves = ref.read(saveSystemProvider.notifier);
+    final folderId = _findOrCreateVoicingsFolder(saves);
+    if (folderId == null) return;
+
+    final rootName = chromaticNotes[suggestion.rootPc];
+    final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
+    final saveId =
+        saves.saveSnapshot(saveName, folderId, voicingToSnapshot(suggestion));
+    if (saveId == null) return;
+
+    final laneId = _findOrCreateSaveLane(sectionId, section);
+    if (laneId == null) return;
+
+    addSaveBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      saveId: saveId,
+      startBar: harmonyBlock.startBar,
+      spanBars: harmonyBlock.spanBars,
+    );
+  }
+
+  String? _findOrCreateVoicingsFolder(SaveSystemNotifier saves) {
+    const targetName = 'Songwriter voicings';
+    final existing = ref
+        .read(saveSystemProvider)
+        .folders
+        .where((f) => f.parentId == null && f.name == targetName)
+        .toList();
+    if (existing.isNotEmpty) return existing.first.id;
+    return saves.createSaveFolder(targetName, null);
+  }
+
+  String? _findOrCreateSaveLane(String sectionId, SongSection section) {
+    final existing = section.lanes
+        .where((l) => l.kind == SongLaneKind.save)
+        .toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+    if (existing.isNotEmpty) return existing.first.id;
+    addLane(sectionId: sectionId, kind: SongLaneKind.save);
+    final updated = state.sections.firstWhere((s) => s.id == sectionId);
+    final saveLanes =
+        updated.lanes.where((l) => l.kind == SongLaneKind.save).toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
+    return saveLanes.isEmpty ? null : saveLanes.last.id;
   }
 
   void _recomputeNumerals() {
