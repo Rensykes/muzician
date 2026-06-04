@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/save_system.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/songwriter_rules.dart';
+import '../schema/rules/songwriter_third_above_rules.dart';
 import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
 import 'save_system_store.dart';
@@ -27,6 +28,9 @@ SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
 
 /// Name of the root-level folder that holds accepted voicing snapshots.
 const _voicingsFolderName = 'Songwriter voicings';
+
+/// Name of the root-level folder that holds accepted 3rd-above harmony snapshots.
+const _harmoniesFolderName = 'Songwriter harmonies';
 
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   Timer? _debounce;
@@ -394,6 +398,63 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       startBar: harmonyBlock.startBar,
       spanBars: harmonyBlock.spanBars,
     );
+  }
+
+  /// Persists a 3rd-above harmony suggestion as a SaveEntry in the auto-created
+  /// "Songwriter harmonies" folder and inserts a save-lane block aligned to the
+  /// triggering harmony block's bars.
+  Future<void> acceptThirdAboveSuggestion({
+    required String sectionId,
+    required String harmonyBlockId,
+    required ThirdAboveSuggestion suggestion,
+  }) async {
+    final section = state.sections.firstWhere(
+      (s) => s.id == sectionId,
+      orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
+    );
+    if (section.id.isEmpty) return;
+    SongBlock? harmonyBlock;
+    for (final lane in section.lanes) {
+      for (final b in lane.blocks) {
+        if (b.id == harmonyBlockId) {
+          harmonyBlock = b;
+          break;
+        }
+      }
+      if (harmonyBlock != null) break;
+    }
+    if (harmonyBlock == null) return;
+
+    final saves = ref.read(saveSystemProvider.notifier);
+    final folderId = _findOrCreateHarmoniesFolder(saves);
+    if (folderId == null) return;
+
+    final rootName = chromaticNotes[suggestion.rootPc];
+    final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
+    final saveId =
+        saves.saveSnapshot(saveName, folderId, thirdAboveToSnapshot(suggestion));
+    if (saveId == null) return;
+
+    final laneId = _findOrCreateSaveLane(sectionId);
+    if (laneId == null) return;
+
+    addSaveBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      saveId: saveId,
+      startBar: harmonyBlock.startBar,
+      spanBars: harmonyBlock.spanBars,
+    );
+  }
+
+  String? _findOrCreateHarmoniesFolder(SaveSystemNotifier saves) {
+    final existing = ref
+        .read(saveSystemProvider)
+        .folders
+        .where((f) => f.parentId == null && f.name == _harmoniesFolderName)
+        .toList();
+    if (existing.isNotEmpty) return existing.first.id;
+    return saves.createSaveFolder(_harmoniesFolderName, null);
   }
 
   String? _findOrCreateVoicingsFolder(SaveSystemNotifier saves) {
