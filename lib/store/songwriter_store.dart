@@ -25,6 +25,9 @@ SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
   sections: [],
 );
 
+/// Name of the root-level folder that holds accepted voicing snapshots.
+const _voicingsFolderName = 'Songwriter voicings';
+
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   Timer? _debounce;
 
@@ -376,7 +379,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         saves.saveSnapshot(saveName, folderId, voicingToSnapshot(suggestion));
     if (saveId == null) return;
 
-    final laneId = _findOrCreateSaveLane(sectionId, section);
+    final laneId = _findOrCreateSaveLane(sectionId);
     if (laneId == null) return;
 
     addSaveBlock(
@@ -389,17 +392,21 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   String? _findOrCreateVoicingsFolder(SaveSystemNotifier saves) {
-    const targetName = 'Songwriter voicings';
     final existing = ref
         .read(saveSystemProvider)
         .folders
-        .where((f) => f.parentId == null && f.name == targetName)
+        .where((f) => f.parentId == null && f.name == _voicingsFolderName)
         .toList();
     if (existing.isNotEmpty) return existing.first.id;
-    return saves.createSaveFolder(targetName, null);
+    return saves.createSaveFolder(_voicingsFolderName, null);
   }
 
-  String? _findOrCreateSaveLane(String sectionId, SongSection section) {
+  String? _findOrCreateSaveLane(String sectionId) {
+    final section = state.sections.firstWhere(
+      (s) => s.id == sectionId,
+      orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
+    );
+    if (section.id.isEmpty) return null;
     final existing = section.lanes
         .where((l) => l.kind == SongLaneKind.save)
         .toList()
