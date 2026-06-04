@@ -49,7 +49,8 @@ void main() {
     await tester.tap(find.byKey(const Key('block_hb1')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Suggested voicings'), findsOneWidget);
+    expect(find.text('Voicings'), findsOneWidget);
+    expect(find.text('Harmony'), findsOneWidget);
     expect(find.textContaining('deleted save'), findsNothing);
   });
 }
