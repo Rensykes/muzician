@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
+import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
+import '../../utils/note_utils.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
 import '../../ui/save_browser_panel.dart';
@@ -156,21 +158,39 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
   void _onTap(BuildContext context, SongBlock block, List<SaveEntry> saves) {
     // Harmony block: show the chord + voicing suggestions.
     if (block.chordRootPc != null && block.chordQuality != null) {
-      final suggestions = suggestVoicings(
+      final cfg = ref.read(songwriterProvider).config;
+      final voicings = suggestVoicings(
         chordRootPc: block.chordRootPc!,
         quality: block.chordQuality!,
+      );
+      final thirdAbove = suggestThirdAbove(
+        chordRootPc: block.chordRootPc!,
+        chordQuality: block.chordQuality!,
+        chordTonePcs: _chordPcs(block),
+        keyRootPc: cfg.keyRoot,
+        keyScaleName: cfg.keyScaleName,
       );
       showHarmonyBlockSheet(
         context,
         block: block,
-        suggestions: suggestions,
-        onAccept: (v) {
+        voicings: voicings,
+        thirdAbove: thirdAbove,
+        onAcceptVoicing: (v) {
           ref
               .read(songwriterProvider.notifier)
               .acceptVoicingSuggestion(
                 sectionId: widget.sectionId,
                 harmonyBlockId: widget.blockId,
                 suggestion: v,
+              );
+        },
+        onAcceptThirdAbove: (s) {
+          ref
+              .read(songwriterProvider.notifier)
+              .acceptThirdAboveSuggestion(
+                sectionId: widget.sectionId,
+                harmonyBlockId: widget.blockId,
+                suggestion: s,
               );
         },
       );
@@ -301,6 +321,15 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
             ),
       ),
     );
+  }
+
+  List<int> _chordPcs(SongBlock block) {
+    final out = <int>[];
+    for (final name in block.chordNotes) {
+      final pc = noteToPC[name];
+      if (pc != null && !out.contains(pc)) out.add(pc);
+    }
+    return out;
   }
 
   String _saveLabel(List<SaveEntry> saves, SongBlock block) {
