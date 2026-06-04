@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
+import '../../schema/rules/songwriter_voicing_rules.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
 import '../../ui/save_browser_panel.dart';
@@ -153,6 +154,27 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
   }
 
   void _onTap(BuildContext context, SongBlock block, List<SaveEntry> saves) {
+    // Harmony block: show the chord + voicing suggestions.
+    if (block.chordRootPc != null && block.chordQuality != null) {
+      final suggestions = suggestVoicings(
+        chordRootPc: block.chordRootPc!,
+        quality: block.chordQuality!,
+      );
+      showHarmonyBlockSheet(
+        context,
+        block: block,
+        suggestions: suggestions,
+        onAccept: (v) {
+          ref.read(songwriterProvider.notifier).acceptVoicingSuggestion(
+                sectionId: widget.sectionId,
+                harmonyBlockId: widget.blockId,
+                suggestion: v,
+              );
+        },
+      );
+      return;
+    }
+    // Save block: existing flow (resolve snapshot → preview or broken-ref).
     final snapshot = resolveBlockSnapshot(block, saves);
     if (snapshot != null) {
       showBlockPreviewSheet(context, snapshot);
