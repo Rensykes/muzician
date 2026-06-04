@@ -431,8 +431,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
     final rootName = chromaticNotes[suggestion.rootPc];
     final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
-    final saveId =
-        saves.saveSnapshot(saveName, folderId, thirdAboveToSnapshot(suggestion));
+    final saveId = saves.saveSnapshot(
+      saveName,
+      folderId,
+      thirdAboveToSnapshot(suggestion),
+    );
     if (saveId == null) return;
 
     final laneId = _findOrCreateSaveLane(sectionId);
