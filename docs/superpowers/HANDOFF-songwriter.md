@@ -17,8 +17,8 @@ A new **"Writer"** tab (6th nav tab) for arranging a song as **Sections → per-
 | **B1** | Foundation: model `lib/models/songwriter.dart`, rules `lib/schema/rules/songwriter_rules.dart`, store `lib/store/songwriter_store.dart`, snapshot dispatch | ✅ merged to `main` |
 | **B2a** | Tab UI: header, section cards, lanes, harmony + save blocks, structure editor, save/load | ✅ merged to `main` |
 | **B2a polish** | Default C major, undo-snackbar deletes, value pills, bar ruler + gridlines, drop header title, empty hint | ✅ DONE on branch **`worktree-songwriter-ux-polish`** (8 commits) — **NOT merged, awaiting review** |
-| **B2b** | Playback transport + playhead + metronome, drag move/resize, tap-block→open-save, Make-Unique/Re-link | ⬜ planned: `docs/superpowers/plans/2026-06-03-songwriter-b2b-playback-editing.md` |
-| **Chord wheel** | Circle-of-fifths diatonic picker feeding the harmony lane | ⬜ spec: `docs/superpowers/specs/2026-06-03-songwriter-chord-wheel-design.md` (needs a plan-writing pass) |
+| **B2b** | Playback transport + playhead + metronome, drag move/resize, tap-block→open-save, Make-Unique/Re-link | ✅ DONE on branch **`worktree-songwriter-ux-polish`** (9 commits on top of polish) — **NOT merged, awaiting review** |
+| **Chord wheel** | Radial diatonic picker feeding the harmony lane | ✅ DONE on branch **`worktree-songwriter-ux-polish`** (8 commits on top of B2b) — **NOT merged, awaiting review**. Plan: `docs/superpowers/plans/2026-06-03-songwriter-chord-wheel.md` |
 | **C** | Enrichment: arpeggio/sequence save type + suggestion rules | ⬜ spec sketch: `docs/superpowers/specs/2026-06-03-songwriter-c-enrichment-design.md` (**needs a brainstorm pass first**) |
 
 ## 3. FIRST STEPS for the new session
