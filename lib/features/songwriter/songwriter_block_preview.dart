@@ -117,15 +117,15 @@ void showHarmonyBlockSheet(
               children: [
                 const Icon(Icons.music_note, size: 24),
                 const SizedBox(width: 8),
-                Text(title,
-                    style: Theme.of(sheetCtx).textTheme.titleMedium),
+                Text(title, style: Theme.of(sheetCtx).textTheme.titleMedium),
                 if (numeral != null) ...[
                   const SizedBox(width: 8),
-                  Text(numeral,
-                      style: Theme.of(sheetCtx)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.grey)),
+                  Text(
+                    numeral,
+                    style: Theme.of(
+                      sheetCtx,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                  ),
                 ],
               ],
             ),
@@ -145,8 +145,10 @@ void showHarmonyBlockSheet(
               ),
             ],
             const SizedBox(height: 16),
-            const Text('Suggested voicings',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text(
+              'Suggested voicings',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             if (!hasChord)
               const Padding(

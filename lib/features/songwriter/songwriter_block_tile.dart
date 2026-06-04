@@ -165,7 +165,9 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
         block: block,
         suggestions: suggestions,
         onAccept: (v) {
-          ref.read(songwriterProvider.notifier).acceptVoicingSuggestion(
+          ref
+              .read(songwriterProvider.notifier)
+              .acceptVoicingSuggestion(
                 sectionId: widget.sectionId,
                 harmonyBlockId: widget.blockId,
                 suggestion: v,
