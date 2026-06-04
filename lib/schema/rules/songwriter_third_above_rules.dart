@@ -11,6 +11,14 @@ import '../../models/piano.dart';
 import '../../models/save_system.dart';
 import '../../utils/note_utils.dart';
 
+/// MIDI value of C4 — the bottom of the C4..B4 octave used for anchoring
+/// 3rd-above harmony notes.
+const int _c4Midi = 60;
+
+/// Starting MIDI value of [PianoRangeName.key49] (C2). `keyIndex` in the
+/// `key49` range is computed as `midi - _key49StartMidi`.
+const int _key49StartMidi = 36;
+
 class ThirdAboveSuggestion {
   const ThirdAboveSuggestion({
     required this.rootPc,
@@ -53,7 +61,7 @@ ThirdAboveSuggestion? suggestThirdAbove({
   if (targetPcs.isEmpty) return null;
 
   // Octave anchoring: midi 60..71 (C4..B4).
-  final midiKeys = [for (final pc in targetPcs) 60 + pc];
+  final midiKeys = [for (final pc in targetPcs) _c4Midi + pc];
 
   final names = targetPcs.map((pc) => chromaticNotes[pc]).join(', ');
   return ThirdAboveSuggestion(
@@ -68,14 +76,12 @@ ThirdAboveSuggestion? suggestThirdAbove({
 
 /// Wraps a suggestion as a PianoSnapshot anchored in key49's middle octave.
 PianoSnapshot thirdAboveToSnapshot(ThirdAboveSuggestion s) {
-  // key49: startMidi = 36 (C2). keyIndex = midi - startMidi.
-  const startMidi = 36;
   return PianoSnapshot(
     currentRange: PianoRangeName.key49,
     selectedKeys: [
       for (final m in s.midiKeys)
         PianoCoordinate(
-          keyIndex: m - startMidi,
+          keyIndex: m - _key49StartMidi,
           midiNote: m,
           noteName: chromaticNotes[m % 12],
         ),

@@ -86,6 +86,19 @@ void main() {
     expect(s, isNull);
   });
 
+  test('pentatonic scale → null (rule requires heptatonic)', () {
+    // major pentatonic has 5 intervals; the rule's (degree + 2) % 7 logic
+    // assumes a heptatonic scale, so non-heptatonic scales are rejected.
+    final s = suggestThirdAbove(
+      chordRootPc: 0,
+      chordQuality: '',
+      chordTonePcs: const [0, 4, 7],
+      keyRootPc: 0,
+      keyScaleName: 'major pentatonic',
+    );
+    expect(s, isNull);
+  });
+
   test('thirdAboveToSnapshot round-trip', () {
     final s = suggestThirdAbove(
       chordRootPc: 0,
