@@ -336,9 +336,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       laneId,
       (l) => l.copyWith(
         blocks: l.blocks
-            .map((b) => b.id == blockId
-                ? b.copyWith(saveId: saveId, clearEmbedded: true)
-                : b)
+            .map(
+              (b) => b.id == blockId
+                  ? b.copyWith(saveId: saveId, clearEmbedded: true)
+                  : b,
+            )
             .toList(),
       ),
     );
@@ -375,8 +377,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
     final rootName = chromaticNotes[suggestion.rootPc];
     final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
-    final saveId =
-        saves.saveSnapshot(saveName, folderId, voicingToSnapshot(suggestion));
+    final saveId = saves.saveSnapshot(
+      saveName,
+      folderId,
+      voicingToSnapshot(suggestion),
+    );
     if (saveId == null) return;
 
     final laneId = _findOrCreateSaveLane(sectionId);
@@ -407,10 +412,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
     );
     if (section.id.isEmpty) return null;
-    final existing = section.lanes
-        .where((l) => l.kind == SongLaneKind.save)
-        .toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final existing =
+        section.lanes.where((l) => l.kind == SongLaneKind.save).toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
     if (existing.isNotEmpty) return existing.first.id;
     addLane(sectionId: sectionId, kind: SongLaneKind.save);
     final updated = state.sections.firstWhere((s) => s.id == sectionId);

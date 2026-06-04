@@ -158,11 +158,7 @@ List<VoicingSuggestion> suggestVoicings({
       final openPc = _standardTuningOpenPc[i];
       final pc = (openPc + f) % 12;
       cells.add(
-        FretCoordinate(
-          stringIndex: i,
-          fret: f,
-          noteName: chromaticNotes[pc],
-        ),
+        FretCoordinate(stringIndex: i, fret: f, noteName: chromaticNotes[pc]),
       );
     }
 
