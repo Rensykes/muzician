@@ -344,9 +344,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
-  /// Persists a voicing suggestion as a SaveEntry in the auto-created
-  /// "Songwriter voicings" folder and inserts a save-lane block in the section
-  /// aligned to the triggering harmony block's bars.
+  /// Persists a voicing suggestion as a SaveEntry in the project's top-level
+  /// folder (auto-created from the project name) and inserts a save-lane block
+  /// in the section aligned to the triggering harmony block's bars.
   Future<void> acceptVoicingSuggestion({
     required String sectionId,
     required String harmonyBlockId,
@@ -394,9 +394,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
-  /// Persists a 3rd-above harmony suggestion as a SaveEntry in the auto-created
-  /// "Songwriter harmonies" folder and inserts a save-lane block aligned to the
-  /// triggering harmony block's bars.
+  /// Persists a 3rd-above harmony suggestion as a SaveEntry in the project's
+  /// top-level folder (auto-created from the project name) and inserts a
+  /// save-lane block aligned to the triggering harmony block's bars.
   Future<void> acceptThirdAboveSuggestion({
     required String sectionId,
     required String harmonyBlockId,
