@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
 import '../../ui/save_card_label.dart';
@@ -92,17 +93,21 @@ void showBrokenReferenceSheet(
   );
 }
 
-/// Opens the harmony-block sheet with two tabs:
+/// Opens the harmony-block sheet with three tabs:
 /// - **Voicings**: horizontal strip of CAGED voicing cards (C v1).
 /// - **Harmony**: one 3rd-above card or an empty state.
+/// - **Library**: saves from the same folder that match the chord or key.
 /// Tapping a card invokes the matching onAccept callback and closes the sheet.
 void showHarmonyBlockSheet(
   BuildContext context, {
   required SongBlock block,
   required List<VoicingSuggestion> voicings,
   required ThirdAboveSuggestion? thirdAbove,
+  required List<LibraryMatch> chordMatches,
+  required List<LibraryMatch> scaleMatches,
   required void Function(VoicingSuggestion) onAcceptVoicing,
   required void Function(ThirdAboveSuggestion) onAcceptThirdAbove,
+  required void Function(String saveId) onAcceptLibrary,
 }) {
   final hasChord = block.chordRootPc != null && block.chordQuality != null;
   final title = block.chordSymbol ?? (hasChord ? '?' : 'Harmony');
@@ -114,7 +119,7 @@ void showHarmonyBlockSheet(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: DefaultTabController(
-          length: 2,
+          length: 3,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,6 +160,7 @@ void showHarmonyBlockSheet(
                 tabs: [
                   Tab(text: 'Voicings'),
                   Tab(text: 'Harmony'),
+                  Tab(text: 'Library'),
                 ],
               ),
               SizedBox(
@@ -175,6 +181,14 @@ void showHarmonyBlockSheet(
                       onAccept: (s) {
                         Navigator.pop(sheetCtx);
                         onAcceptThirdAbove(s);
+                      },
+                    ),
+                    _LibraryTab(
+                      chordMatches: chordMatches,
+                      scaleMatches: scaleMatches,
+                      onAccept: (id) {
+                        Navigator.pop(sheetCtx);
+                        onAcceptLibrary(id);
                       },
                     ),
                   ],
@@ -345,6 +359,126 @@ class _VoicingCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               suggestion.label,
+              style: const TextStyle(fontSize: 11),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LibraryTab extends StatelessWidget {
+  const _LibraryTab({
+    required this.chordMatches,
+    required this.scaleMatches,
+    required this.onAccept,
+  });
+  final List<LibraryMatch> chordMatches;
+  final List<LibraryMatch> scaleMatches;
+  final void Function(String saveId) onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    if (chordMatches.isEmpty && scaleMatches.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Text("No matching saves in this song's folder yet."),
+      );
+    }
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (chordMatches.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text('Matches this chord',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            SizedBox(
+              height: 110,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: chordMatches.length,
+                separatorBuilder: (context, idx) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final m = chordMatches[i];
+                  return _LibraryMatchCard(
+                    key: Key('libraryCard_${m.entry.id}'),
+                    match: m,
+                    onTap: () => onAccept(m.entry.id),
+                  );
+                },
+              ),
+            ),
+          ],
+          if (scaleMatches.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text('Fits this key',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            SizedBox(
+              height: 110,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: scaleMatches.length,
+                separatorBuilder: (context, idx) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final m = scaleMatches[i];
+                  return _LibraryMatchCard(
+                    key: Key('libraryCard_${m.entry.id}'),
+                    match: m,
+                    onTap: () => onAccept(m.entry.id),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LibraryMatchCard extends StatelessWidget {
+  const _LibraryMatchCard({
+    super.key,
+    required this.match,
+    required this.onTap,
+  });
+  final LibraryMatch match;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 96,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).dividerColor),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SavePreviewThumbnail(
+              snapshot: match.entry.snapshot,
+              width: 84,
+              height: 60,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              match.entry.name,
               style: const TextStyle(fontSize: 11),
               textAlign: TextAlign.center,
               maxLines: 2,
