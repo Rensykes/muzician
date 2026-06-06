@@ -49,12 +49,12 @@ void main() {
         );
 
     final saves = c.read(saveSystemProvider);
-    expect(saves.folders.any((f) => f.name == 'Songwriter voicings'), isTrue);
-    final voicingsFolder =
-        saves.folders.firstWhere((f) => f.name == 'Songwriter voicings');
-    expect(voicingsFolder.parentId, isNull);
+    expect(saves.folders.any((f) => f.name == 'Untitled song'), isTrue);
+    final projectFolder =
+        saves.folders.firstWhere((f) => f.name == 'Untitled song');
+    expect(projectFolder.parentId, isNull);
     final newSave = saves.saves.firstWhere(
-      (s) => s.folderId == voicingsFolder.id,
+      (s) => s.folderId == projectFolder.id,
     );
     expect(newSave.name, contains('C'));
 
@@ -113,7 +113,7 @@ void main() {
     final folders = c
         .read(saveSystemProvider)
         .folders
-        .where((f) => f.name == 'Songwriter voicings')
+        .where((f) => f.name == 'Untitled song')
         .toList();
     expect(folders.length, 1, reason: 'folder must not be duplicated');
 
