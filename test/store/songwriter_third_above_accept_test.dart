@@ -47,7 +47,7 @@ void main() {
         keyScaleName: 'major',
       )!;
 
-  test('accept creates SaveEntry in auto-created "Songwriter harmonies" '
+  test('accept creates SaveEntry in auto-created "Untitled song" '
       'folder + save lane + block', () async {
     final c = freshContainer();
     final ids = seedSongWithHarmonyBlock(c);
@@ -60,7 +60,7 @@ void main() {
 
     final saves = c.read(saveSystemProvider);
     final folder = saves.folders
-        .where((f) => f.name == 'Songwriter harmonies')
+        .where((f) => f.name == 'Untitled song')
         .toList();
     expect(folder.length, 1);
     expect(folder.single.parentId, isNull);
@@ -124,7 +124,7 @@ void main() {
     final folders = c
         .read(saveSystemProvider)
         .folders
-        .where((f) => f.name == 'Songwriter harmonies')
+        .where((f) => f.name == 'Untitled song')
         .toList();
     expect(folders.length, 1, reason: 'folder must not duplicate');
     final section = c
@@ -137,7 +137,7 @@ void main() {
     expect(saveLanes.single.blocks.length, 2);
   });
 
-  test('harmonies and voicings folders coexist when both accept flows fire',
+  test('voicing accept + 3rd-above accept both land in the project folder',
       () async {
     final c = freshContainer();
     final ids = seedSongWithHarmonyBlock(c);
@@ -176,11 +176,17 @@ void main() {
           suggestion: freshSuggestion(),
         );
 
-    final folderNames = c
+    final folders = c
         .read(saveSystemProvider)
         .folders
-        .map((f) => f.name)
-        .toSet();
-    expect(folderNames, containsAll(['Songwriter voicings', 'Songwriter harmonies']));
+        .where((f) => f.name == 'Untitled song')
+        .toList();
+    expect(folders.length, 1, reason: 'project folder must be a single folder');
+    final saveCount = c
+        .read(saveSystemProvider)
+        .saves
+        .where((s) => s.folderId == folders.single.id)
+        .length;
+    expect(saveCount, 2, reason: 'one voicing + one 3rd-above in the folder');
   });
 }

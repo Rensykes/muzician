@@ -26,12 +26,6 @@ SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
   sections: [],
 );
 
-/// Name of the root-level folder that holds accepted voicing snapshots.
-const _voicingsFolderName = 'Songwriter voicings';
-
-/// Name of the root-level folder that holds accepted 3rd-above harmony snapshots.
-const _harmoniesFolderName = 'Songwriter harmonies';
-
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   Timer? _debounce;
 
@@ -376,7 +370,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     if (harmonyBlock == null) return;
 
     final saves = ref.read(saveSystemProvider.notifier);
-    final folderId = _findOrCreateVoicingsFolder(saves);
+    final folderId = _findOrCreateProjectFolderId(saves);
     if (folderId == null) return;
 
     final rootName = chromaticNotes[suggestion.rootPc];
@@ -426,7 +420,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     if (harmonyBlock == null) return;
 
     final saves = ref.read(saveSystemProvider.notifier);
-    final folderId = _findOrCreateHarmoniesFolder(saves);
+    final folderId = _findOrCreateProjectFolderId(saves);
     if (folderId == null) return;
 
     final rootName = chromaticNotes[suggestion.rootPc];
@@ -512,26 +506,6 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       }
     }
     return saves.saves.where((s) => include.contains(s.folderId)).toList();
-  }
-
-  String? _findOrCreateHarmoniesFolder(SaveSystemNotifier saves) {
-    final existing = ref
-        .read(saveSystemProvider)
-        .folders
-        .where((f) => f.parentId == null && f.name == _harmoniesFolderName)
-        .toList();
-    if (existing.isNotEmpty) return existing.first.id;
-    return saves.createSaveFolder(_harmoniesFolderName, null);
-  }
-
-  String? _findOrCreateVoicingsFolder(SaveSystemNotifier saves) {
-    final existing = ref
-        .read(saveSystemProvider)
-        .folders
-        .where((f) => f.parentId == null && f.name == _voicingsFolderName)
-        .toList();
-    if (existing.isNotEmpty) return existing.first.id;
-    return saves.createSaveFolder(_voicingsFolderName, null);
   }
 
   String? _findOrCreateSaveLane(String sectionId) {
