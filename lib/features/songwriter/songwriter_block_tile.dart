@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
+import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
 import '../../utils/note_utils.dart';
@@ -170,28 +171,41 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
         keyRootPc: cfg.keyRoot,
         keyScaleName: cfg.keyScaleName,
       );
+      final swNotifier = ref.read(songwriterProvider.notifier);
+      final searchable = swNotifier.searchableSavesForLibraryMatch();
+      final matches = matchLibrary(
+        harmonyBlock: block,
+        searchableSaves: searchable,
+        keyRootPc: cfg.keyRoot,
+        keyScaleName: cfg.keyScaleName,
+      );
       showHarmonyBlockSheet(
         context,
         block: block,
         voicings: voicings,
         thirdAbove: thirdAbove,
+        chordMatches: matches.chordMatches,
+        scaleMatches: matches.scaleMatches,
         onAcceptVoicing: (v) {
-          ref
-              .read(songwriterProvider.notifier)
-              .acceptVoicingSuggestion(
-                sectionId: widget.sectionId,
-                harmonyBlockId: widget.blockId,
-                suggestion: v,
-              );
+          swNotifier.acceptVoicingSuggestion(
+            sectionId: widget.sectionId,
+            harmonyBlockId: widget.blockId,
+            suggestion: v,
+          );
         },
         onAcceptThirdAbove: (s) {
-          ref
-              .read(songwriterProvider.notifier)
-              .acceptThirdAboveSuggestion(
-                sectionId: widget.sectionId,
-                harmonyBlockId: widget.blockId,
-                suggestion: s,
-              );
+          swNotifier.acceptThirdAboveSuggestion(
+            sectionId: widget.sectionId,
+            harmonyBlockId: widget.blockId,
+            suggestion: s,
+          );
+        },
+        onAcceptLibrary: (saveId) {
+          swNotifier.acceptLibraryMatch(
+            sectionId: widget.sectionId,
+            harmonyBlockId: widget.blockId,
+            saveId: saveId,
+          );
         },
       );
       return;

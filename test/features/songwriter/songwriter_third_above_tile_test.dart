@@ -15,6 +15,7 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final n = container.read(songwriterProvider.notifier);
+    n.setProjectName('My Song');
     n.setKey(0, 'major'); // C major
     n.addSection(label: 'V', lengthBars: 8);
     final s = container.read(songwriterProvider).sections.single.id;
@@ -59,11 +60,11 @@ void main() {
 
     final saves = container.read(saveSystemProvider);
     expect(
-      saves.folders.any((f) => f.name == 'Songwriter harmonies'),
+      saves.folders.any((f) => f.name == 'My Song'),
       isTrue,
     );
     final folder =
-        saves.folders.firstWhere((f) => f.name == 'Songwriter harmonies');
+        saves.folders.firstWhere((f) => f.name == 'My Song');
     expect(saves.saves.any((s) => s.folderId == folder.id), isTrue);
   });
 }
