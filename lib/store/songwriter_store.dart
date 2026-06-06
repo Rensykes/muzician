@@ -450,6 +450,70 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  /// Updates the project's display name and renames its linked top-level
+  /// folder if one with the old name exists. Whitespace-only names are ignored.
+  void setProjectName(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final old = state.name;
+    if (trimmed == old) return;
+    _set(state.copyWith(name: trimmed));
+    _renameProjectFolderIfExists(old, trimmed);
+  }
+
+  /// Returns the id of the project's top-level folder, or null when it does
+  /// not exist. Does NOT create the folder. Used by read-only callers.
+  String? _findProjectFolderId() {
+    final name = state.name.trim();
+    if (name.isEmpty) return null;
+    for (final f in ref.read(saveSystemProvider).folders) {
+      if (f.parentId == null && f.name == name) return f.id;
+    }
+    return null;
+  }
+
+  /// Returns the id of the project's top-level folder, creating it if missing.
+  /// Used by accept flows that need to write a SaveEntry.
+  String? _findOrCreateProjectFolderId(SaveSystemNotifier saves) {
+    final existing = _findProjectFolderId();
+    if (existing != null) return existing;
+    final name = state.name.trim();
+    if (name.isEmpty) return null;
+    return saves.createSaveFolder(name, null);
+  }
+
+  void _renameProjectFolderIfExists(String oldName, String newName) {
+    final trimmedOld = oldName.trim();
+    if (trimmedOld.isEmpty || trimmedOld == newName) return;
+    for (final f in ref.read(saveSystemProvider).folders) {
+      if (f.parentId == null && f.name == trimmedOld) {
+        ref.read(saveSystemProvider.notifier).renameFolder(f.id, newName);
+        return;
+      }
+    }
+  }
+
+  /// Returns the saves visible to library-match: the project's top-level
+  /// folder plus every descendant folder. Returns empty when the project
+  /// folder does not exist. Does NOT auto-create the folder.
+  List<SaveEntry> searchableSavesForLibraryMatch() {
+    final rootId = _findProjectFolderId();
+    if (rootId == null) return const [];
+    final saves = ref.read(saveSystemProvider);
+    final include = <String>{rootId};
+    final queue = [rootId];
+    while (queue.isNotEmpty) {
+      final id = queue.removeLast();
+      for (final f in saves.folders) {
+        if (f.parentId == id) {
+          include.add(f.id);
+          queue.add(f.id);
+        }
+      }
+    }
+    return saves.saves.where((s) => include.contains(s.folderId)).toList();
+  }
+
   String? _findOrCreateHarmoniesFolder(SaveSystemNotifier saves) {
     final existing = ref
         .read(saveSystemProvider)
