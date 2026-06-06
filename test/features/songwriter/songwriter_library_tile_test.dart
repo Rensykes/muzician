@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
@@ -10,17 +12,20 @@ import 'package:muzician/features/songwriter/songwriter_block_tile.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('tap → Harmony tab → card → store gets a new harmony save',
-      (tester) async {
+  testWidgets('tap → Library tab → card → save-lane block inserted; '
+      'no new SaveEntry', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final n = container.read(songwriterProvider.notifier);
-    n.setProjectName('My Song');
-    n.setKey(0, 'major'); // C major
+    final saves = container.read(saveSystemProvider.notifier);
+
+    n.setProjectName('Song A');
+    n.setKey(0, 'major');
     n.addSection(label: 'V', lengthBars: 8);
     final s = container.read(songwriterProvider).sections.single.id;
     n.addLane(sectionId: s, kind: SongLaneKind.harmony);
-    final l = container.read(songwriterProvider).sections.single.lanes.single.id;
+    final l =
+        container.read(songwriterProvider).sections.single.lanes.single.id;
     n.addHarmonyBlock(
       sectionId: s,
       laneId: l,
@@ -30,6 +35,24 @@ void main() {
         chordNotes: ['C', 'E', 'G'], romanNumeral: 'I',
       ),
     );
+
+    // Seed an existing save inside the project folder so library-match finds it.
+    final projectFolderId = saves.createSaveFolder('Song A', null)!;
+    final existingSaveId = saves.saveSnapshot(
+      'Existing C voicing',
+      projectFolderId,
+      FretboardSnapshot(
+        tuning: TuningName.standard,
+        numFrets: 12,
+        capo: 0,
+        selectedCells: const [],
+        selectedNotes: const ['C', 'E', 'G'],
+        viewMode: FretboardViewMode.exact,
+        pendingChord: const PendingChord(
+            symbol: 'C', root: 'C', quality: ''),
+      ),
+    )!;
+    final savesCountBefore = container.read(saveSystemProvider).saves.length;
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
@@ -52,19 +75,23 @@ void main() {
     await tester.tap(find.byKey(const Key('block_hb1')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Harmony'));
+    await tester.tap(find.text('Library'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('thirdAboveCard')));
+    await tester.tap(find.byKey(Key('libraryCard_$existingSaveId')));
     await tester.pump(const Duration(milliseconds: 600));
 
-    final saves = container.read(saveSystemProvider);
-    expect(
-      saves.folders.any((f) => f.name == 'My Song'),
-      isTrue,
+    expect(container.read(saveSystemProvider).saves.length,
+        savesCountBefore,
+        reason: 'no new SaveEntry created');
+
+    final section = container
+        .read(songwriterProvider)
+        .sections
+        .firstWhere((sec) => sec.id == s);
+    final saveLane = section.lanes.firstWhere(
+      (la) => la.kind == SongLaneKind.save,
     );
-    final folder =
-        saves.folders.firstWhere((f) => f.name == 'My Song');
-    expect(saves.saves.any((s) => s.folderId == folder.id), isTrue);
+    expect(saveLane.blocks.single.saveId, existingSaveId);
   });
 }
