@@ -444,6 +444,43 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  /// Inserts a save-lane block in [sectionId] aligned to the harmony block's
+  /// bars, referencing the existing [saveId]. Does NOT create a new SaveEntry.
+  /// Silently no-ops when the section or harmony block is missing.
+  void acceptLibraryMatch({
+    required String sectionId,
+    required String harmonyBlockId,
+    required String saveId,
+  }) {
+    final section = state.sections.firstWhere(
+      (s) => s.id == sectionId,
+      orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
+    );
+    if (section.id.isEmpty) return;
+    SongBlock? harmonyBlock;
+    for (final lane in section.lanes) {
+      for (final b in lane.blocks) {
+        if (b.id == harmonyBlockId) {
+          harmonyBlock = b;
+          break;
+        }
+      }
+      if (harmonyBlock != null) break;
+    }
+    if (harmonyBlock == null) return;
+
+    final laneId = _findOrCreateSaveLane(sectionId);
+    if (laneId == null) return;
+
+    addSaveBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      saveId: saveId,
+      startBar: harmonyBlock.startBar,
+      spanBars: harmonyBlock.spanBars,
+    );
+  }
+
   /// Updates the project's display name and renames its linked top-level
   /// folder if one with the old name exists. Whitespace-only names are ignored.
   void setProjectName(String name) {
