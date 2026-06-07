@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/muzician_theme.dart';
+
 /// Bar-number ruler. Leads with [gutter] px (to align with the lane gutter),
 /// then one evenly-sized cell per bar showing its 1-based number.
 class BarRuler extends StatelessWidget {
@@ -10,7 +12,12 @@ class BarRuler extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bars = lengthBars < 1 ? 1 : lengthBars;
-    final style = Theme.of(context).textTheme.labelSmall;
+    const style = TextStyle(
+      color: MuzicianTheme.textMuted,
+      fontSize: 10,
+      fontWeight: FontWeight.w600,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
     return SizedBox(
       height: 16,
       child: Row(
