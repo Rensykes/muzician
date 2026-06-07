@@ -2,6 +2,7 @@
 /// factories, and timeline flattening.
 library;
 
+import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
 import 'save_system_rules.dart' show generateId;
@@ -35,6 +36,78 @@ String? romanNumeralFor(
   final degree = intervals.indexOf(offset);
   if (degree < 0 || degree >= _romanByDegree.length) return null;
   return _caseNumeral(_romanByDegree[degree], quality);
+}
+
+// ─── Diatonic Triad Derivation ───────────────────────────────────────────────
+
+class DiatonicTriad {
+  const DiatonicTriad({
+    required this.degree,
+    required this.rootPc,
+    required this.quality,
+    required this.symbol,
+    required this.romanNumeral,
+    required this.notes,
+  });
+  final int degree;
+  final int rootPc;
+  final String quality;
+  final String symbol;
+  final String romanNumeral;
+  final List<String> notes;
+}
+
+/// Returns the 7 diatonic triads for [keyRootPc] / [scaleName].
+///
+/// Each triad's quality is derived by stacking thirds from the scale's
+/// interval set: the intervals root→3rd and root→5th classify the triad
+/// as major (''), minor ('m'), diminished ('dim'), or augmented ('aug').
+/// Returns an empty list when [scaleName] is unknown or has fewer than 7
+/// degrees.
+List<DiatonicTriad> diatonicTriads(int keyRootPc, String scaleName) {
+  final intervals = scaleIntervals[scaleName];
+  if (intervals == null || intervals.length < 7) return [];
+  final out = <DiatonicTriad>[];
+  for (var d = 0; d < 7; d++) {
+    final rootSemitone = intervals[d];
+    final thirdSemitone = intervals[(d + 2) % 7];
+    final fifthSemitone = intervals[(d + 4) % 7];
+    final i3 = ((thirdSemitone - rootSemitone) % 12 + 12) % 12;
+    final i5 = ((fifthSemitone - rootSemitone) % 12 + 12) % 12;
+
+    String quality;
+    if (i3 == 4 && i5 == 7) {
+      quality = '';
+    } else if (i3 == 3 && i5 == 7) {
+      quality = 'm';
+    } else if (i3 == 3 && i5 == 6) {
+      quality = 'dim';
+    } else if (i3 == 4 && i5 == 8) {
+      quality = 'aug';
+    } else {
+      // Non-tertian triad (e.g. whole-tone, diminished scales). Fall back to
+      // major for symbol display; chord notes still use scale-derived pcs.
+      quality = '';
+    }
+
+    final rootPc = (keyRootPc + rootSemitone) % 12;
+    final rootName = chromaticNotes[rootPc];
+    final symbol = '$rootName$quality';
+    final numeral = _caseNumeral(_romanByDegree[d], quality);
+    final notes = getChordNotes(rootName, quality);
+
+    out.add(
+      DiatonicTriad(
+        degree: d,
+        rootPc: rootPc,
+        quality: quality,
+        symbol: symbol,
+        romanNumeral: numeral,
+        notes: notes,
+      ),
+    );
+  }
+  return out;
 }
 
 // ─── Overlap Validation ───────────────────────────────────────────────────────
@@ -101,6 +174,57 @@ SongBlock makeHarmonyBlock({
   romanNumeral: romanNumeral,
 );
 
+// ─── Expanded-Section Mapping ────────────────────────────────────────────────
+
+class ExpandedSection {
+  const ExpandedSection({
+    required this.sectionId,
+    required this.repeatIndex,
+    required this.globalStartBar,
+    required this.lengthBars,
+  });
+  final String sectionId;
+  final int repeatIndex;
+  final int globalStartBar;
+  final int lengthBars;
+  int get globalEndBar => globalStartBar + lengthBars;
+}
+
+class SectionHit {
+  const SectionHit({required this.section, required this.localBar});
+  final ExpandedSection section;
+  final int localBar;
+}
+
+List<ExpandedSection> expandSections(List<SongSection> sections) {
+  final out = <ExpandedSection>[];
+  var bar = 0;
+  for (final s in sections) {
+    final reps = s.repeat < 1 ? 1 : s.repeat;
+    for (var r = 0; r < reps; r++) {
+      out.add(
+        ExpandedSection(
+          sectionId: s.id,
+          repeatIndex: r,
+          globalStartBar: bar,
+          lengthBars: s.lengthBars,
+        ),
+      );
+      bar += s.lengthBars;
+    }
+  }
+  return out;
+}
+
+SectionHit? sectionAtGlobalBar(List<ExpandedSection> expanded, int globalBar) {
+  for (final e in expanded) {
+    if (globalBar >= e.globalStartBar && globalBar < e.globalEndBar) {
+      return SectionHit(section: e, localBar: globalBar - e.globalStartBar);
+    }
+  }
+  return null;
+}
+
 // ─── Timeline Flattening ──────────────────────────────────────────────────────
 
 /// Total bar length of the whole project after expanding section repeats.
@@ -144,4 +268,19 @@ List<SongBlock> tileLaneBlocks(
     }
   }
   return out;
+}
+
+// ─── Snapshot Resolution ─────────────────────────────────────────────────────
+
+InstrumentSnapshot? resolveBlockSnapshot(
+  SongBlock block,
+  List<SaveEntry> saves,
+) {
+  if (block.embedded != null) return block.embedded;
+  final id = block.saveId;
+  if (id == null) return null;
+  for (final e in saves) {
+    if (e.id == id) return e.snapshot;
+  }
+  return null;
 }

@@ -55,17 +55,21 @@ class SongBlock {
     List<String>? chordNotes,
     String? romanNumeral,
     bool clearRomanNumeral = false,
+    bool clearSaveId = false,
+    bool clearEmbedded = false,
   }) => SongBlock(
     id: id,
     startBar: startBar ?? this.startBar,
     spanBars: spanBars ?? this.spanBars,
-    saveId: saveId ?? this.saveId,
-    embedded: embedded ?? this.embedded,
+    saveId: clearSaveId ? null : (saveId ?? this.saveId),
+    embedded: clearEmbedded ? null : (embedded ?? this.embedded),
     chordSymbol: chordSymbol ?? this.chordSymbol,
     chordQuality: chordQuality ?? this.chordQuality,
     chordRootPc: chordRootPc ?? this.chordRootPc,
     chordNotes: chordNotes ?? this.chordNotes,
-    romanNumeral: clearRomanNumeral ? null : (romanNumeral ?? this.romanNumeral),
+    romanNumeral: clearRomanNumeral
+        ? null
+        : (romanNumeral ?? this.romanNumeral),
   );
 
   Map<String, dynamic> toJson() => {
@@ -203,10 +207,12 @@ class SongLane {
 }
 
 class SongwriterProjectSnapshot extends InstrumentSnapshot {
+  final String name;
   final SongwriterConfig config;
   final List<SongSection> sections;
 
   const SongwriterProjectSnapshot({
+    this.name = 'Untitled song',
     required this.config,
     this.sections = const [],
   });
@@ -234,9 +240,11 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
   PendingScale? get pendingScale => null;
 
   SongwriterProjectSnapshot copyWith({
+    String? name,
     SongwriterConfig? config,
     List<SongSection>? sections,
   }) => SongwriterProjectSnapshot(
+    name: name ?? this.name,
     config: config ?? this.config,
     sections: sections ?? this.sections,
   );
@@ -245,12 +253,16 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
   Map<String, dynamic> toJson() => {
     'type': 'songwriter',
     'instrument': 'songwriter',
+    'name': name,
     'config': config.toJson(),
     'sections': sections.map((s) => s.toJson()).toList(),
   };
 
   factory SongwriterProjectSnapshot.fromJson(Map<String, dynamic> json) =>
       SongwriterProjectSnapshot(
+        name: (json['name'] as String?)?.trim().isNotEmpty == true
+            ? json['name'] as String
+            : 'Untitled song',
         config: SongwriterConfig.fromJson(
           json['config'] as Map<String, dynamic>? ?? const {},
         ),
