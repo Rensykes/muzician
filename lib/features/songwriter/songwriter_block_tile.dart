@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../theme/muzician_theme.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
@@ -108,15 +109,9 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 1),
         decoration: BoxDecoration(
-          color: broken
-              ? Colors.red.withValues(alpha: 0.25)
-              : widget.highlighted
-              ? Colors.tealAccent
-              : Colors.teal,
-          borderRadius: BorderRadius.circular(6),
-          border: widget.highlighted
-              ? Border.all(color: Colors.white, width: 1.5)
-              : null,
+          color: _blockFill(block, widget.highlighted, broken),
+          borderRadius: BorderRadius.circular(8),
+          border: _blockBorder(block, widget.highlighted, broken),
         ),
         child: Row(
           children: [
@@ -125,11 +120,24 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(primary, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    primary,
+                    style: const TextStyle(
+                      color: MuzicianTheme.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   if (secondary != null)
                     Text(
                       secondary,
-                      style: const TextStyle(fontSize: 10),
+                      style: const TextStyle(
+                        color: MuzicianTheme.textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -141,15 +149,15 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
               onHorizontalDragStart: (_) => _resizeDx = 0,
               onHorizontalDragUpdate: (d) => _resizeDx += d.delta.dx,
               onHorizontalDragEnd: (_) => _applyResize(block),
-              child: Container(
-                width: 8,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  borderRadius: const BorderRadius.horizontal(
-                    right: Radius.circular(6),
+                child: Container(
+                  width: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(8),
+                    ),
                   ),
                 ),
-              ),
             ),
           ],
         ),
@@ -361,6 +369,27 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
     }
     return 'Missing';
   }
+}
+
+Color _blockFill(SongBlock block, bool highlighted, bool broken) {
+  if (broken) return MuzicianTheme.red.withValues(alpha: 0.25);
+  final base = block.chordRootPc != null
+      ? MuzicianTheme.violet
+      : MuzicianTheme.teal;
+  return base.withValues(alpha: highlighted ? 0.45 : 0.25);
+}
+
+Border _blockBorder(SongBlock block, bool highlighted, bool broken) {
+  if (broken) {
+    return Border.all(color: MuzicianTheme.red.withValues(alpha: 0.5));
+  }
+  final base = block.chordRootPc != null
+      ? MuzicianTheme.violet
+      : MuzicianTheme.teal;
+  if (highlighted) {
+    return Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.5);
+  }
+  return Border.all(color: base.withValues(alpha: 0.5));
 }
 
 class _PlacementDialog extends StatefulWidget {
