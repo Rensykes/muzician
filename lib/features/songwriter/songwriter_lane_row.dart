@@ -7,6 +7,7 @@ import '../../ui/save_browser_panel.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_block_tile.dart';
 import 'songwriter_grid.dart';
+import 'songwriter_save_lane_filter.dart';
 
 int _nextFreeBar(SongLane lane, int lengthBars) {
   // first bar not covered by an existing block, capped at lengthBars-1
@@ -147,9 +148,12 @@ class SongwriterLaneRow extends ConsumerWidget {
                 final picked = await showModalBottomSheet<SaveEntry>(
                   context: context,
                   isScrollControlled: true,
-                  // No instrumentFilter: a save lane may hold any instrument
-                  // (fretboard voicings, piano harmonies, future types).
+                  // Allow fretboard / piano / piano_roll enrichment saves,
+                  // but exclude songwriter + song arrangement-level saves so
+                  // a save lane cannot embed a whole project save.
                   builder: (sheetCtx) => SaveBrowserPanel(
+                    allowedInstruments:
+                        songwriterSaveLaneAllowedInstruments,
                     onPick: (entry) => Navigator.pop(sheetCtx, entry),
                   ),
                 );

@@ -26,6 +26,18 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   /// [InstrumentSnapshot.instrument] value are shown.
   final String? instrumentFilter;
 
+  /// When set, the list is filtered so only saves whose
+  /// [InstrumentSnapshot.instrument] is in this allowlist are shown.
+  ///
+  /// Use this when a caller needs to permit *multiple* instrument types
+  /// while still excluding others (for example, Songwriter save lanes accept
+  /// `fretboard` / `piano` / `piano_roll` enrichment saves but must NOT
+  /// surface `songwriter` or `song` arrangement-level saves).
+  ///
+  /// Independent from [instrumentFilter]; both can be set, in which case
+  /// a save must satisfy both. Set to `null` to disable.
+  final Set<String>? allowedInstruments;
+
   /// Returns a snapshot of the current instrument state.
   ///
   /// When provided a "Save here" button is visible inside any folder.
@@ -41,6 +53,7 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   const SaveBrowserPanel({
     super.key,
     this.instrumentFilter,
+    this.allowedInstruments,
     this.captureSnapshot,
     this.onLoad,
     this.onPick,
@@ -77,8 +90,14 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     if (_currentFolderId == null) return [];
     final all = getSavesInFolder(allSaves, _currentFolderId!);
     final filter = widget.instrumentFilter;
-    if (filter == null) return all;
-    return all.where((s) => s.snapshot.instrument == filter).toList();
+    final allow = widget.allowedInstruments;
+    if (filter == null && allow == null) return all;
+    return all.where((s) {
+      final inst = s.snapshot.instrument;
+      if (filter != null && inst != filter) return false;
+      if (allow != null && !allow.contains(inst)) return false;
+      return true;
+    }).toList();
   }
 
   // ── Dialogs ──────────────────────────────────────────────────────────────
