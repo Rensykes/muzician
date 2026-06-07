@@ -147,8 +147,9 @@ class SongwriterLaneRow extends ConsumerWidget {
                 final picked = await showModalBottomSheet<SaveEntry>(
                   context: context,
                   isScrollControlled: true,
+                  // No instrumentFilter: a save lane may hold any instrument
+                  // (fretboard voicings, piano harmonies, future types).
                   builder: (sheetCtx) => SaveBrowserPanel(
-                    instrumentFilter: 'fretboard',
                     onPick: (entry) => Navigator.pop(sheetCtx, entry),
                   ),
                 );

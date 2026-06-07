@@ -344,9 +344,37 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  /// Returns true when a save-lane block at [startBar]/[spanBars] would land
+  /// inside the section's first existing save lane without overlapping any of
+  /// its blocks. When the section has no save lane yet, returns true (the
+  /// auto-created lane will be empty).
+  ///
+  /// Mirrors [_findOrCreateSaveLane]'s lane-selection rule (first save lane by
+  /// `order`) so callers can preflight overlaps before persisting a SaveEntry.
+  bool _canPlaceSaveBlockInSection(
+    SongSection section,
+    int startBar,
+    int spanBars,
+  ) {
+    final saveLanes =
+        section.lanes.where((l) => l.kind == SongLaneKind.save).toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
+    if (saveLanes.isEmpty) return true;
+    final lane = saveLanes.first;
+    final endBar = startBar + spanBars;
+    for (final b in lane.blocks) {
+      if (startBar < b.endBar && b.startBar < endBar) return false;
+    }
+    return true;
+  }
+
   /// Persists a voicing suggestion as a SaveEntry in the project's top-level
   /// folder (auto-created from the project name) and inserts a save-lane block
   /// in the section aligned to the triggering harmony block's bars.
+  ///
+  /// Preflights the overlap check against the destination save lane and bails
+  /// out before persisting a SaveEntry when the candidate block cannot land —
+  /// avoiding an orphan save with no block in the arrangement.
   Future<void> acceptVoicingSuggestion({
     required String sectionId,
     required String harmonyBlockId,
@@ -368,6 +396,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (harmonyBlock != null) break;
     }
     if (harmonyBlock == null) return;
+
+    // Preflight: if the candidate block would overlap the destination save
+    // lane, abort BEFORE creating the SaveEntry. addSaveBlock silently
+    // rejects overlaps, which would otherwise leave behind an orphan save.
+    if (!_canPlaceSaveBlockInSection(
+      section,
+      harmonyBlock.startBar,
+      harmonyBlock.spanBars,
+    )) {
+      return;
+    }
 
     final saves = ref.read(saveSystemProvider.notifier);
     final folderId = _findOrCreateProjectFolderId(saves);
@@ -397,6 +436,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   /// Persists a 3rd-above harmony suggestion as a SaveEntry in the project's
   /// top-level folder (auto-created from the project name) and inserts a
   /// save-lane block aligned to the triggering harmony block's bars.
+  ///
+  /// Preflights the overlap check against the destination save lane and bails
+  /// out before persisting a SaveEntry when the candidate block cannot land —
+  /// avoiding an orphan save with no block in the arrangement.
   Future<void> acceptThirdAboveSuggestion({
     required String sectionId,
     required String harmonyBlockId,
@@ -418,6 +461,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (harmonyBlock != null) break;
     }
     if (harmonyBlock == null) return;
+
+    if (!_canPlaceSaveBlockInSection(
+      section,
+      harmonyBlock.startBar,
+      harmonyBlock.spanBars,
+    )) {
+      return;
+    }
 
     final saves = ref.read(saveSystemProvider.notifier);
     final folderId = _findOrCreateProjectFolderId(saves);

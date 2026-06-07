@@ -189,4 +189,44 @@ void main() {
         .length;
     expect(saveCount, 2, reason: 'one voicing + one 3rd-above in the folder');
   });
+
+  test('overlap preflight: bailing out does NOT create an orphan SaveEntry',
+      () async {
+    final c = freshContainer();
+    final ids = seedSongWithHarmonyBlock(c);
+
+    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
+          sectionId: ids.sectionId,
+          harmonyBlockId: ids.harmonyBlockId,
+          suggestion: freshSuggestion(),
+        );
+
+    final savesBefore = c.read(saveSystemProvider).saves.length;
+    final blocksBefore = c
+        .read(songwriterProvider)
+        .sections
+        .firstWhere((s) => s.id == ids.sectionId)
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .blocks
+        .length;
+
+    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
+          sectionId: ids.sectionId,
+          harmonyBlockId: ids.harmonyBlockId,
+          suggestion: freshSuggestion(),
+        );
+
+    expect(c.read(saveSystemProvider).saves.length, savesBefore,
+        reason: 'no orphan SaveEntry on overlap');
+    final blocksAfter = c
+        .read(songwriterProvider)
+        .sections
+        .firstWhere((s) => s.id == ids.sectionId)
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .blocks
+        .length;
+    expect(blocksAfter, blocksBefore, reason: 'no new block on overlap');
+  });
 }

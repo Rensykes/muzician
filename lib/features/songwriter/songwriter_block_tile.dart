@@ -273,8 +273,10 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                 final picked = await showModalBottomSheet<SaveEntry>(
                   context: context,
                   isScrollControlled: true,
+                  // No instrumentFilter: Songwriter accepts both fretboard
+                  // voicings (C v1) and piano 3rd-above harmonies (C v2-a),
+                  // so re-link must see all instrument-typed saves.
                   builder: (ctx) => SaveBrowserPanel(
-                    instrumentFilter: 'fretboard',
                     onPick: (entry) => Navigator.pop(ctx, entry),
                   ),
                 );

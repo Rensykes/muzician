@@ -52,6 +52,22 @@ void main() {
     expect(snap.selectedCells.length, 5);
   });
 
+  test('voicingToSnapshot sets pendingChord from source chord so library '
+      'match can rediscover it', () {
+    final cMajor = suggestVoicings(chordRootPc: 0, quality: '').first;
+    final cSnap = voicingToSnapshot(cMajor);
+    expect(cSnap.pendingChord, isNotNull);
+    expect(cSnap.pendingChord!.symbol, 'C');
+    expect(cSnap.pendingChord!.root, 'C');
+    expect(cSnap.pendingChord!.quality, '');
+
+    final aMinor = suggestVoicings(chordRootPc: 9, quality: 'm').first;
+    final aSnap = voicingToSnapshot(aMinor);
+    expect(aSnap.pendingChord!.symbol, 'Am');
+    expect(aSnap.pendingChord!.root, 'A');
+    expect(aSnap.pendingChord!.quality, 'm');
+  });
+
   test('all cell stringIndex values are 0-based (0..5)', () {
     final v = suggestVoicings(chordRootPc: 0, quality: '');
     for (final s in v) {
