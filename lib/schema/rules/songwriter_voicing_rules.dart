@@ -181,11 +181,16 @@ List<VoicingSuggestion> suggestVoicings({
 
 /// Wraps a voicing's cells into a `FretboardSnapshot` (standard tuning,
 /// 12 frets, capo 0, exact view).
+///
+/// Sets `pendingChord` from the suggestion's source chord (`rootPc` +
+/// `quality`) so the saved voicing can be matched back to the same harmony
+/// block via `matchLibrary`'s chord-hit predicate.
 FretboardSnapshot voicingToSnapshot(VoicingSuggestion v) {
   final pcs = <String>{};
   for (final c in v.cells) {
     pcs.add(c.noteName);
   }
+  final rootName = chromaticNotes[v.rootPc];
   return FretboardSnapshot(
     tuning: TuningName.standard,
     numFrets: _kMaxFret,
@@ -193,6 +198,11 @@ FretboardSnapshot voicingToSnapshot(VoicingSuggestion v) {
     selectedCells: v.cells,
     selectedNotes: pcs.toList(),
     viewMode: FretboardViewMode.exact,
+    pendingChord: PendingChord(
+      root: rootName,
+      quality: v.quality,
+      symbol: '$rootName${v.quality}',
+    ),
   );
 }
 

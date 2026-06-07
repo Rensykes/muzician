@@ -126,4 +126,48 @@ void main() {
     expect(saveLanes.length, 1, reason: 'save lane must be reused');
     expect(saveLanes.single.blocks.length, 2);
   });
+
+  test('overlap preflight: bailing out does NOT create an orphan SaveEntry',
+      () async {
+    final c = freshContainer();
+    final ids = seedSongWithHarmonyBlock(c);
+
+    // First accept lands the block at bars 0..2.
+    await c.read(songwriterProvider.notifier).acceptVoicingSuggestion(
+          sectionId: ids.sectionId,
+          harmonyBlockId: ids.harmonyBlockId,
+          suggestion: suggestVoicings(chordRootPc: 0, quality: '').first,
+        );
+
+    final savesBefore = c.read(saveSystemProvider).saves.length;
+    final blocksBefore = c
+        .read(songwriterProvider)
+        .sections
+        .firstWhere((s) => s.id == ids.sectionId)
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .blocks
+        .length;
+
+    // Second accept targets the SAME harmony block (same bars). The save lane
+    // is already occupied → preflight must abort, no new SaveEntry, no new
+    // block.
+    await c.read(songwriterProvider.notifier).acceptVoicingSuggestion(
+          sectionId: ids.sectionId,
+          harmonyBlockId: ids.harmonyBlockId,
+          suggestion: suggestVoicings(chordRootPc: 0, quality: '')[1],
+        );
+
+    expect(c.read(saveSystemProvider).saves.length, savesBefore,
+        reason: 'no orphan SaveEntry on overlap');
+    final blocksAfter = c
+        .read(songwriterProvider)
+        .sections
+        .firstWhere((s) => s.id == ids.sectionId)
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .blocks
+        .length;
+    expect(blocksAfter, blocksBefore, reason: 'no new block on overlap');
+  });
 }

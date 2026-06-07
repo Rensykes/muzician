@@ -75,7 +75,12 @@ ThirdAboveSuggestion? suggestThirdAbove({
 }
 
 /// Wraps a suggestion as a PianoSnapshot anchored in key49's middle octave.
+///
+/// Sets `pendingChord` from the SOURCE chord (`rootPc` + `quality`) — not the
+/// shifted target — so the saved 3rd-above can be matched back to the same
+/// harmony block via `matchLibrary`'s chord-hit predicate.
 PianoSnapshot thirdAboveToSnapshot(ThirdAboveSuggestion s) {
+  final rootName = chromaticNotes[s.rootPc];
   return PianoSnapshot(
     currentRange: PianoRangeName.key49,
     selectedKeys: [
@@ -88,5 +93,10 @@ PianoSnapshot thirdAboveToSnapshot(ThirdAboveSuggestion s) {
     ],
     selectedNotes: [for (final pc in s.targetPcs) chromaticNotes[pc]],
     viewMode: PianoViewMode.exact,
+    pendingChord: PendingChord(
+      root: rootName,
+      quality: s.quality,
+      symbol: '$rootName${s.quality}',
+    ),
   );
 }

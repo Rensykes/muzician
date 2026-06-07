@@ -119,4 +119,36 @@ void main() {
     expect(byMidi[67]!.keyIndex, 31);
     expect(byMidi[71]!.keyIndex, 35);
   });
+
+  test('thirdAboveToSnapshot sets pendingChord from SOURCE chord (not the '
+      'shifted target) so library match can rediscover it', () {
+    // Source: C major. Target notes: E, G, B. pendingChord must reflect the
+    // source chord (C) so tapping a C harmony block surfaces this save under
+    // "Matches this chord".
+    final cMajor = suggestThirdAbove(
+      chordRootPc: 0,
+      chordQuality: '',
+      chordTonePcs: const [0, 4, 7],
+      keyRootPc: 0,
+      keyScaleName: 'major',
+    )!;
+    final snap = thirdAboveToSnapshot(cMajor);
+    expect(snap.pendingChord, isNotNull);
+    expect(snap.pendingChord!.symbol, 'C');
+    expect(snap.pendingChord!.root, 'C');
+    expect(snap.pendingChord!.quality, '');
+
+    // Source: A minor. pendingChord must be "Am", not the target chord.
+    final aMinor = suggestThirdAbove(
+      chordRootPc: 9,
+      chordQuality: 'm',
+      chordTonePcs: const [9, 0, 4],
+      keyRootPc: 0,
+      keyScaleName: 'major',
+    )!;
+    final aSnap = thirdAboveToSnapshot(aMinor);
+    expect(aSnap.pendingChord!.symbol, 'Am');
+    expect(aSnap.pendingChord!.root, 'A');
+    expect(aSnap.pendingChord!.quality, 'm');
+  });
 }
