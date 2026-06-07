@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../theme/muzician_theme.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
@@ -64,6 +65,15 @@ class SongwriterLaneRow extends ConsumerWidget {
             child: Text(
               lane.label ??
                   (lane.kind == SongLaneKind.harmony ? 'Harmony' : 'Lane'),
+              style: TextStyle(
+                color: lane.kind == SongLaneKind.harmony
+                    ? MuzicianTheme.violet
+                    : MuzicianTheme.teal,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           Expanded(
@@ -78,9 +88,7 @@ class SongwriterLaneRow extends ConsumerWidget {
                         child: CustomPaint(
                           painter: BarGridPainter(
                             lengthBars: lengthBars,
-                            color: Theme.of(
-                              context,
-                            ).dividerColor.withValues(alpha: 0.4),
+                            color: MuzicianTheme.glassBorder,
                           ),
                         ),
                       ),
@@ -108,9 +116,7 @@ class SongwriterLaneRow extends ConsumerWidget {
                               painter: PlayheadPainter(
                                 bar: activeBar!.toDouble(),
                                 lengthBars: lengthBars,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.7),
+                                color: MuzicianTheme.sky.withValues(alpha: 0.7),
                               ),
                             ),
                           ),
@@ -123,7 +129,12 @@ class SongwriterLaneRow extends ConsumerWidget {
           ),
           IconButton(
             key: Key('addBlock_$laneId'),
-            icon: const Icon(Icons.add),
+            icon: Icon(
+              Icons.add_rounded,
+              color: lane.kind == SongLaneKind.harmony
+                  ? MuzicianTheme.violet
+                  : MuzicianTheme.teal,
+            ),
             onPressed: () async {
               if (lane.kind == SongLaneKind.harmony) {
                 final config = ref.read(songwriterProvider).config;
