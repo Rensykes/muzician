@@ -6,6 +6,8 @@ import '../../store/songwriter_store.dart';
 import '../../ui/save_browser_panel.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_block_tile.dart';
+import 'songwriter_grid.dart';
+import 'songwriter_save_lane_filter.dart';
 
 int _nextFreeBar(SongLane lane, int lengthBars) {
   // first bar not covered by an existing block, capped at lengthBars-1
@@ -27,9 +29,11 @@ class SongwriterLaneRow extends ConsumerWidget {
     super.key,
     required this.sectionId,
     required this.laneId,
+    this.activeBar,
   });
   final String sectionId;
   final String laneId;
+  final int? activeBar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -70,6 +74,16 @@ class SongwriterLaneRow extends ConsumerWidget {
                   final barWidth = constraints.maxWidth / lengthBars;
                   return Stack(
                     children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: BarGridPainter(
+                            lengthBars: lengthBars,
+                            color: Theme.of(
+                              context,
+                            ).dividerColor.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ),
                       for (final block in lane.blocks)
                         Positioned(
                           left: block.startBar * barWidth,
@@ -80,6 +94,25 @@ class SongwriterLaneRow extends ConsumerWidget {
                             sectionId: sectionId,
                             laneId: laneId,
                             blockId: block.id,
+                            barWidth: barWidth,
+                            highlighted:
+                                activeBar != null &&
+                                activeBar! >= block.startBar &&
+                                activeBar! < block.endBar,
+                          ),
+                        ),
+                      if (activeBar != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: PlayheadPainter(
+                                bar: activeBar!.toDouble(),
+                                lengthBars: lengthBars,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.7),
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -115,8 +148,12 @@ class SongwriterLaneRow extends ConsumerWidget {
                 final picked = await showModalBottomSheet<SaveEntry>(
                   context: context,
                   isScrollControlled: true,
+                  // Allow fretboard / piano / piano_roll enrichment saves,
+                  // but exclude songwriter + song arrangement-level saves so
+                  // a save lane cannot embed a whole project save.
                   builder: (sheetCtx) => SaveBrowserPanel(
-                    instrumentFilter: 'fretboard',
+                    allowedInstruments:
+                        songwriterSaveLaneAllowedInstruments,
                     onPick: (entry) => Navigator.pop(sheetCtx, entry),
                   ),
                 );
