@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/muzician_theme.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../utils/note_utils.dart';
@@ -34,11 +35,22 @@ Future<SongBlock?> showHarmonyChordSheet(
   return showModalBottomSheet<SongBlock>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _HarmonySheet(
-      startBar: startBar,
-      spanBars: spanBars,
-      keyRoot: keyRoot,
-      keyScaleName: keyScaleName,
+    backgroundColor: Colors.transparent,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(context).size.height * 0.85,
+    ),
+    builder: (_) => Container(
+      decoration: BoxDecoration(
+        color: MuzicianTheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(color: MuzicianTheme.glassBorder),
+      ),
+      child: _HarmonySheet(
+        startBar: startBar,
+        spanBars: spanBars,
+        keyRoot: keyRoot,
+        keyScaleName: keyScaleName,
+      ),
     ),
   );
 }
