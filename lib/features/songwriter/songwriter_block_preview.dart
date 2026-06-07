@@ -396,8 +396,10 @@ class _LibraryTab extends StatelessWidget {
           if (chordMatches.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 4),
-              child: Text('Matches this chord',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                'Matches this chord',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
             SizedBox(
               height: 110,
@@ -420,8 +422,10 @@ class _LibraryTab extends StatelessWidget {
             const SizedBox(height: 8),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 4),
-              child: Text('Fits this key',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                'Fits this key',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
             SizedBox(
               height: 110,

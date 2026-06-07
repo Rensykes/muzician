@@ -20,7 +20,7 @@ class LibraryMatch {
 }
 
 ({List<LibraryMatch> chordMatches, List<LibraryMatch> scaleMatches})
-    matchLibrary({
+matchLibrary({
   required SongBlock harmonyBlock,
   required List<SaveEntry> searchableSaves,
   required int? keyRootPc,
