@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../theme/muzician_theme.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
+import '../_mockup_shell.dart';
 import 'songwriter_grid.dart';
 import 'songwriter_lane_row.dart';
 import 'songwriter_undo.dart';
@@ -37,11 +39,15 @@ class SongwriterSectionCard extends ConsumerWidget {
       }
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: MuzicianTheme.glassBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: MuzicianTheme.glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -49,9 +55,15 @@ class SongwriterSectionCard extends ConsumerWidget {
                   child: TextFormField(
                     key: Key('sectionLabel_$sectionId'),
                     initialValue: section.label ?? '',
+                    style: const TextStyle(
+                      color: MuzicianTheme.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                     decoration: const InputDecoration(
                       isDense: true,
                       hintText: 'Section name (optional)',
+                      hintStyle: TextStyle(color: MuzicianTheme.textMuted),
                       border: InputBorder.none,
                     ),
                     onFieldSubmitted: (v) =>
@@ -81,10 +93,11 @@ class SongwriterSectionCard extends ConsumerWidget {
                     onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
                   ),
                 ),
-                IconButton(
+                IconBtn(
                   key: Key('removeSection_$sectionId'),
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () {
+                  icon: Icons.close_rounded,
+                  color: MuzicianTheme.textSecondary,
+                  onTap: () {
                     final sections = ref.read(songwriterProvider).sections;
                     final index = sections.indexWhere((s) => s.id == sectionId);
                     if (index < 0) return;
@@ -111,10 +124,11 @@ class SongwriterSectionCard extends ConsumerWidget {
                       activeBar: activeLocalBar,
                     ),
                   ),
-                  IconButton(
+                  IconBtn(
                     key: Key('removeLane_${lane.id}'),
-                    icon: const Icon(Icons.close, size: 16),
-                    onPressed: () {
+                    icon: Icons.close_rounded,
+                    color: MuzicianTheme.textSecondary,
+                    onTap: () {
                       final s = ref
                           .read(songwriterProvider)
                           .sections
@@ -158,15 +172,35 @@ class SongwriterSectionCard extends ConsumerWidget {
                     child: Text('+ Save lane'),
                   ),
                 ],
-                child: const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('+ lane'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: MuzicianTheme.emerald.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: MuzicianTheme.emerald.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_rounded, size: 16, color: MuzicianTheme.emerald),
+                      SizedBox(width: 6),
+                      Text(
+                        'Add lane',
+                        style: TextStyle(
+                          color: MuzicianTheme.emerald,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ],
         ),
-      ),
     );
   }
 }
@@ -195,19 +229,28 @@ class _ValuePill extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: theme.dividerColor),
+          color: MuzicianTheme.teal.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: MuzicianTheme.teal.withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [Text(label), const Icon(Icons.arrow_drop_down, size: 16)],
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: MuzicianTheme.teal,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, color: MuzicianTheme.teal, size: 16),
+          ],
         ),
       ),
     );
