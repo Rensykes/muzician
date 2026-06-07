@@ -11,6 +11,7 @@ import '../../store/songwriter_store.dart';
 import '../../store/save_system_store.dart';
 import '../../ui/save_browser_panel.dart';
 import 'songwriter_block_preview.dart';
+import 'songwriter_save_lane_filter.dart';
 import 'songwriter_undo.dart';
 
 class SongwriterBlockTile extends ConsumerStatefulWidget {
@@ -273,10 +274,12 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                 final picked = await showModalBottomSheet<SaveEntry>(
                   context: context,
                   isScrollControlled: true,
-                  // No instrumentFilter: Songwriter accepts both fretboard
-                  // voicings (C v1) and piano 3rd-above harmonies (C v2-a),
-                  // so re-link must see all instrument-typed saves.
+                  // Allow fretboard / piano / piano_roll enrichment saves,
+                  // but exclude songwriter + song arrangement-level saves so
+                  // a save-lane block cannot point at a whole project save.
                   builder: (ctx) => SaveBrowserPanel(
+                    allowedInstruments:
+                        songwriterSaveLaneAllowedInstruments,
                     onPick: (entry) => Navigator.pop(ctx, entry),
                   ),
                 );
