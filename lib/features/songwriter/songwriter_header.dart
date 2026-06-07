@@ -27,6 +27,20 @@ class SongwriterHeader extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
+          Flexible(
+            child: Consumer(
+              builder: (context, ref, _) {
+                final name =
+                    ref.watch(songwriterProvider.select((p) => p.name));
+                return _Chip(
+                  key: const Key('projectNameChip'),
+                  label: name,
+                  onTap: () => _editProjectName(context, ref, name),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
           Consumer(
             builder: (context, ref, _) {
               final playing = ref.watch(
@@ -144,8 +158,39 @@ class SongwriterHeader extends ConsumerWidget {
   }
 }
 
+void _editProjectName(BuildContext context, WidgetRef ref, String current) {
+  final controller = TextEditingController(text: current);
+  showDialog<void>(
+    context: context,
+    builder: (dialogCtx) => AlertDialog(
+      title: const Text('Project name'),
+      content: TextField(
+        key: const Key('projectNameField'),
+        controller: controller,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Name'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogCtx),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            ref
+                .read(songwriterProvider.notifier)
+                .setProjectName(controller.text);
+            Navigator.pop(dialogCtx);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+}
+
 class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.onTap});
+  const _Chip({super.key, required this.label, required this.onTap});
   final String label;
   final VoidCallback onTap;
   @override
