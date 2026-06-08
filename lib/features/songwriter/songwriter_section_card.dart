@@ -152,23 +152,9 @@ class SongwriterSectionCard extends ConsumerWidget {
             ),
           Align(
             alignment: Alignment.centerLeft,
-            child: PopupMenuButton<SongLaneKind>(
+            child: GestureDetector(
               key: Key('addLane_$sectionId'),
-              onSelected: (kind) => notifier.addLane(
-                sectionId: sectionId,
-                kind: kind,
-                label: kind == SongLaneKind.harmony ? 'Harmony' : null,
-              ),
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: SongLaneKind.harmony,
-                  child: Text('+ Harmony lane'),
-                ),
-                PopupMenuItem(
-                  value: SongLaneKind.save,
-                  child: Text('+ Save lane'),
-                ),
-              ],
+              onTap: () => _showAddLaneSheet(context, notifier, sectionId),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -204,6 +190,84 @@ class SongwriterSectionCard extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+void _showAddLaneSheet(
+  BuildContext context,
+  SongwriterNotifier notifier,
+  String sectionId,
+) {
+  showWidgetSheet(
+    context: context,
+    title: 'Add lane',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _LaneOptionTile(
+          icon: Icons.music_note_rounded,
+          label: 'Harmony lane',
+          onTap: () {
+            Navigator.pop(context);
+            notifier.addLane(
+              sectionId: sectionId,
+              kind: SongLaneKind.harmony,
+              label: 'Harmony',
+            );
+          },
+        ),
+        _LaneOptionTile(
+          icon: Icons.save_rounded,
+          label: 'Save lane',
+          onTap: () {
+            Navigator.pop(context);
+            notifier.addLane(
+              sectionId: sectionId,
+              kind: SongLaneKind.save,
+              label: null,
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+class _LaneOptionTile extends StatelessWidget {
+  const _LaneOptionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: MuzicianTheme.textSecondary),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: const TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
