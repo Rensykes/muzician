@@ -149,15 +149,15 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
               onHorizontalDragStart: (_) => _resizeDx = 0,
               onHorizontalDragUpdate: (d) => _resizeDx += d.delta.dx,
               onHorizontalDragEnd: (_) => _applyResize(block),
-                child: Container(
-                  width: 8,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: const BorderRadius.horizontal(
-                      right: Radius.circular(8),
-                    ),
+              child: Container(
+                width: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(8),
                   ),
                 ),
+              ),
             ),
           ],
         ),
@@ -286,8 +286,7 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
                   // but exclude songwriter + song arrangement-level saves so
                   // a save-lane block cannot point at a whole project save.
                   builder: (ctx) => SaveBrowserPanel(
-                    allowedInstruments:
-                        songwriterSaveLaneAllowedInstruments,
+                    allowedInstruments: songwriterSaveLaneAllowedInstruments,
                     onPick: (entry) => Navigator.pop(ctx, entry),
                   ),
                 );
