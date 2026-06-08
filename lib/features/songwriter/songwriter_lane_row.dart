@@ -163,8 +163,7 @@ class SongwriterLaneRow extends ConsumerWidget {
                   // but exclude songwriter + song arrangement-level saves so
                   // a save lane cannot embed a whole project save.
                   builder: (sheetCtx) => SaveBrowserPanel(
-                    allowedInstruments:
-                        songwriterSaveLaneAllowedInstruments,
+                    allowedInstruments: songwriterSaveLaneAllowedInstruments,
                     onPick: (entry) => Navigator.pop(sheetCtx, entry),
                   ),
                 );

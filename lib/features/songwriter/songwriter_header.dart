@@ -41,18 +41,26 @@ class SongwriterHeader extends ConsumerWidget {
                 size: 22,
               ),
               onSelected: (v) {
-                if (v == 'saveload') { onOpenSaveLoad?.call(); }
-                if (v == 'structure') { onOpenStructure?.call(); }
+                if (v == 'saveload') {
+                  onOpenSaveLoad?.call();
+                }
+                if (v == 'structure') {
+                  onOpenStructure?.call();
+                }
                 if (v == 'rename') {
                   _editProjectName(
-                    context, ref,
+                    context,
+                    ref,
                     ref.read(songwriterProvider).name,
                   );
                 }
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'saveload', child: Text('Save / Load')),
-                PopupMenuItem(value: 'structure', child: Text('Edit structure')),
+                PopupMenuItem(
+                  value: 'structure',
+                  child: Text('Edit structure'),
+                ),
                 PopupMenuItem(value: 'rename', child: Text('Rename project')),
               ],
             ),
@@ -168,20 +176,14 @@ class _WriterConfigStrip extends ConsumerWidget {
                 .setMetronomeEnabled(!metronomeOn),
           ),
           _stripDivider(),
-          IconBtn(
-            icon: Icons.add_box_outlined,
-            onTap: onNewProject,
-          ),
+          IconBtn(icon: Icons.add_box_outlined, onTap: onNewProject),
         ],
       ),
     );
   }
 
-  static Widget _stripDivider() => Container(
-    width: 1,
-    height: 24,
-    color: MuzicianTheme.glassBorder,
-  );
+  static Widget _stripDivider() =>
+      Container(width: 1, height: 24, color: MuzicianTheme.glassBorder);
 }
 
 class _ConfigReadout extends StatelessWidget {

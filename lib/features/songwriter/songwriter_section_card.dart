@@ -48,159 +48,163 @@ class SongwriterSectionCard extends ConsumerWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  key: Key('sectionLabel_$sectionId'),
+                  initialValue: section.label ?? '',
+                  style: const TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: 'Section name (optional)',
+                    hintStyle: TextStyle(color: MuzicianTheme.textMuted),
+                    border: InputBorder.none,
+                  ),
+                  onFieldSubmitted: (v) =>
+                      notifier.renameSection(sectionId, v.isEmpty ? null : v),
+                ),
+              ),
+              _ValuePill(
+                key: Key('barsPill_$sectionId'),
+                label: '${section.lengthBars} bars',
+                onTap: () => _openStepper(
+                  context,
+                  title: 'Bars',
+                  value: section.lengthBars,
+                  min: 1,
+                  onChanged: (v) => notifier.setSectionLength(sectionId, v),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _ValuePill(
+                key: Key('repeatPill_$sectionId'),
+                label: '${section.repeat}×',
+                onTap: () => _openStepper(
+                  context,
+                  title: 'Repeat',
+                  value: section.repeat,
+                  min: 1,
+                  onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
+                ),
+              ),
+              IconBtn(
+                key: Key('removeSection_$sectionId'),
+                icon: Icons.close_rounded,
+                color: MuzicianTheme.textSecondary,
+                onTap: () {
+                  final sections = ref.read(songwriterProvider).sections;
+                  final index = sections.indexWhere((s) => s.id == sectionId);
+                  if (index < 0) return;
+                  final removed = sections[index];
+                  notifier.removeSection(sectionId);
+                  showUndoSnack(
+                    context,
+                    'Section deleted',
+                    () => notifier.insertSection(removed, index),
+                  );
+                },
+              ),
+            ],
+          ),
+          if (section.lanes.isNotEmpty)
+            BarRuler(lengthBars: section.lengthBars, gutter: 72),
+          for (final lane in section.lanes)
             Row(
               children: [
                 Expanded(
-                  child: TextFormField(
-                    key: Key('sectionLabel_$sectionId'),
-                    initialValue: section.label ?? '',
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      hintText: 'Section name (optional)',
-                      hintStyle: TextStyle(color: MuzicianTheme.textMuted),
-                      border: InputBorder.none,
-                    ),
-                    onFieldSubmitted: (v) =>
-                        notifier.renameSection(sectionId, v.isEmpty ? null : v),
-                  ),
-                ),
-                _ValuePill(
-                  key: Key('barsPill_$sectionId'),
-                  label: '${section.lengthBars} bars',
-                  onTap: () => _openStepper(
-                    context,
-                    title: 'Bars',
-                    value: section.lengthBars,
-                    min: 1,
-                    onChanged: (v) => notifier.setSectionLength(sectionId, v),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                _ValuePill(
-                  key: Key('repeatPill_$sectionId'),
-                  label: '${section.repeat}×',
-                  onTap: () => _openStepper(
-                    context,
-                    title: 'Repeat',
-                    value: section.repeat,
-                    min: 1,
-                    onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
+                  child: SongwriterLaneRow(
+                    sectionId: sectionId,
+                    laneId: lane.id,
+                    activeBar: activeLocalBar,
                   ),
                 ),
                 IconBtn(
-                  key: Key('removeSection_$sectionId'),
+                  key: Key('removeLane_${lane.id}'),
                   icon: Icons.close_rounded,
                   color: MuzicianTheme.textSecondary,
                   onTap: () {
-                    final sections = ref.read(songwriterProvider).sections;
-                    final index = sections.indexWhere((s) => s.id == sectionId);
-                    if (index < 0) return;
-                    final removed = sections[index];
-                    notifier.removeSection(sectionId);
+                    final s = ref
+                        .read(songwriterProvider)
+                        .sections
+                        .firstWhere((x) => x.id == sectionId);
+                    final idx = s.lanes.indexWhere((l) => l.id == lane.id);
+                    if (idx < 0) return;
+                    final removed = s.lanes[idx];
+                    notifier.removeLane(sectionId: sectionId, laneId: lane.id);
                     showUndoSnack(
                       context,
-                      'Section deleted',
-                      () => notifier.insertSection(removed, index),
+                      'Lane deleted',
+                      () => notifier.insertLane(
+                        sectionId: sectionId,
+                        lane: removed,
+                        index: idx,
+                      ),
                     );
                   },
                 ),
               ],
             ),
-            if (section.lanes.isNotEmpty)
-              BarRuler(lengthBars: section.lengthBars, gutter: 72),
-            for (final lane in section.lanes)
-              Row(
-                children: [
-                  Expanded(
-                    child: SongwriterLaneRow(
-                      sectionId: sectionId,
-                      laneId: lane.id,
-                      activeBar: activeLocalBar,
-                    ),
-                  ),
-                  IconBtn(
-                    key: Key('removeLane_${lane.id}'),
-                    icon: Icons.close_rounded,
-                    color: MuzicianTheme.textSecondary,
-                    onTap: () {
-                      final s = ref
-                          .read(songwriterProvider)
-                          .sections
-                          .firstWhere((x) => x.id == sectionId);
-                      final idx = s.lanes.indexWhere((l) => l.id == lane.id);
-                      if (idx < 0) return;
-                      final removed = s.lanes[idx];
-                      notifier.removeLane(
-                        sectionId: sectionId,
-                        laneId: lane.id,
-                      );
-                      showUndoSnack(
-                        context,
-                        'Lane deleted',
-                        () => notifier.insertLane(
-                          sectionId: sectionId,
-                          lane: removed,
-                          index: idx,
-                        ),
-                      );
-                    },
-                  ),
-                ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PopupMenuButton<SongLaneKind>(
+              key: Key('addLane_$sectionId'),
+              onSelected: (kind) => notifier.addLane(
+                sectionId: sectionId,
+                kind: kind,
+                label: kind == SongLaneKind.harmony ? 'Harmony' : null,
               ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: PopupMenuButton<SongLaneKind>(
-                key: Key('addLane_$sectionId'),
-                onSelected: (kind) => notifier.addLane(
-                  sectionId: sectionId,
-                  kind: kind,
-                  label: kind == SongLaneKind.harmony ? 'Harmony' : null,
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: SongLaneKind.harmony,
+                  child: Text('+ Harmony lane'),
                 ),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: SongLaneKind.harmony,
-                    child: Text('+ Harmony lane'),
+                PopupMenuItem(
+                  value: SongLaneKind.save,
+                  child: Text('+ Save lane'),
+                ),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: MuzicianTheme.emerald.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: MuzicianTheme.emerald.withValues(alpha: 0.3),
                   ),
-                  PopupMenuItem(
-                    value: SongLaneKind.save,
-                    child: Text('+ Save lane'),
-                  ),
-                ],
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: MuzicianTheme.emerald.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: MuzicianTheme.emerald.withValues(alpha: 0.3),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.add_rounded,
+                      size: 16,
+                      color: MuzicianTheme.emerald,
                     ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_rounded, size: 16, color: MuzicianTheme.emerald),
-                      SizedBox(width: 6),
-                      Text(
-                        'Add lane',
-                        style: TextStyle(
-                          color: MuzicianTheme.emerald,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Add lane',
+                      style: TextStyle(
+                        color: MuzicianTheme.emerald,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -249,7 +253,11 @@ class _ValuePill extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const Icon(Icons.arrow_drop_down, color: MuzicianTheme.teal, size: 16),
+            const Icon(
+              Icons.arrow_drop_down,
+              color: MuzicianTheme.teal,
+              size: 16,
+            ),
           ],
         ),
       ),

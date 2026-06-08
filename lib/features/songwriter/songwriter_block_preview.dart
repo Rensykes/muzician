@@ -60,8 +60,10 @@ void showBrokenReferenceSheet(
         if (onRelink != null)
           ListTile(
             leading: const Icon(Icons.link, color: MuzicianTheme.textSecondary),
-            title: const Text('Re-link to another save',
-                style: TextStyle(color: MuzicianTheme.textPrimary)),
+            title: const Text(
+              'Re-link to another save',
+              style: TextStyle(color: MuzicianTheme.textPrimary),
+            ),
             onTap: () {
               Navigator.pop(context);
               onRelink();
@@ -69,8 +71,10 @@ void showBrokenReferenceSheet(
           ),
         ListTile(
           leading: const Icon(Icons.delete_outline, color: MuzicianTheme.red),
-          title: const Text('Delete block',
-              style: TextStyle(color: MuzicianTheme.textPrimary)),
+          title: const Text(
+            'Delete block',
+            style: TextStyle(color: MuzicianTheme.textPrimary),
+          ),
           onTap: () {
             Navigator.pop(context);
             onDelete();
@@ -281,7 +285,10 @@ class _ThirdAboveCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               suggestion.label,
-              style: const TextStyle(fontSize: 11, color: MuzicianTheme.textPrimary),
+              style: const TextStyle(
+                fontSize: 11,
+                color: MuzicianTheme.textPrimary,
+              ),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -326,7 +333,10 @@ class _VoicingCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               suggestion.label,
-              style: const TextStyle(fontSize: 11, color: MuzicianTheme.textPrimary),
+              style: const TextStyle(
+                fontSize: 11,
+                color: MuzicianTheme.textPrimary,
+              ),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -450,7 +460,10 @@ class _LibraryMatchCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               match.entry.name,
-              style: const TextStyle(fontSize: 11, color: MuzicianTheme.textPrimary),
+              style: const TextStyle(
+                fontSize: 11,
+                color: MuzicianTheme.textPrimary,
+              ),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

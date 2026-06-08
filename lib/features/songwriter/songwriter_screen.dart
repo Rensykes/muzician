@@ -62,7 +62,8 @@ class SongwriterScreen extends ConsumerWidget {
                     ),
                   _AddSectionChip(
                     key: const Key('songwriterAddSection'),
-                    onTap: () => notifier.addSection(label: null, lengthBars: 8),
+                    onTap: () =>
+                        notifier.addSection(label: null, lengthBars: 8),
                   ),
                 ],
               ),
