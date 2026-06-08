@@ -28,43 +28,50 @@ class SongwriterHeader extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        CompactAppBar(
-          title: 'Writer',
-          chipLabel: ref.watch(songwriterProvider.select((p) => p.name)),
-          actions: [
-            PopupMenuButton<String>(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              icon: const Icon(
-                Icons.more_vert,
-                color: MuzicianTheme.textSecondary,
-                size: 22,
-              ),
-              onSelected: (v) {
-                if (v == 'saveload') {
-                  onOpenSaveLoad?.call();
-                }
-                if (v == 'structure') {
-                  onOpenStructure?.call();
-                }
-                if (v == 'rename') {
-                  _editProjectName(
+        SizedBox(
+          height: 44,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => _showOverflowMenu(context, ref),
+                  child: const Text(
+                    'Writer',
+                    style: TextStyle(
+                      color: MuzicianTheme.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                GestureDetector(
+                  onTap: () => _editProjectName(
                     context,
                     ref,
                     ref.read(songwriterProvider).name,
-                  );
-                }
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'saveload', child: Text('Save / Load')),
-                PopupMenuItem(
-                  value: 'structure',
-                  child: Text('Edit structure'),
+                  ),
+                  child: Text(
+                    ref.watch(songwriterProvider.select((p) => p.name)),
+                    style: const TextStyle(
+                      color: MuzicianTheme.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                PopupMenuItem(value: 'rename', child: Text('Rename project')),
+                const Spacer(),
+                IconBtn(
+                  icon: Icons.more_vert,
+                  onTap: () => _showOverflowMenu(context, ref),
+                ),
               ],
             ),
-          ],
+          ),
         ),
         _WriterConfigStrip(
           keyLabel: keyLabel,
@@ -77,16 +84,98 @@ class SongwriterHeader extends ConsumerWidget {
     );
   }
 
+  void _showOverflowMenu(BuildContext context, WidgetRef ref) {
+    showWidgetSheet(
+      context: context,
+      title: 'Writer',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MenuTile(
+            icon: Icons.save_rounded,
+            label: 'Save / Load',
+            onTap: () {
+              Navigator.pop(context);
+              onOpenSaveLoad?.call();
+            },
+          ),
+          _MenuTile(
+            icon: Icons.account_tree_rounded,
+            label: 'Edit structure',
+            onTap: () {
+              Navigator.pop(context);
+              onOpenStructure?.call();
+            },
+          ),
+          _MenuTile(
+            icon: Icons.edit_rounded,
+            label: 'Rename project',
+            onTap: () {
+              Navigator.pop(context);
+              _editProjectName(context, ref, ref.read(songwriterProvider).name);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _confirmNew(
     BuildContext context,
     SongwriterNotifier notifier,
   ) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => _GlassDialog(
-        title: 'New project?',
-        content: 'This clears the current songwriter session.',
-        confirmLabel: 'New project',
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: MuzicianTheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: MuzicianTheme.glassBorder),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'New project?',
+                style: TextStyle(
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'This clears the current songwriter session.',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _GlassTextButton(
+                    label: 'Cancel',
+                    onTap: () => Navigator.pop(dialogCtx, false),
+                  ),
+                  const SizedBox(width: 12),
+                  _GlassTextButton(
+                    label: 'New project',
+                    accent: true,
+                    onTap: () => Navigator.pop(dialogCtx, true),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
     if (ok == true) await notifier.newProject();
@@ -139,16 +228,15 @@ class _WriterConfigStrip extends ConsumerWidget {
     final metronomeOn = ref.watch(
       settingsProvider.select((s) => s.metronomeEnabled),
     );
-    return Container(
-      height: 44,
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: MuzicianTheme.glassBorder),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: MuzicianTheme.glassBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: MuzicianTheme.glassBorder),
+        ),
         child: Row(
           children: [
             _ConfigReadout(label: 'KEY', value: keyLabel, onTap: onKeyTap),
@@ -197,13 +285,15 @@ class _ConfigReadout extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: MuzicianTheme.textMuted,
                 fontSize: 9,
@@ -213,13 +303,13 @@ class _ConfigReadout extends StatelessWidget {
             ),
             Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: MuzicianTheme.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -232,12 +322,11 @@ void _editProjectName(BuildContext context, WidgetRef ref, String current) {
   final controller = TextEditingController(text: current);
   showDialog<void>(
     context: context,
-    builder: (dialogCtx) => AlertDialog(
+    builder: (dialogCtx) => Dialog(
       backgroundColor: Colors.transparent,
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
-      contentPadding: EdgeInsets.zero,
-      content: Container(
+      child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: MuzicianTheme.surface,
@@ -441,65 +530,36 @@ class _GlassTextButton extends StatelessWidget {
   }
 }
 
-class _GlassDialog extends StatelessWidget {
-  const _GlassDialog({
-    required this.title,
-    required this.content,
-    required this.confirmLabel,
+class _MenuTile extends StatelessWidget {
+  const _MenuTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
   });
-  final String title;
-  final String content;
-  final String confirmLabel;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Colors.transparent,
-      shadowColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      contentPadding: EdgeInsets.zero,
-      content: Container(
-        padding: const EdgeInsets.all(20),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: MuzicianTheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
+            Icon(icon, size: 20, color: MuzicianTheme.textSecondary),
+            const SizedBox(width: 14),
             Text(
-              title,
+              label,
               style: const TextStyle(
                 color: MuzicianTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              content,
-              style: const TextStyle(
-                color: MuzicianTheme.textSecondary,
                 fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _GlassTextButton(
-                  label: 'Cancel',
-                  onTap: () => Navigator.pop(context, false),
-                ),
-                const SizedBox(width: 12),
-                _GlassTextButton(
-                  label: confirmLabel,
-                  accent: true,
-                  onTap: () => Navigator.pop(context, true),
-                ),
-              ],
             ),
           ],
         ),
