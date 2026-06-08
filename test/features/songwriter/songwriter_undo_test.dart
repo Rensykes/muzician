@@ -22,14 +22,11 @@ void main() {
     );
 
     showUndoSnack(ctx, 'Section deleted', () => undone = true);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Section deleted'), findsOneWidget);
 
     await tester.tap(find.text('Undo'));
     await tester.pump();
     expect(undone, true);
-
-    // Advance past the 4-second auto-dismiss timer so test teardown is clean.
-    await tester.pump(const Duration(seconds: 5));
   });
 }
