@@ -83,19 +83,10 @@ class SongwriterHeader extends ConsumerWidget {
   ) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('New project?'),
-        content: const Text('This clears the current songwriter session.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('New project'),
-          ),
-        ],
+      builder: (_) => _GlassDialog(
+        title: 'New project?',
+        content: 'This clears the current songwriter session.',
+        confirmLabel: 'New project',
       ),
     );
     if (ok == true) await notifier.newProject();
@@ -156,28 +147,32 @@ class _WriterConfigStrip extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: MuzicianTheme.glassBorder),
       ),
-      child: Row(
-        children: [
-          _ConfigReadout(label: 'KEY', value: keyLabel, onTap: onKeyTap),
-          _stripDivider(),
-          _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
-          _stripDivider(),
-          IconBtn(
-            icon: playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
-            onTap: () {
-              final t = ref.read(songwriterPlaybackProvider.notifier);
-              playing ? t.stopPlayback() : t.startPlayback();
-            },
-          ),
-          IconBtn(
-            icon: metronomeOn ? Icons.music_note : Icons.music_off,
-            onTap: () => ref
-                .read(settingsProvider.notifier)
-                .setMetronomeEnabled(!metronomeOn),
-          ),
-          _stripDivider(),
-          IconBtn(icon: Icons.add_box_outlined, onTap: onNewProject),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _ConfigReadout(label: 'KEY', value: keyLabel, onTap: onKeyTap),
+            _stripDivider(),
+            _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
+            _stripDivider(),
+            IconBtn(
+              key: const Key('songwriterPlay'),
+              icon: playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              onTap: () {
+                final t = ref.read(songwriterPlaybackProvider.notifier);
+                playing ? t.stopPlayback() : t.startPlayback();
+              },
+            ),
+            IconBtn(
+              icon: metronomeOn ? Icons.music_note : Icons.music_off,
+              onTap: () => ref
+                  .read(settingsProvider.notifier)
+                  .setMetronomeEnabled(!metronomeOn),
+            ),
+            _stripDivider(),
+            IconBtn(icon: Icons.add_box_outlined, onTap: onNewProject),
+          ],
+        ),
       ),
     );
   }
@@ -238,28 +233,69 @@ void _editProjectName(BuildContext context, WidgetRef ref, String current) {
   showDialog<void>(
     context: context,
     builder: (dialogCtx) => AlertDialog(
-      title: const Text('Project name'),
-      content: TextField(
-        key: const Key('projectNameField'),
-        controller: controller,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Name'),
+      backgroundColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      contentPadding: EdgeInsets.zero,
+      content: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: MuzicianTheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: MuzicianTheme.glassBorder),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Project name',
+              style: TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('projectNameField'),
+              controller: controller,
+              autofocus: true,
+              style: const TextStyle(color: MuzicianTheme.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Name',
+                labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: MuzicianTheme.sky),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _GlassTextButton(
+                  label: 'Cancel',
+                  onTap: () => Navigator.pop(dialogCtx),
+                ),
+                const SizedBox(width: 12),
+                _GlassTextButton(
+                  label: 'Save',
+                  accent: true,
+                  onTap: () {
+                    ref
+                        .read(songwriterProvider.notifier)
+                        .setProjectName(controller.text);
+                    Navigator.pop(dialogCtx);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogCtx),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            ref
-                .read(songwriterProvider.notifier)
-                .setProjectName(controller.text);
-            Navigator.pop(dialogCtx);
-          },
-          child: const Text('Save'),
-        ),
-      ],
     ),
   );
 }
@@ -313,30 +349,160 @@ class _KeySheet extends StatelessWidget {
               scale.isEmpty
                   ? scale
                   : scale[0].toUpperCase() + scale.substring(1),
+              style: const TextStyle(
+                color: MuzicianTheme.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 6,
+              runSpacing: 6,
               children: [
                 for (var pc = 0; pc < 12; pc++)
-                  ActionChip(
-                    label: Text(chromaticNotes[pc]),
-                    onPressed: () {
+                  _GlassPill(
+                    key: ValueKey('keyPill_${scale}_$pc'),
+                    label: chromaticNotes[pc],
+                    onTap: () {
                       onPick(pc, scale);
                       Navigator.pop(context);
                     },
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ],
-          TextButton(
-            onPressed: () {
+          _GlassTextButton(
+            label: 'Clear key',
+            onTap: () {
               onClear();
               Navigator.pop(context);
             },
-            child: const Text('Clear key'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GlassPill extends StatelessWidget {
+  const _GlassPill({super.key, required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: MuzicianTheme.glassBorder),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: MuzicianTheme.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassTextButton extends StatelessWidget {
+  const _GlassTextButton({
+    required this.label,
+    required this.onTap,
+    this.accent = false,
+  });
+  final String label;
+  final VoidCallback onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: accent ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassDialog extends StatelessWidget {
+  const _GlassDialog({
+    required this.title,
+    required this.content,
+    required this.confirmLabel,
+  });
+  final String title;
+  final String content;
+  final String confirmLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      contentPadding: EdgeInsets.zero,
+      content: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: MuzicianTheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: MuzicianTheme.glassBorder),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              content,
+              style: const TextStyle(
+                color: MuzicianTheme.textSecondary,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _GlassTextButton(
+                  label: 'Cancel',
+                  onTap: () => Navigator.pop(context, false),
+                ),
+                const SizedBox(width: 12),
+                _GlassTextButton(
+                  label: confirmLabel,
+                  accent: true,
+                  onTap: () => Navigator.pop(context, true),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

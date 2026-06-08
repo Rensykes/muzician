@@ -285,35 +285,79 @@ class _StepperDialogState extends State<_StepperDialog> {
   void _set(int next) {
     if (next < widget.min) return;
     setState(() => _v = next);
-    widget.onChanged(_v); // live-apply
+    widget.onChanged(_v);
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.title),
-      content: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            key: const Key('stepperMinus'),
-            icon: const Icon(Icons.remove),
-            onPressed: () => _set(_v - 1),
-          ),
-          Text('$_v', style: Theme.of(context).textTheme.headlineSmall),
-          IconButton(
-            key: const Key('stepperPlus'),
-            icon: const Icon(Icons.add),
-            onPressed: () => _set(_v + 1),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Done'),
+      backgroundColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      contentPadding: EdgeInsets.zero,
+      content: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: MuzicianTheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: MuzicianTheme.glassBorder),
         ),
-      ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.title,
+              style: const TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconBtn(
+                  key: const Key('stepperMinus'),
+                  icon: Icons.remove_rounded,
+                  onTap: () => _set(_v - 1),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '$_v',
+                    style: const TextStyle(
+                      color: MuzicianTheme.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconBtn(
+                  key: const Key('stepperPlus'),
+                  icon: Icons.add_rounded,
+                  onTap: () => _set(_v + 1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: const Text(
+                  'Done',
+                  style: TextStyle(
+                    color: MuzicianTheme.sky,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

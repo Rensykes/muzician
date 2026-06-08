@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/muzician_theme.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
+import '../_mockup_shell.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
@@ -240,100 +241,111 @@ class _SongwriterBlockTileState extends ConsumerState<SongwriterBlockTile> {
   }
 
   void _openMenu(BuildContext context, SongBlock block) {
-    showModalBottomSheet<void>(
+    showWidgetSheet(
       context: context,
-      builder: (sheetCtx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.open_with),
-              title: const Text('Edit placement'),
+      title: 'Block Menu',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MenuTile(
+            icon: Icons.open_with,
+            label: 'Edit placement',
+            onTap: () {
+              Navigator.pop(context);
+              _editPlacement(context, block);
+            },
+          ),
+          if (block.embedded == null && block.saveId != null)
+            _MenuTile(
+              icon: Icons.content_copy,
+              label: 'Make Unique',
               onTap: () {
-                Navigator.pop(sheetCtx);
-                _editPlacement(context, block);
-              },
-            ),
-            if (block.embedded == null && block.saveId != null)
-              ListTile(
-                leading: const Icon(Icons.content_copy),
-                title: const Text('Make Unique'),
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  final saves = ref.read(saveSystemProvider).saves;
-                  final snap = resolveBlockSnapshot(block, saves);
-                  if (snap != null) {
-                    ref
-                        .read(songwriterProvider.notifier)
-                        .makeBlockUnique(
-                          sectionId: widget.sectionId,
-                          laneId: widget.laneId,
-                          blockId: widget.blockId,
-                          snapshot: snap,
-                        );
-                  }
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('Re-link'),
-              onTap: () async {
-                Navigator.pop(sheetCtx);
-                final picked = await showModalBottomSheet<SaveEntry>(
-                  context: context,
-                  isScrollControlled: true,
-                  // Allow fretboard / piano / piano_roll enrichment saves,
-                  // but exclude songwriter + song arrangement-level saves so
-                  // a save-lane block cannot point at a whole project save.
-                  builder: (ctx) => SaveBrowserPanel(
-                    allowedInstruments: songwriterSaveLaneAllowedInstruments,
-                    onPick: (entry) => Navigator.pop(ctx, entry),
-                  ),
-                );
-                if (picked != null) {
+                Navigator.pop(context);
+                final saves = ref.read(saveSystemProvider).saves;
+                final snap = resolveBlockSnapshot(block, saves);
+                if (snap != null) {
                   ref
                       .read(songwriterProvider.notifier)
-                      .relinkBlock(
+                      .makeBlockUnique(
                         sectionId: widget.sectionId,
                         laneId: widget.laneId,
                         blockId: widget.blockId,
-                        saveId: picked.id,
+                        snapshot: snap,
                       );
                 }
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
-              onTap: () {
-                Navigator.pop(sheetCtx);
-                final n = ref.read(songwriterProvider.notifier);
-                n.removeBlock(
+          _MenuTile(
+            icon: Icons.link,
+            label: 'Re-link',
+            onTap: () async {
+              Navigator.pop(context);
+              final picked = await showModalBottomSheet<SaveEntry>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
+                ),
+                builder: (ctx) => Container(
+                  decoration: BoxDecoration(
+                    color: MuzicianTheme.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                    border: Border.all(color: MuzicianTheme.glassBorder),
+                  ),
+                  child: SaveBrowserPanel(
+                    allowedInstruments: songwriterSaveLaneAllowedInstruments,
+                    onPick: (entry) => Navigator.pop(ctx, entry),
+                  ),
+                ),
+              );
+              if (picked != null) {
+                ref
+                    .read(songwriterProvider.notifier)
+                    .relinkBlock(
+                      sectionId: widget.sectionId,
+                      laneId: widget.laneId,
+                      blockId: widget.blockId,
+                      saveId: picked.id,
+                    );
+              }
+            },
+          ),
+          _MenuTile(
+            icon: Icons.delete_outline,
+            label: 'Delete',
+            accent: true,
+            onTap: () {
+              Navigator.pop(context);
+              final n = ref.read(songwriterProvider.notifier);
+              n.removeBlock(
+                sectionId: widget.sectionId,
+                laneId: widget.laneId,
+                blockId: widget.blockId,
+              );
+              showUndoSnack(
+                context,
+                'Block deleted',
+                () => n.insertBlock(
                   sectionId: widget.sectionId,
                   laneId: widget.laneId,
-                  blockId: widget.blockId,
-                );
-                showUndoSnack(
-                  context,
-                  'Block deleted',
-                  () => n.insertBlock(
-                    sectionId: widget.sectionId,
-                    laneId: widget.laneId,
-                    block: block,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+                  block: block,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
   void _editPlacement(BuildContext context, SongBlock block) {
-    showDialog<void>(
+    showWidgetSheet(
       context: context,
-      builder: (_) => _PlacementDialog(
+      title: 'Block placement',
+      child: _PlacementDialog(
         initialStart: block.startBar,
         initialSpan: block.spanBars,
         onApply: (start, span) => ref
@@ -411,9 +423,9 @@ class _PlacementDialogState extends State<_PlacementDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Block placement'),
-      content: Column(
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           _row(
@@ -422,27 +434,47 @@ class _PlacementDialogState extends State<_PlacementDialog> {
             0,
             (v) => setState(() => _start = v < 0 ? 0 : v),
           ),
+          const SizedBox(height: 12),
           _row(
             'Span (bars)',
             _span,
             1,
             (v) => setState(() => _span = v < 1 ? 1 : v),
           ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: MuzicianTheme.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () {
+                  widget.onApply(_start, _span);
+                  Navigator.pop(context);
+                },
+                child: const Text(
+                  'Apply',
+                  style: TextStyle(
+                    color: MuzicianTheme.sky,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            widget.onApply(_start, _span);
-            Navigator.pop(context);
-          },
-          child: const Text('Apply'),
-        ),
-      ],
     );
   }
 
@@ -450,22 +482,80 @@ class _PlacementDialogState extends State<_PlacementDialog> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label),
+        Text(
+          label,
+          style: const TextStyle(
+            color: MuzicianTheme.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.remove),
-              onPressed: value > min ? () => onChanged(value - 1) : null,
+            IconBtn(
+              icon: Icons.remove_rounded,
+              onTap: value > min ? () => onChanged(value - 1) : () {},
             ),
-            Text('$value'),
-            IconButton(
-              icon: const Icon(Icons.add),
-              onPressed: () => onChanged(value + 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                '$value',
+                style: const TextStyle(
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
+            IconBtn(icon: Icons.add_rounded, onTap: () => onChanged(value + 1)),
           ],
         ),
       ],
+    );
+  }
+}
+
+class _MenuTile extends StatelessWidget {
+  const _MenuTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.accent = false,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: accent ? MuzicianTheme.red : MuzicianTheme.textSecondary,
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: TextStyle(
+                color: accent ? MuzicianTheme.red : MuzicianTheme.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
