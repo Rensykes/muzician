@@ -5,6 +5,7 @@ import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/save_browser_panel.dart';
+import '../_mockup_shell.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_block_tile.dart';
 import 'songwriter_grid.dart';
@@ -127,15 +128,13 @@ class SongwriterLaneRow extends ConsumerWidget {
               ),
             ),
           ),
-          IconButton(
+          IconBtn(
             key: Key('addBlock_$laneId'),
-            icon: Icon(
-              Icons.add_rounded,
-              color: lane.kind == SongLaneKind.harmony
-                  ? MuzicianTheme.violet
-                  : MuzicianTheme.teal,
-            ),
-            onPressed: () async {
+            icon: Icons.add_rounded,
+            color: lane.kind == SongLaneKind.harmony
+                ? MuzicianTheme.violet
+                : MuzicianTheme.teal,
+            onTap: () async {
               if (lane.kind == SongLaneKind.harmony) {
                 final config = ref.read(songwriterProvider).config;
                 final block = await showHarmonyChordSheet(
@@ -159,12 +158,25 @@ class SongwriterLaneRow extends ConsumerWidget {
                 final picked = await showModalBottomSheet<SaveEntry>(
                   context: context,
                   isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.85,
+                  ),
                   // Allow fretboard / piano / piano_roll enrichment saves,
                   // but exclude songwriter + song arrangement-level saves so
                   // a save lane cannot embed a whole project save.
-                  builder: (sheetCtx) => SaveBrowserPanel(
-                    allowedInstruments: songwriterSaveLaneAllowedInstruments,
-                    onPick: (entry) => Navigator.pop(sheetCtx, entry),
+                  builder: (sheetCtx) => Container(
+                    decoration: BoxDecoration(
+                      color: MuzicianTheme.surface,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(20),
+                      ),
+                      border: Border.all(color: MuzicianTheme.glassBorder),
+                    ),
+                    child: SaveBrowserPanel(
+                      allowedInstruments: songwriterSaveLaneAllowedInstruments,
+                      onPick: (entry) => Navigator.pop(sheetCtx, entry),
+                    ),
                   ),
                 );
                 if (picked != null) {

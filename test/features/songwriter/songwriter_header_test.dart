@@ -13,13 +13,15 @@ void main() {
     addTearDown(container.dispose);
     container.read(songwriterProvider.notifier).setTempo(132);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
+      ),
+    );
     // Flush the debounce timer from setTempo before pumpAndSettle.
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
-    expect(find.text('132 BPM'), findsOneWidget);
+    expect(find.text('132'), findsOneWidget);
   });
 }

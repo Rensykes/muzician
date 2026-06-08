@@ -263,9 +263,8 @@ class _ThirdAboveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
       child: Container(
         width: 96,
         padding: const EdgeInsets.all(6),
@@ -311,9 +310,8 @@ class _VoicingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
       child: Container(
         width: 96,
         padding: const EdgeInsets.all(6),
@@ -438,9 +436,8 @@ class _LibraryMatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
       child: Container(
         width: 96,
         padding: const EdgeInsets.all(6),

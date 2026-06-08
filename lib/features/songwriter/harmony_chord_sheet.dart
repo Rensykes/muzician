@@ -36,20 +36,22 @@ Future<SongBlock?> showHarmonyChordSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.of(context).size.height * 0.85,
-    ),
     builder: (_) => Container(
       decoration: BoxDecoration(
         color: MuzicianTheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         border: Border.all(color: MuzicianTheme.glassBorder),
       ),
-      child: _HarmonySheet(
-        startBar: startBar,
-        spanBars: spanBars,
-        keyRoot: keyRoot,
-        keyScaleName: keyScaleName,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      child: SingleChildScrollView(
+        child: _HarmonySheet(
+          startBar: startBar,
+          spanBars: spanBars,
+          keyRoot: keyRoot,
+          keyScaleName: keyScaleName,
+        ),
       ),
     ),
   );
@@ -156,33 +158,97 @@ class _HarmonySheetState extends State<_HarmonySheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Root'),
+        const Text(
+          'Root',
+          style: TextStyle(
+            color: MuzicianTheme.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 6,
+          runSpacing: 6,
           children: [
             for (var pc = 0; pc < 12; pc++)
-              ChoiceChip(
+              _GlassPickerChip(
                 key: Key('harmonyRoot_$pc'),
-                label: Text(chromaticNotes[pc]),
+                label: chromaticNotes[pc],
                 selected: _rootPc == pc,
-                onSelected: (_) => setState(() => _rootPc = pc),
+                onTap: () => setState(() => _rootPc = pc),
               ),
           ],
         ),
         const SizedBox(height: 12),
-        const Text('Quality'),
+        const Text(
+          'Quality',
+          style: TextStyle(
+            color: MuzicianTheme.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 6,
+          runSpacing: 6,
           children: [
             for (final q in _qualities)
-              ActionChip(
+              _GlassPickerChip(
                 key: Key('harmonyQuality_${q.$1}'),
-                label: Text(q.$2),
-                onPressed: _rootPc == null ? null : () => _commitManual(q.$1),
+                label: q.$2,
+                selected: false,
+                enabled: _rootPc != null,
+                onTap: _rootPc == null ? null : () => _commitManual(q.$1),
               ),
           ],
         ),
       ],
+    );
+  }
+}
+
+class _GlassPickerChip extends StatelessWidget {
+  const _GlassPickerChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    this.enabled = true,
+    this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected
+                ? Colors.white.withValues(alpha: 0.30)
+                : MuzicianTheme.glassBorder,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: enabled ? MuzicianTheme.textPrimary : MuzicianTheme.textDim,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }
