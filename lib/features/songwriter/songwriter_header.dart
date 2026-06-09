@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/save_system.dart';
 import '../../theme/muzician_theme.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_playback_store.dart';
@@ -28,10 +29,11 @@ class SongwriterHeader extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        const SizedBox(height: 4),
         SizedBox(
-          height: 44,
+          height: 52,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+            padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
             child: Row(
               children: [
                 GestureDetector(
@@ -40,31 +42,32 @@ class SongwriterHeader extends ConsumerWidget {
                     'Writer',
                     style: TextStyle(
                       color: MuzicianTheme.textPrimary,
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.3,
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: () => _editProjectName(
-                    context,
-                    ref,
-                    ref.read(songwriterProvider).name,
-                  ),
-                  child: Text(
-                    ref.watch(songwriterProvider.select((p) => p.name)),
-                    style: const TextStyle(
-                      color: MuzicianTheme.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _editProjectName(
+                      context,
+                      ref,
+                      ref.read(songwriterProvider).name,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    child: Text(
+                      ref.watch(songwriterProvider.select((p) => p.name)),
+                      style: const TextStyle(
+                        color: MuzicianTheme.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 IconBtn(
                   icon: Icons.more_vert,
                   onTap: () => _showOverflowMenu(context, ref),
@@ -73,6 +76,7 @@ class SongwriterHeader extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 4),
         _WriterConfigStrip(
           keyLabel: keyLabel,
           tempo: config.tempo,
@@ -115,6 +119,7 @@ class SongwriterHeader extends ConsumerWidget {
               _editProjectName(context, ref, ref.read(songwriterProvider).name);
             },
           ),
+          _LayoutPickerTile(),
         ],
       ),
     );
@@ -229,17 +234,24 @@ class _WriterConfigStrip extends ConsumerWidget {
       settingsProvider.select((s) => s.metronomeEnabled),
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Container(
-        height: 44,
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           color: MuzicianTheme.glassBg,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: MuzicianTheme.glassBorder),
         ),
         child: Row(
           children: [
-            _ConfigReadout(label: 'KEY', value: keyLabel, onTap: onKeyTap),
+            Flexible(
+              child: _ConfigReadout(
+                label: 'KEY',
+                value: keyLabel,
+                onTap: onKeyTap,
+              ),
+            ),
             _stripDivider(),
             _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
             _stripDivider(),
@@ -285,7 +297,7 @@ class _ConfigReadout extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -296,11 +308,12 @@ class _ConfigReadout extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: MuzicianTheme.textMuted,
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
               value,
               maxLines: 1,
@@ -524,6 +537,111 @@ class _GlassTextButton extends StatelessWidget {
           color: accent ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _LayoutPickerTile extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(
+      settingsProvider.select((s) => s.writerLayout),
+    );
+    final notifier = ref.read(settingsProvider.notifier);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.view_quilt_rounded,
+                size: 20,
+                color: MuzicianTheme.textSecondary,
+              ),
+              const SizedBox(width: 14),
+              const Text(
+                'Layout',
+                style: TextStyle(
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final layout in WriterLayout.values)
+                _LayoutChip(
+                  key: Key('writerLayout_${layout.name}'),
+                  label: _layoutLabel(layout),
+                  selected: layout == current,
+                  onTap: () => notifier.setWriterLayout(layout),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _layoutLabel(WriterLayout layout) {
+    switch (layout) {
+      case WriterLayout.classic:
+        return 'Classic';
+      case WriterLayout.track:
+        return 'Track';
+      case WriterLayout.sheet:
+        return 'Sheet';
+    }
+  }
+}
+
+class _LayoutChip extends StatelessWidget {
+  const _LayoutChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? MuzicianTheme.sky.withValues(alpha: 0.18)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? MuzicianTheme.sky
+                : MuzicianTheme.glassBorder,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? MuzicianTheme.sky : MuzicianTheme.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
