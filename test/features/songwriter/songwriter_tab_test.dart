@@ -10,7 +10,9 @@ void main() {
   testWidgets('empty SongwriterScreen shows the add-section affordance',
       (tester) async {
     await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(home: SongwriterScreen()),
+      child: MaterialApp(
+        home: Scaffold(body: SongwriterScreen()),
+      ),
     ));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('songwriterAddSection')), findsOneWidget);

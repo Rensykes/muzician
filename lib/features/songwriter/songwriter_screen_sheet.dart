@@ -1,10 +1,4 @@
-/// Variant B — Notation-Sheet (lead-sheet inspired).
-///
-/// Drops cards entirely. Each section is a typographic chapter with a thin
-/// rule. Bars are rendered as lead-sheet cells (`| C | F | G | C |`). Tapping
-/// an empty cell opens the chord picker; tapping a filled cell offers
-/// replace/delete. Save-lanes are not surfaced in this variant — Sheet mode
-/// is harmony-only.
+/// Notation-Sheet (lead-sheet inspired) — the sole Writer layout.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,7 +9,6 @@ import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'harmony_chord_sheet.dart';
-import 'section_lyrics_sheet.dart';
 import 'songwriter_header.dart';
 import 'songwriter_save_panel.dart';
 import 'songwriter_structure_editor.dart';
@@ -126,22 +119,23 @@ class _SectionSheet extends ConsumerWidget {
       children: [
         _SectionHeading(section: section),
         const SizedBox(height: 14),
-        _BarRow(
-          section: section,
-          lane: harmonyLane,
-          keyRoot: config.keyRoot,
-          keyScaleName: config.keyScaleName,
-          onEnsureLane: () => notifier.addLane(
-            sectionId: sectionId,
-            kind: SongLaneKind.harmony,
-            label: 'Harmony',
+        for (var i = 0; i < section.repeat.clamp(1, 32); i++)
+          Padding(
+            padding: EdgeInsets.only(bottom: i == section.repeat - 1 ? 0 : 18),
+            child: _SectionInstance(
+              key: Key('sectionInstance_${section.id}_$i'),
+              section: section,
+              harmonyLane: harmonyLane,
+              instanceIndex: i,
+              keyRoot: config.keyRoot,
+              keyScaleName: config.keyScaleName,
+              onEnsureLane: () => notifier.addLane(
+                sectionId: sectionId,
+                kind: SongLaneKind.harmony,
+                label: 'Harmony',
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        _LyricsBlock(
-          sectionId: sectionId,
-          lyrics: section.lyrics,
-        ),
         if (section.lanes.any((l) => l.kind == SongLaneKind.save)) ...[
           const SizedBox(height: 12),
           Padding(
@@ -160,6 +154,54 @@ class _SectionSheet extends ConsumerWidget {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _SectionInstance extends ConsumerWidget {
+  const _SectionInstance({
+    super.key,
+    required this.section,
+    required this.harmonyLane,
+    required this.instanceIndex,
+    required this.keyRoot,
+    required this.keyScaleName,
+    required this.onEnsureLane,
+  });
+
+  final SongSection section;
+  final SongLane harmonyLane;
+  final int instanceIndex;
+  final int? keyRoot;
+  final String? keyScaleName;
+  final VoidCallback onEnsureLane;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (section.repeat > 1)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Text(
+              '\u2014 ${instanceIndex + 1} of ${section.repeat} \u2014',
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 11,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        _BarRow(
+          section: section,
+          lane: harmonyLane,
+          instanceIndex: instanceIndex,
+          keyRoot: keyRoot,
+          keyScaleName: keyScaleName,
+          onEnsureLane: onEnsureLane,
+        ),
       ],
     );
   }
@@ -227,7 +269,7 @@ class _SectionHeading extends ConsumerWidget {
                   onChanged: (v) => notifier.setSectionRepeat(section.id, v),
                 ),
                 child: Text(
-                  '×${section.repeat}',
+                  '\u00d7${section.repeat}',
                   style: const TextStyle(
                     color: MuzicianTheme.sky,
                     fontSize: 12,
@@ -297,7 +339,7 @@ class _SectionHeading extends ConsumerWidget {
           controller: controller,
           autofocus: true,
           style: const TextStyle(color: MuzicianTheme.textPrimary),
-          decoration: const InputDecoration(hintText: 'Verse, Chorus…'),
+          decoration: const InputDecoration(hintText: 'Verse, Chorus\u2026'),
         ),
         actions: [
           TextButton(
@@ -324,12 +366,14 @@ class _BarRow extends ConsumerWidget {
   const _BarRow({
     required this.section,
     required this.lane,
+    required this.instanceIndex,
     required this.keyRoot,
     required this.keyScaleName,
     required this.onEnsureLane,
   });
   final SongSection section;
   final SongLane lane;
+  final int instanceIndex;
   final int? keyRoot;
   final String? keyScaleName;
   final VoidCallback onEnsureLane;
@@ -339,7 +383,7 @@ class _BarRow extends ConsumerWidget {
     final notifier = ref.read(songwriterProvider.notifier);
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
     final blockByStart = <int, SongBlock>{};
-    final blockSpan = <int, SongBlock>{}; // each occupied bar → owning block
+    final blockSpan = <int, SongBlock>{};
     for (final b in lane.blocks) {
       blockByStart[b.startBar] = b;
       for (var i = b.startBar; i < b.endBar; i++) {
@@ -348,7 +392,6 @@ class _BarRow extends ConsumerWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Wrap to 4 cells per row when narrow; up to 8 when wide.
         final perRow = constraints.maxWidth >= 360 ? 4 : 4;
         final rows = <List<Widget>>[];
         for (var start = 0; start < bars; start += perRow) {
@@ -362,17 +405,19 @@ class _BarRow extends ConsumerWidget {
               cells.add(_BarCell(
                 flex: span,
                 block: owner,
+                instanceIndex: instanceIndex,
                 onTap: () => _editBlock(context, ref, owner),
                 onLongPress: () =>
                     _removeBlock(context, notifier, owner),
               ));
               i += span;
             } else if (owner != null) {
-              i++; // covered by an earlier owner; skip silently.
+              i++;
             } else {
               cells.add(_BarCell(
                 flex: 1,
                 block: null,
+                instanceIndex: instanceIndex,
                 onTap: () => _addAt(context, ref, i),
               ));
               i++;
@@ -404,6 +449,8 @@ class _BarRow extends ConsumerWidget {
       spanBars: 1,
       keyRoot: keyRoot,
       keyScaleName: keyScaleName,
+      instanceIndex: instanceIndex,
+      currentLyric: '',
     );
     if (block == null) return;
     final laneId = lane.id.isEmpty
@@ -416,11 +463,48 @@ class _BarRow extends ConsumerWidget {
             .id
         : lane.id;
     HapticFeedback.selectionClick();
-    ref.read(songwriterProvider.notifier).addHarmonyBlock(
-          sectionId: section.id,
-          laneId: laneId,
-          block: block,
-        );
+    if (block.isSilent) {
+      ref.read(songwriterProvider.notifier).addSilentBlock(
+            sectionId: section.id,
+            laneId: laneId,
+            startBar: bar,
+            spanBars: 1,
+            verseCount: section.repeat.clamp(1, 16),
+          );
+      final newBlockId = ref
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == section.id)
+          .lanes
+          .firstWhere((l) => l.id == laneId)
+          .blocks
+          .lastWhere((b) => b.startBar == bar)
+          .id;
+      if (block.lyrics.isNotEmpty) {
+        ref.read(songwriterProvider.notifier).setBlockLyric(
+              sectionId: section.id,
+              laneId: laneId,
+              blockId: newBlockId,
+              verseIndex: instanceIndex,
+              text: block.lyrics.first,
+            );
+      }
+    } else {
+      ref.read(songwriterProvider.notifier).addHarmonyBlock(
+            sectionId: section.id,
+            laneId: laneId,
+            block: block,
+          );
+      if (block.lyrics.isNotEmpty) {
+        ref.read(songwriterProvider.notifier).setBlockLyric(
+              sectionId: section.id,
+              laneId: laneId,
+              blockId: block.id,
+              verseIndex: instanceIndex,
+              text: block.lyrics.first,
+            );
+      }
+    }
   }
 
   Future<void> _editBlock(
@@ -428,26 +512,43 @@ class _BarRow extends ConsumerWidget {
     WidgetRef ref,
     SongBlock block,
   ) async {
+    final currentLyric = instanceIndex < block.lyrics.length
+        ? block.lyrics[instanceIndex]
+        : '';
     final next = await showHarmonyChordSheet(
       context,
       startBar: block.startBar,
       spanBars: block.spanBars,
       keyRoot: keyRoot,
       keyScaleName: keyScaleName,
+      existing: block,
+      instanceIndex: instanceIndex,
+      currentLyric: currentLyric,
     );
     if (next == null) return;
-    final n = ref.read(songwriterProvider.notifier);
     HapticFeedback.selectionClick();
-    n.removeBlock(
-      sectionId: section.id,
-      laneId: lane.id,
-      blockId: block.id,
-    );
-    n.addHarmonyBlock(
-      sectionId: section.id,
-      laneId: lane.id,
-      block: next,
-    );
+    // Write the lyric for this instance.
+    ref.read(songwriterProvider.notifier).setBlockLyric(
+          sectionId: section.id,
+          laneId: lane.id,
+          blockId: block.id,
+          verseIndex: instanceIndex,
+          text: next.lyrics.isNotEmpty ? next.lyrics.first : null,
+        );
+    // If chord state changed (non-silent), replace the block.
+    if (!next.isSilent) {
+      final n = ref.read(songwriterProvider.notifier);
+      n.removeBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        blockId: block.id,
+      );
+      n.addHarmonyBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        block: next,
+      );
+    }
   }
 
   void _removeBlock(
@@ -477,17 +578,18 @@ class _BarCell extends StatelessWidget {
   const _BarCell({
     required this.flex,
     required this.block,
+    required this.instanceIndex,
     required this.onTap,
     this.onLongPress,
   });
   final int flex;
   final SongBlock? block;
+  final int instanceIndex;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final filled = block != null;
     return Expanded(
       flex: flex,
       child: GestureDetector(
@@ -498,7 +600,7 @@ class _BarCell extends StatelessWidget {
           height: 64,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: filled
+            color: block != null
                 ? MuzicianTheme.violet.withValues(alpha: 0.18)
                 : Colors.transparent,
             border: Border(
@@ -512,42 +614,74 @@ class _BarCell extends StatelessWidget {
               ),
             ),
           ),
-          child: filled
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      block!.chordSymbol ?? '?',
-                      style: const TextStyle(
-                        color: MuzicianTheme.textPrimary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if ((block!.romanNumeral ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        block!.romanNumeral!,
-                        style: const TextStyle(
-                          color: MuzicianTheme.violet,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ],
-                )
-              : Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (block == null)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
                   child: Text(
-                    '·',
+                    '\u00b7',
                     style: TextStyle(
-                      color: MuzicianTheme.textMuted.withValues(alpha: 0.5),
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
+                      color: MuzicianTheme.textMuted,
+                      fontSize: 18,
                     ),
                   ),
+                )
+              else if (block!.isSilent)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    key: Key('silentCell_${block!.id}_$instanceIndex'),
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: MuzicianTheme.textMuted,
+                    ),
+                  ),
+                )
+              else ...[
+                const Spacer(),
+                Text(
+                  block!.chordSymbol ?? '?',
+                  style: const TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
                 ),
+                if ((block!.romanNumeral ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    block!.romanNumeral!,
+                    style: const TextStyle(
+                      color: MuzicianTheme.violet,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ],
+              if (block != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  instanceIndex < block!.lyrics.length
+                      ? block!.lyrics[instanceIndex]
+                      : '',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: MuzicianTheme.textSecondary,
+                    fontSize: 12,
+                    height: 1.25,
+                  ),
+                ),
+                const Spacer(),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -578,7 +712,7 @@ class _SaveLaneChip extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            '$label · $count',
+            '$label \u00b7 $count',
             style: const TextStyle(
               color: MuzicianTheme.teal,
               fontSize: 11,
@@ -761,60 +895,6 @@ class _StepperDialogState extends State<_StepperDialog> {
           child: const Text('Done'),
         ),
       ],
-    );
-  }
-}
-
-class _LyricsBlock extends ConsumerWidget {
-  const _LyricsBlock({required this.sectionId, required this.lyrics});
-
-  final String sectionId;
-  final String? lyrics;
-
-  Future<void> _edit(BuildContext context, WidgetRef ref) async {
-    final next = await showSectionLyricsSheet(
-      context: context,
-      initial: lyrics,
-    );
-    ref.read(songwriterProvider.notifier).setSectionLyrics(sectionId, next);
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final has = lyrics != null && lyrics!.trim().isNotEmpty;
-    if (!has) {
-      return GestureDetector(
-        key: const Key('sectionLyricsAdd'),
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _edit(context, ref),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-          child: Text(
-            '+ lyrics',
-            style: TextStyle(
-              color: MuzicianTheme.textMuted,
-              fontStyle: FontStyle.italic,
-              fontSize: 13,
-            ),
-          ),
-        ),
-      );
-    }
-    return GestureDetector(
-      key: Key('sectionLyrics_$sectionId'),
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _edit(context, ref),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 4, left: 4, right: 4, bottom: 2),
-        child: Text(
-          lyrics!,
-          style: const TextStyle(
-            color: MuzicianTheme.textPrimary,
-            fontSize: 14,
-            height: 1.35,
-          ),
-        ),
-      ),
     );
   }
 }
