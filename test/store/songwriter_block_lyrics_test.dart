@@ -139,4 +139,72 @@ void main() {
     expect(block.chordSymbol, isNull);
     expect(block.startBar, 2);
   });
+
+  test('setSectionRepeat grows lyrics list on each harmony block', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.first.id;
+    n.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.harmony,
+      label: 'Harmony',
+    );
+    final laneId = container.read(songwriterProvider)
+        .sections.first.lanes.first.id;
+    n.addHarmonyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: makeHarmonyBlock(
+        startBar: 0,
+        spanBars: 1,
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
+        chordNotes: const ['C', 'E', 'G'],
+      ).copyWith(lyrics: ['first']),
+    );
+
+    n.setSectionRepeat(sectionId, 3);
+
+    final block = container.read(songwriterProvider)
+        .sections.first.lanes.first.blocks.single;
+    expect(block.lyrics, ['first', '', '']);
+  });
+
+  test('setSectionRepeat does NOT shrink existing lyrics', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.first.id;
+    n.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.harmony,
+      label: 'Harmony',
+    );
+    final laneId = container.read(songwriterProvider)
+        .sections.first.lanes.first.id;
+    n.addHarmonyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: makeHarmonyBlock(
+        startBar: 0,
+        spanBars: 1,
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
+        chordNotes: const ['C', 'E', 'G'],
+      ).copyWith(lyrics: ['a', 'b', 'c']),
+    );
+
+    n.setSectionRepeat(sectionId, 1);
+
+    final block = container.read(songwriterProvider)
+        .sections.first.lanes.first.blocks.single;
+    expect(block.lyrics, ['a', 'b', 'c']);
+  });
 }
