@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/save_system.dart';
+import '../models/song_project.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/songwriter_rules.dart';
 import '../schema/rules/songwriter_third_above_rules.dart';
@@ -163,15 +164,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   // ── lanes ──
-  void addLane({
+  String addLane({
     required String sectionId,
     required SongLaneKind kind,
     String? label,
   }) {
+    final lane = makeLane(kind: kind, label: label, order: 0);
     _replaceSection(sectionId, (s) {
-      final lane = makeLane(kind: kind, label: label, order: s.lanes.length);
-      return s.copyWith(lanes: [...s.lanes, lane]);
+      final positioned = lane.copyWith(order: s.lanes.length);
+      return s.copyWith(lanes: [...s.lanes, positioned]);
     });
+    return lane.id;
   }
 
   void _replaceLane(
@@ -286,6 +289,70 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       sectionId,
       laneId,
       (l) => l.copyWith(blocks: [...l.blocks, block]),
+    );
+  }
+
+  String addDrumPattern({String name = 'Pattern'}) {
+    final pattern = makeDrumPattern(name: name);
+    _set(state.copyWith(drumPatterns: [...state.drumPatterns, pattern]));
+    return pattern.id;
+  }
+
+  void updateDrumPattern(DrumPattern updated) {
+    _set(
+      state.copyWith(
+        drumPatterns: state.drumPatterns
+            .map((p) => p.id == updated.id ? updated : p)
+            .toList(),
+      ),
+    );
+  }
+
+  void removeDrumPattern(String patternId) {
+    final patterns =
+        state.drumPatterns.where((p) => p.id != patternId).toList();
+    final sections = state.sections.map((s) {
+      final lanes = s.lanes.map((l) {
+        if (l.kind != SongLaneKind.drum) return l;
+        final blocks = l.blocks
+            .map((b) =>
+                b.patternId == patternId ? b.copyWith(clearPatternId: true) : b)
+            .toList();
+        return l.copyWith(blocks: blocks);
+      }).toList();
+      return s.copyWith(lanes: lanes);
+    }).toList();
+    _set(state.copyWith(drumPatterns: patterns, sections: sections));
+  }
+
+  void addDrumBlock({
+    required String sectionId,
+    required String laneId,
+    required String patternId,
+    required int startBar,
+    required int spanBars,
+  }) {
+    _set(
+      state.copyWith(
+        sections: state.sections.map((s) {
+          if (s.id != sectionId) return s;
+          return s.copyWith(
+            lanes: s.lanes.map((l) {
+              if (l.id != laneId || l.kind != SongLaneKind.drum) return l;
+              return l.copyWith(
+                blocks: [
+                  ...l.blocks,
+                  makeDrumBlock(
+                    patternId: patternId,
+                    startBar: startBar,
+                    spanBars: spanBars,
+                  ),
+                ],
+              );
+            }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
