@@ -23,7 +23,7 @@ class SongBlock {
   // non-null when "Made Unique" — detached snapshot copy
   final InstrumentSnapshot? embedded;
 
-  // harmony-lane extras (null on save-lane blocks)
+  // harmony-lane extras (null on save / silent blocks)
   final String? chordSymbol;
   final String? chordQuality;
   final int? chordRootPc;
@@ -32,6 +32,10 @@ class SongBlock {
 
   // drum-lane reference into SongwriterProjectSnapshot.drumPatterns
   final String? patternId;
+
+  // lyric-bearing fields (any harmony / silent block can carry lyrics)
+  final List<String> lyrics;
+  final bool isSilent;
 
   const SongBlock({
     required this.id,
@@ -45,6 +49,8 @@ class SongBlock {
     this.chordNotes = const [],
     this.romanNumeral,
     this.patternId,
+    this.lyrics = const [],
+    this.isSilent = false,
   });
 
   int get endBar => startBar + spanBars;
@@ -60,6 +66,8 @@ class SongBlock {
     List<String>? chordNotes,
     String? romanNumeral,
     String? patternId,
+    List<String>? lyrics,
+    bool? isSilent,
     bool clearRomanNumeral = false,
     bool clearSaveId = false,
     bool clearEmbedded = false,
@@ -78,6 +86,8 @@ class SongBlock {
         ? null
         : (romanNumeral ?? this.romanNumeral),
     patternId: clearPatternId ? null : (patternId ?? this.patternId),
+    lyrics: lyrics ?? this.lyrics,
+    isSilent: isSilent ?? this.isSilent,
   );
 
   Map<String, dynamic> toJson() => {
@@ -92,6 +102,8 @@ class SongBlock {
     'chordNotes': chordNotes,
     'romanNumeral': romanNumeral,
     'patternId': patternId,
+    'lyrics': lyrics,
+    'isSilent': isSilent,
   };
 
   factory SongBlock.fromJson(Map<String, dynamic> json) => SongBlock(
@@ -110,6 +122,10 @@ class SongBlock {
         const [],
     romanNumeral: json['romanNumeral'] as String?,
     patternId: json['patternId'] as String?,
+    lyrics:
+        (json['lyrics'] as List?)?.map((e) => e as String).toList() ??
+        const [],
+    isSilent: json['isSilent'] as bool? ?? false,
   );
 }
 
