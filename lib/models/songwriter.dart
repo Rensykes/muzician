@@ -91,6 +91,7 @@ class SongBlock {
     'chordRootPc': chordRootPc,
     'chordNotes': chordNotes,
     'romanNumeral': romanNumeral,
+    'patternId': patternId,
   };
 
   factory SongBlock.fromJson(Map<String, dynamic> json) => SongBlock(
@@ -108,6 +109,7 @@ class SongBlock {
         (json['chordNotes'] as List?)?.map((e) => e as String).toList() ??
         const [],
     romanNumeral: json['romanNumeral'] as String?,
+    patternId: json['patternId'] as String?,
   );
 }
 
@@ -218,11 +220,13 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
   final String name;
   final SongwriterConfig config;
   final List<SongSection> sections;
+  final List<DrumPattern> drumPatterns;
 
   const SongwriterProjectSnapshot({
     this.name = 'Untitled song',
     required this.config,
     this.sections = const [],
+    this.drumPatterns = const [],
   });
 
   @override
@@ -251,10 +255,12 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     String? name,
     SongwriterConfig? config,
     List<SongSection>? sections,
+    List<DrumPattern>? drumPatterns,
   }) => SongwriterProjectSnapshot(
     name: name ?? this.name,
     config: config ?? this.config,
     sections: sections ?? this.sections,
+    drumPatterns: drumPatterns ?? this.drumPatterns,
   );
 
   @override
@@ -264,6 +270,7 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     'name': name,
     'config': config.toJson(),
     'sections': sections.map((s) => s.toJson()).toList(),
+    'drumPatterns': drumPatterns.map((p) => p.toJson()).toList(),
   };
 
   factory SongwriterProjectSnapshot.fromJson(Map<String, dynamic> json) =>
@@ -277,6 +284,11 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
         sections:
             (json['sections'] as List?)
                 ?.map((s) => SongSection.fromJson(s as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        drumPatterns:
+            (json['drumPatterns'] as List?)
+                ?.map((p) => DrumPattern.fromJson(p as Map<String, dynamic>))
                 .toList() ??
             const [],
       );
