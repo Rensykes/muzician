@@ -4,16 +4,77 @@ library;
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/piano_roll.dart';
+import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../models/song_project.dart';
 import '../schema/rules/song_audio_rules.dart' show audioClipLengthTicks;
 import '../schema/rules/song_import_rules.dart' as import_rules;
 import '../schema/rules/song_rules.dart' as rules;
+import '../utils/note_utils.dart';
+import 'save_system_store.dart';
 import 'song_audio_repository.dart';
+import 'song_sessions_store.dart';
 
 class SongProjectNotifier extends Notifier<SongProject> {
+  bool _hydrating = false;
+
   @override
-  SongProject build() => rules.getDefaultSongProject();
+  SongProject build() {
+    // React to project selection changes.
+    ref.listen<String?>(
+      saveSystemProvider.select((s) => s.selectedProjectId),
+      (prev, next) {
+        // Persist outgoing immediately.
+        if (prev != null && prev != next) {
+          ref.read(songSessionsProvider.notifier).put(prev, state);
+        }
+        if (next == null) {
+          _hydrating = true;
+          state = rules.getDefaultSongProject();
+          _hydrating = false;
+          return;
+        }
+        _hydrating = true;
+        final session = ref.read(songSessionsProvider.notifier).get(next);
+        if (session != null) {
+          state = session;
+        } else {
+          state = _defaultFor(next);
+        }
+        _hydrating = false;
+      },
+    );
+
+    return rules.getDefaultSongProject();
+  }
+
+  @override
+  set state(SongProject value) {
+    super.state = value;
+    _schedulePersist(value);
+  }
+
+  SongProject _defaultFor(String projectId) {
+    final folder = ref.read(saveSystemProvider).folders.firstWhere((f) => f.id == projectId);
+    final cfg = folder.projectConfig ?? const ProjectConfig();
+    final base = rules.getDefaultSongProject();
+    return base.copyWith(
+      config: base.config.copyWith(
+        tempo: cfg.tempo,
+        timeSignature: TimeSignature(beatsPerMeasure: cfg.beatsPerBar, beatUnit: cfg.beatUnit),
+        scaleRoot: () => cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
+        scaleName: () => cfg.keyScaleName,
+      ),
+    );
+  }
+
+  void _schedulePersist(SongProject project) {
+    if (_hydrating) return;
+    final id = ref.read(saveSystemProvider).selectedProjectId;
+    if (id != null) {
+      ref.read(songSessionsProvider.notifier).put(id, project);
+    }
+  }
 
   // ── ID Generation ───────────────────────────────────────────────────────────
 

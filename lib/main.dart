@@ -18,7 +18,8 @@ import 'store/piano_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'store/songwriter_store.dart';
-import 'store/song_session_store.dart';
+import 'store/song_sessions_store.dart';
+import 'store/songwriter_sessions_store.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
@@ -81,9 +82,13 @@ class _AppShellState extends ConsumerState<_AppShell> {
     Future.microtask(() async {
       await ref.read(saveSystemProvider.notifier).hydrate();
       await ref.read(settingsProvider.notifier).hydrate();
-      await ref.read(songSessionProvider).hydrate();
-      await ref.read(songwriterProvider.notifier).hydrate();
+      await ref.read(songSessionsProvider.notifier).hydrate();
+      await ref.read(songwriterSessionsProvider.notifier).hydrate();
       await NotePlayer.instance.init();
+      final selected = ref.read(saveSystemProvider).selectedProjectId;
+      if (selected != null) {
+        ref.read(saveSystemProvider.notifier).selectProject(selected);
+      }
     });
   }
 
