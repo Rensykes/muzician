@@ -1,19 +1,17 @@
-/// Songwriter project Riverpod store with debounced session auto-save.
+/// Songwriter project Riverpod store with per-project session auto-save.
 library;
 
-import 'dart:async';
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../models/songwriter.dart';
+import '../schema/rules/save_system_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
 import '../schema/rules/songwriter_third_above_rules.dart';
 import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
 import 'save_system_store.dart';
-
-const _sessionKey = '@muzician/songwriter_session/v1';
+import 'songwriter_sessions_store.dart';
 
 SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
   config: SongwriterConfig(
@@ -27,46 +25,77 @@ SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
 );
 
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
-  Timer? _debounce;
+  bool _hydrating = false;
 
   @override
   SongwriterProjectSnapshot build() {
-    ref.onDispose(() => _debounce?.cancel());
+    // React to project selection changes.
+    ref.listen<String?>(
+      saveSystemProvider.select((s) => s.selectedProjectId),
+      (prev, next) {
+        // Persist outgoing immediately.
+        if (prev != null && prev != next) {
+          ref.read(songwriterSessionsProvider.notifier).put(prev, state);
+        }
+        if (next == null) {
+          _hydrating = true;
+          state = _emptyProject();
+          _hydrating = false;
+          return;
+        }
+        _hydrating = true;
+        final session = ref.read(songwriterSessionsProvider.notifier).get(next);
+        if (session != null) {
+          state = session;
+        } else {
+          state = _defaultFor(next);
+        }
+        _hydrating = false;
+      },
+    );
+
     return _emptyProject();
   }
 
-  // ── session persistence ──
-  Future<void> hydrate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sessionKey);
-    if (raw != null) {
-      try {
-        state = SongwriterProjectSnapshot.fromJson(
-          jsonDecode(raw) as Map<String, dynamic>,
-        );
-      } catch (_) {}
-    }
+  @override
+  set state(SongwriterProjectSnapshot value) {
+    super.state = value;
+    _schedulePersist(value);
   }
 
-  void _schedulePersist() {
-    _debounce?.cancel();
-    final snapshot = state; // capture now, not when the timer fires
-    _debounce = Timer(const Duration(milliseconds: 500), () async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_sessionKey, jsonEncode(snapshot.toJson()));
-    });
+  SongwriterProjectSnapshot _defaultFor(String projectId) {
+    final folder = ref.read(saveSystemProvider).folders.firstWhere((f) => f.id == projectId);
+    final cfg = folder.projectConfig ?? const ProjectConfig();
+    return SongwriterProjectSnapshot(
+      name: folder.name,
+      config: SongwriterConfig(
+        tempo: cfg.tempo,
+        beatsPerBar: cfg.beatsPerBar,
+        beatUnit: cfg.beatUnit,
+        keyRoot: cfg.keyRootPc,
+        keyScaleName: cfg.keyScaleName,
+      ),
+    );
+  }
+
+  void _schedulePersist(SongwriterProjectSnapshot project) {
+    if (_hydrating) return;
+    final id = ref.read(saveSystemProvider).selectedProjectId;
+    if (id != null) {
+      ref.read(songwriterSessionsProvider.notifier).put(id, project);
+    }
   }
 
   void _set(SongwriterProjectSnapshot next) {
     state = next;
-    _schedulePersist();
   }
 
   Future<void> newProject() async {
-    _debounce?.cancel();
     state = _emptyProject();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_sessionKey);
+    final id = ref.read(saveSystemProvider).selectedProjectId;
+    if (id != null) {
+      ref.read(songwriterSessionsProvider.notifier).remove(id);
+    }
   }
 
   // ── config ──
@@ -408,15 +437,18 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       return;
     }
 
-    final saves = ref.read(saveSystemProvider.notifier);
-    final folderId = _findOrCreateProjectFolderId(saves);
-    if (folderId == null) return;
+    final selId = ref.read(saveSystemProvider).selectedProjectId;
+    if (selId == null) return;
+    final selFolder = ref.read(saveSystemProvider).folders
+        .where((f) => f.id == selId).firstOrNull;
+    if (selFolder == null || selFolder.kind != SaveFolderKind.project) return;
 
+    final saves = ref.read(saveSystemProvider.notifier);
     final rootName = chromaticNotes[suggestion.rootPc];
     final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
     final saveId = saves.saveSnapshot(
       saveName,
-      folderId,
+      selId,
       voicingToSnapshot(suggestion),
     );
     if (saveId == null) return;
@@ -470,15 +502,19 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       return;
     }
 
+    final selId = ref.read(saveSystemProvider).selectedProjectId;
+    if (selId == null) return;
+    final selFolder = ref.read(saveSystemProvider).folders
+        .where((f) => f.id == selId).firstOrNull;
+    if (selFolder == null || selFolder.kind != SaveFolderKind.project) return;
+
     final saves = ref.read(saveSystemProvider.notifier);
-    final folderId = _findOrCreateProjectFolderId(saves);
-    if (folderId == null) return;
 
     final rootName = chromaticNotes[suggestion.rootPc];
     final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
     final saveId = saves.saveSnapshot(
       saveName,
-      folderId,
+      selId,
       thirdAboveToSnapshot(suggestion),
     );
     if (saveId == null) return;
@@ -540,7 +576,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     final old = state.name;
     if (trimmed == old) return;
     _set(state.copyWith(name: trimmed));
-    _renameProjectFolderIfExists(old, trimmed);
+    final sel = ref.read(saveSystemProvider).selectedProjectId;
+    if (sel != null) {
+      ref.read(saveSystemProvider.notifier).renameProject(sel, trimmed);
+    } else {
+      _renameProjectFolderIfExists(old, trimmed);
+    }
   }
 
   /// Returns the id of the project's top-level folder, or null when it does
@@ -575,25 +616,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     }
   }
 
-  /// Returns the saves visible to library-match: the project's top-level
-  /// folder plus every descendant folder. Returns empty when the project
-  /// folder does not exist. Does NOT auto-create the folder.
+  /// Returns the saves visible to library-match: selected project's subtree.
+  /// Returns empty when no project is selected.
   List<SaveEntry> searchableSavesForLibraryMatch() {
-    final rootId = _findProjectFolderId();
-    if (rootId == null) return const [];
-    final saves = ref.read(saveSystemProvider);
-    final include = <String>{rootId};
-    final queue = [rootId];
-    while (queue.isNotEmpty) {
-      final id = queue.removeLast();
-      for (final f in saves.folders) {
-        if (f.parentId == id) {
-          include.add(f.id);
-          queue.add(f.id);
-        }
-      }
-    }
-    return saves.saves.where((s) => include.contains(s.folderId)).toList();
+    final sv = ref.read(saveSystemProvider);
+    final selId = sv.selectedProjectId;
+    if (selId == null) return const [];
+    final f = sv.folders.where((f) => f.id == selId).firstOrNull;
+    if (f == null || f.kind != SaveFolderKind.project) return const [];
+    return getSavesInSubtree(sv.folders, sv.saves, selId);
   }
 
   String? _findOrCreateSaveLane(String sectionId) {
