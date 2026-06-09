@@ -378,3 +378,20 @@ final saveSystemProvider =
     NotifierProvider<SaveSystemNotifier, SaveSystemState>(
       SaveSystemNotifier.new,
     );
+
+final selectedProjectProvider = Provider<SaveFolder?>((ref) {
+  final state = ref.watch(saveSystemProvider);
+  final id = state.selectedProjectId;
+  if (id == null) return null;
+  return state.folders.where((f) => f.id == id).firstOrNull;
+});
+
+final projectsListProvider = Provider<List<SaveFolder>>((ref) {
+  final folders = ref.watch(saveSystemProvider.select((s) => s.folders));
+  return getProjectFolders(folders);
+});
+
+final dumpFolderProvider = Provider<SaveFolder?>((ref) {
+  final folders = ref.watch(saveSystemProvider.select((s) => s.folders));
+  return getDumpFolder(folders);
+});

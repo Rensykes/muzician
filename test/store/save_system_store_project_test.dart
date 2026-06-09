@@ -68,4 +68,30 @@ void main() {
     c.read(saveSystemProvider.notifier).deleteFolder(dumpId);
     expect(c.read(saveSystemProvider).folders.any((f) => f.id == dumpId), isTrue);
   });
+
+  test('selectedProjectProvider tracks selected folder', () async {
+    final c = makeContainer();
+    await c.read(saveSystemProvider.notifier).hydrate();
+    expect(c.read(selectedProjectProvider), isNull);
+    final id = c.read(saveSystemProvider.notifier).createProject('A', const ProjectConfig())!;
+    c.read(saveSystemProvider.notifier).selectProject(id);
+    expect(c.read(selectedProjectProvider)?.id, id);
+  });
+
+  test('projectsListProvider returns ordered project folders', () async {
+    final c = makeContainer();
+    await c.read(saveSystemProvider.notifier).hydrate();
+    c.read(saveSystemProvider.notifier).createProject('A', const ProjectConfig());
+    c.read(saveSystemProvider.notifier).createProject('B', const ProjectConfig());
+    final list = c.read(projectsListProvider);
+    expect(list.map((f) => f.name), ['A', 'B']);
+  });
+
+  test('dumpFolderProvider null until ensureDumpFolder', () async {
+    final c = makeContainer();
+    await c.read(saveSystemProvider.notifier).hydrate();
+    expect(c.read(dumpFolderProvider), isNull);
+    c.read(saveSystemProvider.notifier).ensureDumpFolder();
+    expect(c.read(dumpFolderProvider), isNotNull);
+  });
 }
