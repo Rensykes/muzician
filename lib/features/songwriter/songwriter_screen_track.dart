@@ -9,14 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../_mockup_shell.dart';
-import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
 import 'section_lyrics_sheet.dart';
 import 'songwriter_block_tile.dart';
@@ -520,13 +518,9 @@ class _LaneCard extends ConsumerWidget {
                             width: block.spanBars * barWidth,
                             top: 0,
                             bottom: 0,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: MuzicianTheme.orange.withValues(alpha: 0.15),
-                                border: Border.all(
-                                  color: MuzicianTheme.orange.withValues(alpha: 0.3),
-                                ),
-                              ),
+                            child: DrumBlockTile(
+                              lane: lane,
+                              block: block,
                             ),
                           )
                         else

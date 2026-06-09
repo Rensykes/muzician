@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/muzician_theme.dart';
 import '../../models/save_system.dart';
+import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/save_browser_panel.dart';
 import '../_mockup_shell.dart';
+import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_block_tile.dart';
 import 'songwriter_grid.dart';
@@ -58,19 +60,26 @@ class SongwriterLaneRow extends ConsumerWidget {
     if (lane.id.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      key: Key('drumLaneRow_$laneId'),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
           SizedBox(
-            width: 72,
+            width: 80,
             child: Text(
               lane.label ??
-                  (lane.kind == SongLaneKind.harmony ? 'Harmony' : 'Lane'),
+                  switch (lane.kind) {
+                    SongLaneKind.harmony => 'Harmony',
+                    SongLaneKind.save => 'Lane',
+                    SongLaneKind.drum => 'Beat',
+                  },
               style: TextStyle(
-                color: lane.kind == SongLaneKind.harmony
-                    ? MuzicianTheme.violet
-                    : MuzicianTheme.teal,
-                fontSize: 12,
+                color: switch (lane.kind) {
+                  SongLaneKind.harmony => MuzicianTheme.violet,
+                  SongLaneKind.save => MuzicianTheme.teal,
+                  SongLaneKind.drum => MuzicianTheme.orange,
+                },
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
               maxLines: 1,
@@ -79,7 +88,7 @@ class SongwriterLaneRow extends ConsumerWidget {
           ),
           Expanded(
             child: SizedBox(
-              height: 44,
+              height: 52,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final barWidth = constraints.maxWidth / lengthBars;
@@ -94,22 +103,34 @@ class SongwriterLaneRow extends ConsumerWidget {
                         ),
                       ),
                       for (final block in lane.blocks)
-                        Positioned(
-                          left: block.startBar * barWidth,
-                          width: block.spanBars * barWidth,
-                          top: 0,
-                          bottom: 0,
-                          child: SongwriterBlockTile(
-                            sectionId: sectionId,
-                            laneId: laneId,
-                            blockId: block.id,
-                            barWidth: barWidth,
-                            highlighted:
-                                activeBar != null &&
-                                activeBar! >= block.startBar &&
-                                activeBar! < block.endBar,
+                        if (lane.kind == SongLaneKind.drum)
+                          Positioned(
+                            left: block.startBar * barWidth,
+                            width: block.spanBars * barWidth,
+                            top: 0,
+                            bottom: 0,
+                            child: DrumBlockTile(
+                              lane: lane,
+                              block: block,
+                            ),
+                          )
+                        else
+                          Positioned(
+                            left: block.startBar * barWidth,
+                            width: block.spanBars * barWidth,
+                            top: 0,
+                            bottom: 0,
+                            child: SongwriterBlockTile(
+                              sectionId: sectionId,
+                              laneId: laneId,
+                              blockId: block.id,
+                              barWidth: barWidth,
+                              highlighted:
+                                  activeBar != null &&
+                                  activeBar! >= block.startBar &&
+                                  activeBar! < block.endBar,
+                            ),
                           ),
-                        ),
                       if (activeBar != null)
                         Positioned.fill(
                           child: IgnorePointer(
@@ -131,9 +152,11 @@ class SongwriterLaneRow extends ConsumerWidget {
           IconBtn(
             key: Key('addBlock_$laneId'),
             icon: Icons.add_rounded,
-            color: lane.kind == SongLaneKind.harmony
-                ? MuzicianTheme.violet
-                : MuzicianTheme.teal,
+            color: switch (lane.kind) {
+              SongLaneKind.harmony => MuzicianTheme.violet,
+              SongLaneKind.save => MuzicianTheme.teal,
+              SongLaneKind.drum => MuzicianTheme.orange,
+            },
             onTap: () async {
               if (lane.kind == SongLaneKind.harmony) {
                 final config = ref.read(songwriterProvider).config;
@@ -194,6 +217,65 @@ class SongwriterLaneRow extends ConsumerWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class DrumBlockTile extends ConsumerWidget {
+  const DrumBlockTile({
+    super.key,
+    required this.lane,
+    required this.block,
+  });
+  final SongLane lane;
+  final SongBlock block;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final patternId = block.patternId;
+    final pattern = patternId == null
+        ? null
+        : ref
+            .read(songwriterProvider)
+            .drumPatterns
+            .firstWhere(
+              (p) => p.id == patternId,
+              orElse: () => const DrumPattern(
+                id: '',
+                name: 'Missing',
+                lengthTicks: 0,
+                lanes: [],
+              ),
+            );
+    return GestureDetector(
+      key: Key('drumBlockTile_${patternId ?? block.id}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        if (patternId == null || pattern == null || pattern.id.isEmpty) return;
+        showSongwriterDrumPatternSheet(
+          context: context,
+          patternId: patternId,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: MuzicianTheme.orange.withValues(alpha: 0.18),
+          border: Border.all(color: MuzicianTheme.orange.withValues(alpha: 0.5)),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.graphic_eq, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              pattern?.name ?? 'pattern?',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }
