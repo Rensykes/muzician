@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
 
@@ -86,6 +87,13 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   }
 
   void deleteFolder(String id) {
+    final f = state.folders.where((x) => x.id == id).firstOrNull;
+    if (f == null) return;
+    if (f.kind == SaveFolderKind.dump) return; // refuse
+    if (f.kind == SaveFolderKind.project) {
+      deleteProject(id);
+      return;
+    }
     final descendantIds = getDescendantFolderIds(state.folders, id);
     final allDeletedIds = [id, ...descendantIds];
     final nextFolders = state.folders
@@ -104,6 +112,79 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
       saves: nextSaves,
       activeSession: () => nextSession,
     );
+    _persist();
+  }
+
+  // ── Project CRUD ──────────────────────────────────────────────────────────
+
+  String? createProject(String name, ProjectConfig cfg) {
+    if (!isValidFolderName(name)) return null;
+    final siblings = state.folders.where((f) => f.parentId == null).toList();
+    final folder = createProjectFolder(name, cfg, siblings.length);
+    state = state.copyWith(folders: [...state.folders, folder]);
+    _persist();
+    return folder.id;
+  }
+
+  void renameProject(String id, String name) {
+    if (!isValidFolderName(name)) return;
+    state = state.copyWith(
+      folders: state.folders.map((f) {
+        if (f.id != id || f.kind != SaveFolderKind.project) return f;
+        return f.copyWith(name: name.trim());
+      }).toList(),
+    );
+    _persist();
+  }
+
+  void deleteProject(String id) {
+    final folder = state.folders.firstWhere(
+      (f) => f.id == id && f.kind == SaveFolderKind.project,
+      orElse: () => const SaveFolder(id: '', name: '', createdAt: 0, order: 0),
+    );
+    if (folder.id.isEmpty) return;
+    final ids = getSubtreeFolderIds(state.folders, id);
+    final nextFolders = state.folders.where((f) => !ids.contains(f.id)).toList();
+    final nextSaves = state.saves.where((s) => !ids.contains(s.folderId)).toList();
+    final clearSel = state.selectedProjectId == id;
+    state = state.copyWith(
+      folders: nextFolders,
+      saves: nextSaves,
+      selectedProjectId: clearSel ? () => null : null,
+    );
+    _persist();
+  }
+
+  void updateProjectConfig(String id, ProjectConfig cfg) {
+    state = state.copyWith(
+      folders: state.folders.map((f) {
+        if (f.id != id || f.kind != SaveFolderKind.project) return f;
+        return f.copyWith(projectConfig: cfg);
+      }).toList(),
+    );
+    _persist();
+  }
+
+  String ensureDumpFolder() {
+    final existing = getDumpFolder(state.folders);
+    if (existing != null) return existing.id;
+    final siblings = state.folders.where((f) => f.parentId == null).toList();
+    final folder = createDumpFolder(siblings.length);
+    state = state.copyWith(folders: [...state.folders, folder]);
+    _persist();
+    return folder.id;
+  }
+
+  void selectProject(String? id) {
+    if (id == null) {
+      state = state.copyWith(selectedProjectId: () => null);
+      _persist();
+      return;
+    }
+    final folder = state.folders.where((f) => f.id == id).firstOrNull;
+    if (folder == null) return;
+    if (folder.kind != SaveFolderKind.project && folder.kind != SaveFolderKind.dump) return;
+    state = state.copyWith(selectedProjectId: () => id);
     _persist();
   }
 
