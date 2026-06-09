@@ -492,3 +492,8 @@ final dumpFolderProvider = Provider<SaveFolder?>((ref) {
   final folders = ref.watch(saveSystemProvider.select((s) => s.folders));
   return getDumpFolder(folders);
 });
+
+final isProjectLockedProvider = Provider<bool>((ref) {
+  final sel = ref.watch(selectedProjectProvider);
+  return sel != null && sel.kind == SaveFolderKind.project;
+});

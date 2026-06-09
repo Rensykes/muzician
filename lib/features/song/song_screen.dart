@@ -93,7 +93,16 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                       ],
                     ),
                   ),
-                  _SongScaleChip(config: project.config),
+                  Consumer(builder: (context, ref, _) {
+                    final locked = ref.watch(isProjectLockedProvider);
+                    return IgnorePointer(
+                      ignoring: locked,
+                      child: Opacity(
+                        opacity: locked ? 0.5 : 1.0,
+                        child: _SongScaleChip(config: project.config),
+                      ),
+                    );
+                  }),
                   const Padding(
                     padding: EdgeInsets.only(right: 4),
                     child: ProjectChip(),
