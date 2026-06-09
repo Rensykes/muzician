@@ -229,6 +229,49 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     });
   }
 
+  void setBlockLyric({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+    required int verseIndex,
+    required String? text,
+  }) {
+    if (verseIndex < 0) return;
+    _replaceLane(sectionId, laneId, (l) => l.copyWith(
+      blocks: l.blocks.map((b) {
+        if (b.id != blockId) return b;
+        final list = [...b.lyrics];
+        while (list.length <= verseIndex) {
+          list.add('');
+        }
+        list[verseIndex] = text ?? '';
+        while (list.isNotEmpty && list.last.isEmpty) {
+          list.removeLast();
+        }
+        return b.copyWith(lyrics: list);
+      }).toList(),
+    ));
+  }
+
+  void addSilentBlock({
+    required String sectionId,
+    required String laneId,
+    required int startBar,
+    required int spanBars,
+    int verseCount = 1,
+  }) {
+    _replaceLane(sectionId, laneId, (l) => l.copyWith(
+      blocks: [
+        ...l.blocks,
+        makeSilentBlock(
+          startBar: startBar,
+          spanBars: spanBars,
+          verseCount: verseCount,
+        ),
+      ],
+    ));
+  }
+
   void removeBlock({
     required String sectionId,
     required String laneId,

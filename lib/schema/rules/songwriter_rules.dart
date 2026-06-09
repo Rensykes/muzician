@@ -175,6 +175,18 @@ SongBlock makeHarmonyBlock({
   romanNumeral: romanNumeral,
 );
 
+SongBlock makeSilentBlock({
+  required int startBar,
+  required int spanBars,
+  int verseCount = 1,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  isSilent: true,
+  lyrics: List<String>.filled(verseCount.clamp(1, 16), ''),
+);
+
 DrumPattern makeDrumPattern({String name = 'Pattern'}) => DrumPattern(
   id: generateId(),
   name: name,
