@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/models/song_project.dart';
+import 'package:muzician/schema/rules/songwriter_rules.dart';
 
 void main() {
   test('SongLaneKind.drum exists and round-trips by name', () {
@@ -71,5 +72,28 @@ void main() {
     );
     final back = SongBlock.fromJson(block.toJson());
     expect(back.patternId, 'p42');
+  });
+
+  test('makeDrumPattern creates 16-tick empty pattern with named lanes', () {
+    final pattern = makeDrumPattern(name: 'Empty');
+    expect(pattern.name, 'Empty');
+    expect(pattern.lengthTicks, 16);
+    expect(pattern.lanes.length, DrumLaneId.values.length);
+    for (final l in pattern.lanes) {
+      expect(l.activeTicks, isEmpty);
+    }
+    expect(pattern.id.isNotEmpty, true);
+  });
+
+  test('makeDrumBlock fills required fields', () {
+    final block = makeDrumBlock(
+      patternId: 'p1',
+      startBar: 4,
+      spanBars: 8,
+    );
+    expect(block.patternId, 'p1');
+    expect(block.startBar, 4);
+    expect(block.spanBars, 8);
+    expect(block.id.isNotEmpty, true);
   });
 }
