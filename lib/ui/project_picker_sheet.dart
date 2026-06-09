@@ -7,6 +7,7 @@ import '../models/save_system.dart';
 import '../store/save_system_store.dart';
 import '../theme/muzician_theme.dart';
 import '../utils/note_utils.dart';
+import 'project_config_sheet.dart';
 
 class ProjectPickerSheet extends ConsumerWidget {
   final bool allowDump;
@@ -62,6 +63,20 @@ class ProjectPickerSheet extends ConsumerWidget {
                 if (context.mounted) Navigator.of(context).pop();
               },
             ),
+            if (selectedId != null &&
+                ref.read(saveSystemProvider).folders
+                    .where((f) => f.id == selectedId).firstOrNull?.kind ==
+                    SaveFolderKind.project) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                icon: const Icon(Icons.settings, size: 16),
+                label: const Text('Edit project config'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  ProjectConfigSheet.show(context, selectedId);
+                },
+              ),
+            ],
             if (allowDump && (dump != null)) ...[
               const Divider(),
               const Text('SPARE',

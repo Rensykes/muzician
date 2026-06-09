@@ -6,9 +6,13 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/piano_roll.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
+import '../models/song_project.dart';
+import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
+import '../utils/note_utils.dart';
 
 class SaveSystemNotifier extends Notifier<SaveSystemState> {
   @override
@@ -186,6 +190,99 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     if (folder.kind != SaveFolderKind.project && folder.kind != SaveFolderKind.dump) return;
     state = state.copyWith(selectedProjectId: () => id);
     _persist();
+  }
+
+  Future<void> applyProjectConfig(
+    String projectId,
+    ProjectConfig cfg, {
+    required bool retrofit,
+  }) async {
+    updateProjectConfig(projectId, cfg);
+    if (!retrofit) return;
+
+    final ids = getSubtreeFolderIds(state.folders, projectId);
+    final nextSaves = state.saves.map((s) {
+      if (!ids.contains(s.folderId)) return s;
+      final snapped = _retrofitSnapshot(s.snapshot, cfg);
+      if (snapped == s.snapshot) return s;
+      return s.copyWith(
+        snapshot: snapped,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+    }).toList();
+    state = state.copyWith(saves: nextSaves);
+    await _persist();
+  }
+
+  InstrumentSnapshot _retrofitSnapshot(InstrumentSnapshot snap, ProjectConfig cfg) {
+    final scaleNotes = _scaleNotesFor(cfg.keyRootPc, cfg.keyScaleName);
+    if (snap is FretboardSnapshot) {
+      return FretboardSnapshot(
+        tuning: snap.tuning,
+        numFrets: snap.numFrets,
+        capo: snap.capo,
+        selectedCells: snap.selectedCells,
+        selectedNotes: snap.selectedNotes,
+        viewMode: snap.viewMode,
+        pendingChord: snap.pendingChord,
+        pendingScale: snap.pendingScale,
+      );
+    }
+    if (snap is PianoSnapshot) {
+      return PianoSnapshot(
+        currentRange: snap.currentRange,
+        selectedKeys: snap.selectedKeys,
+        selectedNotes: snap.selectedNotes,
+        viewMode: snap.viewMode,
+        pendingChord: snap.pendingChord,
+        pendingScale: snap.pendingScale,
+      );
+    }
+    if (snap is PianoRollSnapshot) {
+      return PianoRollSnapshot(
+        tempo: cfg.tempo,
+        key: cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
+        numerator: cfg.beatsPerBar,
+        denominator: cfg.beatUnit,
+        totalMeasures: snap.totalMeasures,
+        notes: snap.notes,
+        pitchRangeStart: snap.pitchRangeStart,
+        pitchRangeEnd: snap.pitchRangeEnd,
+        selectedColumnTick: snap.selectedColumnTick,
+        snapTicks: snap.snapTicks,
+        highlightedNotes: scaleNotes,
+        pendingScale: snap.pendingScale,
+      );
+    }
+    if (snap is SongProjectSnapshot) {
+      final project = snap.project.copyWith(
+        config: snap.project.config.copyWith(
+          tempo: cfg.tempo,
+          timeSignature: TimeSignature(beatsPerMeasure: cfg.beatsPerBar, beatUnit: cfg.beatUnit),
+          scaleRoot: () => cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
+          scaleName: () => cfg.keyScaleName,
+        ),
+      );
+      return SongProjectSnapshot(project: project);
+    }
+    if (snap is SongwriterProjectSnapshot) {
+      return snap.copyWith(
+        config: snap.config.copyWith(
+          tempo: cfg.tempo,
+          beatsPerBar: cfg.beatsPerBar,
+          beatUnit: cfg.beatUnit,
+          keyRoot: cfg.keyRootPc,
+          keyScaleName: cfg.keyScaleName,
+        ),
+      );
+    }
+    return snap;
+  }
+
+  List<String> _scaleNotesFor(int? rootPc, String? scaleName) {
+    if (rootPc == null || scaleName == null) return const [];
+    final intervals = scaleIntervals[scaleName] ?? const [0, 2, 4, 5, 7, 9, 11];
+    return intervals.map((i) => chromaticNotes[(rootPc + i) % 12]).toList();
   }
 
   // ── Save Management ───────────────────────────────────────────────────────
