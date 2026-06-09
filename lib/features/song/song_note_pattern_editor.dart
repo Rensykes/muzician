@@ -10,6 +10,7 @@
 /// panels are also hidden because loading would smash the host pattern length.
 library;
 
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart';
@@ -21,6 +22,7 @@ import '../../store/piano_roll_store.dart';
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/glass_snackbar.dart';
 import '../../utils/note_utils.dart';
 import '../piano_roll/piano_roll_screen_v2.dart';
 
@@ -149,12 +151,12 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
         .read(songProjectProvider.notifier)
         .applyNotePattern(widget.patternId, nextPattern);
     if (!applied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
+      showGlassSnackbar(
+        context,
+        title: 'Resize rejected',
+        message:
             'Pattern resize rejected because it would overlap another clip.',
-          ),
-        ),
+        contentType: ContentType.warning,
       );
       return;
     }

@@ -348,7 +348,7 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
             ],
           ),
         ),
-        Expanded(
+        Flexible(
           child: _DrumGrid(
             pattern: _pattern,
             timeSig: timeSig,

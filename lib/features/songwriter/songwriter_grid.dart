@@ -14,12 +14,12 @@ class BarRuler extends StatelessWidget {
     final bars = lengthBars < 1 ? 1 : lengthBars;
     const style = TextStyle(
       color: MuzicianTheme.textMuted,
-      fontSize: 10,
+      fontSize: 11,
       fontWeight: FontWeight.w600,
       fontFeatures: [FontFeature.tabularFigures()],
     );
     return SizedBox(
-      height: 16,
+      height: 20,
       child: Row(
         children: [
           SizedBox(width: gutter),

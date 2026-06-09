@@ -57,6 +57,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(saveBrowserGrid: grid);
     await _persist();
   }
+
+  Future<void> setWriterLayout(WriterLayout layout) async {
+    state = state.copyWith(writerLayout: layout);
+    await _persist();
+  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
