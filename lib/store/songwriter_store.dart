@@ -107,6 +107,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         label == null ? s.copyWith(clearLabel: true) : s.copyWith(label: label),
   );
 
+  void setSectionLyrics(String sectionId, String? lyrics) => _replaceSection(
+    sectionId,
+    (s) => (lyrics == null || lyrics.isEmpty)
+        ? s.copyWith(clearLyrics: true)
+        : s.copyWith(lyrics: lyrics),
+  );
+
   void setSectionLength(String sectionId, int lengthBars) => _replaceSection(
     sectionId,
     (s) => s.copyWith(lengthBars: lengthBars < 1 ? 1 : lengthBars),
