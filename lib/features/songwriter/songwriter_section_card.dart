@@ -186,7 +186,7 @@ class SongwriterSectionCard extends ConsumerWidget {
             alignment: Alignment.centerLeft,
             child: GestureDetector(
               key: Key('addLane_$sectionId'),
-              onTap: () => _showAddLaneSheet(context, notifier, sectionId),
+              onTap: () => _showAddLaneSheet(context, notifier, sectionId, section.lengthBars),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -231,6 +231,7 @@ void _showAddLaneSheet(
   BuildContext context,
   SongwriterNotifier notifier,
   String sectionId,
+  int lengthBars,
 ) {
   showWidgetSheet(
     context: context,
@@ -274,15 +275,12 @@ void _showAddLaneSheet(
               label: 'Beat',
             );
             final patternId = notifier.addDrumPattern(name: 'Pattern');
-            final section = notifier.state.sections.firstWhere(
-              (s) => s.id == sectionId,
-            );
             notifier.addDrumBlock(
               sectionId: sectionId,
               laneId: laneId,
               patternId: patternId,
               startBar: 0,
-              spanBars: section.lengthBars,
+              spanBars: lengthBars,
             );
           },
         ),
