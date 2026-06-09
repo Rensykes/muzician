@@ -20,6 +20,7 @@ import 'store/settings_store.dart';
 import 'store/songwriter_store.dart';
 import 'store/song_sessions_store.dart';
 import 'store/songwriter_sessions_store.dart';
+import 'ui/project_chip.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
@@ -334,6 +335,10 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
           ? null
           : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
       appBarActions: [
+        const Padding(
+          padding: EdgeInsets.only(right: 4),
+          child: ProjectChip(),
+        ),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 0),
@@ -505,6 +510,10 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
           ? null
           : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
       appBarActions: [
+        const Padding(
+          padding: EdgeInsets.only(right: 4),
+          child: ProjectChip(),
+        ),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 1),
