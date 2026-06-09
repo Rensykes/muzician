@@ -2,8 +2,9 @@
 library;
 
 import 'save_system.dart';
+import 'song_project.dart';
 
-enum SongLaneKind { harmony, save }
+enum SongLaneKind { harmony, save, drum }
 
 SongLaneKind _laneKindFromName(String? raw) {
   for (final v in SongLaneKind.values) {
@@ -29,6 +30,9 @@ class SongBlock {
   final List<String> chordNotes;
   final String? romanNumeral;
 
+  // drum-lane reference into SongwriterProjectSnapshot.drumPatterns
+  final String? patternId;
+
   const SongBlock({
     required this.id,
     required this.startBar,
@@ -40,6 +44,7 @@ class SongBlock {
     this.chordRootPc,
     this.chordNotes = const [],
     this.romanNumeral,
+    this.patternId,
   });
 
   int get endBar => startBar + spanBars;
@@ -54,9 +59,11 @@ class SongBlock {
     int? chordRootPc,
     List<String>? chordNotes,
     String? romanNumeral,
+    String? patternId,
     bool clearRomanNumeral = false,
     bool clearSaveId = false,
     bool clearEmbedded = false,
+    bool clearPatternId = false,
   }) => SongBlock(
     id: id,
     startBar: startBar ?? this.startBar,
@@ -70,6 +77,7 @@ class SongBlock {
     romanNumeral: clearRomanNumeral
         ? null
         : (romanNumeral ?? this.romanNumeral),
+    patternId: clearPatternId ? null : (patternId ?? this.patternId),
   );
 
   Map<String, dynamic> toJson() => {
@@ -280,6 +288,7 @@ class SongSection {
   final int lengthBars;
   final int order;
   final int repeat; // loops the whole section N times
+  final String? lyrics; // free-text lyrics for the whole section
   final List<SongLane> lanes;
 
   const SongSection({
@@ -288,6 +297,7 @@ class SongSection {
     required this.order,
     this.label,
     this.repeat = 1,
+    this.lyrics,
     this.lanes = const [],
   });
 
@@ -296,14 +306,17 @@ class SongSection {
     int? lengthBars,
     int? order,
     int? repeat,
+    String? lyrics,
     List<SongLane>? lanes,
     bool clearLabel = false,
+    bool clearLyrics = false,
   }) => SongSection(
     id: id,
     label: clearLabel ? null : (label ?? this.label),
     lengthBars: lengthBars ?? this.lengthBars,
     order: order ?? this.order,
     repeat: repeat ?? this.repeat,
+    lyrics: clearLyrics ? null : (lyrics ?? this.lyrics),
     lanes: lanes ?? this.lanes,
   );
 
@@ -313,6 +326,7 @@ class SongSection {
     'lengthBars': lengthBars,
     'order': order,
     'repeat': repeat,
+    'lyrics': lyrics,
     'lanes': lanes.map((l) => l.toJson()).toList(),
   };
 
@@ -322,6 +336,7 @@ class SongSection {
     lengthBars: json['lengthBars'] as int? ?? 4,
     order: json['order'] as int? ?? 0,
     repeat: json['repeat'] as int? ?? 1,
+    lyrics: json['lyrics'] as String?,
     lanes:
         (json['lanes'] as List?)
             ?.map((l) => SongLane.fromJson(l as Map<String, dynamic>))
