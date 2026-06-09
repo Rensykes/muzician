@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/muzician_theme.dart';
 import '../../models/songwriter.dart';
@@ -6,6 +7,7 @@ import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../_mockup_shell.dart';
+import 'section_lyrics_sheet.dart';
 import 'songwriter_grid.dart';
 import 'songwriter_lane_row.dart';
 import 'songwriter_undo.dart';
@@ -40,16 +42,24 @@ class SongwriterSectionCard extends ConsumerWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(18, 16, 12, 18),
       decoration: BoxDecoration(
         color: MuzicianTheme.glassBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: MuzicianTheme.glassBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: TextFormField(
@@ -57,40 +67,18 @@ class SongwriterSectionCard extends ConsumerWidget {
                   initialValue: section.label ?? '',
                   style: const TextStyle(
                     color: MuzicianTheme.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
                   decoration: const InputDecoration(
                     isDense: true,
                     hintText: 'Section name (optional)',
                     hintStyle: TextStyle(color: MuzicianTheme.textMuted),
                     border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 6),
                   ),
                   onFieldSubmitted: (v) =>
                       notifier.renameSection(sectionId, v.isEmpty ? null : v),
-                ),
-              ),
-              _ValuePill(
-                key: Key('barsPill_$sectionId'),
-                label: '${section.lengthBars} bars',
-                onTap: () => _openStepper(
-                  context,
-                  title: 'Bars',
-                  value: section.lengthBars,
-                  min: 1,
-                  onChanged: (v) => notifier.setSectionLength(sectionId, v),
-                ),
-              ),
-              const SizedBox(width: 6),
-              _ValuePill(
-                key: Key('repeatPill_$sectionId'),
-                label: '${section.repeat}×',
-                onTap: () => _openStepper(
-                  context,
-                  title: 'Repeat',
-                  value: section.repeat,
-                  min: 1,
-                  onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
                 ),
               ),
               IconBtn(
@@ -102,6 +90,7 @@ class SongwriterSectionCard extends ConsumerWidget {
                   final index = sections.indexWhere((s) => s.id == sectionId);
                   if (index < 0) return;
                   final removed = sections[index];
+                  HapticFeedback.mediumImpact();
                   notifier.removeSection(sectionId);
                   showUndoSnack(
                     context,
@@ -112,44 +101,87 @@ class SongwriterSectionCard extends ConsumerWidget {
               ),
             ],
           ),
-          if (section.lanes.isNotEmpty)
-            BarRuler(lengthBars: section.lengthBars, gutter: 72),
-          for (final lane in section.lanes)
-            Row(
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Row(
               children: [
-                Expanded(
-                  child: SongwriterLaneRow(
-                    sectionId: sectionId,
-                    laneId: lane.id,
-                    activeBar: activeLocalBar,
+                _ValuePill(
+                  key: Key('barsPill_$sectionId'),
+                  label: '${section.lengthBars} bars',
+                  onTap: () => _openStepper(
+                    context,
+                    title: 'Bars',
+                    value: section.lengthBars,
+                    min: 1,
+                    onChanged: (v) => notifier.setSectionLength(sectionId, v),
                   ),
                 ),
-                IconBtn(
-                  key: Key('removeLane_${lane.id}'),
-                  icon: Icons.close_rounded,
-                  color: MuzicianTheme.textSecondary,
-                  onTap: () {
-                    final s = ref
-                        .read(songwriterProvider)
-                        .sections
-                        .firstWhere((x) => x.id == sectionId);
-                    final idx = s.lanes.indexWhere((l) => l.id == lane.id);
-                    if (idx < 0) return;
-                    final removed = s.lanes[idx];
-                    notifier.removeLane(sectionId: sectionId, laneId: lane.id);
-                    showUndoSnack(
-                      context,
-                      'Lane deleted',
-                      () => notifier.insertLane(
-                        sectionId: sectionId,
-                        lane: removed,
-                        index: idx,
-                      ),
-                    );
-                  },
+                const SizedBox(width: 8),
+                _ValuePill(
+                  key: Key('repeatPill_$sectionId'),
+                  label: '${section.repeat}×',
+                  onTap: () => _openStepper(
+                    context,
+                    title: 'Repeat',
+                    value: section.repeat,
+                    min: 1,
+                    onChanged: (v) => notifier.setSectionRepeat(sectionId, v),
+                  ),
                 ),
               ],
             ),
+          ),
+          if (section.lanes.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            BarRuler(lengthBars: section.lengthBars, gutter: 80),
+          ],
+          for (final lane in section.lanes)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SongwriterLaneRow(
+                      sectionId: sectionId,
+                      laneId: lane.id,
+                      activeBar: activeLocalBar,
+                    ),
+                  ),
+                  IconBtn(
+                    key: Key('removeLane_${lane.id}'),
+                    icon: Icons.close_rounded,
+                    color: MuzicianTheme.textSecondary,
+                    onTap: () {
+                      final s = ref
+                          .read(songwriterProvider)
+                          .sections
+                          .firstWhere((x) => x.id == sectionId);
+                      final idx = s.lanes.indexWhere((l) => l.id == lane.id);
+                      if (idx < 0) return;
+                      final removed = s.lanes[idx];
+                      HapticFeedback.lightImpact();
+                      notifier.removeLane(
+                        sectionId: sectionId,
+                        laneId: lane.id,
+                      );
+                      showUndoSnack(
+                        context,
+                        'Lane deleted',
+                        () => notifier.insertLane(
+                          sectionId: sectionId,
+                          lane: removed,
+                          index: idx,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 16),
+          _ClassicLyricsRow(sectionId: section.id, lyrics: section.lyrics),
+          const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerLeft,
             child: GestureDetector(
@@ -157,12 +189,12 @@ class SongwriterSectionCard extends ConsumerWidget {
               onTap: () => _showAddLaneSheet(context, notifier, sectionId),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
+                  horizontal: 14,
+                  vertical: 10,
                 ),
                 decoration: BoxDecoration(
                   color: MuzicianTheme.emerald.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: MuzicianTheme.emerald.withValues(alpha: 0.3),
                   ),
@@ -175,12 +207,12 @@ class SongwriterSectionCard extends ConsumerWidget {
                       size: 16,
                       color: MuzicianTheme.emerald,
                     ),
-                    SizedBox(width: 6),
+                    SizedBox(width: 8),
                     Text(
                       'Add lane',
                       style: TextStyle(
                         color: MuzicianTheme.emerald,
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -230,6 +262,30 @@ void _showAddLaneSheet(
             );
           },
         ),
+        _LaneOptionTile(
+          key: const Key('addDrumLaneActionClassic'),
+          icon: Icons.graphic_eq,
+          label: 'Drum lane',
+          onTap: () {
+            Navigator.pop(context);
+            final laneId = notifier.addLane(
+              sectionId: sectionId,
+              kind: SongLaneKind.drum,
+              label: 'Beat',
+            );
+            final patternId = notifier.addDrumPattern(name: 'Pattern');
+            final section = notifier.state.sections.firstWhere(
+              (s) => s.id == sectionId,
+            );
+            notifier.addDrumBlock(
+              sectionId: sectionId,
+              laneId: laneId,
+              patternId: patternId,
+              startBar: 0,
+              spanBars: section.lengthBars,
+            );
+          },
+        ),
       ],
     ),
   );
@@ -237,6 +293,7 @@ void _showAddLaneSheet(
 
 class _LaneOptionTile extends StatelessWidget {
   const _LaneOptionTile({
+    super.key,
     required this.icon,
     required this.label,
     required this.onTap,
@@ -300,7 +357,7 @@ class _ValuePill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
         decoration: BoxDecoration(
           color: MuzicianTheme.teal.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(10),
@@ -313,14 +370,14 @@ class _ValuePill extends StatelessWidget {
               label,
               style: const TextStyle(
                 color: MuzicianTheme.teal,
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
             const Icon(
               Icons.arrow_drop_down,
               color: MuzicianTheme.teal,
-              size: 16,
+              size: 18,
             ),
           ],
         ),
@@ -416,6 +473,52 @@ class _StepperDialogState extends State<_StepperDialog> {
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClassicLyricsRow extends ConsumerWidget {
+  const _ClassicLyricsRow({required this.sectionId, required this.lyrics});
+
+  final String sectionId;
+  final String? lyrics;
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final next = await showSectionLyricsSheet(
+      context: context,
+      initial: lyrics,
+    );
+    ref.read(songwriterProvider.notifier).setSectionLyrics(sectionId, next);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final has = lyrics != null && lyrics!.trim().isNotEmpty;
+    return InkWell(
+      onTap: () => _edit(context, ref),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.lyrics_outlined, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                has ? lyrics! : 'Add lyrics…',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontStyle: has ? FontStyle.normal : FontStyle.italic,
+                  color: has
+                      ? MuzicianTheme.textPrimary
+                      : MuzicianTheme.textPrimary.withValues(alpha: 0.5),
                 ),
               ),
             ),
