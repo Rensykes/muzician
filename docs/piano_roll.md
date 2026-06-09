@@ -648,6 +648,13 @@ Rendered as a modal bottom sheet at 88 % of screen height with a drag handle.
 
 ---
 
+## Project lock
+
+When a project is selected, the instrument inherits its key / tempo /
+time-signature (where applicable) and the corresponding controls are disabled.
+Change the values through the project config sheet from the project chip in
+the header. Dump and "no project" leave controls free.
+
 ## Standalone Roll vs. Song Note Editor
 
 The standalone `Roll` tab (`PianoRollScreenV2`) uses `pianoRollProvider` with the default container.

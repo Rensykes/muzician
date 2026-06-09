@@ -91,6 +91,13 @@ Audio tracks host clips from microphone recordings or imported files.
 - **Broken clips**: if a referenced file is missing on load, the clip renders with a red diagonal stripe and stays silent during playback.
 - **Auto-mute**: the target audio track is muted while you record so its prior clips do not bleed back through the mic.
 
+## Project lock
+
+When a project is selected, the Song workspace inherits its tempo and time
+signature from `ProjectConfig` and the scale chip is disabled. Change the
+values through the project config sheet from the project chip in the header.
+Dump and "no project" leave controls free.
+
 ## Limitations (v1)
 
 - No clip resize or time-stretching
