@@ -9,17 +9,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../_mockup_shell.dart';
+import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
 import 'section_lyrics_sheet.dart';
 import 'songwriter_block_tile.dart';
 import 'songwriter_grid.dart';
 import 'songwriter_header.dart';
+import 'songwriter_lane_row.dart';
 import 'songwriter_save_panel.dart';
 import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
@@ -438,6 +441,7 @@ class _LaneCard extends ConsumerWidget {
     final bars = lengthBars < 1 ? 1 : lengthBars;
 
     return Container(
+      key: Key('drumLaneRow_$laneId'),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.025),
         borderRadius: BorderRadius.circular(14),
@@ -510,21 +514,37 @@ class _LaneCard extends ConsumerWidget {
                         ),
                       ),
                       for (final block in lane.blocks)
-                        Positioned(
-                          left: block.startBar * barWidth,
-                          width: block.spanBars * barWidth,
-                          top: 0,
-                          bottom: 0,
-                          child: SongwriterBlockTile(
-                            sectionId: sectionId,
-                            laneId: laneId,
-                            blockId: block.id,
-                            barWidth: barWidth,
-                            highlighted: activeBar != null &&
-                                activeBar! >= block.startBar &&
-                                activeBar! < block.endBar,
+                        if (lane.kind == SongLaneKind.drum)
+                          Positioned(
+                            left: block.startBar * barWidth,
+                            width: block.spanBars * barWidth,
+                            top: 0,
+                            bottom: 0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: MuzicianTheme.orange.withValues(alpha: 0.15),
+                                border: Border.all(
+                                  color: MuzicianTheme.orange.withValues(alpha: 0.3),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Positioned(
+                            left: block.startBar * barWidth,
+                            width: block.spanBars * barWidth,
+                            top: 0,
+                            bottom: 0,
+                            child: SongwriterBlockTile(
+                              sectionId: sectionId,
+                              laneId: laneId,
+                              blockId: block.id,
+                              barWidth: barWidth,
+                              highlighted: activeBar != null &&
+                                  activeBar! >= block.startBar &&
+                                  activeBar! < block.endBar,
+                            ),
                           ),
-                        ),
                       if (activeBar != null)
                         Positioned.fill(
                           child: IgnorePointer(

@@ -5,7 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
 import 'package:muzician/features/songwriter/songwriter_screen_track.dart';
+import 'package:muzician/features/songwriter/songwriter_screen.dart';
 import 'package:muzician/store/songwriter_store.dart';
+import 'package:muzician/store/settings_store.dart' show settingsProvider;
+import 'package:muzician/models/save_system.dart' show WriterLayout;
 
 void main() {
   setUp(() {
@@ -79,5 +82,35 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
 
     expect(find.text('walking down the road'), findsOneWidget);
+  });
+
+  testWidgets('classic variant renders lyrics inside section card', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final container = ProviderContainer(
+      overrides: [
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(songwriterProvider.notifier);
+    notifier.addSection(label: 'Verse', lengthBars: 4);
+    final id = container.read(songwriterProvider).sections.first.id;
+    notifier.setSectionLyrics(id, 'classic verse');
+
+    await container.read(settingsProvider.notifier)
+        .setWriterLayout(WriterLayout.classic);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(body: SongwriterScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.text('classic verse'), findsOneWidget);
   });
 }
