@@ -300,7 +300,6 @@ class SongSection {
   final int lengthBars;
   final int order;
   final int repeat; // loops the whole section N times
-  final String? lyrics; // free-text lyrics for the whole section
   final List<SongLane> lanes;
 
   const SongSection({
@@ -309,7 +308,6 @@ class SongSection {
     required this.order,
     this.label,
     this.repeat = 1,
-    this.lyrics,
     this.lanes = const [],
   });
 
@@ -318,17 +316,14 @@ class SongSection {
     int? lengthBars,
     int? order,
     int? repeat,
-    String? lyrics,
     List<SongLane>? lanes,
     bool clearLabel = false,
-    bool clearLyrics = false,
   }) => SongSection(
     id: id,
     label: clearLabel ? null : (label ?? this.label),
     lengthBars: lengthBars ?? this.lengthBars,
     order: order ?? this.order,
     repeat: repeat ?? this.repeat,
-    lyrics: clearLyrics ? null : (lyrics ?? this.lyrics),
     lanes: lanes ?? this.lanes,
   );
 
@@ -338,7 +333,6 @@ class SongSection {
     'lengthBars': lengthBars,
     'order': order,
     'repeat': repeat,
-    'lyrics': lyrics,
     'lanes': lanes.map((l) => l.toJson()).toList(),
   };
 
@@ -348,7 +342,6 @@ class SongSection {
     lengthBars: json['lengthBars'] as int? ?? 4,
     order: json['order'] as int? ?? 0,
     repeat: json['repeat'] as int? ?? 1,
-    lyrics: json['lyrics'] as String?,
     lanes:
         (json['lanes'] as List?)
             ?.map((l) => SongLane.fromJson(l as Map<String, dynamic>))
