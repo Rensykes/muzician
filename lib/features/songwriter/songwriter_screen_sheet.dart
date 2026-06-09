@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
+import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_header.dart';
 import 'songwriter_save_panel.dart';
@@ -202,6 +203,16 @@ class _SectionInstance extends ConsumerWidget {
           keyScaleName: keyScaleName,
           onEnsureLane: onEnsureLane,
         ),
+        // Drum lanes (one strip per drum lane on this section).
+        for (final lane in section.lanes.where((l) => l.kind == SongLaneKind.drum)) ...[
+          const SizedBox(height: 8),
+          _DrumLaneRow(
+            key: Key('sheetDrumLane_${lane.id}_$instanceIndex'),
+            section: section,
+            lane: lane,
+            instanceIndex: instanceIndex,
+          ),
+        ],
       ],
     );
   }
@@ -684,6 +695,145 @@ class _BarCell extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DrumLaneRow extends ConsumerWidget {
+  const _DrumLaneRow({
+    super.key,
+    required this.section,
+    required this.lane,
+    required this.instanceIndex,
+  });
+
+  final SongSection section;
+  final SongLane lane;
+  final int instanceIndex;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
+    final ownerByBar = <int, SongBlock>{};
+    for (final b in lane.blocks) {
+      for (var i = b.startBar; i < b.endBar; i++) {
+        ownerByBar[i] = b;
+      }
+    }
+    final patternsById = {
+      for (final p in ref.read(songwriterProvider).drumPatterns) p.id: p,
+    };
+    return LayoutBuilder(
+      builder: (context, _) {
+        const perRow = 4;
+        final rows = <List<Widget>>[];
+        for (var start = 0; start < bars; start += perRow) {
+          final end = (start + perRow).clamp(0, bars);
+          final cells = <Widget>[];
+          var i = start;
+          while (i < end) {
+            final owner = ownerByBar[i];
+            if (owner != null && owner.startBar == i) {
+              final span = owner.spanBars.clamp(1, end - i);
+              final pattern = owner.patternId == null
+                  ? null
+                  : patternsById[owner.patternId];
+              cells.add(Expanded(
+                flex: span,
+                child: GestureDetector(
+                  key: Key(
+                    'sheetDrumTile_${owner.patternId ?? owner.id}',
+                  ),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (owner.patternId == null) return;
+                    showSongwriterDrumPatternSheet(
+                      context: context,
+                      patternId: owner.patternId!,
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: MuzicianTheme.orange.withValues(alpha: 0.18),
+                      border: Border.all(
+                        color: MuzicianTheme.orange.withValues(alpha: 0.5),
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.graphic_eq,
+                          size: 14,
+                          color: MuzicianTheme.textPrimary,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            pattern?.name ?? 'pattern?',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: MuzicianTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ));
+              i += span;
+            } else if (owner != null) {
+              i++;
+            } else {
+              cells.add(Expanded(
+                flex: 1,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  height: 28,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: MuzicianTheme.glassBorder,
+                      style: BorderStyle.solid,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ));
+              i++;
+            }
+          }
+          rows.add(cells);
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Text(
+                lane.label ?? 'Beat',
+                style: const TextStyle(
+                  color: MuzicianTheme.textMuted,
+                  fontSize: 11,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            for (var r = 0; r < rows.length; r++)
+              Padding(
+                padding: EdgeInsets.only(bottom: r == rows.length - 1 ? 0 : 6),
+                child: Row(children: rows[r]),
+              ),
+          ],
+        );
+      },
     );
   }
 }
