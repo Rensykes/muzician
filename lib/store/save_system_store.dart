@@ -1,7 +1,10 @@
 /// Save System Riverpod Store
 library;
 
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
@@ -12,26 +15,52 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
 
   Future<void> hydrate() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(saveSystemStorageKey);
-    if (raw != null) {
-      final parsed = deserialiseState(raw);
+    final existing = prefs.getString(saveSystemStorageKey);
+    if (existing != null) {
+      final parsed = deserialiseState(existing);
       if (parsed != null) {
         state = state.copyWith(
           folders: parsed.folders,
           saves: parsed.saves,
+          selectedProjectId: () => parsed.selectedProjectId,
           hydrated: true,
         );
         return;
       }
     }
+    // First v3 launch — wipe legacy blobs.
+    for (final key in legacySaveSystemStorageKeys) {
+      await prefs.remove(key);
+    }
+    for (final key in legacySessionKeys) {
+      await prefs.remove(key);
+    }
+    await _wipeAudioDir();
     state = state.copyWith(hydrated: true);
+    await _persist();
+  }
+
+  Future<void> _wipeAudioDir() async {
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final audioDir = Directory('${docsDir.path}/song_audio');
+      if (await audioDir.exists()) {
+        await audioDir.delete(recursive: true);
+      }
+    } catch (_) {
+      /* best-effort; ignore */
+    }
   }
 
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       saveSystemStorageKey,
-      serialiseState(folders: state.folders, saves: state.saves),
+      serialiseState(
+        folders: state.folders,
+        saves: state.saves,
+        selectedProjectId: state.selectedProjectId,
+      ),
     );
   }
 
