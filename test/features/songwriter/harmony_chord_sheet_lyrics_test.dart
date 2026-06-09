@@ -6,14 +6,13 @@ import 'package:muzician/models/songwriter.dart';
 void main() {
   testWidgets('renders a single lyric input prefilled with currentLyric',
       (tester) async {
-    SongBlock? result;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Builder(
             builder: (ctx) => ElevatedButton(
               onPressed: () async {
-                result = await showHarmonyChordSheet(
+                await showHarmonyChordSheet(
                   ctx,
                   startBar: 0,
                   spanBars: 1,
