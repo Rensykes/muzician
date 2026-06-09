@@ -636,11 +636,6 @@ class AppSettings {
   /// When true the save browser renders saves as a grid; false shows a list.
   final bool saveBrowserGrid;
 
-  /// Selects the Writer page layout. `track` (default) is the DAW-style
-  /// timeline; `sheet` is the lead-sheet notation style; `classic` is the
-  /// original card-based layout.
-  final WriterLayout writerLayout;
-
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
@@ -648,7 +643,6 @@ class AppSettings {
     this.humSensitivity = HumSensitivity.balanced,
     this.metronomeEnabled = true,
     this.saveBrowserGrid = false,
-    this.writerLayout = WriterLayout.track,
   });
 
   AppSettings copyWith({
@@ -658,7 +652,6 @@ class AppSettings {
     HumSensitivity? humSensitivity,
     bool? metronomeEnabled,
     bool? saveBrowserGrid,
-    WriterLayout? writerLayout,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
@@ -666,7 +659,6 @@ class AppSettings {
     humSensitivity: humSensitivity ?? this.humSensitivity,
     metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
     saveBrowserGrid: saveBrowserGrid ?? this.saveBrowserGrid,
-    writerLayout: writerLayout ?? this.writerLayout,
   );
 
   Map<String, dynamic> toJson() => {
@@ -676,7 +668,6 @@ class AppSettings {
     'humSensitivity': humSensitivity.name,
     'metronomeEnabled': metronomeEnabled,
     'saveBrowserGrid': saveBrowserGrid,
-    'writerLayout': writerLayout.name,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -686,17 +677,7 @@ class AppSettings {
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
     metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,
     saveBrowserGrid: json['saveBrowserGrid'] as bool? ?? false,
-    writerLayout: _writerLayoutFromName(json['writerLayout'] as String?),
   );
-}
-
-enum WriterLayout { classic, track, sheet }
-
-WriterLayout _writerLayoutFromName(String? raw) {
-  for (final value in WriterLayout.values) {
-    if (value.name == raw) return value;
-  }
-  return WriterLayout.track;
 }
 
 HumSensitivity _humSensitivityFromName(String? raw) {

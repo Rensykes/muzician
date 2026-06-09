@@ -58,10 +58,6 @@ class SettingsNotifier extends Notifier<AppSettings> {
     await _persist();
   }
 
-  Future<void> setWriterLayout(WriterLayout layout) async {
-    state = state.copyWith(writerLayout: layout);
-    await _persist();
-  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
