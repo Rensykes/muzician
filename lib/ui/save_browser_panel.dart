@@ -50,6 +50,10 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   /// of running the normal load/select action.
   final void Function(SaveEntry entry)? onPick;
 
+  /// Virtual root: when set, navigation stops at this folder and Back
+  /// cannot escape it.  null = full tree (traditional behaviour).
+  final String? rootFolderId;
+
   const SaveBrowserPanel({
     super.key,
     this.instrumentFilter,
@@ -57,6 +61,7 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
     this.captureSnapshot,
     this.onLoad,
     this.onPick,
+    this.rootFolderId,
   });
 
   @override
@@ -68,6 +73,15 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   String? _selectedSaveId;
   bool _editMode = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _currentFolderId = widget.rootFolderId;
+  }
+
+  bool get _atVirtualRoot =>
+      widget.rootFolderId != null && _currentFolderId == widget.rootFolderId;
+
   // ── Computed helpers ──────────────────────────────────────────────────────
 
   List<SaveFolder> _breadcrumb(List<SaveFolder> allFolders) {
@@ -77,6 +91,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
       final f = allFolders.where((f) => f.id == walkId).firstOrNull;
       if (f == null) break;
       crumbs.insert(0, f);
+      if (walkId == widget.rootFolderId) break; // stop at virtual root
       walkId = f.parentId;
     }
     return crumbs;
@@ -519,7 +534,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           _Breadcrumb(
             breadcrumb: breadcrumb,
             onRoot: () => setState(() {
-              _currentFolderId = null;
+              _currentFolderId = widget.rootFolderId ?? null;
               _selectedSaveId = null;
             }),
             onNavigate: (id) => setState(() {
@@ -527,9 +542,13 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
               _selectedSaveId = null;
             }),
             onBack: () => setState(() {
-              _currentFolderId = breadcrumb.length > 1
+              if (_atVirtualRoot) return;
+              final parent = breadcrumb.length > 1
                   ? breadcrumb[breadcrumb.length - 2].id
                   : null;
+              _currentFolderId = (widget.rootFolderId != null && parent == null)
+                  ? widget.rootFolderId
+                  : parent;
               _selectedSaveId = null;
             }),
           ),
