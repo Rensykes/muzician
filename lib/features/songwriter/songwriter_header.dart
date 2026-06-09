@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
@@ -77,16 +78,34 @@ class SongwriterHeader extends ConsumerWidget {
             },
           ),
           const Spacer(),
-          Flexible(
-            child: _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
-          ),
+          Consumer(builder: (context, ref, _) {
+            final locked = ref.watch(isProjectLockedProvider);
+            return Flexible(
+              child: IgnorePointer(
+                ignoring: locked,
+                child: Opacity(
+                  opacity: locked ? 0.5 : 1.0,
+                  child: _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
+                ),
+              ),
+            );
+          }),
           const SizedBox(width: 6),
-          Flexible(
-            child: _Chip(
-              label: '${config.tempo} BPM',
-              onTap: () => _editTempo(context, ref),
-            ),
-          ),
+          Consumer(builder: (context, ref, _) {
+            final locked = ref.watch(isProjectLockedProvider);
+            return Flexible(
+              child: IgnorePointer(
+                ignoring: locked,
+                child: Opacity(
+                  opacity: locked ? 0.5 : 1.0,
+                  child: _Chip(
+                    label: '${config.tempo} BPM',
+                    onTap: () => _editTempo(context, ref),
+                  ),
+                ),
+              ),
+            );
+          }),
           IconButton(
             tooltip: 'New project',
             visualDensity: VisualDensity.compact,
