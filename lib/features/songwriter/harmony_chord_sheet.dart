@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/muzician_theme.dart';
 import '../../models/songwriter.dart';
+import '../../schema/rules/save_system_rules.dart' show generateId;
 import '../../schema/rules/songwriter_rules.dart';
 import '../../utils/note_utils.dart';
 import 'chord_wheel.dart';
@@ -31,6 +32,9 @@ Future<SongBlock?> showHarmonyChordSheet(
   required int spanBars,
   required int? keyRoot,
   required String? keyScaleName,
+  SongBlock? existing,
+  int instanceIndex = 0,
+  String currentLyric = '',
 }) {
   return showModalBottomSheet<SongBlock>(
     context: context,
@@ -51,6 +55,9 @@ Future<SongBlock?> showHarmonyChordSheet(
           spanBars: spanBars,
           keyRoot: keyRoot,
           keyScaleName: keyScaleName,
+          existing: existing,
+          instanceIndex: instanceIndex,
+          currentLyric: currentLyric,
         ),
       ),
     ),
@@ -63,11 +70,17 @@ class _HarmonySheet extends StatefulWidget {
     required this.spanBars,
     required this.keyRoot,
     required this.keyScaleName,
+    this.existing,
+    this.instanceIndex = 0,
+    this.currentLyric = '',
   });
   final int startBar;
   final int spanBars;
   final int? keyRoot;
   final String? keyScaleName;
+  final SongBlock? existing;
+  final int instanceIndex;
+  final String currentLyric;
 
   @override
   State<_HarmonySheet> createState() => _HarmonySheetState();
@@ -76,6 +89,21 @@ class _HarmonySheet extends StatefulWidget {
 class _HarmonySheetState extends State<_HarmonySheet> {
   bool _showManual = false;
   int? _rootPc;
+  bool _silentMode = false;
+  late final TextEditingController _lyricController;
+
+  @override
+  void initState() {
+    super.initState();
+    _silentMode = widget.existing?.isSilent ?? false;
+    _lyricController = TextEditingController(text: widget.currentLyric);
+  }
+
+  @override
+  void dispose() {
+    _lyricController.dispose();
+    super.dispose();
+  }
 
   bool get _hasKey => widget.keyRoot != null && widget.keyScaleName != null;
 
@@ -88,7 +116,7 @@ class _HarmonySheetState extends State<_HarmonySheet> {
       chordRootPc: triad.rootPc,
       chordNotes: triad.notes,
       romanNumeral: triad.romanNumeral,
-    );
+    ).copyWith(lyrics: [_lyricController.text], isSilent: false);
     Navigator.pop(context, block);
   }
 
@@ -109,7 +137,7 @@ class _HarmonySheetState extends State<_HarmonySheet> {
         widget.keyRoot,
         widget.keyScaleName,
       ),
-    );
+    ).copyWith(lyrics: [_lyricController.text], isSilent: false);
     Navigator.pop(context, block);
   }
 
@@ -120,34 +148,81 @@ class _HarmonySheetState extends State<_HarmonySheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_hasKey) ...[
-            SizedBox(
-              height: 240,
-              child: ChordWheel(
-                keyRootPc: widget.keyRoot!,
-                scaleName: widget.keyScaleName!,
-                onPick: _commitTriad,
+          SwitchListTile(
+            key: const Key('silentToggle'),
+            title: const Text('Silent placeholder (lyric only)'),
+            value: _silentMode,
+            onChanged: (v) => setState(() => _silentMode = v),
+          ),
+          if (!_silentMode) ...[
+            if (_hasKey) ...[
+              SizedBox(
+                height: 240,
+                child: ChordWheel(
+                  keyRootPc: widget.keyRoot!,
+                  scaleName: widget.keyScaleName!,
+                  onPick: _commitTriad,
+                ),
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => setState(() => _showManual = !_showManual),
+                child: Row(
+                  children: [
+                    Icon(
+                      _showManual ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 4),
+                    const Text('Other chord'),
+                  ],
+                ),
+              ),
+            ],
+            if (!_hasKey || _showManual) ...[
+              const SizedBox(height: 8),
+              _manualPicker(),
+            ],
+          ],
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: TextField(
+              key: const Key('lyricInput'),
+              controller: _lyricController,
+              style: const TextStyle(color: MuzicianTheme.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Verse ${widget.instanceIndex + 1}',
+                labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
+                filled: true,
+                fillColor: MuzicianTheme.glassBg,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () => setState(() => _showManual = !_showManual),
-              child: Row(
-                children: [
-                  Icon(
-                    _showManual ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 4),
-                  const Text('Other chord'),
-                ],
+          ),
+          if (_silentMode)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: FilledButton(
+                key: const Key('confirmSilent'),
+                onPressed: () {
+                  Navigator.of(context).pop(
+                    SongBlock(
+                      id: widget.existing?.id ?? generateId(),
+                      startBar: widget.startBar,
+                      spanBars: widget.spanBars,
+                      isSilent: true,
+                      lyrics: [_lyricController.text],
+                    ),
+                  );
+                },
+                child: const Text('Save placeholder'),
               ),
             ),
-          ],
-          if (!_hasKey || _showManual) ...[
-            const SizedBox(height: 8),
-            _manualPicker(),
-          ],
         ],
       ),
     );
