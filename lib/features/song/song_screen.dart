@@ -9,7 +9,6 @@ import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
-import '../../store/song_session_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/transport_strip.dart' as transport;
@@ -291,7 +290,7 @@ class _SongScreenState extends ConsumerState<SongScreen> {
     );
     if (confirmed != true) return;
     ref.read(songPlaybackProvider.notifier).stopPlayback();
-    await ref.read(songSessionProvider).clearAndReset();
+    await ref.read(songProjectProvider.notifier).loadProject(song_rules.getDefaultSongProject());
   }
 }
 
