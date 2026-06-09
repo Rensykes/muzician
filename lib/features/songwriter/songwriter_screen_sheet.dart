@@ -300,6 +300,47 @@ class _SectionHeading extends ConsumerWidget {
                 ),
                 child: const SizedBox(width: 24, height: 24),
               ),
+            PopupMenuButton<String>(
+              key: Key('sheetSectionMenu_${section.id}'),
+              icon: const Icon(Icons.more_vert, color: MuzicianTheme.textPrimary),
+              onSelected: (value) async {
+                if (value == 'addDrumLane') {
+                  ref.read(songwriterProvider.notifier).addLane(
+                        sectionId: section.id,
+                        kind: SongLaneKind.drum,
+                        label: 'Beat',
+                      );
+                  final laneId = ref
+                      .read(songwriterProvider)
+                      .sections
+                      .firstWhere((s) => s.id == section.id)
+                      .lanes
+                      .lastWhere((l) => l.kind == SongLaneKind.drum)
+                      .id;
+                  final patternId = ref.read(songwriterProvider.notifier)
+                      .addDrumPattern(name: 'Pattern');
+                  ref.read(songwriterProvider.notifier).addDrumBlock(
+                        sectionId: section.id,
+                        laneId: laneId,
+                        patternId: patternId,
+                        startBar: 0,
+                        spanBars: section.lengthBars,
+                      );
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  key: Key('addDrumLaneSheetAction'),
+                  value: 'addDrumLane',
+                  child: ListTile(
+                    leading: Icon(Icons.graphic_eq),
+                    title: Text('Add drum lane'),
+                    dense: true,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 4),
             IconButton(
               key: Key('removeSection_${section.id}'),
               onPressed: () {
