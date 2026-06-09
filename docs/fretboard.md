@@ -224,3 +224,10 @@ showAppInfoPanel(context, initialTab: 0); // 0 = Fretboard, 1 = Piano, 2 = Piano
 | **Gestures** | Tap fret cell to select / deselect |
 | **Input & View Modes** | Free mode, Chord mode, Exact / Exact+Focus views |
 | **Panels & Tools** | Tuning (10 presets), Capo (0–11), Chord voicing picker, Scale picker, Detection panel, Saves |
+
+## Project lock
+
+When a project is selected, the instrument inherits its key / tempo /
+time-signature (where applicable) and the corresponding controls are disabled.
+Change the values through the project config sheet from the project chip in
+the header. Dump and "no project" leave controls free.

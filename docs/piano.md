@@ -159,3 +159,10 @@ showAppInfoPanel(context, initialTab: 1); // 0 = Fretboard, 1 = Piano, 2 = Piano
 | **Gestures** | Tap key to select / deselect; pan / drag to scroll (61 / 88-key layouts) |
 | **Panels & Tools** | Range selector (49 / 61 / 88 keys), Chord picker, Scale picker, Detection, Saves |
 | **Behaviour Notes** | Out-of-key alert, colour coding (sky / teal / violet / emerald) |
+
+## Project lock
+
+When a project is selected, the instrument inherits its key / tempo /
+time-signature (where applicable) and the corresponding controls are disabled.
+Change the values through the project config sheet from the project chip in
+the header. Dump and "no project" leave controls free.

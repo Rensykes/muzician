@@ -70,3 +70,12 @@ not appended.
 Songwriter projects also save as a `SaveEntry` (`InstrumentSnapshot` filter
 `'songwriter'`) through the shared save browser, alongside fretboard / piano /
 piano-roll / song saves.
+
+## Project Config
+
+Songwriter now uses `SaveSystemState.selectedProjectId` instead of the old
+folder-name convention. When a real project is selected (kind `project`),
+tempo and key chips in the header are locked; edit them through the project
+config sheet. Dump is rejected — `ProjectGateModal` blocks the tab until a
+project is selected. Library-match scope is
+`getSavesInSubtree(folders, saves, selectedProjectId)`.

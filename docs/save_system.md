@@ -21,6 +21,34 @@ lib/
 
 ## Data Model (`lib/models/save_system.dart`)
 
+### Projects + Dump
+
+Every top-level folder has a `kind`:
+
+| Kind | Meaning |
+|---|---|
+| `normal` | Subfolder inside a project (Verse / Chorus) — readability only. |
+| `project` | A user-facing project root. Carries a `ProjectConfig` (key, tempo, time signature). |
+| `dump` | Single global spare folder (at most one). Holds ad-hoc saves until copied into a real project. |
+
+`SaveSystemState.selectedProjectId` identifies the active project (`project` or `dump`). Persisted in the v3 blob. Song + Songwriter require `kind == project` (Dump is rejected). Fretboard / Piano / Roll accept either.
+
+`ProjectConfig` (defined in `lib/models/project_config.dart`):
+
+| Field | Type | Default |
+|---|---|---|
+| `keyRootPc` | `int?` (0-11) | null |
+| `keyScaleName` | `String?` | null |
+| `tempo` | `int` | 120 |
+| `beatsPerBar` | `int` | 4 |
+| `beatUnit` | `int` | 4 |
+
+When a project is selected, tempo / key / time-signature controls on the instrument and arrangement headers are locked. Edit them through the project config sheet, which prompts before retrofitting every save in the project's subtree.
+
+### Migration
+
+Storage key bumped to `@muzician/save-system/v3`. On first launch of the v3 code, the legacy blobs (`@muzician/save-system/v2`, `@muzician/song_session/v1`, `@muzician/songwriter_session/v1`) and `appDocs/song_audio/` are wiped.
+
 | Type | Description |
 |---|---|
 | `PendingChord` | Root + quality pending detection (`root`, `quality`, `symbol`) |
