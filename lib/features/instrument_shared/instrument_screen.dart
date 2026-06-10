@@ -33,6 +33,11 @@ class InstrumentScreen extends ConsumerWidget {
   final bool scaleHasValue;
   final bool chordHasValue;
 
+  /// Label shown on the Scale dock tab. Defaults to `'Scale'`. Callers pass
+  /// the active key's name (e.g. `'C major'`) when a project key is set so
+  /// the user sees the locked-in scale at a glance.
+  final String scaleLabel;
+
   final ValueKey<String> detectionKey;
 
   const InstrumentScreen({
@@ -50,6 +55,7 @@ class InstrumentScreen extends ConsumerWidget {
     required this.scaleHasValue,
     required this.chordHasValue,
     required this.detectionKey,
+    this.scaleLabel = 'Scale',
     this.modeSegment,
   });
 
@@ -115,7 +121,7 @@ class InstrumentScreen extends ConsumerWidget {
               children: [
                 DockTab(
                   icon: Icons.stacked_line_chart,
-                  label: 'Scale',
+                  label: scaleLabel,
                   color: MuzicianTheme.emerald,
                   hasValue: scaleHasValue,
                   onTap: onScalePanelRequested,
