@@ -15,6 +15,7 @@ import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
 import 'models/piano.dart' show PianoViewMode;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
+import 'store/project_config_sync.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'store/song_sessions_store.dart';
@@ -97,6 +98,8 @@ class _AppShellState extends ConsumerState<_AppShell> {
       } else {
         notifier.selectProject(selected);
       }
+      // Mount the project config syncer (Provider body runs on first read).
+      ref.read(projectConfigSyncProvider);
     });
   }
 
