@@ -341,9 +341,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
     return InstrumentScreen(
       binding: fretboardBinding,
       title: 'Fretboard',
-      appBarChipLabel: state.selectedNotes.isEmpty
-          ? null
-          : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+      appBarChipLabel: null,
       appBarActions: [
         const Padding(
           padding: EdgeInsets.only(right: 4),
@@ -516,9 +514,7 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
     return InstrumentScreen(
       binding: pianoBinding,
       title: 'Piano',
-      appBarChipLabel: state.selectedNotes.isEmpty
-          ? null
-          : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+      appBarChipLabel: null,
       appBarActions: [
         const Padding(
           padding: EdgeInsets.only(right: 4),
