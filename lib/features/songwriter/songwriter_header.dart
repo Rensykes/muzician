@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../store/save_system_store.dart';
+import '../../theme/muzician_theme.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../utils/note_utils.dart';
+import '../_mockup_shell.dart';
 
 class SongwriterHeader extends ConsumerWidget {
   const SongwriterHeader({
@@ -24,115 +25,100 @@ class SongwriterHeader extends ConsumerWidget {
         ? 'No key'
         : '${chromaticNotes[config.keyRoot!]} ${config.keyScaleName ?? ''}'
               .trim();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          Flexible(
-            child: Consumer(
-              builder: (context, ref, _) {
-                final name =
-                    ref.watch(songwriterProvider.select((p) => p.name));
-                return _Chip(
-                  key: const Key('projectNameChip'),
-                  label: name,
-                  onTap: () => _editProjectName(context, ref, name),
-                );
-              },
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 52,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => _showOverflowMenu(context, ref),
+                  child: const Text(
+                    'Writer',
+                    style: TextStyle(
+                      color: MuzicianTheme.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _editProjectName(
+                      context,
+                      ref,
+                      ref.read(songwriterProvider).name,
+                    ),
+                    child: Text(
+                      ref.watch(songwriterProvider.select((p) => p.name)),
+                      style: const TextStyle(
+                        color: MuzicianTheme.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                IconBtn(
+                  icon: Icons.more_vert,
+                  onTap: () => _showOverflowMenu(context, ref),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 6),
-          Consumer(
-            builder: (context, ref, _) {
-              final playing = ref.watch(
-                songwriterPlaybackProvider.select(
-                  (s) => s.status == SongwriterPlaybackStatus.playing,
-                ),
-              );
-              final t = ref.read(songwriterPlaybackProvider.notifier);
-              return IconButton(
-                key: const Key('songwriterPlay'),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                icon: Icon(playing ? Icons.stop : Icons.play_arrow),
-                onPressed: () => playing ? t.stopPlayback() : t.startPlayback(),
-              );
+        ),
+        const SizedBox(height: 4),
+        _WriterConfigStrip(
+          keyLabel: keyLabel,
+          tempo: config.tempo,
+          onKeyTap: () => _editKey(context, ref),
+          onTempoTap: () => _editTempo(context, ref),
+          onNewProject: () => _confirmNew(context, notifier),
+        ),
+      ],
+    );
+  }
+
+  void _showOverflowMenu(BuildContext context, WidgetRef ref) {
+    showWidgetSheet(
+      context: context,
+      title: 'Writer',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MenuTile(
+            icon: Icons.save_rounded,
+            label: 'Save / Load',
+            onTap: () {
+              Navigator.pop(context);
+              onOpenSaveLoad?.call();
             },
           ),
-          Consumer(
-            builder: (context, ref, _) {
-              final on = ref.watch(
-                settingsProvider.select((s) => s.metronomeEnabled),
-              );
-              return IconButton(
-                key: const Key('songwriterMetronome'),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                icon: Icon(on ? Icons.music_note : Icons.music_off),
-                onPressed: () => ref
-                    .read(settingsProvider.notifier)
-                    .setMetronomeEnabled(!on),
-              );
+          _MenuTile(
+            icon: Icons.account_tree_rounded,
+            label: 'Edit structure',
+            onTap: () {
+              Navigator.pop(context);
+              onOpenStructure?.call();
             },
           ),
-          const Spacer(),
-          Consumer(builder: (context, ref, _) {
-            final locked = ref.watch(isProjectLockedProvider);
-            if (locked) {
-              return _LockableChip(
-                label: keyLabel,
-                locked: true,
-                onTap: () {},
-              );
-            }
-            return Flexible(
-              child: _LockableChip(
-                label: keyLabel,
-                locked: false,
-                onTap: () => _editKey(context, ref),
-              ),
-            );
-          }),
-          const SizedBox(width: 6),
-          Consumer(builder: (context, ref, _) {
-            final locked = ref.watch(isProjectLockedProvider);
-            if (locked) {
-              return _LockableChip(
-                label: '${config.tempo} BPM',
-                locked: true,
-                onTap: () {},
-              );
-            }
-            return Flexible(
-              child: _LockableChip(
-                label: '${config.tempo} BPM',
-                locked: false,
-                onTap: () => _editTempo(context, ref),
-              ),
-            );
-          }),
-          IconButton(
-            tooltip: 'New project',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            icon: const Icon(Icons.add_box_outlined),
-            onPressed: () => _confirmNew(context, notifier),
-          ),
-          PopupMenuButton<String>(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            onSelected: (v) {
-              if (v == 'saveload') onOpenSaveLoad?.call();
-              if (v == 'structure') onOpenStructure?.call();
+          _MenuTile(
+            icon: Icons.edit_rounded,
+            label: 'Rename project',
+            onTap: () {
+              Navigator.pop(context);
+              _editProjectName(context, ref, ref.read(songwriterProvider).name);
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'saveload', child: Text('Save / Load')),
-              PopupMenuItem(value: 'structure', child: Text('Edit structure')),
-            ],
           ),
+
         ],
       ),
     );
@@ -144,19 +130,56 @@ class SongwriterHeader extends ConsumerWidget {
   ) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('New project?'),
-        content: const Text('This clears the current songwriter session.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: MuzicianTheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: MuzicianTheme.glassBorder),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('New project'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'New project?',
+                style: TextStyle(
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'This clears the current songwriter session.',
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _GlassTextButton(
+                    label: 'Cancel',
+                    onTap: () => Navigator.pop(dialogCtx, false),
+                  ),
+                  const SizedBox(width: 12),
+                  _GlassTextButton(
+                    label: 'New project',
+                    accent: true,
+                    onTap: () => Navigator.pop(dialogCtx, true),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
     if (ok == true) await notifier.newProject();
@@ -165,20 +188,143 @@ class SongwriterHeader extends ConsumerWidget {
   void _editTempo(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
     final current = ref.read(songwriterProvider).config.tempo;
-    showModalBottomSheet<void>(
+    showWidgetSheet(
       context: context,
-      builder: (_) =>
-          _TempoSheet(initial: current, onChanged: notifier.setTempo),
+      title: 'Tempo',
+      child: _TempoSheet(initial: current, onChanged: notifier.setTempo),
     );
   }
 
   void _editKey(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
-    showModalBottomSheet<void>(
+    showWidgetSheet(
       context: context,
-      builder: (_) => _KeySheet(
+      title: 'Key',
+      child: _KeySheet(
         onPick: (root, scale) => notifier.setKey(root, scale),
         onClear: () => notifier.setKey(null, null),
+      ),
+    );
+  }
+}
+
+class _WriterConfigStrip extends ConsumerWidget {
+  const _WriterConfigStrip({
+    required this.keyLabel,
+    required this.tempo,
+    required this.onKeyTap,
+    required this.onTempoTap,
+    required this.onNewProject,
+  });
+  final String keyLabel;
+  final int tempo;
+  final VoidCallback onKeyTap;
+  final VoidCallback onTempoTap;
+  final VoidCallback onNewProject;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playing = ref.watch(
+      songwriterPlaybackProvider.select(
+        (s) => s.status == SongwriterPlaybackStatus.playing,
+      ),
+    );
+    final metronomeOn = ref.watch(
+      settingsProvider.select((s) => s.metronomeEnabled),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: MuzicianTheme.glassBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: MuzicianTheme.glassBorder),
+        ),
+        child: Row(
+          children: [
+            Flexible(
+              child: _ConfigReadout(
+                label: 'KEY',
+                value: keyLabel,
+                onTap: onKeyTap,
+              ),
+            ),
+            _stripDivider(),
+            _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
+            _stripDivider(),
+            IconBtn(
+              key: const Key('songwriterPlay'),
+              icon: playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              onTap: () {
+                final t = ref.read(songwriterPlaybackProvider.notifier);
+                playing ? t.stopPlayback() : t.startPlayback();
+              },
+            ),
+            IconBtn(
+              icon: metronomeOn ? Icons.music_note : Icons.music_off,
+              onTap: () => ref
+                  .read(settingsProvider.notifier)
+                  .setMetronomeEnabled(!metronomeOn),
+            ),
+            _stripDivider(),
+            IconBtn(icon: Icons.add_box_outlined, onTap: onNewProject),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _stripDivider() =>
+      Container(width: 1, height: 24, color: MuzicianTheme.glassBorder);
+}
+
+class _ConfigReadout extends StatelessWidget {
+  const _ConfigReadout({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -188,97 +334,71 @@ void _editProjectName(BuildContext context, WidgetRef ref, String current) {
   final controller = TextEditingController(text: current);
   showDialog<void>(
     context: context,
-    builder: (dialogCtx) => AlertDialog(
-      title: const Text('Project name'),
-      content: TextField(
-        key: const Key('projectNameField'),
-        controller: controller,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Name'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogCtx),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            ref
-                .read(songwriterProvider.notifier)
-                .setProjectName(controller.text);
-            Navigator.pop(dialogCtx);
-          },
-          child: const Text('Save'),
-        ),
-      ],
-    ),
-  );
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({super.key, required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => ActionChip(
-    visualDensity: VisualDensity.compact,
-    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-    onPressed: onTap,
-  );
-}
-
-class _LockableChip extends StatelessWidget {
-  const _LockableChip({
-    required this.label,
-    required this.locked,
-    required this.onTap,
-  });
-  final String label;
-  final bool locked;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    if (!locked) return _Chip(label: label, onTap: onTap);
-    final theme = Theme.of(context);
-    return Tooltip(
-      message: 'Set in project config',
+    builder: (dialogCtx) => Dialog(
+      backgroundColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.12),
-            width: 0.5,
-          ),
-          borderRadius: BorderRadius.circular(999),
+          color: MuzicianTheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: MuzicianTheme.glassBorder),
         ),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.lock_outline,
-              size: 11,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            const Text(
+              'Project name',
+              style: TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('projectNameField'),
+              controller: controller,
+              autofocus: true,
+              style: const TextStyle(color: MuzicianTheme.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Name',
+                labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: MuzicianTheme.sky),
                 ),
               ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _GlassTextButton(
+                  label: 'Cancel',
+                  onTap: () => Navigator.pop(dialogCtx),
+                ),
+                const SizedBox(width: 12),
+                _GlassTextButton(
+                  label: 'Save',
+                  accent: true,
+                  onTap: () {
+                    ref
+                        .read(songwriterProvider.notifier)
+                        .setProjectName(controller.text);
+                    Navigator.pop(dialogCtx);
+                  },
+                ),
+              ],
             ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _TempoSheet extends StatefulWidget {
@@ -330,30 +450,133 @@ class _KeySheet extends StatelessWidget {
               scale.isEmpty
                   ? scale
                   : scale[0].toUpperCase() + scale.substring(1),
+              style: const TextStyle(
+                color: MuzicianTheme.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 6,
+              runSpacing: 6,
               children: [
                 for (var pc = 0; pc < 12; pc++)
-                  ActionChip(
-                    label: Text(chromaticNotes[pc]),
-                    onPressed: () {
+                  _GlassPill(
+                    key: ValueKey('keyPill_${scale}_$pc'),
+                    label: chromaticNotes[pc],
+                    onTap: () {
                       onPick(pc, scale);
                       Navigator.pop(context);
                     },
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ],
-          TextButton(
-            onPressed: () {
+          _GlassTextButton(
+            label: 'Clear key',
+            onTap: () {
               onClear();
               Navigator.pop(context);
             },
-            child: const Text('Clear key'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GlassPill extends StatelessWidget {
+  const _GlassPill({super.key, required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: MuzicianTheme.glassBorder),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: MuzicianTheme.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassTextButton extends StatelessWidget {
+  const _GlassTextButton({
+    required this.label,
+    required this.onTap,
+    this.accent = false,
+  });
+  final String label;
+  final VoidCallback onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: accent ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+
+
+class _MenuTile extends StatelessWidget {
+  const _MenuTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: MuzicianTheme.textSecondary),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: const TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

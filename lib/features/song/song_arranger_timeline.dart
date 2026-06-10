@@ -1,5 +1,6 @@
 library;
 
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/glass_snackbar.dart';
 import 'song_audio_actions.dart';
 import 'song_track_header.dart';
 
@@ -937,8 +939,11 @@ abstract final class SongImportPickerLauncher {
   }) async {
     final opener = _open;
     if (opener == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Import picker not yet available')),
+      showGlassSnackbar(
+        context,
+        title: 'Not available',
+        message: 'Import picker not yet available',
+        contentType: ContentType.help,
       );
       return;
     }

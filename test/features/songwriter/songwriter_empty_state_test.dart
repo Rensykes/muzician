@@ -9,7 +9,11 @@ void main() {
 
   testWidgets('empty Writer tab shows guidance', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: SongwriterScreen())),
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(body: SongwriterScreen()),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('songwriterEmptyHint')), findsOneWidget);

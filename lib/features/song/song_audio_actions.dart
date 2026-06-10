@@ -1,3 +1,4 @@
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
 import '../../store/song_audio_repository.dart';
 import '../../store/song_project_store.dart';
+import '../../ui/glass_snackbar.dart';
 import 'song_audio_recorder_sheet.dart';
 
 const int _kAudioImportMaxBytes = 50 * 1024 * 1024;
@@ -26,15 +28,21 @@ Future<void> importAudioFile(
   final path = file.path;
   if (path == null) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not access file on this platform')),
+    showGlassSnackbar(
+      context,
+      title: 'Import failed',
+      message: 'Could not access file on this platform',
+      contentType: ContentType.failure,
     );
     return;
   }
   if (file.size > _kAudioImportMaxBytes) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Audio file is larger than 50 MB')),
+    showGlassSnackbar(
+      context,
+      title: 'File too large',
+      message: 'Audio file is larger than 50 MB',
+      contentType: ContentType.failure,
     );
     return;
   }
@@ -56,9 +64,12 @@ Future<void> importAudioFile(
         );
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
+    showGlassSnackbar(
       context,
-    ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
+      title: 'Import error',
+      message: 'Import failed: $e',
+      contentType: ContentType.failure,
+    );
   }
 }
 

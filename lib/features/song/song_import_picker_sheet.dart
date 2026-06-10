@@ -7,12 +7,14 @@
 /// surface (overlap rejection → SnackBar).
 library;
 
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/save_system.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/glass_snackbar.dart';
 import '../../ui/save_tree_browser.dart';
 import 'song_arranger_timeline.dart';
 
@@ -131,13 +133,13 @@ class SongImportPickerSheet extends ConsumerWidget {
           );
       Navigator.of(context).pop();
     } on StateError {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
+      showGlassSnackbar(
+        context,
+        title: 'Overlap',
+        message:
             'Imported clip would overlap an existing one. Choose another spot.',
-          ),
-          duration: Duration(seconds: 3),
-        ),
+        contentType: ContentType.warning,
+        duration: const Duration(seconds: 3),
       );
     }
   }

@@ -2,8 +2,9 @@
 library;
 
 import 'save_system.dart';
+import 'song_project.dart';
 
-enum SongLaneKind { harmony, save }
+enum SongLaneKind { harmony, save, drum }
 
 SongLaneKind _laneKindFromName(String? raw) {
   for (final v in SongLaneKind.values) {
@@ -22,12 +23,19 @@ class SongBlock {
   // non-null when "Made Unique" — detached snapshot copy
   final InstrumentSnapshot? embedded;
 
-  // harmony-lane extras (null on save-lane blocks)
+  // harmony-lane extras (null on save / silent blocks)
   final String? chordSymbol;
   final String? chordQuality;
   final int? chordRootPc;
   final List<String> chordNotes;
   final String? romanNumeral;
+
+  // drum-lane reference into SongwriterProjectSnapshot.drumPatterns
+  final String? patternId;
+
+  // lyric-bearing fields (any harmony / silent block can carry lyrics)
+  final List<String> lyrics;
+  final bool isSilent;
 
   const SongBlock({
     required this.id,
@@ -40,6 +48,9 @@ class SongBlock {
     this.chordRootPc,
     this.chordNotes = const [],
     this.romanNumeral,
+    this.patternId,
+    this.lyrics = const [],
+    this.isSilent = false,
   });
 
   int get endBar => startBar + spanBars;
@@ -54,9 +65,13 @@ class SongBlock {
     int? chordRootPc,
     List<String>? chordNotes,
     String? romanNumeral,
+    String? patternId,
+    List<String>? lyrics,
+    bool? isSilent,
     bool clearRomanNumeral = false,
     bool clearSaveId = false,
     bool clearEmbedded = false,
+    bool clearPatternId = false,
   }) => SongBlock(
     id: id,
     startBar: startBar ?? this.startBar,
@@ -70,6 +85,9 @@ class SongBlock {
     romanNumeral: clearRomanNumeral
         ? null
         : (romanNumeral ?? this.romanNumeral),
+    patternId: clearPatternId ? null : (patternId ?? this.patternId),
+    lyrics: lyrics ?? this.lyrics,
+    isSilent: isSilent ?? this.isSilent,
   );
 
   Map<String, dynamic> toJson() => {
@@ -83,6 +101,9 @@ class SongBlock {
     'chordRootPc': chordRootPc,
     'chordNotes': chordNotes,
     'romanNumeral': romanNumeral,
+    'patternId': patternId,
+    'lyrics': lyrics,
+    'isSilent': isSilent,
   };
 
   factory SongBlock.fromJson(Map<String, dynamic> json) => SongBlock(
@@ -100,6 +121,11 @@ class SongBlock {
         (json['chordNotes'] as List?)?.map((e) => e as String).toList() ??
         const [],
     romanNumeral: json['romanNumeral'] as String?,
+    patternId: json['patternId'] as String?,
+    lyrics:
+        (json['lyrics'] as List?)?.map((e) => e as String).toList() ??
+        const [],
+    isSilent: json['isSilent'] as bool? ?? false,
   );
 }
 
@@ -210,11 +236,13 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
   final String name;
   final SongwriterConfig config;
   final List<SongSection> sections;
+  final List<DrumPattern> drumPatterns;
 
   const SongwriterProjectSnapshot({
     this.name = 'Untitled song',
     required this.config,
     this.sections = const [],
+    this.drumPatterns = const [],
   });
 
   @override
@@ -243,10 +271,12 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     String? name,
     SongwriterConfig? config,
     List<SongSection>? sections,
+    List<DrumPattern>? drumPatterns,
   }) => SongwriterProjectSnapshot(
     name: name ?? this.name,
     config: config ?? this.config,
     sections: sections ?? this.sections,
+    drumPatterns: drumPatterns ?? this.drumPatterns,
   );
 
   @override
@@ -256,6 +286,7 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     'name': name,
     'config': config.toJson(),
     'sections': sections.map((s) => s.toJson()).toList(),
+    'drumPatterns': drumPatterns.map((p) => p.toJson()).toList(),
   };
 
   factory SongwriterProjectSnapshot.fromJson(Map<String, dynamic> json) =>
@@ -269,6 +300,11 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
         sections:
             (json['sections'] as List?)
                 ?.map((s) => SongSection.fromJson(s as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        drumPatterns:
+            (json['drumPatterns'] as List?)
+                ?.map((p) => DrumPattern.fromJson(p as Map<String, dynamic>))
                 .toList() ??
             const [],
       );
