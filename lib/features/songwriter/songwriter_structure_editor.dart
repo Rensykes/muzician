@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/songwriter_store.dart';
 import 'songwriter_undo.dart';
@@ -47,6 +48,7 @@ class SongwriterStructureEditor extends ConsumerWidget {
                         final index = all.indexWhere((x) => x.id == s.id);
                         if (index < 0) return;
                         final removed = all[index];
+                        HapticFeedback.mediumImpact();
                         notifier.removeSection(s.id);
                         showUndoSnack(
                           context,

@@ -3,6 +3,7 @@
 library;
 
 import '../../models/save_system.dart';
+import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
 import 'save_system_rules.dart' show generateId;
@@ -172,6 +173,39 @@ SongBlock makeHarmonyBlock({
   chordRootPc: chordRootPc,
   chordNotes: chordNotes,
   romanNumeral: romanNumeral,
+);
+
+SongBlock makeSilentBlock({
+  required int startBar,
+  required int spanBars,
+  int verseCount = 1,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  isSilent: true,
+  lyrics: List<String>.filled(verseCount.clamp(1, 16), ''),
+);
+
+DrumPattern makeDrumPattern({String name = 'Pattern'}) => DrumPattern(
+  id: generateId(),
+  name: name,
+  lengthTicks: 16,
+  lanes: [
+    for (final id in DrumLaneId.values)
+      DrumLaneSequence(laneId: id, activeTicks: const []),
+  ],
+);
+
+SongBlock makeDrumBlock({
+  required String patternId,
+  required int startBar,
+  required int spanBars,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  patternId: patternId,
 );
 
 // ─── Expanded-Section Mapping ────────────────────────────────────────────────

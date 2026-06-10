@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  awesome_snackbar_content: ^0.1.8
   flutter_riverpod: ^2.6.1
   music_notes: ^0.11.0
   shared_preferences: ^2.3.4
