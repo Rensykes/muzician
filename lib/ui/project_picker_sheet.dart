@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
+import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
 import '../theme/muzician_theme.dart';
 import '../utils/note_utils.dart';
@@ -88,6 +89,7 @@ class ProjectPickerSheet extends ConsumerWidget {
                           .selectProject(p.id);
                       Navigator.of(context).pop();
                     },
+                    onDelete: () => _confirmDeleteProject(context, ref, p),
                   ),
                 ),
               const SizedBox(height: 4),
@@ -200,10 +202,12 @@ class _ProjectTile extends StatelessWidget {
   final SaveFolder folder;
   final bool isActive;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
   const _ProjectTile({
     required this.folder,
     required this.isActive,
     required this.onTap,
+    this.onDelete,
   });
 
   String? _subtitle() {
@@ -312,12 +316,84 @@ class _ProjectTile extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (!isDump && onDelete != null) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  tooltip: 'Delete project',
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: MuzicianTheme.red.withValues(alpha: 0.85),
+                  ),
+                  onPressed: onDelete,
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
   }
+}
+
+Future<void> _confirmDeleteProject(
+  BuildContext context,
+  WidgetRef ref,
+  SaveFolder project,
+) async {
+  final state = ref.read(saveSystemProvider);
+  final saves = getSavesInSubtree(state.folders, state.saves, project.id);
+  final folderIds = getSubtreeFolderIds(state.folders, project.id);
+  final folderCount = folderIds.length - 1;
+  final body = saves.isEmpty
+      ? 'Delete "${project.name}"? It has no saves.'
+      : 'Delete "${project.name}"?\n\n'
+          'This will permanently remove '
+          '${saves.length} save${saves.length == 1 ? '' : 's'}'
+          '${folderCount > 0 ? ' and $folderCount subfolder${folderCount == 1 ? '' : 's'}' : ''}.\n\n'
+          'This cannot be undone.';
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF141826),
+      title: const Text(
+        'Delete project?',
+        style: TextStyle(
+          color: MuzicianTheme.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: Text(
+        body,
+        style: const TextStyle(color: MuzicianTheme.textSecondary),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: MuzicianTheme.textSecondary),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text(
+            'Delete',
+            style: TextStyle(color: MuzicianTheme.red),
+          ),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  ref.read(saveSystemProvider.notifier).deleteProject(project.id);
 }
 
 class _PrimaryAction extends StatelessWidget {

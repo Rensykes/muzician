@@ -7,11 +7,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano.dart';
 import '../../schema/rules/piano_rules.dart';
+import '../../models/save_system.dart';
 import '../../store/piano_store.dart';
+import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
+import '../../ui/core/project_off_scale_dialog.dart';
 import '../../utils/note_player.dart';
+import '../../utils/note_utils.dart' as note_utils;
 
 const double _whiteKeyW = 42;
 const double _blackKeyW = 26;
@@ -233,6 +237,27 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
       return;
     }
 
+    final project = ref.read(selectedProjectProvider);
+    if (project != null && project.kind == SaveFolderKind.project) {
+      if (!mounted) return;
+      final decision = await showDialog<ProjectOffScaleDecision>(
+        context: context,
+        builder: (ctx) => ProjectOffScaleDialog(
+          projectName: project.name,
+          keyLabel: _keyLabelFor(project),
+          noteName: noteName,
+        ),
+      );
+      if (decision != ProjectOffScaleDecision.switchToDump) return;
+      final dumpId = ref
+          .read(saveSystemProvider.notifier)
+          .ensureDumpFolder();
+      ref.read(saveSystemProvider.notifier).selectProject(dumpId);
+      notifier.setHighlightedNotes([]);
+      onConfirmed();
+      return;
+    }
+
     final suppress = ref.read(settingsProvider).suppressOutOfKeyAlert;
     if (suppress) {
       notifier.setHighlightedNotes([]);
@@ -251,6 +276,14 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     }
     notifier.setHighlightedNotes([]);
     onConfirmed();
+  }
+
+  String _keyLabelFor(SaveFolder project) {
+    final cfg = project.projectConfig;
+    if (cfg?.keyRootPc == null) return 'the project key';
+    final root = note_utils.chromaticNotes[cfg!.keyRootPc!];
+    final scale = cfg.keyScaleName ?? '';
+    return '$root $scale'.trim();
   }
 }
 
