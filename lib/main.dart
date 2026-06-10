@@ -13,6 +13,8 @@ import 'features/song/song_screen.dart';
 import 'features/songwriter/songwriter_feature.dart';
 import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
 import 'models/piano.dart' show PianoViewMode;
+import 'models/save_system.dart';
+import 'utils/note_utils.dart' show chromaticNotes;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/project_config_sync.dart';
@@ -337,6 +339,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
     final activeScale = ref.watch(activeScaleProvider);
     final activeChord = ref.watch(activeChordProvider);
     final chordCommitted = ref.watch(fretboardChordCommittedProvider);
+    final scaleInfo = _resolveScaleDockState(ref, activeScale);
 
     return InstrumentScreen(
       binding: fretboardBinding,
@@ -391,7 +394,8 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       emptySubtitle:
           'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('fret-detect'),
-      scaleHasValue: activeScale != null,
+      scaleHasValue: scaleInfo.hasValue,
+      scaleLabel: scaleInfo.label,
       chordHasValue: activeChord != null || chordCommitted,
       onScalePanelRequested: () => showWidgetSheet(
         context: context,
@@ -506,10 +510,10 @@ class _PianoScreen extends ConsumerStatefulWidget {
 class _PianoScreenState extends ConsumerState<_PianoScreen> {
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(pianoProvider);
     final activeScale = ref.watch(pianoActiveScaleProvider);
     final activeChord = ref.watch(pianoActiveChordProvider);
     final chordCommitted = ref.watch(pianoChordCommittedProvider);
+    final scaleInfo = _resolveScaleDockState(ref, activeScale);
 
     return InstrumentScreen(
       binding: pianoBinding,
@@ -553,7 +557,8 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
       emptySubtitle:
           'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('piano-detect'),
-      scaleHasValue: activeScale != null,
+      scaleHasValue: scaleInfo.hasValue,
+      scaleLabel: scaleInfo.label,
       chordHasValue: activeChord != null || chordCommitted,
       onScalePanelRequested: () => showWidgetSheet(
         context: context,
@@ -806,4 +811,31 @@ class _SettingsScreen extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Combines the user-set active scale (`activeScale*Provider`) and the active
+/// project's locked key into the dock-tab label + accent state.
+///
+/// Priority: project key wins when a project is active and has a key set;
+/// otherwise the user-set active scale; otherwise the default "Scale" label
+/// with no accent.
+({bool hasValue, String label}) _resolveScaleDockState(
+  WidgetRef ref,
+  ({String root, String scaleName})? activeScale,
+) {
+  final project = ref.watch(selectedProjectProvider);
+  if (project != null && project.kind == SaveFolderKind.project) {
+    final cfg = project.projectConfig;
+    if (cfg?.keyRootPc != null && cfg!.keyScaleName != null) {
+      final root = chromaticNotes[cfg.keyRootPc!];
+      return (hasValue: true, label: '$root ${cfg.keyScaleName}');
+    }
+  }
+  if (activeScale != null) {
+    return (
+      hasValue: true,
+      label: '${activeScale.root} ${activeScale.scaleName}',
+    );
+  }
+  return (hasValue: false, label: 'Scale');
 }
