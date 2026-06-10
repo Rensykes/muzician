@@ -17,7 +17,6 @@ import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
-import 'store/songwriter_store.dart';
 import 'store/song_sessions_store.dart';
 import 'store/songwriter_sessions_store.dart';
 import 'ui/project_chip.dart';
@@ -86,9 +85,17 @@ class _AppShellState extends ConsumerState<_AppShell> {
       await ref.read(songSessionsProvider.notifier).hydrate();
       await ref.read(songwriterSessionsProvider.notifier).hydrate();
       await NotePlayer.instance.init();
-      final selected = ref.read(saveSystemProvider).selectedProjectId;
-      if (selected != null) {
-        ref.read(saveSystemProvider.notifier).selectProject(selected);
+      final notifier = ref.read(saveSystemProvider.notifier);
+      var selected = ref.read(saveSystemProvider).selectedProjectId;
+      if (selected == null) {
+        // First launch (or selection cleared): default to Dump so the user can
+        // create saves freely on Fretboard / Piano / Roll without being forced
+        // through a project-creation modal. Song / Songwriter still prompt
+        // when entered because Dump is not a real project.
+        selected = notifier.ensureDumpFolder();
+        notifier.selectProject(selected);
+      } else {
+        notifier.selectProject(selected);
       }
     });
   }

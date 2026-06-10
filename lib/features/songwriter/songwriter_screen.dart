@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/save_system.dart';
-import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/project_chip.dart';
-import '../../ui/project_gate_modal.dart';
 import 'songwriter_header.dart';
 import 'songwriter_save_panel.dart';
 import 'songwriter_section_card.dart';
@@ -32,14 +29,6 @@ class SongwriterScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(selectedProjectProvider);
-    if (selected == null || selected.kind == SaveFolderKind.dump) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        ProjectGateModal.show(context, allowDump: false, allowCancel: false);
-      });
-    }
-
     final notifier = ref.watch(songwriterProvider.notifier);
     final project = ref.watch(songwriterProvider);
     return Scaffold(

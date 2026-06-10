@@ -584,27 +584,6 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     }
   }
 
-  /// Returns the id of the project's top-level folder, or null when it does
-  /// not exist. Does NOT create the folder. Used by read-only callers.
-  String? _findProjectFolderId() {
-    final name = state.name.trim();
-    if (name.isEmpty) return null;
-    for (final f in ref.read(saveSystemProvider).folders) {
-      if (f.parentId == null && f.name == name) return f.id;
-    }
-    return null;
-  }
-
-  /// Returns the id of the project's top-level folder, creating it if missing.
-  /// Used by accept flows that need to write a SaveEntry.
-  String? _findOrCreateProjectFolderId(SaveSystemNotifier saves) {
-    final existing = _findProjectFolderId();
-    if (existing != null) return existing;
-    final name = state.name.trim();
-    if (name.isEmpty) return null;
-    return saves.createSaveFolder(name, null);
-  }
-
   void _renameProjectFolderIfExists(String oldName, String newName) {
     final trimmedOld = oldName.trim();
     if (trimmedOld.isEmpty || trimmedOld == newName) return;

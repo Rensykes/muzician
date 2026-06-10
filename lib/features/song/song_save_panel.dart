@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../store/save_system_store.dart';
 import '../../store/song_project_store.dart';
+import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 
 class SongSavePanel extends ConsumerWidget {
@@ -14,7 +15,10 @@ class SongSavePanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(selectedProjectProvider);
     if (selected == null || selected.kind == SaveFolderKind.dump) {
-      return const _SongRequiresProjectPlaceholder();
+      return const ProjectRequiredPlaceholder(
+        message: 'Song needs a real project.\nDump is not allowed here.',
+        allowDump: false,
+      );
     }
     return SaveBrowserPanel(
       rootFolderId: selected.id,
@@ -26,27 +30,6 @@ class SongSavePanel extends ConsumerWidget {
           ref.read(songProjectProvider.notifier).loadProject(snap.project);
         }
       },
-    );
-  }
-}
-
-class _SongRequiresProjectPlaceholder extends StatelessWidget {
-  const _SongRequiresProjectPlaceholder();
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Select a project to save / load songs',
-              style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () { /* wired in Task 16 */ },
-            child: const Text('Choose project'),
-          ),
-        ],
-      ),
     );
   }
 }

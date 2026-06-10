@@ -9,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/piano_roll.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
-import '../models/song_project.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../utils/note_utils.dart';
