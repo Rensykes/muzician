@@ -12,7 +12,16 @@ class OutOfKeyResult {
 }
 
 class OutOfKeyDialog extends StatefulWidget {
-  const OutOfKeyDialog({super.key});
+  final String title;
+  final String message;
+  final bool showSuppressOption;
+  const OutOfKeyDialog({
+    super.key,
+    this.title = 'Outside the key',
+    this.message =
+        'This note is outside the highlighted scale. Adding it will clear the scale highlight.',
+    this.showSuppressOption = true,
+  });
 
   @override
   State<OutOfKeyDialog> createState() => _OutOfKeyDialogState();
@@ -26,9 +35,9 @@ class _OutOfKeyDialogState extends State<OutOfKeyDialog> {
     return AlertDialog(
       backgroundColor: const Color(0xFF1E293B),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'Outside the key',
-        style: TextStyle(
+      title: Text(
+        widget.title,
+        style: const TextStyle(
           color: Color(0xFFE2E8F0),
           fontSize: 16,
           fontWeight: FontWeight.w700,
@@ -38,46 +47,48 @@ class _OutOfKeyDialogState extends State<OutOfKeyDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'This note is outside the highlighted scale. Adding it will clear the scale highlight.',
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+          Text(
+            widget.message,
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
           ),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () => setState(() => _suppress = !_suppress),
-            child: Row(
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    color: _suppress
-                        ? MuzicianTheme.sky.withValues(alpha: 0.2)
-                        : Colors.white.withValues(alpha: 0.04),
-                    border: Border.all(
+          if (widget.showSuppressOption) ...[
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => setState(() => _suppress = !_suppress),
+              child: Row(
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
                       color: _suppress
-                          ? MuzicianTheme.sky
-                          : Colors.white.withValues(alpha: 0.2),
-                      width: 1,
+                          ? MuzicianTheme.sky.withValues(alpha: 0.2)
+                          : Colors.white.withValues(alpha: 0.04),
+                      border: Border.all(
+                        color: _suppress
+                            ? MuzicianTheme.sky
+                            : Colors.white.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
                     ),
+                    child: _suppress
+                        ? const Icon(
+                            Icons.check,
+                            size: 12,
+                            color: MuzicianTheme.sky,
+                          )
+                        : null,
                   ),
-                  child: _suppress
-                      ? const Icon(
-                          Icons.check,
-                          size: 12,
-                          color: MuzicianTheme.sky,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  "Don't show this again",
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Don't show this again",
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
       actions: [

@@ -33,6 +33,10 @@ class InstrumentScreen extends ConsumerWidget {
   final bool scaleHasValue;
   final bool chordHasValue;
 
+  /// True when the active chord conflicts with the locked-in project key.
+  /// Drives the warning overlay on the Scale dock tab.
+  final bool scaleOffKey;
+
   /// Label shown on the Scale dock tab. Defaults to `'Scale'`. Callers pass
   /// the active key's name (e.g. `'C major'`) when a project key is set so
   /// the user sees the locked-in scale at a glance.
@@ -56,6 +60,7 @@ class InstrumentScreen extends ConsumerWidget {
     required this.chordHasValue,
     required this.detectionKey,
     this.scaleLabel = 'Scale',
+    this.scaleOffKey = false,
     this.modeSegment,
   });
 
@@ -124,6 +129,7 @@ class InstrumentScreen extends ConsumerWidget {
                   label: scaleLabel,
                   color: MuzicianTheme.emerald,
                   hasValue: scaleHasValue,
+                  warning: scaleOffKey,
                   onTap: onScalePanelRequested,
                 ),
                 DockTab(

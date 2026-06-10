@@ -155,6 +155,98 @@ List<String> getChordNotes(String root, String quality) {
   return intervals.map((i) => chromaticNotes[(rootIdx + i) % 12]).toList();
 }
 
+/// A diatonic chord built on a degree of a scale: the canonical sharp [root],
+/// the [quality] symbol used elsewhere in this file, and the [degree] (1-based,
+/// shown as 'I', 'ii', etc. by callers).
+class DiatonicChord {
+  final int degree;
+  final String root;
+  final String quality;
+  final String romanNumeral;
+  const DiatonicChord({
+    required this.degree,
+    required this.root,
+    required this.quality,
+    required this.romanNumeral,
+  });
+}
+
+const _kRomanUpper = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+String _romanFor(int degree, String quality) {
+  final base = _kRomanUpper[degree - 1];
+  final isMinor = quality == 'm' || quality == 'm7' || quality == 'm7b5';
+  final stem = isMinor ? base.toLowerCase() : base;
+  if (quality == 'dim' || quality == 'm7b5' || quality == 'dim7') return '$stem°';
+  if (quality == 'aug') return '$stem+';
+  return stem;
+}
+
+String _qualityFromTriad(int third, int fifth) {
+  // third + fifth are semitone counts above the root (e.g. major triad = 4,7).
+  if (third == 4 && fifth == 7) return '';
+  if (third == 3 && fifth == 7) return 'm';
+  if (third == 3 && fifth == 6) return 'dim';
+  if (third == 4 && fifth == 8) return 'aug';
+  return ''; // fallback to maj
+}
+
+/// Returns the pitch classes from [chordNotes] that are not in the scale
+/// built on [scaleRoot] with [scaleName]. Returns an empty list when no key
+/// is given or the inputs are unknown.
+List<String> chordPitchClassesOutOfKey(
+  List<String> chordNotes, {
+  required String? scaleRoot,
+  required String? scaleName,
+}) {
+  if (scaleRoot == null || scaleName == null) return const [];
+  final scalePcs = getScaleNotes(scaleRoot, scaleName).toSet();
+  if (scalePcs.isEmpty) return const [];
+  return chordNotes.where((n) => !scalePcs.contains(n)).toList();
+}
+
+/// Returns the seven diatonic triads for [scaleName] starting on [root].
+///
+/// Returns an empty list when the scale has fewer than 7 notes (pentatonic,
+/// blues, whole-tone, diminished) or the inputs are unknown.
+List<DiatonicChord> getDiatonicChords(String root, String scaleName) {
+  final rootIdx = chromaticNotes.indexOf(root);
+  if (rootIdx < 0) return const [];
+  final intervals = scaleIntervals[scaleName];
+  if (intervals == null || intervals.length != 7) return const [];
+
+  final pcSet = intervals.map((i) => (rootIdx + i) % 12).toSet();
+  final out = <DiatonicChord>[];
+  for (int deg = 0; deg < 7; deg++) {
+    final rootPc = (rootIdx + intervals[deg]) % 12;
+    // Walk up by scale steps to find third + fifth (stack thirds in scale).
+    int? thirdSemi;
+    int? fifthSemi;
+    for (int step = 1; step < 7; step++) {
+      final pc = (rootIdx + intervals[(deg + step) % 7]) % 12;
+      if (!pcSet.contains(pc)) continue;
+      final semi = (pc - rootPc + 12) % 12;
+      if (step == 2) thirdSemi = semi;
+      if (step == 4) {
+        fifthSemi = semi;
+        break;
+      }
+    }
+    if (thirdSemi == null || fifthSemi == null) continue;
+    final quality = _qualityFromTriad(thirdSemi, fifthSemi);
+    final chordRoot = chromaticNotes[rootPc];
+    out.add(
+      DiatonicChord(
+        degree: deg + 1,
+        root: chordRoot,
+        quality: quality,
+        romanNumeral: _romanFor(deg + 1, quality),
+      ),
+    );
+  }
+  return out;
+}
+
 // ─── Detection helpers ────────────────────────────────────────────────────────
 
 int _compareChordResults(ChordDetectionResult a, ChordDetectionResult b) {
