@@ -340,6 +340,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
     final activeChord = ref.watch(activeChordProvider);
     final chordCommitted = ref.watch(fretboardChordCommittedProvider);
     final scaleInfo = _resolveScaleDockState(ref, activeScale);
+    final chordOffKey = ref.watch(fretboardBinding.chordOffKey);
 
     return InstrumentScreen(
       binding: fretboardBinding,
@@ -396,6 +397,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       detectionKey: const ValueKey('fret-detect'),
       scaleHasValue: scaleInfo.hasValue,
       scaleLabel: scaleInfo.label,
+      scaleOffKey: chordOffKey,
       chordHasValue: activeChord != null || chordCommitted,
       onScalePanelRequested: () => showWidgetSheet(
         context: context,
@@ -514,6 +516,7 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
     final activeChord = ref.watch(pianoActiveChordProvider);
     final chordCommitted = ref.watch(pianoChordCommittedProvider);
     final scaleInfo = _resolveScaleDockState(ref, activeScale);
+    final chordOffKey = ref.watch(pianoBinding.chordOffKey);
 
     return InstrumentScreen(
       binding: pianoBinding,
@@ -559,6 +562,7 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
       detectionKey: const ValueKey('piano-detect'),
       scaleHasValue: scaleInfo.hasValue,
       scaleLabel: scaleInfo.label,
+      scaleOffKey: chordOffKey,
       chordHasValue: activeChord != null || chordCommitted,
       onScalePanelRequested: () => showWidgetSheet(
         context: context,

@@ -120,6 +120,118 @@ class RootPillRow extends StatelessWidget {
   }
 }
 
+/// Horizontal row of diatonic chord chips for the active key. Renders one
+/// chip per scale degree (Roman numeral + chord symbol) and reports taps
+/// back as `(root, quality)` so the picker can populate itself.
+class DiatonicChordsRow extends StatelessWidget {
+  final List<DiatonicChord> chords;
+  final String? selectedRoot;
+  final String selectedQuality;
+  final Color accent;
+  final void Function(String root, String quality) onTap;
+  final EdgeInsetsGeometry padding;
+  const DiatonicChordsRow({
+    super.key,
+    required this.chords,
+    required this.selectedRoot,
+    required this.selectedQuality,
+    required this.accent,
+    required this.onTap,
+    this.padding = EdgeInsets.zero,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: padding,
+        itemCount: chords.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (_, i) {
+          final c = chords[i];
+          final active = selectedRoot == c.root && selectedQuality == c.quality;
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onTap(c.root, c.quality);
+            },
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: active
+                    ? accent.withValues(alpha: 0.18)
+                    : MuzicianTheme.emerald.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: active
+                      ? accent.withValues(alpha: 0.5)
+                      : MuzicianTheme.emerald.withValues(alpha: 0.25),
+                  width: 0.5,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    c.romanNumeral,
+                    style: TextStyle(
+                      color: active ? accent : MuzicianTheme.emerald,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    '${formatRootChoiceLabel(c.root)}${c.quality}',
+                    style: TextStyle(
+                      color: active ? accent : const Color(0xFFE2E8F0),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Header label shown above the [DiatonicChordsRow], e.g. `"DIATONIC · C major"`.
+class DiatonicChordsHeader extends StatelessWidget {
+  final String keyLabel;
+  const DiatonicChordsHeader({super.key, required this.keyLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          Icons.stacked_line_chart,
+          size: 12,
+          color: MuzicianTheme.emerald.withValues(alpha: 0.9),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'DIATONIC · ${keyLabel.toUpperCase()}',
+          style: TextStyle(
+            color: MuzicianTheme.emerald.withValues(alpha: 0.9),
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Horizontal row of chord-quality pills.
 class QualityPillRow extends StatelessWidget {
   final List<(String symbol, String label)> qualities;

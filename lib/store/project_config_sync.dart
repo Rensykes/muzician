@@ -18,6 +18,22 @@ import '../store/song_project_store.dart';
 import '../store/songwriter_store.dart';
 import '../utils/note_utils.dart';
 
+/// Returns the active project's key (`root` pitch-class name, `scaleName`)
+/// when the selected save folder is a project with a key configured.
+///
+/// Returns `null` outside a project context or when no key has been set.
+final activeProjectKeyProvider =
+    Provider<({String root, String scaleName})?>((ref) {
+      final folder = ref.watch(selectedProjectProvider);
+      if (folder == null || folder.kind != SaveFolderKind.project) return null;
+      final cfg = folder.projectConfig;
+      if (cfg == null) return null;
+      final rootPc = cfg.keyRootPc;
+      final scaleName = cfg.keyScaleName;
+      if (rootPc == null || scaleName == null) return null;
+      return (root: chromaticNotes[rootPc], scaleName: scaleName);
+    });
+
 /// Mount once on app start (read it from `main.dart`). The provider has no
 /// state — its body wires the listeners.
 final projectConfigSyncProvider = Provider<void>((ref) {

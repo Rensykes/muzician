@@ -80,6 +80,10 @@ class InstrumentBinding extends ScalePickerBinding {
   final StateProvider<int> manualEdit;
   final StateProvider<bool> chordCommitted;
 
+  /// True when the committed chord contains pitch classes outside the
+  /// active project key. Drives the off-key indicator on the Scale dock tab.
+  final ProviderListenable<bool> chordOffKey;
+
   const InstrumentBinding({
     required super.selectedPitchClasses,
     required super.highlightedNotes,
@@ -93,6 +97,7 @@ class InstrumentBinding extends ScalePickerBinding {
     required this.activeChord,
     required this.manualEdit,
     required this.chordCommitted,
+    required this.chordOffKey,
   }) : selectionActions = actions,
        super(actions: actions);
 

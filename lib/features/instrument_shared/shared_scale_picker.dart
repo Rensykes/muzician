@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmonic_analysis.dart';
+import '../../store/project_config_sync.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../utils/note_utils.dart';
@@ -43,7 +44,16 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
   Widget build(BuildContext context) {
     final highlightedNotes = ref.watch(widget.binding.highlightedNotes);
     final pendingScale = ref.watch(widget.binding.pendingScale);
-    final activeScale = ref.watch(widget.binding.activeScale);
+    final activeScaleRaw = ref.watch(widget.binding.activeScale);
+    final projectKey = ref.watch(activeProjectKeyProvider);
+    final activeScale = activeScaleRaw ?? projectKey;
+    final isProjectLocked = projectKey != null;
+
+    // Re-run initial sync when the project key changes (e.g. user switched
+    // projects between sheet opens), so the pills reflect the new locked key.
+    ref.listen(activeProjectKeyProvider, (_, _) {
+      _initialSyncDone = false;
+    });
 
     // Restore from committed active state once per widget lifecycle.
     if (!_initialSyncDone && activeScale != null && pendingScale == null) {
@@ -172,38 +182,50 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () {
-                          HapticFeedback.mediumImpact();
-                          setState(() {
-                            _selectedRoot = null;
-                            _selectedScale = null;
-                            _initialSyncDone = false;
-                          });
-                          widget.binding.actions(ref).setHighlightedNotes([]);
-                          ref.read(widget.binding.activeScale.notifier).state =
-                              null;
-                        },
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: MuzicianTheme.emerald.withValues(alpha: 0.2),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              '✕',
-                              style: TextStyle(
-                                color: MuzicianTheme.emerald,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
+                      if (isProjectLocked) ...[
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.lock_outline_rounded,
+                          size: 12,
+                          color: MuzicianTheme.emerald,
+                        ),
+                      ] else ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.mediumImpact();
+                            setState(() {
+                              _selectedRoot = null;
+                              _selectedScale = null;
+                              _initialSyncDone = false;
+                            });
+                            widget.binding.actions(ref).setHighlightedNotes([]);
+                            ref
+                                .read(widget.binding.activeScale.notifier)
+                                .state = null;
+                          },
+                          child: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: MuzicianTheme.emerald.withValues(
+                                alpha: 0.2,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                '✕',
+                                style: TextStyle(
+                                  color: MuzicianTheme.emerald,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 )
