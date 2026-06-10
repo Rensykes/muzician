@@ -653,7 +653,19 @@ Rendered as a modal bottom sheet at 88 % of screen height with a drag handle.
 When a project is selected, the instrument inherits its key / tempo /
 time-signature (where applicable) and the corresponding controls are disabled.
 Change the values through the project config sheet from the project chip in
-the header. Dump and "no project" leave controls free.
+the header (`ProjectChip` shown in `PianoRollScreenV2`). Dump and "no
+project" leave controls free.
+
+**Scale dock / key resolution:** The piano roll's header shows a `ProjectChip`
+when a project is active. The `projectConfigSyncProvider` pushes the project
+key into the `highlightedNotes` pitch-class list so the grid reflects the
+locked-in scale automatically.
+
+**Key-aware detection:** When a column is selected, the detection panel
+(`PianoRollDetectionPanel`) benefits from the project key context. The
+project scale is pushed into `highlightedNotes` via
+`projectConfigSyncProvider`, so note/chord/scale detection works against the
+project's tonal centre.
 
 ## Standalone Roll vs. Song Note Editor
 

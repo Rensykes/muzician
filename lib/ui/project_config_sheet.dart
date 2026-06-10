@@ -34,6 +34,7 @@ class ProjectConfigSheet extends ConsumerStatefulWidget {
 
 class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
   late ProjectConfig _draft;
+  late TextEditingController _nameCtrl;
   late TextEditingController _tempoCtrl;
 
   @override
@@ -44,18 +45,25 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
         .folders
         .firstWhere((f) => f.id == widget.projectId);
     _draft = folder.projectConfig ?? const ProjectConfig();
+    _nameCtrl = TextEditingController(text: folder.name);
     _tempoCtrl = TextEditingController(text: _draft.tempo.toString());
   }
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
     _tempoCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
+    final notifier = ref.read(saveSystemProvider.notifier);
     final state = ref.read(saveSystemProvider);
     final folder = state.folders.firstWhere((f) => f.id == widget.projectId);
+    final name = _nameCtrl.text.trim();
+    if (name.isNotEmpty && name != folder.name) {
+      notifier.renameProject(widget.projectId, name);
+    }
     final current = folder.projectConfig ?? const ProjectConfig();
     final changed = current.tempo != _draft.tempo ||
         current.beatsPerBar != _draft.beatsPerBar ||
@@ -105,9 +113,7 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
       ),
     );
     if (confirm != true) return;
-    await ref
-        .read(saveSystemProvider.notifier)
-        .applyProjectConfig(widget.projectId, _draft, retrofit: true);
+    await notifier.applyProjectConfig(widget.projectId, _draft, retrofit: true);
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -144,15 +150,28 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
                 ),
               ),
               const SizedBox(height: 14),
-              Text(
-                folder.name,
-                style: const TextStyle(
-                  color: MuzicianTheme.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
+              _Section(
+                label: 'NAME',
+                child: TextField(
+                  controller: _nameCtrl,
+                  style: const TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: MuzicianTheme.textDim),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: MuzicianTheme.sky),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 14),
               const Text(
                 'PROJECT CONFIG',
                 style: TextStyle(

@@ -49,17 +49,24 @@ A saved project contains:
 
 ### Session auto-save
 
-In addition to the named save browser, the active Song workspace is
-auto-persisted to a single `SharedPreferences` slot (`@muzician/song_session/v1`)
-~500 ms after every mutation and restored on the next app launch.  This slot is
-overwritten — not appended — so it is a "last session" snapshot, not a save
-history.
+The active Song workspace is auto-persisted per project through
+`SongSessionsNotifier` (`lib/store/song_sessions_store.dart`), which stores a
+`Map<String, SongProject>` keyed by project ID in a single `SharedPreferences`
+slot (`@muzician/song_sessions/v1`).  Every mutation in `SongProjectNotifier`
+triggers a debounced (~500 ms) write of the map so the last session for every
+project is always saved.
 
-Tap the **New Song** button in the Song header to wipe the current session and
-start fresh.  A confirmation dialog protects against accidental overwrites; on
-confirm, the persisted blob is removed, the project is reset to its default
-empty state, and audio assets referenced only by the prior session are
-reconciled out of `appDocs/song_audio/`.
+`songProjectProvider` (`lib/store/song_project_store.dart`) watches
+`selectedProjectId` changes.  When the project changes, the current session is
+persisted under the previous project ID, and the session for the new project ID
+is loaded from the map (falling back to a default project seeded from the
+project's `ProjectConfig` if no session exists).  On app start,
+`songSessionsProvider.hydrate()` restores the full map from shared preferences.
+
+Tap the **New Song** button in the Song header to load
+`getDefaultSongProject()` into the current project's session slot.  A
+confirmation dialog protects against accidental overwrites; on confirm, the
+current project's session slot is replaced with the default empty song.
 
 ## Audio Playback Sink
 
@@ -93,10 +100,14 @@ Audio tracks host clips from microphone recordings or imported files.
 
 ## Project lock
 
-When a project is selected, the Song workspace inherits its tempo and time
-signature from `ProjectConfig` and the scale chip is disabled. Change the
-values through the project config sheet from the project chip in the header.
-Dump and "no project" leave controls free.
+When a project folder is selected (`isProjectLockedProvider`), the Song
+workspace inherits tempo and time signature from the project's `ProjectConfig`
+via `projectConfigSyncProvider` (`lib/store/project_config_sync.dart`), which
+also pushes the project key/scale into the Song store.  The scale chip is
+hidden and a `ProjectChip` widget is shown in the Song header next to the New
+Song / Add Track buttons.  Change project values through the project config
+sheet accessed from the project chip.  Dump and "no project" leave the scale
+chip visible and controls free.
 
 ## Limitations (v1)
 

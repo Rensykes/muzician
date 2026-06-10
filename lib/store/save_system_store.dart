@@ -386,22 +386,9 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     final idx = siblings.indexWhere((f) => f.id == id);
     if (idx <= 0) return;
     final swapped = List<SaveFolder>.of(siblings);
-    swapped[idx - 1] = SaveFolder(
-      id: siblings[idx].id,
-      name: siblings[idx].name,
-      parentId: siblings[idx].parentId,
-      createdAt: siblings[idx].createdAt,
-      order: idx - 1,
-      progressionMeta: siblings[idx].progressionMeta,
-    );
-    swapped[idx] = SaveFolder(
-      id: siblings[idx - 1].id,
-      name: siblings[idx - 1].name,
-      parentId: siblings[idx - 1].parentId,
-      createdAt: siblings[idx - 1].createdAt,
-      order: idx,
-      progressionMeta: siblings[idx - 1].progressionMeta,
-    );
+    final prev = swapped[idx - 1];
+    swapped[idx - 1] = swapped[idx].copyWith(order: idx - 1);
+    swapped[idx] = prev.copyWith(order: idx);
     state = state.copyWith(
       folders: [
         ...state.folders.where((f) => f.parentId != folder.parentId),
@@ -418,22 +405,9 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     final idx = siblings.indexWhere((f) => f.id == id);
     if (idx >= siblings.length - 1) return;
     final swapped = List<SaveFolder>.of(siblings);
-    swapped[idx + 1] = SaveFolder(
-      id: siblings[idx].id,
-      name: siblings[idx].name,
-      parentId: siblings[idx].parentId,
-      createdAt: siblings[idx].createdAt,
-      order: idx + 1,
-      progressionMeta: siblings[idx].progressionMeta,
-    );
-    swapped[idx] = SaveFolder(
-      id: siblings[idx + 1].id,
-      name: siblings[idx + 1].name,
-      parentId: siblings[idx + 1].parentId,
-      createdAt: siblings[idx + 1].createdAt,
-      order: idx,
-      progressionMeta: siblings[idx + 1].progressionMeta,
-    );
+    final next = swapped[idx + 1];
+    swapped[idx + 1] = swapped[idx].copyWith(order: idx + 1);
+    swapped[idx] = next.copyWith(order: idx);
     state = state.copyWith(
       folders: [
         ...state.folders.where((f) => f.parentId != folder.parentId),

@@ -497,6 +497,7 @@ class SaveFolder {
 
   SaveFolder copyWith({
     String? name,
+    int? order,
     SaveFolderKind? kind,
     ProjectConfig? projectConfig,
     bool clearProjectConfig = false,
@@ -505,7 +506,7 @@ class SaveFolder {
         name: name ?? this.name,
         parentId: parentId,
         createdAt: createdAt,
-        order: order,
+        order: order ?? this.order,
         progressionMeta: progressionMeta,
         kind: kind ?? this.kind,
         projectConfig: clearProjectConfig ? null : (projectConfig ?? this.projectConfig),
