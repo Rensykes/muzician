@@ -51,31 +51,48 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 
 | Method | Description |
 |---|---|
-| `hydrate()` | Restore the auto-saved session. |
-| `newProject()` | Reset to empty + clear the session slot. |
+| `newProject()` | Reset to empty + clear the session slot for the active project. |
 | `setKey(root, scaleName)` / `setTempo(tempo)` | Config edits; `setKey` recomputes harmony-lane Roman numerals. |
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
 | `makeBlockUnique(...)` | Detach a block from its live save by embedding a snapshot. |
 | `loadProject(project)` | Replace the whole project (named-save load). |
 
+The notifier no longer exposes a public `hydrate()`. Instead, `build()` listens
+to `saveSystemProvider.selectedProjectId` changes. When the project changes the
+outgoing session is immediately persisted via `songwriterSessionsProvider.put`
+and the incoming session is loaded via `.get`. If no session exists for the new
+project, `_defaultFor(next)` creates one seeded from the folder's
+`ProjectConfig`.
+
 ### Session auto-save
 
-The active project auto-persists to `@muzician/songwriter_session/v1` ~500 ms after
-each mutation (debounced; state captured at schedule time) and restores on launch. This
-slot is separate from the Song tab's `@muzician/song_session/v1` and is overwritten,
-not appended.
+Sessions live in `@muzician/songwriter_sessions/v1` — a per-project map of
+`Map<String, SongwriterProjectSnapshot>` keyed by project ID, debounced ~500 ms
+(state captured at schedule time). On project switch the outgoing session is
+persisted immediately and the incoming session is loaded from the map (or
+seeded via `_defaultFor` when no session exists yet); leaving the project
+clears to empty.
 
 ## Save / Load
 
-Songwriter projects also save as a `SaveEntry` (`InstrumentSnapshot` filter
-`'songwriter'`) through the shared save browser, alongside fretboard / piano /
-piano-roll / song saves.
+Songwriter projects save as a `SaveEntry` (`InstrumentSnapshot` filter
+`'songwriter'`) through the shared `SaveBrowserPanel`. The panel is scoped to
+the selected project's folder via `rootFolderId: selected.id`, keeping the
+save/load view confined to the project subtree. `songwriterCaptureForTest`
+exposes the current snapshot for widget tests.
 
 ## Project Config
 
-Songwriter now uses `SaveSystemState.selectedProjectId` instead of the old
+Songwriter uses `SaveSystemState.selectedProjectId` instead of the old
 folder-name convention. When a real project is selected (kind `project`),
 tempo and key chips in the header are locked; edit them through the project
 config sheet. Dump is rejected — `ProjectGateModal` blocks the tab until a
-project is selected. Library-match scope is
-`getSavesInSubtree(folders, saves, selectedProjectId)`.
+project is selected.
+
+`projectConfigSyncProvider` (`lib/store/project_config_sync.dart`) pushes the
+active project's tempo and key into the songwriter store whenever a project is
+selected or its config changes. When loading a project that has no session yet,
+`_defaultFor` seeds a new `SongwriterProjectSnapshot` from the project folder's
+`ProjectConfig` (name, tempo, beatsPerBar, beatUnit, keyRoot, keyScaleName).
+
+Library-match scope is `getSavesInSubtree(folders, saves, selectedProjectId)`.

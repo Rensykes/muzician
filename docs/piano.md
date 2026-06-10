@@ -166,3 +166,26 @@ When a project is selected, the instrument inherits its key / tempo /
 time-signature (where applicable) and the corresponding controls are disabled.
 Change the values through the project config sheet from the project chip in
 the header. Dump and "no project" leave controls free.
+
+**Scale dock label:** The Scale dock tab shows the active project key (e.g.
+"C major") as its label when the selected project has a key configured. When
+no project key is active, the label falls back to the user-selected active
+scale (set via `SharedScalePicker`), and to the default `"Scale"` when
+neither is present. See `_resolveScaleDockState()` in `lib/main.dart`.
+
+**chordOffKey warning:** When the committed chord contains notes outside the
+active project key, the Scale dock tab turns orange and shows a warning icon.
+This is driven by `InstrumentBinding.chordOffKey`, computed by
+`pianoChordOffKeyProvider` in `lib/store/piano_store.dart`. The flag is
+passed as `scaleOffKey` to `InstrumentScreen` → `DockTab.warning`.
+
+**Shared scale picker:** The scale picker (`SharedScalePicker` in
+`lib/features/instrument_shared/shared_scale_picker.dart`) reads
+`activeProjectKeyProvider` and merges it with the user-set active scale. The
+active-scale chip turns orange when the committed chord is off-key and the
+project is locked (`chordOffKey && isProjectLocked`).
+
+**Chord picker header:** The shared chord picker parts in
+`lib/features/instrument_shared/chord_picker_parts.dart` provide
+`ChordPickerHeader` — a reusable header row showing the active chord as a
+badge. Used by both the Fretboard and Piano chord pickers.
