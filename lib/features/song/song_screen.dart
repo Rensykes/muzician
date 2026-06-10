@@ -7,15 +7,13 @@ import '../../models/piano_roll.dart' show TimeSignature;
 import '../../models/song_playback.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
+import '../../store/save_system_store.dart';
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/project_chip.dart';
 import '../../ui/transport_strip.dart' as transport;
-import '../../models/save_system.dart';
-import '../../store/save_system_store.dart';
-import '../../ui/project_gate_modal.dart';
 import '../../utils/note_utils.dart' as note_utils;
 import '../_mockup_shell.dart' show showWidgetSheet, showPickerSheet;
 import 'song_arranger_timeline.dart';
@@ -39,14 +37,6 @@ class _SongScreenState extends ConsumerState<SongScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selected = ref.watch(selectedProjectProvider);
-    if (selected == null || selected.kind == SaveFolderKind.dump) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        ProjectGateModal.show(context, allowDump: false, allowCancel: false);
-      });
-    }
-
     final project = ref.watch(songProjectProvider);
     final playback = ref.watch(songPlaybackProvider);
 
@@ -95,13 +85,8 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                   ),
                   Consumer(builder: (context, ref, _) {
                     final locked = ref.watch(isProjectLockedProvider);
-                    return IgnorePointer(
-                      ignoring: locked,
-                      child: Opacity(
-                        opacity: locked ? 0.5 : 1.0,
-                        child: _SongScaleChip(config: project.config),
-                      ),
-                    );
+                    if (locked) return const SizedBox.shrink();
+                    return _SongScaleChip(config: project.config);
                   }),
                   const Padding(
                     padding: EdgeInsets.only(right: 4),

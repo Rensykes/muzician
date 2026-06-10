@@ -534,7 +534,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           _Breadcrumb(
             breadcrumb: breadcrumb,
             onRoot: () => setState(() {
-              _currentFolderId = widget.rootFolderId ?? null;
+              _currentFolderId = widget.rootFolderId;
               _selectedSaveId = null;
             }),
             onNavigate: (id) => setState(() {

@@ -80,29 +80,36 @@ class SongwriterHeader extends ConsumerWidget {
           const Spacer(),
           Consumer(builder: (context, ref, _) {
             final locked = ref.watch(isProjectLockedProvider);
+            if (locked) {
+              return _LockableChip(
+                label: keyLabel,
+                locked: true,
+                onTap: () {},
+              );
+            }
             return Flexible(
-              child: IgnorePointer(
-                ignoring: locked,
-                child: Opacity(
-                  opacity: locked ? 0.5 : 1.0,
-                  child: _Chip(label: keyLabel, onTap: () => _editKey(context, ref)),
-                ),
+              child: _LockableChip(
+                label: keyLabel,
+                locked: false,
+                onTap: () => _editKey(context, ref),
               ),
             );
           }),
           const SizedBox(width: 6),
           Consumer(builder: (context, ref, _) {
             final locked = ref.watch(isProjectLockedProvider);
+            if (locked) {
+              return _LockableChip(
+                label: '${config.tempo} BPM',
+                locked: true,
+                onTap: () {},
+              );
+            }
             return Flexible(
-              child: IgnorePointer(
-                ignoring: locked,
-                child: Opacity(
-                  opacity: locked ? 0.5 : 1.0,
-                  child: _Chip(
-                    label: '${config.tempo} BPM',
-                    onTap: () => _editTempo(context, ref),
-                  ),
-                ),
+              child: _LockableChip(
+                label: '${config.tempo} BPM',
+                locked: false,
+                onTap: () => _editTempo(context, ref),
               ),
             );
           }),
@@ -219,6 +226,59 @@ class _Chip extends StatelessWidget {
     label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
     onPressed: onTap,
   );
+}
+
+class _LockableChip extends StatelessWidget {
+  const _LockableChip({
+    required this.label,
+    required this.locked,
+    required this.onTap,
+  });
+  final String label;
+  final bool locked;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    if (!locked) return _Chip(label: label, onTap: onTap);
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: 'Set in project config',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.12),
+            width: 0.5,
+          ),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.lock_outline,
+              size: 11,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _TempoSheet extends StatefulWidget {
