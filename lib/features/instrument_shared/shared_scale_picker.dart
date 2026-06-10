@@ -48,6 +48,13 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
     final projectKey = ref.watch(activeProjectKeyProvider);
     final activeScale = activeScaleRaw ?? projectKey;
     final isProjectLocked = projectKey != null;
+    final binding = widget.binding;
+    final chordOffKey = binding is InstrumentBinding
+        ? ref.watch(binding.chordOffKey)
+        : false;
+    final chipColor = chordOffKey && isProjectLocked
+        ? MuzicianTheme.orange
+        : MuzicianTheme.emerald;
 
     // Re-run initial sync when the project key changes (e.g. user switched
     // projects between sheet opens), so the pills reflect the new locked key.
@@ -159,10 +166,10 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.emerald.withValues(alpha: 0.12),
+                    color: chipColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: MuzicianTheme.emerald.withValues(alpha: 0.4),
+                      color: chipColor.withValues(alpha: 0.4),
                       width: 0.5,
                     ),
                   ),
@@ -176,18 +183,20 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                             scaleName: _selectedScale!,
                           ),
                         ),
-                        style: const TextStyle(
-                          color: MuzicianTheme.emerald,
+                        style: TextStyle(
+                          color: chipColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       if (isProjectLocked) ...[
                         const SizedBox(width: 6),
-                        const Icon(
-                          Icons.lock_outline_rounded,
+                        Icon(
+                          chordOffKey
+                              ? Icons.warning_amber_rounded
+                              : Icons.lock_outline_rounded,
                           size: 12,
-                          color: MuzicianTheme.emerald,
+                          color: chipColor,
                         ),
                       ] else ...[
                         const SizedBox(width: 6),
@@ -201,23 +210,22 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                             });
                             widget.binding.actions(ref).setHighlightedNotes([]);
                             ref
-                                .read(widget.binding.activeScale.notifier)
-                                .state = null;
+                                    .read(widget.binding.activeScale.notifier)
+                                    .state =
+                                null;
                           },
                           child: Container(
                             width: 16,
                             height: 16,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: MuzicianTheme.emerald.withValues(
-                                alpha: 0.2,
-                              ),
+                              color: chipColor.withValues(alpha: 0.2),
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Text(
                                 '✕',
                                 style: TextStyle(
-                                  color: MuzicianTheme.emerald,
+                                  color: chipColor,
                                   fontSize: 9,
                                   fontWeight: FontWeight.w800,
                                 ),
