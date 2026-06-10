@@ -21,11 +21,11 @@ import '../utils/note_utils.dart';
 /// Mount once on app start (read it from `main.dart`). The provider has no
 /// state — its body wires the listeners.
 final projectConfigSyncProvider = Provider<void>((ref) {
-  ref.listen<SaveFolder?>(
-    selectedProjectProvider,
-    (prev, next) => _apply(ref, next),
-    fireImmediately: true,
-  );
+  ref.listen<SaveFolder?>(selectedProjectProvider, (prev, next) {
+    // Defer state mutations so they don't happen during this provider's
+    // build phase — Riverpod forbids modifying other providers on build.
+    Future.microtask(() => _apply(ref, next));
+  }, fireImmediately: true);
 });
 
 void _apply(Ref ref, SaveFolder? folder) {
@@ -34,8 +34,9 @@ void _apply(Ref ref, SaveFolder? folder) {
   if (cfg == null) return;
 
   final scaleNotes = _scaleNotesFor(cfg.keyRootPc, cfg.keyScaleName);
-  final keyString =
-      cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!];
+  final keyString = cfg.keyRootPc == null
+      ? null
+      : chromaticNotes[cfg.keyRootPc!];
 
   // Fretboard + Piano live highlight
   ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
