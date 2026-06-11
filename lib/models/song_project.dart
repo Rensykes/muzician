@@ -82,6 +82,7 @@ class SongTrack {
   final int order;
   final bool isMuted;
   final bool isSolo;
+  final double volume; // 0.0–1.0 playback gain
 
   const SongTrack({
     required this.id,
@@ -90,6 +91,7 @@ class SongTrack {
     required this.order,
     this.isMuted = false,
     this.isSolo = false,
+    this.volume = 1.0,
   });
 
   SongTrack copyWith({
@@ -99,6 +101,7 @@ class SongTrack {
     int? order,
     bool? isMuted,
     bool? isSolo,
+    double? volume,
   }) => SongTrack(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -106,6 +109,7 @@ class SongTrack {
     order: order ?? this.order,
     isMuted: isMuted ?? this.isMuted,
     isSolo: isSolo ?? this.isSolo,
+    volume: volume ?? this.volume,
   );
 
   Map<String, dynamic> toJson() => {
@@ -115,6 +119,7 @@ class SongTrack {
     'order': order,
     'isMuted': isMuted,
     'isSolo': isSolo,
+    'volume': volume,
   };
 
   factory SongTrack.fromJson(Map<String, dynamic> json) => SongTrack(
@@ -124,6 +129,7 @@ class SongTrack {
     order: json['order'] as int,
     isMuted: json['isMuted'] as bool? ?? false,
     isSolo: json['isSolo'] as bool? ?? false,
+    volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
   );
 }
 

@@ -192,6 +192,15 @@ class SongProjectNotifier extends Notifier<SongProject> {
     );
   }
 
+  void setTrackVolume(String trackId, double volume) {
+    final v = volume.clamp(0.0, 1.0);
+    state = state.copyWith(
+      tracks: state.tracks
+          .map((t) => t.id == trackId ? t.copyWith(volume: v) : t)
+          .toList(),
+    );
+  }
+
   void toggleSolo(String trackId) {
     state = state.copyWith(
       tracks: state.tracks
