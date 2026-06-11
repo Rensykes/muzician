@@ -86,6 +86,33 @@ List<int> snapshotMidiNotes(InstrumentSnapshot? snapshot) {
   return const [];
 }
 
+/// Where the playhead sits inside the sheet layout.
+class SongwriterActivePosition {
+  const SongwriterActivePosition({
+    required this.sectionId,
+    required this.instanceIndex,
+    required this.localBar,
+  });
+
+  final String sectionId;
+  final int instanceIndex;
+  final int localBar;
+}
+
+/// Maps a global playback bar to (sectionId, instanceIndex, localBar).
+SongwriterActivePosition? activePositionForBar(
+  List<SongSection> sections,
+  int globalBar,
+) {
+  final hit = sectionAtGlobalBar(expandSections(sections), globalBar);
+  if (hit == null) return null;
+  return SongwriterActivePosition(
+    sectionId: hit.section.sectionId,
+    instanceIndex: hit.section.repeatIndex,
+    localBar: hit.localBar,
+  );
+}
+
 /// Flattens [project] into a sorted, tick-indexed event list.
 ///
 /// Sections expand by repeat (via [expandSections]); lane block patterns tile
