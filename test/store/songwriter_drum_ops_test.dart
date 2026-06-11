@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
@@ -27,7 +26,7 @@ void main() {
     addTearDown(container.dispose);
     final notifier = container.read(songwriterProvider.notifier);
 
-    final id = notifier.addDrumPattern();
+    notifier.addDrumPattern();
     final updated = container.read(songwriterProvider).drumPatterns.single
         .copyWith(name: 'Funky');
     notifier.updateDrumPattern(updated);

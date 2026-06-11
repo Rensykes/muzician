@@ -41,9 +41,29 @@ else broken (the referenced save was deleted).
 ### Repeat semantics
 
 Playback flattening expands **section** repeats (whole section loops N×) and **lane**
-repeats (the lane's block pattern tiles N× from bar 0, clipped to the section). v1
-blocks are silent visual guides — flattening drives the playhead/highlighting; audio is
-metronome only.
+repeats (the lane's block pattern tiles N× from bar 0, clipped to the section).
+
+### Playback audio (`lib/schema/rules/songwriter_playback_rules.dart`)
+
+`flattenPlaybackEvents(project, saves)` turns the whole project into a sorted,
+tick-indexed event list the transport walks:
+
+- **Harmony blocks** sound their chord as a per-bar stab (block start + every bar
+  boundary inside the block, clipped to the section). Pitches come from
+  `chordNotes` stacked ascending from octave 4, falling back to
+  `chordRootPc` + `chordQuality` intervals. Silent blocks stay silent.
+- **Save blocks** resolve their snapshot (embedded → live save → broken) and sound
+  the voicing the same way: piano keys use `PianoCoordinate.midiNote`, fretboard
+  cells map string+fret through the tuning. Broken blocks are silent.
+- **Drum lane blocks** fire their referenced `DrumPattern` hits at native tick
+  resolution, tiled across the block's bar span.
+- The metronome click is unchanged and still gated by `settingsProvider.metronomeEnabled`.
+
+Sinks are injectable providers (`songwriterNoteSinkProvider`,
+`drumPatternPlaybackSinkProvider`, `songwriterMetronomeSinkProvider`) so tests can
+capture events. The sheet UI highlights the active bar cell via
+`songwriterActivePositionProvider` (global bar → section instance + local bar) and
+auto-scrolls the active section into view.
 
 ## Store (`lib/store/songwriter_store.dart`)
 
