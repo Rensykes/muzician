@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
+import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'drum_pattern_sheet.dart';
@@ -180,6 +181,22 @@ class _SectionInstance extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(
+      songwriterActivePositionProvider.select(
+        (p) => p != null &&
+            p.sectionId == section.id &&
+            p.instanceIndex == instanceIndex,
+      ),
+      (prev, next) {
+        if (next && !(prev ?? false)) {
+          Scrollable.ensureVisible(
+            context,
+            duration: const Duration(milliseconds: 300),
+            alignment: 0.2,
+          );
+        }
+      },
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -434,6 +451,20 @@ class _BarRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
+    final activeBar = ref.watch(
+      songwriterActivePositionProvider.select(
+        (p) => p != null &&
+                p.sectionId == section.id &&
+                p.instanceIndex == instanceIndex
+            ? p.localBar
+            : null,
+      ),
+    );
+    bool isActiveCell(int startBar, int span) =>
+        activeBar != null && activeBar >= startBar && activeBar < startBar + span;
+    Key? activeKey(int startBar, int span) => isActiveCell(startBar, span)
+        ? Key('activeBarCell_${section.id}_${instanceIndex}_$startBar')
+        : null;
     final blockByStart = <int, SongBlock>{};
     final blockSpan = <int, SongBlock>{};
     for (final b in lane.blocks) {
@@ -455,9 +486,11 @@ class _BarRow extends ConsumerWidget {
             if (owner != null && owner.startBar == i) {
               final span = owner.spanBars.clamp(1, end - i);
               cells.add(_BarCell(
+                key: activeKey(i, span),
                 flex: span,
                 block: owner,
                 instanceIndex: instanceIndex,
+                isActive: isActiveCell(i, span),
                 onTap: () => _editBlock(context, ref, owner),
                 onLongPress: () =>
                     _removeBlock(context, notifier, owner),
@@ -467,9 +500,11 @@ class _BarRow extends ConsumerWidget {
               i++;
             } else {
               cells.add(_BarCell(
+                key: activeKey(i, 1),
                 flex: 1,
                 block: null,
                 instanceIndex: instanceIndex,
+                isActive: isActiveCell(i, 1),
                 onTap: () => _addAt(context, ref, i),
               ));
               i++;
@@ -628,17 +663,20 @@ class _BarRow extends ConsumerWidget {
 
 class _BarCell extends StatelessWidget {
   const _BarCell({
+    super.key,
     required this.flex,
     required this.block,
     required this.instanceIndex,
     required this.onTap,
     this.onLongPress,
+    this.isActive = false,
   });
   final int flex;
   final SongBlock? block;
   final int instanceIndex;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -652,16 +690,22 @@ class _BarCell extends StatelessWidget {
           height: 64,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: block != null
-                ? MuzicianTheme.violet.withValues(alpha: 0.18)
-                : Colors.transparent,
+            color: isActive
+                ? MuzicianTheme.violet.withValues(alpha: 0.34)
+                : (block != null
+                      ? MuzicianTheme.violet.withValues(alpha: 0.18)
+                      : Colors.transparent),
             border: Border(
               left: BorderSide(
-                color: MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                color: isActive
+                    ? MuzicianTheme.violet
+                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
               right: BorderSide(
-                color: MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                color: isActive
+                    ? MuzicianTheme.violet
+                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
