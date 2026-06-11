@@ -78,18 +78,22 @@ class CompactAppBar extends StatelessWidget {
             if (onClose != null)
               IconBtn(icon: Icons.close_rounded, onTap: onClose!),
             if (onClose != null) const SizedBox(width: 4),
-            Text(
-              title,
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
               ),
             ),
             if (chipLabel != null) ...[
               const SizedBox(width: 10),
-              StatusChip(label: chipLabel!),
+              Flexible(child: StatusChip(label: chipLabel!)),
             ],
             const Spacer(),
             ...actions,
@@ -116,6 +120,8 @@ class StatusChip extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: MuzicianTheme.textPrimary,
           fontSize: 11.5,

@@ -5,13 +5,26 @@ import 'package:muzician/features/piano_roll/piano_roll_save_panel.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/piano_roll_store.dart';
+import 'package:muzician/store/save_system_store.dart';
+
+/// Builds a container with the Dump folder selected so the project-scoped
+/// save panel renders its browser instead of the project-required placeholder.
+ProviderContainer _containerWithDumpSelected() {
+  final container = ProviderContainer();
+  final saveSystem = container.read(saveSystemProvider.notifier);
+  saveSystem.selectProject(saveSystem.ensureDumpFolder());
+  return container;
+}
 
 void main() {
   testWidgets('PianoRollSavePanel renders with SaveBrowserPanel', (
     tester,
   ) async {
+    final container = _containerWithDumpSelected();
+    addTearDown(container.dispose);
     await tester.pumpWidget(
-      ProviderScope(
+      UncontrolledProviderScope(
+        container: container,
         child: MaterialApp(home: Scaffold(body: PianoRollSavePanel())),
       ),
     );
@@ -23,8 +36,11 @@ void main() {
   });
 
   testWidgets('PianoRollSavePanel shows save/load controls', (tester) async {
+    final container = _containerWithDumpSelected();
+    addTearDown(container.dispose);
     await tester.pumpWidget(
-      ProviderScope(
+      UncontrolledProviderScope(
+        container: container,
         child: MaterialApp(home: Scaffold(body: PianoRollSavePanel())),
       ),
     );
