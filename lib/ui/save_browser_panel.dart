@@ -14,6 +14,7 @@ import '../schema/rules/save_system_rules.dart';
 import '../store/fretboard_store.dart';
 import '../store/piano_roll_store.dart';
 import '../store/piano_store.dart';
+import '../store/project_config_sync.dart';
 import '../store/save_system_store.dart';
 import '../store/settings_store.dart';
 import '../theme/muzician_theme.dart';
@@ -622,8 +623,15 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
         // saves
         ...saves.map((save) {
           final isSelected = _selectedSaveId == save.id;
+          final projectKey = ref.watch(activeProjectKeyProvider);
+          final offKey = snapshotOffKey(
+            save.snapshot,
+            scaleRoot: projectKey?.root,
+            scaleName: projectKey?.scaleName,
+          );
           return _SaveRow(
             save: save,
+            offKey: offKey,
             isSelected: isSelected,
             isActiveSession: activeSession?.saveId == save.id,
             editMode: _editMode,
@@ -693,11 +701,18 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
       ),
       ...saves.map((save) {
         final label = saveCardLabel(save.snapshot);
+        final projectKey = ref.watch(activeProjectKeyProvider);
+        final offKey = snapshotOffKey(
+          save.snapshot,
+          scaleRoot: projectKey?.root,
+          scaleName: projectKey?.scaleName,
+        );
         return _SaveCard(
           name: save.name,
           instrument: save.snapshot.instrument,
           labelText: label.kind == SaveCardLabelKind.notes ? null : label.text,
           noteChips: label.notes,
+          offKey: offKey,
           selected: _selectedSaveId == save.id,
           onTap: () {
             if (widget.onPick != null) {
@@ -1043,6 +1058,7 @@ class _FolderRow extends StatelessWidget {
 
 class _SaveRow extends StatefulWidget {
   final SaveEntry save;
+  final bool offKey;
   final bool isSelected;
   final bool isActiveSession;
   final bool editMode;
@@ -1062,6 +1078,7 @@ class _SaveRow extends StatefulWidget {
 
   const _SaveRow({
     required this.save,
+    this.offKey = false,
     required this.isSelected,
     required this.isActiveSession,
     required this.editMode,
@@ -1202,6 +1219,14 @@ class _SaveRowState extends State<_SaveRow>
                         const SizedBox(width: 4),
                       ],
                       Text(_icon, style: const TextStyle(fontSize: 14)),
+                      if (widget.offKey) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 14,
+                          color: MuzicianTheme.orange,
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -1542,6 +1567,7 @@ class _SaveCard extends StatelessWidget {
   final String instrument;
   final String? labelText; // chord symbol / scale / 'Highlight'
   final List<String> noteChips; // shown when labelText is null
+  final bool offKey;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
@@ -1552,6 +1578,7 @@ class _SaveCard extends StatelessWidget {
     required this.labelText,
     required this.noteChips,
     required this.onTap,
+    this.offKey = false,
     this.selected = false,
     this.onLongPress,
   });
@@ -1583,6 +1610,12 @@ class _SaveCard extends StatelessWidget {
               children: [
                 Icon(saveInstrumentIcon(instrument), size: 16),
                 const Spacer(),
+                if (offKey)
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 14,
+                    color: MuzicianTheme.orange,
+                  ),
               ],
             ),
             const SizedBox(height: 6),
