@@ -120,6 +120,37 @@ void main() {
     expect(container.read(songProjectProvider).tracks.single.isMuted, false);
   });
 
+  test('setTrackVolume clamps and persists; fromJson defaults to 1.0', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final trackId = notifier.addTrack(SongTrackType.note);
+
+    expect(container.read(songProjectProvider).tracks.single.volume, 1.0);
+
+    notifier.setTrackVolume(trackId, 0.5);
+    expect(container.read(songProjectProvider).tracks.single.volume, 0.5);
+
+    notifier.setTrackVolume(trackId, 1.4);
+    expect(container.read(songProjectProvider).tracks.single.volume, 1.0);
+
+    notifier.setTrackVolume(trackId, -0.2);
+    expect(container.read(songProjectProvider).tracks.single.volume, 0.0);
+
+    final legacy = SongTrack.fromJson({
+      'id': 't1',
+      'name': 'Lead',
+      'type': 'note',
+      'order': 0,
+    });
+    expect(legacy.volume, 1.0);
+
+    final roundTrip = SongTrack.fromJson(
+      legacy.copyWith(volume: 0.25).toJson(),
+    );
+    expect(roundTrip.volume, 0.25);
+  });
+
   test('deleteClip cleans up orphaned pattern', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
