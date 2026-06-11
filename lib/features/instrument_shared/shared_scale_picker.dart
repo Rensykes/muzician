@@ -7,9 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmonic_analysis.dart';
+import '../../models/project_config.dart';
+import '../../models/save_system.dart';
+import '../../schema/rules/save_system_rules.dart';
 import '../../store/project_config_sync.dart';
+import '../../store/save_system_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
+import '../../ui/core/update_project_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import 'instrument_binding.dart';
 
@@ -413,6 +418,18 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
   Future<void> _tryApplyScale(String root, String scaleName) async {
     final scaleNotes = getScaleNotes(root, scaleName);
     if (scaleNotes.isEmpty) return;
+    final projectKey = ref.read(activeProjectKeyProvider);
+    if (projectKey != null) {
+      if (projectKey.root == root && projectKey.scaleName == scaleName) {
+        setState(() {
+          _selectedRoot = root;
+          _selectedScale = scaleName;
+        });
+        return;
+      }
+      await _promoteToProjectKey(root, scaleName);
+      return;
+    }
     final scaleSet = scaleNotes.toSet();
     final conflicts = ref
         .read(widget.binding.selectedPitchClasses)
@@ -448,5 +465,52 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
         scaleName: scaleName,
       );
     }
+  }
+
+  Future<void> _promoteToProjectKey(String root, String scaleName) async {
+    final folder = ref.read(selectedProjectProvider);
+    if (folder == null || folder.kind != SaveFolderKind.project) return;
+    final saveState = ref.read(saveSystemProvider);
+    final affected = getSavesInSubtree(
+      saveState.folders,
+      saveState.saves,
+      folder.id,
+    ).length;
+    final rootPc = chromaticNotes.indexOf(root);
+    if (rootPc < 0) return;
+    final currentLabel = formatScaleLabel(
+      ScaleDetectionResult(
+        root: _selectedRoot ?? root,
+        scaleName: _selectedScale ?? scaleName,
+      ),
+    );
+    final projectKey = ref.read(activeProjectKeyProvider);
+    final fromLabel = projectKey != null
+        ? formatScaleLabel(
+            ScaleDetectionResult(
+              root: projectKey.root,
+              scaleName: projectKey.scaleName,
+            ),
+          )
+        : currentLabel;
+    final newLabel = formatScaleLabel(
+      ScaleDetectionResult(root: root, scaleName: scaleName),
+    );
+    if (!mounted) return;
+    final confirmed = await UpdateProjectKeyDialog.ask(
+      context,
+      currentLabel: fromLabel,
+      newLabel: newLabel,
+      affectedSaves: affected,
+    );
+    if (!confirmed) return;
+    final current = folder.projectConfig ?? const ProjectConfig();
+    final next = current.copyWith(
+      keyRootPc: rootPc,
+      keyScaleName: scaleName,
+    );
+    await ref
+        .read(saveSystemProvider.notifier)
+        .applyProjectConfig(folder.id, next, retrofit: true);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/save_system.dart';
+import '../utils/note_utils.dart';
 
 enum SaveCardLabelKind { chord, scale, notes, highlight }
 
@@ -32,6 +33,29 @@ SaveCardLabel saveCardLabel(InstrumentSnapshot snapshot) {
     );
   }
   return const SaveCardLabel(SaveCardLabelKind.highlight, text: 'Highlight');
+}
+
+/// True when any pitch class on the snapshot falls outside the supplied
+/// project scale. Returns `false` when no project key is configured or the
+/// snapshot has no notes to evaluate.
+bool snapshotOffKey(
+  InstrumentSnapshot snapshot, {
+  required String? scaleRoot,
+  required String? scaleName,
+}) {
+  if (scaleRoot == null || scaleName == null) return false;
+  final scalePcs = getScaleNotes(scaleRoot, scaleName).toSet();
+  if (scalePcs.isEmpty) return false;
+  for (final n in snapshot.selectedNotes) {
+    if (!scalePcs.contains(n)) return true;
+  }
+  final chord = snapshot.pendingChord;
+  if (chord != null) {
+    for (final n in getChordNotes(chord.root, chord.quality)) {
+      if (!scalePcs.contains(n)) return true;
+    }
+  }
+  return false;
 }
 
 /// Material icon for the snapshot's instrument, used by the card.
