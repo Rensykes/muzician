@@ -279,6 +279,99 @@ void main() {
     expect(ordered(), ['B', 'C', 'A']);
   });
 
+  test('splitClipAtTick splits a note clip into two unique clips', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final trackId = notifier.addTrack(SongTrackType.note);
+    final clipId = notifier.createEmptyNotePatternClip(
+      trackId: trackId,
+      startTick: 16,
+    );
+    final pattern = container.read(songProjectProvider).notePatterns.single;
+    notifier.applyNotePattern(
+      pattern.id,
+      pattern.copyWith(
+        notes: const [
+          NotePatternNote(
+              id: 'n1', midiNote: 60, startTick: 0, durationTicks: 4),
+          NotePatternNote(
+              id: 'n2', midiNote: 64, startTick: 12, durationTicks: 4),
+        ],
+      ),
+    );
+
+    // Split at global tick 24 = local tick 8.
+    expect(notifier.splitClipAtTick(clipId, 24), isTrue);
+    final state = container.read(songProjectProvider);
+    expect(state.clips, hasLength(2));
+    final ordered = [...state.clips]
+      ..sort((a, b) => a.startTick.compareTo(b.startTick));
+    expect(ordered[0].startTick, 16);
+    expect(ordered[1].startTick, 24);
+    expect(ordered[0].patternId == ordered[1].patternId, isFalse);
+    expect(state.notePatterns, hasLength(2));
+
+    // Out-of-range split rejected.
+    expect(notifier.splitClipAtTick(ordered[0].id, 16), isFalse);
+  });
+
+  test('splitClipAtTick keeps shared siblings on the original pattern', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final trackId = notifier.addTrack(SongTrackType.note);
+    final clipId = notifier.createEmptyNotePatternClip(
+      trackId: trackId,
+      startTick: 0,
+    );
+    final siblingId = notifier.duplicateClip(clipId);
+    final sharedPatternId =
+        container.read(songProjectProvider).clips.first.patternId;
+
+    expect(notifier.splitClipAtTick(clipId, 8), isTrue);
+    final state = container.read(songProjectProvider);
+    final sibling = state.clips.firstWhere((c) => c.id == siblingId);
+    expect(sibling.patternId, sharedPatternId,
+        reason: 'shared sibling keeps the original pattern');
+    expect(state.notePatterns.any((p) => p.id == sharedPatternId), isTrue);
+    expect(state.clips, hasLength(3));
+  });
+
+  test('setAudioClipTrim adjusts schedulable window', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final trackId = notifier.addTrack(SongTrackType.audio);
+    notifier.addAudioClip(
+      trackId: trackId,
+      startTick: 0,
+      asset: const AudioAsset(
+        id: 'a1',
+        durationMs: 1000,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [],
+        sourceLabel: '',
+      ),
+    );
+    final pattern =
+        container.read(songProjectProvider).audioPatterns.single;
+
+    notifier.setAudioClipTrim(pattern.id, trimStartMs: 100, trimEndMs: 200);
+    final updated =
+        container.read(songProjectProvider).audioPatterns.single;
+    expect(updated.trimStartMs, 100);
+    expect(updated.trimEndMs, 200);
+
+    // Trim wider than the asset is clamped to keep ≥1 ms of audio.
+    notifier.setAudioClipTrim(pattern.id, trimStartMs: 900, trimEndMs: 900);
+    final clamped =
+        container.read(songProjectProvider).audioPatterns.single;
+    expect(clamped.trimStartMs + clamped.trimEndMs, lessThan(1000));
+  });
+
   test('deleteClip cleans up orphaned pattern', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);

@@ -7,9 +7,11 @@ import '../models/piano_roll.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../models/song_project.dart';
-import '../schema/rules/song_audio_rules.dart' show audioClipLengthTicks;
+import '../schema/rules/song_audio_rules.dart'
+    show audioClipLengthTicks, audioTickToMs;
 import '../schema/rules/song_import_rules.dart' as import_rules;
 import '../schema/rules/song_rules.dart' as rules;
+import '../schema/rules/song_split_rules.dart' as split_rules;
 import '../utils/note_utils.dart';
 import 'save_system_store.dart';
 import 'song_audio_repository.dart';
@@ -481,6 +483,149 @@ class SongProjectNotifier extends Notifier<SongProject> {
           .toList(),
     );
     return true;
+  }
+
+  /// Splits the clip at global [tick] into two clips with **unique** sliced
+  /// patterns (Make-Unique semantics — shared siblings keep the original
+  /// pattern). Audio clips split via trim windows on two patterns sharing
+  /// the asset. Returns false when [tick] is not strictly inside the clip.
+  bool splitClipAtTick(String clipId, int tick) {
+    final clip = state.clips.firstWhere((c) => c.id == clipId);
+    final patternLen = rules.patternLengthForClip(state, clip);
+    if (patternLen == null) return false;
+    final local = tick - clip.startTick;
+    if (local <= 0 || local >= patternLen) return false;
+
+    final leftClip = clip.copyWith(patternId: _id('np'));
+    final rightClip = SongClipInstance(
+      id: _id('sci'),
+      trackId: clip.trackId,
+      patternId: _id('np'),
+      patternType: clip.patternType,
+      startTick: tick,
+    );
+
+    switch (clip.patternType) {
+      case SongPatternType.note:
+        final pattern = state.notePatterns.firstWhere(
+          (p) => p.id == clip.patternId,
+        );
+        final parts = split_rules.splitNotePattern(
+          pattern,
+          local,
+          leftId: leftClip.patternId,
+          rightId: rightClip.patternId,
+        );
+        if (parts == null) return false;
+        state = state.copyWith(
+          notePatterns: [...state.notePatterns, parts.left, parts.right],
+        );
+      case SongPatternType.drum:
+        final pattern = state.drumPatterns.firstWhere(
+          (p) => p.id == clip.patternId,
+        );
+        final parts = split_rules.splitDrumPattern(
+          pattern,
+          local,
+          leftId: leftClip.patternId,
+          rightId: rightClip.patternId,
+        );
+        if (parts == null) return false;
+        state = state.copyWith(
+          drumPatterns: [...state.drumPatterns, parts.left, parts.right],
+        );
+      case SongPatternType.audio:
+        final pattern = state.audioPatterns.firstWhere(
+          (p) => p.id == clip.patternId,
+        );
+        final asset = state.audioAssets
+            .where((a) => a.id == pattern.assetId)
+            .firstOrNull;
+        if (asset == null) return false;
+        final cutMs = audioTickToMs(local, state.config);
+        final playable =
+            asset.durationMs - pattern.trimStartMs - pattern.trimEndMs;
+        if (cutMs <= 0 || cutMs >= playable) return false;
+        state = state.copyWith(
+          audioPatterns: [
+            ...state.audioPatterns,
+            pattern.copyWith(
+              id: leftClip.patternId,
+              name: '${pattern.name} ◂',
+              trimEndMs: pattern.trimEndMs + (playable - cutMs),
+            ),
+            pattern.copyWith(
+              id: rightClip.patternId,
+              name: '${pattern.name} ▸',
+              trimStartMs: pattern.trimStartMs + cutMs,
+            ),
+          ],
+        );
+    }
+
+    // Swap in the two halves, then drop the original pattern if orphaned.
+    final originalPatternId = clip.patternId;
+    state = state.copyWith(
+      clips: [
+        for (final c in state.clips)
+          if (c.id == clipId) leftClip else c,
+        rightClip,
+      ],
+    );
+    final stillReferenced = state.clips.any(
+      (c) => c.patternId == originalPatternId,
+    );
+    if (!stillReferenced) {
+      state = switch (clip.patternType) {
+        SongPatternType.note => state.copyWith(
+          notePatterns: state.notePatterns
+              .where((p) => p.id != originalPatternId)
+              .toList(),
+        ),
+        SongPatternType.drum => state.copyWith(
+          drumPatterns: state.drumPatterns
+              .where((p) => p.id != originalPatternId)
+              .toList(),
+        ),
+        SongPatternType.audio => state.copyWith(
+          audioPatterns: state.audioPatterns
+              .where((p) => p.id != originalPatternId)
+              .toList(),
+        ),
+      };
+    }
+    return true;
+  }
+
+  /// Sets an audio clip pattern's head/tail trim, clamped so at least 1 ms
+  /// of audio remains.
+  void setAudioClipTrim(
+    String patternId, {
+    required int trimStartMs,
+    required int trimEndMs,
+  }) {
+    final pattern = state.audioPatterns
+        .where((p) => p.id == patternId)
+        .firstOrNull;
+    if (pattern == null) return;
+    final asset = state.audioAssets
+        .where((a) => a.id == pattern.assetId)
+        .firstOrNull;
+    if (asset == null) return;
+    var start = trimStartMs.clamp(0, asset.durationMs - 1);
+    var end = trimEndMs.clamp(0, asset.durationMs - 1);
+    if (start + end >= asset.durationMs) {
+      end = (asset.durationMs - start - 1).clamp(0, asset.durationMs - 1);
+    }
+    state = state.copyWith(
+      audioPatterns: state.audioPatterns
+          .map(
+            (p) => p.id == patternId
+                ? p.copyWith(trimStartMs: start, trimEndMs: end)
+                : p,
+          )
+          .toList(),
+    );
   }
 
   /// Adds a new clip referencing an existing pattern (shared link) — the

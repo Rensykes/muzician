@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
+import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import 'song_pattern_editor_launcher.dart';
@@ -172,6 +173,36 @@ class SongClipActionBar extends ConsumerWidget {
               },
             ),
             _ActionBtn(
+              icon: Icons.content_cut,
+              tooltip: 'Split at playhead',
+              onTap: () {
+                HapticFeedback.selectionClick();
+                final tick = ref.read(songPlaybackProvider).currentTick;
+                if (tick == null ||
+                    !ref
+                        .read(songProjectProvider.notifier)
+                        .splitClipAtTick(clip.id, tick)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Park the playhead inside the clip to split it',
+                      ),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+            ),
+            if (track.type == SongTrackType.audio)
+              _ActionBtn(
+                icon: Icons.tune,
+                tooltip: 'Trim audio',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _showTrimDialog(context, ref, clip);
+                },
+              ),
+            _ActionBtn(
               icon: Icons.content_paste_go,
               tooltip: 'Copy for paste',
               onTap: () {
@@ -313,6 +344,108 @@ class SongClipActionBar extends ConsumerWidget {
               },
             ),
     ];
+  }
+
+  void _showTrimDialog(
+    BuildContext context,
+    WidgetRef ref,
+    SongClipInstance clip,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: MuzicianTheme.surface,
+        title: const Text(
+          'Trim Audio',
+          style: TextStyle(color: MuzicianTheme.textPrimary),
+        ),
+        content: Consumer(
+          builder: (_, dialogRef, _) {
+            final project = dialogRef.watch(songProjectProvider);
+            final pattern = project.audioPatterns
+                .where((p) => p.id == clip.patternId)
+                .firstOrNull;
+            final asset = pattern == null
+                ? null
+                : project.audioAssets
+                      .where((a) => a.id == pattern.assetId)
+                      .firstOrNull;
+            if (pattern == null || asset == null) {
+              return const Text(
+                'Audio asset missing.',
+                style: TextStyle(color: MuzicianTheme.textMuted),
+              );
+            }
+            final maxMs = asset.durationMs.toDouble();
+            Widget trimRow(String label, int value, void Function(int) write) {
+              return Row(
+                children: [
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: MuzicianTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: value.toDouble().clamp(0, maxMs),
+                      max: maxMs,
+                      activeColor: MuzicianTheme.teal,
+                      onChanged: (v) => write(v.round()),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 56,
+                    child: Text(
+                      '${(value / 1000).toStringAsFixed(2)}s',
+                      style: const TextStyle(
+                        color: MuzicianTheme.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            final notifier = dialogRef.read(songProjectProvider.notifier);
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                trimRow(
+                  'Head',
+                  pattern.trimStartMs,
+                  (v) => notifier.setAudioClipTrim(
+                    pattern.id,
+                    trimStartMs: v,
+                    trimEndMs: pattern.trimEndMs,
+                  ),
+                ),
+                trimRow(
+                  'Tail',
+                  pattern.trimEndMs,
+                  (v) => notifier.setAudioClipTrim(
+                    pattern.id,
+                    trimStartMs: pattern.trimStartMs,
+                    trimEndMs: v,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -202,11 +202,12 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
         final nowMs = audioTickToMs(tick, project.config);
         while (scheduled.isNotEmpty && scheduled.first.startMs <= nowMs) {
           final clip = scheduled.removeAt(0);
-          final offset = nowMs - clip.startMs;
           unawaited(
             audioSink.startClip(
               asset: clip.asset,
-              offsetMs: offset.clamp(0, clip.asset.durationMs),
+              offsetMs: clip
+                  .offsetIntoAsset(nowMs)
+                  .clamp(0, clip.asset.durationMs),
               volume: clip.volume,
             ),
           );

@@ -53,6 +53,9 @@ class ScheduledAudioClip {
     required this.endMs,
     this.volume = 1.0,
   });
+
+  /// Playback offset into the asset for a given song-time [nowMs].
+  int offsetIntoAsset(int nowMs) => pattern.trimStartMs + (nowMs - startMs);
 }
 
 /// Returns every audio clip that should play given the project's current
@@ -77,13 +80,16 @@ List<ScheduledAudioClip> schedulableAudioClips(SongProject project) {
     final asset = assetById[pattern.assetId];
     if (asset == null) continue;
     final startMs = audioTickToMs(clip.startTick, project.config);
+    final playableMs = (asset.durationMs - pattern.trimStartMs - pattern.trimEndMs)
+        .clamp(0, asset.durationMs);
+    if (playableMs <= 0) continue;
     out.add(
       ScheduledAudioClip(
         clip: clip,
         pattern: pattern,
         asset: asset,
         startMs: startMs,
-        endMs: startMs + asset.durationMs,
+        endMs: startMs + playableMs,
         volume: volume,
       ),
     );
