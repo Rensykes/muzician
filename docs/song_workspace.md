@@ -40,6 +40,24 @@ New empty patterns default to 1 measure.
 Song-level transport plays all audible tracks. Muted tracks are silent unless soloed.
 Solo takes priority over mute — if any track is soloed, only soloed tracks play.
 
+### Transport controls
+
+- **Per-track volume** (`SongTrack.volume`, 0–1, default 1): set from the track
+  menu's Volume slider. Note/drum sink volume is `0.8 × track.volume`; audio
+  clips pass the gain to the player.
+- **Loop region**: long-press-drag on the measure ruler selects a
+  measure-snapped region (painted teal). The tick clock wraps at the loop end;
+  audio clips that start inside the region re-arm on each pass. The loop chip
+  in the transport clears it.
+- **Practice tempo**: the `1×/¾×/½×` chip scales the tick duration only
+  (patterns play slower; audio clips keep their natural speed, so they drift
+  under a multiplier — practice tempo is meant for note/drum material).
+- **Metronome + count-in**: the metronome chip toggles
+  `settings.metronomeEnabled` (clicks every beat, accented on the measure);
+  the `1·2·3` chip enables a one-measure count-in before the clock starts.
+- **Auto-follow**: the timeline scrolls to keep the playhead visible during
+  playback; a manual horizontal scroll pauses following until the next play.
+
 ## Save / Load
 
 Song projects save as `SongProjectSnapshot` through the shared save browser.
