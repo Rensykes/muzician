@@ -195,21 +195,13 @@ void main() {
     playback.setLoopRegion(0, 4);
 
     // Stop after the event fired three times (i.e. two wraps happened).
-    var stopped = false;
-    container.listen<int>(
-      // dummy listen to keep container alive
-      Provider((_) => 0),
-      (_, __) {},
-    );
     final run = playback.startPlayback(
       tickDurationOverride: const Duration(milliseconds: 1),
     );
     while (fires.length < 3) {
       await Future<void>.delayed(const Duration(milliseconds: 2));
-      if (fires.length >= 3 && !stopped) break;
     }
     playback.stopPlayback();
-    stopped = true;
     await run;
 
     expect(fires.length, greaterThanOrEqualTo(3),
