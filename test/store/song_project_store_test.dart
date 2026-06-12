@@ -372,6 +372,29 @@ void main() {
     expect(clamped.trimStartMs + clamped.trimEndMs, lessThan(1000));
   });
 
+  test('markers: add sorts by tick; update + remove work', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+
+    final m2 = notifier.addMarker(32, 'Chorus');
+    final m1 = notifier.addMarker(0, 'Verse');
+    var markers = container.read(songProjectProvider).markers;
+    expect(markers.map((m) => m.label), ['Verse', 'Chorus']);
+
+    notifier.updateMarker(m1, label: 'Intro');
+    markers = container.read(songProjectProvider).markers;
+    expect(markers.first.label, 'Intro');
+
+    notifier.removeMarker(m2);
+    expect(container.read(songProjectProvider).markers, hasLength(1));
+
+    // JSON round trip keeps markers.
+    final round =
+        SongProject.fromJson(container.read(songProjectProvider).toJson());
+    expect(round.markers.single.label, 'Intro');
+  });
+
   test('deleteClip cleans up orphaned pattern', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
