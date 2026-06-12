@@ -2,8 +2,10 @@ library;
 
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/song_playback.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_playback_store.dart';
@@ -37,6 +39,7 @@ class SongArrangerTimeline extends ConsumerStatefulWidget {
 
 class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
   late final ScrollController _hScroll;
+  bool _userScrubbing = false;
 
   @override
   void initState() {
@@ -50,8 +53,35 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
     super.dispose();
   }
 
+  /// Keeps the playhead inside the visible window while playing.
+  void _followPlayhead(int tick) {
+    if (_userScrubbing || !_hScroll.hasClients) return;
+    final position = _hScroll.position;
+    final playheadDx = tick * _kTickWidth;
+    final viewLeft = position.pixels;
+    final viewRight = viewLeft + position.viewportDimension;
+    const margin = 80.0;
+    if (playheadDx > viewRight - margin || playheadDx < viewLeft) {
+      final target = (playheadDx - position.viewportDimension * 0.3).clamp(
+        0.0,
+        position.maxScrollExtent,
+      );
+      _hScroll.jumpTo(target);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen(songPlaybackProvider, (prev, next) {
+      if (next.status == SongPlaybackStatus.playing &&
+          next.currentTick != null) {
+        _followPlayhead(next.currentTick!);
+      }
+      if (prev?.status == SongPlaybackStatus.idle &&
+          next.status == SongPlaybackStatus.playing) {
+        _userScrubbing = false; // re-arm follow on each new playback
+      }
+    });
     final project = ref.watch(songProjectProvider);
     final orderedTracks = [...project.tracks]
       ..sort((a, b) => a.order.compareTo(b.order));
@@ -95,7 +125,17 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
         final gutterWidth = constraints.maxWidth >= _kTabletBreakpoint
             ? _kGutterTablet
             : _kGutterCompact;
-        return Column(
+        return NotificationListener<UserScrollNotification>(
+          onNotification: (notification) {
+            // A user-initiated horizontal scroll pauses auto-follow until
+            // the next playback starts.
+            if (notification.metrics.axis == Axis.horizontal &&
+                notification.direction != ScrollDirection.idle) {
+              _userScrubbing = true;
+            }
+            return false;
+          },
+          child: Column(
           children: [
             _MeasureRuler(
               totalMeasures: project.config.totalMeasures,
@@ -136,13 +176,14 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
               ),
             ),
           ],
+          ),
         );
       },
     );
   }
 }
 
-class _MeasureRuler extends StatelessWidget {
+class _MeasureRuler extends ConsumerStatefulWidget {
   final int totalMeasures;
   final int measureTicks;
   final double timelineWidth;
@@ -165,7 +206,60 @@ class _MeasureRuler extends StatelessWidget {
   });
 
   @override
+  ConsumerState<_MeasureRuler> createState() => _MeasureRulerState();
+}
+
+class _MeasureRulerState extends ConsumerState<_MeasureRuler> {
+  int? _dragStartTick;
+  int? _dragEndTick;
+
+  int _snappedTick(double dx) {
+    final tick = (dx / _kTickWidth).round();
+    final snapped = (tick / widget.measureTicks).round() * widget.measureTicks;
+    return snapped.clamp(0, widget.measureTicks * widget.totalMeasures);
+  }
+
+  void _onDragStart(DragStartDetails details) {
+    setState(() {
+      _dragStartTick = _snappedTick(details.localPosition.dx);
+      _dragEndTick = null;
+    });
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_dragStartTick == null) return;
+    final tick = _snappedTick(details.localPosition.dx);
+    if (tick == _dragEndTick) return;
+    setState(() => _dragEndTick = tick);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final a = _dragStartTick;
+    final b = _dragEndTick;
+    setState(() {
+      _dragStartTick = null;
+      _dragEndTick = null;
+    });
+    if (a == null || b == null || a == b) return;
+    HapticFeedback.mediumImpact();
+    ref
+        .read(songPlaybackProvider.notifier)
+        .setLoopRegion(a < b ? a : b, a < b ? b : a);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final playback = ref.watch(songPlaybackProvider);
+    final pendingStart = _dragStartTick;
+    final pendingEnd = _dragEndTick;
+    final (loopStart, loopEnd) =
+        pendingStart != null && pendingEnd != null
+        ? (
+            pendingStart < pendingEnd ? pendingStart : pendingEnd,
+            pendingStart < pendingEnd ? pendingEnd : pendingStart,
+          )
+        : (playback.loopStartTick, playback.loopEndTickExclusive);
+
     return Container(
       height: _kRulerHeight,
       decoration: BoxDecoration(
@@ -176,25 +270,38 @@ class _MeasureRuler extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(width: gutterWidth, child: const _GutterCorner()),
+          SizedBox(width: widget.gutterWidth, child: const _GutterCorner()),
           _VerticalDivider(),
           Expanded(
             child: SingleChildScrollView(
-              controller: hScroll,
+              controller: widget.hScroll,
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: timelineWidth,
+                width: widget.timelineWidth,
                 height: _kRulerHeight,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTapDown: (details) => onSeekToDx(details.localPosition.dx),
+                  onTapDown: (details) =>
+                      widget.onSeekToDx(details.localPosition.dx),
+                  onLongPressStart: (d) => _onDragStart(
+                    DragStartDetails(localPosition: d.localPosition),
+                  ),
+                  onLongPressMoveUpdate: (d) => _onDragUpdate(
+                    DragUpdateDetails(
+                      globalPosition: d.globalPosition,
+                      localPosition: d.localPosition,
+                    ),
+                  ),
+                  onLongPressEnd: (d) => _onDragEnd(DragEndDetails()),
                   child: CustomPaint(
                     painter: _RulerPainter(
-                      totalMeasures: totalMeasures,
-                      measureTicks: measureTicks,
-                      currentPlaybackTick: currentPlaybackTick,
+                      totalMeasures: widget.totalMeasures,
+                      measureTicks: widget.measureTicks,
+                      currentPlaybackTick: widget.currentPlaybackTick,
+                      loopStartTick: loopStart,
+                      loopEndTickExclusive: loopEnd,
                     ),
-                    size: Size(timelineWidth, _kRulerHeight),
+                    size: Size(widget.timelineWidth, _kRulerHeight),
                   ),
                 ),
               ),
@@ -240,11 +347,15 @@ class _RulerPainter extends CustomPainter {
   final int totalMeasures;
   final int measureTicks;
   final int? currentPlaybackTick;
+  final int? loopStartTick;
+  final int? loopEndTickExclusive;
 
   const _RulerPainter({
     required this.totalMeasures,
     required this.measureTicks,
     required this.currentPlaybackTick,
+    this.loopStartTick,
+    this.loopEndTickExclusive,
   });
 
   @override
@@ -253,6 +364,21 @@ class _RulerPainter extends CustomPainter {
     final linePaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.08)
       ..strokeWidth = 0.5;
+
+    // Loop region band under the measure numbers.
+    if (loopStartTick != null && loopEndTickExclusive != null) {
+      final left = loopStartTick! * _kTickWidth;
+      final right = loopEndTickExclusive! * _kTickWidth;
+      canvas.drawRect(
+        Rect.fromLTRB(left, 0, right, size.height),
+        Paint()..color = MuzicianTheme.teal.withValues(alpha: 0.18),
+      );
+      final edgePaint = Paint()
+        ..color = MuzicianTheme.teal
+        ..strokeWidth = 2;
+      canvas.drawLine(Offset(left, 0), Offset(left, size.height), edgePaint);
+      canvas.drawLine(Offset(right, 0), Offset(right, size.height), edgePaint);
+    }
 
     for (var m = 0; m <= totalMeasures; m++) {
       final x = m * measureWidth;
@@ -286,7 +412,9 @@ class _RulerPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RulerPainter oldDelegate) =>
       totalMeasures != oldDelegate.totalMeasures ||
-      currentPlaybackTick != oldDelegate.currentPlaybackTick;
+      currentPlaybackTick != oldDelegate.currentPlaybackTick ||
+      loopStartTick != oldDelegate.loopStartTick ||
+      loopEndTickExclusive != oldDelegate.loopEndTickExclusive;
 }
 
 /// Width (in ticks) of the right-edge resize handle hit zone.
