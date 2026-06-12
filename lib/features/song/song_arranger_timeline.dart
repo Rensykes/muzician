@@ -577,8 +577,18 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
     widget.measureTicks * widget.totalMeasures,
   );
 
-  int _snapToMeasure(int tick) =>
-      (tick / widget.measureTicks).round() * widget.measureTicks;
+  /// Snap unit: a measure by default, a beat when beat-snap is on.
+  int get _snapTicks {
+    if (!ref.read(songSnapToBeatProvider)) return widget.measureTicks;
+    final ts = ref.read(songProjectProvider).config.timeSignature;
+    final beatTicks = widget.measureTicks ~/ ts.beatsPerMeasure;
+    return beatTicks > 0 ? beatTicks : widget.measureTicks;
+  }
+
+  int _snapToMeasure(int tick) {
+    final unit = _snapTicks;
+    return (tick / unit).round() * unit;
+  }
 
   /// First clip on this track that starts strictly after [tick] (excluding
   /// the optionally-passed clip id), or null.
@@ -612,14 +622,15 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
     final tick = _tickAtDx(details.localPosition.dx);
     if (_clipAt(tick) != null) return;
 
+    final unit = _snapTicks;
     final start = _snapToMeasure(tick).clamp(
       0,
-      widget.measureTicks * widget.totalMeasures - widget.measureTicks,
+      widget.measureTicks * widget.totalMeasures - unit,
     );
     final ceiling =
         _nextClipStartAfter(start) ??
         widget.measureTicks * widget.totalMeasures;
-    final defaultEnd = (start + widget.measureTicks).clamp(start + 1, ceiling);
+    final defaultEnd = (start + unit).clamp(start + 1, ceiling);
 
     HapticFeedback.lightImpact();
     setState(() {
@@ -637,7 +648,7 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
     final tick = _tickAtDx(details.localPosition.dx);
     final snapped = _snapToMeasure(
       tick,
-    ).clamp(start + widget.measureTicks, ceiling);
+    ).clamp(start + _snapTicks, ceiling);
     if (snapped == _pendingEndTick) return;
     setState(() => _pendingEndTick = snapped);
   }
@@ -955,6 +966,7 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
                       );
                 },
               ),
+              ?_pasteOption(ctx, startTick),
             ],
           );
         }
@@ -1004,6 +1016,7 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
                 _openImportPicker(context, 'fretboard', startTick);
               },
             ),
+            ?_pasteOption(ctx, startTick),
           ],
         );
       },
@@ -1013,6 +1026,53 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
   String _lengthSummary(int lengthTicks) {
     final measures = lengthTicks ~/ widget.measureTicks;
     return measures == 1 ? '1 measure' : '$measures measures';
+  }
+
+  /// "Paste copied clip" sheet option, or null when the clipboard is empty,
+  /// the pattern type doesn't match this track, or the pattern was deleted.
+  _AddClipOption? _pasteOption(BuildContext ctx, int startTick) {
+    final clipboard = ref.read(songClipClipboardProvider);
+    if (clipboard == null) return null;
+    final matches = switch (clipboard.patternType) {
+      SongPatternType.note => widget.track.type == SongTrackType.note,
+      SongPatternType.drum => widget.track.type == SongTrackType.drum,
+      SongPatternType.audio => widget.track.type == SongTrackType.audio,
+    };
+    if (!matches) return null;
+    final project = ref.read(songProjectProvider);
+    final exists = switch (clipboard.patternType) {
+      SongPatternType.note =>
+        project.notePatterns.any((p) => p.id == clipboard.patternId),
+      SongPatternType.drum =>
+        project.drumPatterns.any((p) => p.id == clipboard.patternId),
+      SongPatternType.audio =>
+        project.audioPatterns.any((p) => p.id == clipboard.patternId),
+    };
+    if (!exists) return null;
+    return _AddClipOption(
+      label: 'Paste copied clip',
+      icon: Icons.content_paste,
+      color: MuzicianTheme.sky,
+      onTap: () {
+        Navigator.pop(ctx);
+        final id = ref
+            .read(songProjectProvider.notifier)
+            .addClipReference(
+              patternId: clipboard.patternId,
+              patternType: clipboard.patternType,
+              trackId: widget.track.id,
+              startTick: startTick,
+            );
+        if (id == null && mounted) {
+          showGlassSnackbar(
+            context,
+            title: 'Paste failed',
+            message: 'Target slot is occupied.',
+            contentType: ContentType.warning,
+          );
+        }
+      },
+    );
   }
 
   String _audioStartSummary(int startTick) {

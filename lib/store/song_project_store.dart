@@ -423,6 +423,128 @@ class SongProjectNotifier extends Notifier<SongProject> {
     return newClip.id;
   }
 
+  /// Moves [clipId] to [targetTrackId] keeping its start tick.
+  ///
+  /// Returns false (no change) when the target track doesn't exist, has a
+  /// different type, or the slot is occupied.
+  bool moveClipToTrack(String clipId, String targetTrackId) {
+    final clip = state.clips.firstWhere((c) => c.id == clipId);
+    if (clip.trackId == targetTrackId) return true;
+    final sourceTrack = state.tracks.firstWhere((t) => t.id == clip.trackId);
+    final targetTrack = state.tracks
+        .where((t) => t.id == targetTrackId)
+        .firstOrNull;
+    if (targetTrack == null || targetTrack.type != sourceTrack.type) {
+      return false;
+    }
+    final patternLen = rules.patternLengthForClip(state, clip);
+    if (patternLen == null) return false;
+    final candidate = clip.copyWith(trackId: targetTrackId);
+    if (!rules.canPlaceClipOnTrack(
+      state,
+      candidate,
+      patternLengthTicks: patternLen,
+      excludingClipId: clipId,
+    )) {
+      return false;
+    }
+    state = state.copyWith(
+      clips: state.clips.map((c) => c.id == clipId ? candidate : c).toList(),
+    );
+    return true;
+  }
+
+  /// Transposes every note of the clip's pattern by [semitones].
+  ///
+  /// Shared patterns transpose all their clip instances (same semantics as
+  /// pattern editing). Rejected when any note would leave midi 0..127.
+  bool transposeClipPattern(String clipId, int semitones) {
+    final clip = state.clips.firstWhere((c) => c.id == clipId);
+    if (clip.patternType != SongPatternType.note) return false;
+    final pattern = state.notePatterns
+        .where((p) => p.id == clip.patternId)
+        .firstOrNull;
+    if (pattern == null || pattern.notes.isEmpty) return false;
+    for (final note in pattern.notes) {
+      final next = note.midiNote + semitones;
+      if (next < 0 || next > 127) return false;
+    }
+    final next = pattern.copyWith(
+      notes: [
+        for (final note in pattern.notes)
+          note.copyWith(midiNote: note.midiNote + semitones),
+      ],
+    );
+    state = state.copyWith(
+      notePatterns: state.notePatterns
+          .map((p) => p.id == pattern.id ? next : p)
+          .toList(),
+    );
+    return true;
+  }
+
+  /// Adds a new clip referencing an existing pattern (shared link) — the
+  /// paste half of copy/paste. Returns the new clip id, or null when the
+  /// track type doesn't match the pattern or the slot is occupied.
+  String? addClipReference({
+    required String patternId,
+    required SongPatternType patternType,
+    required String trackId,
+    required int startTick,
+  }) {
+    final track = state.tracks.where((t) => t.id == trackId).firstOrNull;
+    if (track == null) return null;
+    final matches = switch (patternType) {
+      SongPatternType.note => track.type == SongTrackType.note,
+      SongPatternType.drum => track.type == SongTrackType.drum,
+      SongPatternType.audio => track.type == SongTrackType.audio,
+    };
+    if (!matches) return null;
+    final newClip = SongClipInstance(
+      id: _id('sci'),
+      trackId: trackId,
+      patternId: patternId,
+      patternType: patternType,
+      startTick: startTick < 0 ? 0 : startTick,
+    );
+    final patternLen = rules.patternLengthForClip(
+      state.copyWith(clips: [...state.clips, newClip]),
+      newClip,
+    );
+    if (patternLen == null) return null;
+    if (!rules.canPlaceClipOnTrack(
+      state,
+      newClip,
+      patternLengthTicks: patternLen,
+    )) {
+      return null;
+    }
+    state = state.copyWith(clips: [...state.clips, newClip]);
+    state = rules.ensureProjectCoversEndTick(
+      state,
+      newClip.startTick + patternLen,
+    );
+    return newClip.id;
+  }
+
+  /// Moves a track up/down the lane order by [delta] positions (clamped).
+  void moveTrack(String trackId, int delta) {
+    final ordered = [...state.tracks]
+      ..sort((a, b) => a.order.compareTo(b.order));
+    final from = ordered.indexWhere((t) => t.id == trackId);
+    if (from < 0) return;
+    final to = (from + delta).clamp(0, ordered.length - 1);
+    if (to == from) return;
+    final track = ordered.removeAt(from);
+    ordered.insert(to, track);
+    state = state.copyWith(
+      tracks: [
+        for (var i = 0; i < ordered.length; i++)
+          ordered[i].copyWith(order: i),
+      ],
+    );
+  }
+
   void deleteClip(String clipId) {
     final clip = state.clips.firstWhere((c) => c.id == clipId);
 
@@ -668,3 +790,12 @@ final songProjectProvider = NotifierProvider<SongProjectNotifier, SongProject>(
 final songSelectedTrackIdProvider = StateProvider<String?>((_) => null);
 
 final songSelectedClipIdProvider = StateProvider<String?>((_) => null);
+
+/// Copied clip reference — paste creates a new clip sharing the pattern.
+final songClipClipboardProvider =
+    StateProvider<({String patternId, SongPatternType patternType})?>(
+      (_) => null,
+    );
+
+/// When true, clip create/move/resize snap to beats instead of measures.
+final songSnapToBeatProvider = StateProvider<bool>((_) => false);

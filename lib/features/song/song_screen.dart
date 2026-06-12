@@ -436,6 +436,16 @@ class _SongTransportStrip extends ConsumerWidget {
             playbackNotifier.toggleCountIn();
           },
         ),
+        _TransportChip(
+          key: const Key('snapToggle'),
+          label: ref.watch(songSnapToBeatProvider) ? 'SNAP ♩' : 'SNAP ▭',
+          active: ref.watch(songSnapToBeatProvider),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ref.read(songSnapToBeatProvider.notifier).state =
+                !ref.read(songSnapToBeatProvider);
+          },
+        ),
         if (playback.hasLoop)
           _TransportChip(
             key: const Key('loopChip'),
