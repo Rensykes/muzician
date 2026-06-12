@@ -59,27 +59,49 @@ class SongwriterScreenSheet extends ConsumerWidget {
               onOpenStructure: () => _openStructure(context),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
-                children: [
-                  if (project.sections.isEmpty)
-                    const _EmptyState(key: Key('songwriterEmptyHint')),
-                  for (final section in project.sections)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 36),
-                      child: _SectionSheet(sectionId: section.id),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: _AddSectionRule(
-                      key: const Key('songwriterAddSection'),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        notifier.addSection(label: null, lengthBars: 8);
-                      },
-                    ),
-                  ),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoColumns = constraints.maxWidth >= 700;
+                  final columnWidth = twoColumns
+                      ? (constraints.maxWidth - 28 * 2 - 24) / 2
+                      : null;
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
+                    children: [
+                      if (project.sections.isEmpty)
+                        const _EmptyState(key: Key('songwriterEmptyHint')),
+                      if (twoColumns)
+                        // Wide layout: sections flow in two columns.
+                        Wrap(
+                          spacing: 24,
+                          runSpacing: 36,
+                          children: [
+                            for (final section in project.sections)
+                              SizedBox(
+                                width: columnWidth,
+                                child: _SectionSheet(sectionId: section.id),
+                              ),
+                          ],
+                        )
+                      else
+                        for (final section in project.sections)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 36),
+                            child: _SectionSheet(sectionId: section.id),
+                          ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: _AddSectionRule(
+                          key: const Key('songwriterAddSection'),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            notifier.addSection(label: null, lengthBars: 8);
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
