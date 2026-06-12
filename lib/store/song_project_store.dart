@@ -672,6 +672,36 @@ class SongProjectNotifier extends Notifier<SongProject> {
     return newClip.id;
   }
 
+  // ── Markers ─────────────────────────────────────────────────────────────────
+
+  String addMarker(int tick, String label) {
+    final marker = SongMarker(
+      id: _id('mk'),
+      tick: tick < 0 ? 0 : tick,
+      label: label,
+    );
+    state = state.copyWith(
+      markers: [...state.markers, marker]
+        ..sort((a, b) => a.tick.compareTo(b.tick)),
+    );
+    return marker.id;
+  }
+
+  void updateMarker(String id, {int? tick, String? label}) {
+    state = state.copyWith(
+      markers: [
+        for (final m in state.markers)
+          if (m.id == id) m.copyWith(tick: tick, label: label) else m,
+      ]..sort((a, b) => a.tick.compareTo(b.tick)),
+    );
+  }
+
+  void removeMarker(String id) {
+    state = state.copyWith(
+      markers: state.markers.where((m) => m.id != id).toList(),
+    );
+  }
+
   /// Moves a track up/down the lane order by [delta] positions (clamped).
   void moveTrack(String trackId, int delta) {
     final ordered = [...state.tracks]
@@ -944,3 +974,6 @@ final songClipClipboardProvider =
 
 /// When true, clip create/move/resize snap to beats instead of measures.
 final songSnapToBeatProvider = StateProvider<bool>((_) => false);
+
+/// Horizontal timeline zoom (1.0 = 4 dp per tick). Pinch on the timeline.
+final songTimelineZoomProvider = StateProvider<double>((_) => 1.0);

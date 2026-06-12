@@ -15,7 +15,11 @@ import '../../ui/glass_snackbar.dart';
 import 'song_audio_actions.dart';
 import 'song_track_header.dart';
 
-const double _kTickWidth = 4.0;
+const double _kBaseTickWidth = 4.0;
+
+/// Current tick width in dp — [_kBaseTickWidth] × the timeline zoom. Set by
+/// the timeline root on every build so painters and hit-tests stay in sync.
+double _kTickWidth = _kBaseTickWidth;
 const double _kRulerHeight = 32;
 const double _kLaneHeight = 64;
 
@@ -90,8 +94,11 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
     }
   }
 
+  double _scaleBaseZoom = 1.0;
+
   @override
   Widget build(BuildContext context) {
+    _kTickWidth = _kBaseTickWidth * ref.watch(songTimelineZoomProvider);
     ref.listen(songPlaybackProvider, (prev, next) {
       if (next.status == SongPlaybackStatus.playing &&
           next.currentTick != null) {
@@ -193,7 +200,18 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
             }
             return false;
           },
-          child: Column(
+          child: GestureDetector(
+            // Two-finger pinch zooms the timeline horizontally; single-finger
+            // input falls through to the scroll views and clip gestures.
+            onScaleStart: (details) {
+              _scaleBaseZoom = ref.read(songTimelineZoomProvider);
+            },
+            onScaleUpdate: (details) {
+              if (details.pointerCount < 2) return;
+              ref.read(songTimelineZoomProvider.notifier).state =
+                  (_scaleBaseZoom * details.horizontalScale).clamp(0.5, 3.0);
+            },
+            child: Column(
           children: [
             _MeasureRuler(
               totalMeasures: project.config.totalMeasures,
@@ -237,6 +255,7 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
               ),
             ),
           ],
+            ),
           ),
         );
       },
@@ -308,9 +327,95 @@ class _MeasureRulerState extends ConsumerState<_MeasureRuler> {
         .setLoopRegion(a < b ? a : b, a < b ? b : a);
   }
 
+  Future<void> _addMarkerAt(int tick) async {
+    final controller = TextEditingController();
+    final label = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: MuzicianTheme.surface,
+        title: const Text(
+          'Add Marker',
+          style: TextStyle(color: MuzicianTheme.textPrimary),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: MuzicianTheme.textPrimary),
+          decoration: const InputDecoration(
+            hintText: 'Verse, Chorus, …',
+            hintStyle: TextStyle(color: MuzicianTheme.textMuted),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (label == null) return;
+    ref.read(songProjectProvider.notifier).addMarker(tick, label.trim());
+  }
+
+  Future<void> _editMarker(SongMarker marker) async {
+    final controller = TextEditingController(text: marker.label);
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: MuzicianTheme.surface,
+        title: const Text(
+          'Edit Marker',
+          style: TextStyle(color: MuzicianTheme.textPrimary),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: MuzicianTheme.textPrimary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'delete'),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: MuzicianTheme.red),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'save'),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final notifier = ref.read(songProjectProvider.notifier);
+    if (action == 'delete') {
+      notifier.removeMarker(marker.id);
+    } else if (action == 'save') {
+      notifier.updateMarker(marker.id, label: controller.text.trim());
+    }
+  }
+
+  /// Marker whose flag sits within 12 dp of [dx], or null.
+  SongMarker? _markerNear(double dx, List<SongMarker> markers) {
+    for (final m in markers) {
+      if ((m.tick * _kTickWidth - dx).abs() < 12) return m;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final playback = ref.watch(songPlaybackProvider);
+    final markers = ref.watch(songProjectProvider.select((p) => p.markers));
     final pendingStart = _dragStartTick;
     final pendingEnd = _dragEndTick;
     final (loopStart, loopEnd) =
@@ -342,8 +447,18 @@ class _MeasureRulerState extends ConsumerState<_MeasureRuler> {
                 height: _kRulerHeight,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTapDown: (details) =>
-                      widget.onSeekToDx(details.localPosition.dx),
+                  onTapDown: (details) {
+                    final hit = _markerNear(details.localPosition.dx, markers);
+                    if (hit != null) {
+                      _editMarker(hit);
+                      return;
+                    }
+                    widget.onSeekToDx(details.localPosition.dx);
+                  },
+                  onDoubleTapDown: (details) {
+                    final tick = _snappedTick(details.localPosition.dx);
+                    _addMarkerAt(tick);
+                  },
                   onLongPressStart: (d) => _onDragStart(
                     DragStartDetails(localPosition: d.localPosition),
                   ),
@@ -361,6 +476,7 @@ class _MeasureRulerState extends ConsumerState<_MeasureRuler> {
                       currentPlaybackTick: widget.currentPlaybackTick,
                       loopStartTick: loopStart,
                       loopEndTickExclusive: loopEnd,
+                      markers: markers,
                     ),
                     size: Size(widget.timelineWidth, _kRulerHeight),
                   ),
@@ -410,6 +526,7 @@ class _RulerPainter extends CustomPainter {
   final int? currentPlaybackTick;
   final int? loopStartTick;
   final int? loopEndTickExclusive;
+  final List<SongMarker> markers;
 
   const _RulerPainter({
     required this.totalMeasures,
@@ -417,6 +534,7 @@ class _RulerPainter extends CustomPainter {
     required this.currentPlaybackTick,
     this.loopStartTick,
     this.loopEndTickExclusive,
+    this.markers = const [],
   });
 
   @override
@@ -461,6 +579,41 @@ class _RulerPainter extends CustomPainter {
       }
     }
 
+    // Marker flags.
+    for (final marker in markers) {
+      final mx = marker.tick * _kTickWidth;
+      final flagPaint = Paint()..color = MuzicianTheme.orange;
+      canvas.drawLine(
+        Offset(mx, 0),
+        Offset(mx, size.height),
+        Paint()
+          ..color = MuzicianTheme.orange.withValues(alpha: 0.8)
+          ..strokeWidth = 1.5,
+      );
+      final path = Path()
+        ..moveTo(mx, 2)
+        ..lineTo(mx + 8, 6)
+        ..lineTo(mx, 10)
+        ..close();
+      canvas.drawPath(path, flagPaint);
+      if (marker.label.isNotEmpty) {
+        final tp = TextPainter(
+          text: TextSpan(
+            text: marker.label,
+            style: const TextStyle(
+              color: MuzicianTheme.orange,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+          ellipsis: '…',
+        )..layout(maxWidth: 80);
+        tp.paint(canvas, Offset(mx + 10, 2));
+      }
+    }
+
     if (currentPlaybackTick != null) {
       final cx = currentPlaybackTick! * _kTickWidth;
       final cursorPaint = Paint()
@@ -475,7 +628,8 @@ class _RulerPainter extends CustomPainter {
       totalMeasures != oldDelegate.totalMeasures ||
       currentPlaybackTick != oldDelegate.currentPlaybackTick ||
       loopStartTick != oldDelegate.loopStartTick ||
-      loopEndTickExclusive != oldDelegate.loopEndTickExclusive;
+      loopEndTickExclusive != oldDelegate.loopEndTickExclusive ||
+      markers != oldDelegate.markers;
 }
 
 /// Width (in ticks) of the right-edge resize handle hit zone.
