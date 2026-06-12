@@ -8,6 +8,7 @@ import '../../models/song_playback.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
@@ -385,6 +386,15 @@ class _SongTransportStrip extends ConsumerWidget {
       );
     }
 
+    final metronomeOn = ref.watch(
+      settingsProvider.select((s) => s.metronomeEnabled),
+    );
+    final multiplierLabel = switch (playback.tempoMultiplier) {
+      0.75 => '¾×',
+      0.5 => '½×',
+      _ => '1×',
+    };
+
     return transport.TransportStrip(
       bpm: bpm,
       barBeat: barBeat,
@@ -396,6 +406,96 @@ class _SongTransportStrip extends ConsumerWidget {
       onBpmTap: onBpmTap,
       onSigTap: onSigTap,
       onBpmDelta: (delta) => songNotifier.setTempo(bpm + delta),
+      extras: [
+        _TransportChip(
+          key: const Key('tempoMultiplierChip'),
+          label: multiplierLabel,
+          active: playback.tempoMultiplier != 1.0,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            playbackNotifier.cycleTempoMultiplier();
+          },
+        ),
+        _TransportChip(
+          key: const Key('songMetronomeToggle'),
+          icon: Icons.timer_outlined,
+          active: metronomeOn,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ref
+                .read(settingsProvider.notifier)
+                .setMetronomeEnabled(!metronomeOn);
+          },
+        ),
+        _TransportChip(
+          key: const Key('countInToggle'),
+          label: '1·2·3',
+          active: playback.countInEnabled,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            playbackNotifier.toggleCountIn();
+          },
+        ),
+        if (playback.hasLoop)
+          _TransportChip(
+            key: const Key('loopChip'),
+            icon: Icons.repeat_rounded,
+            active: true,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              playbackNotifier.clearLoopRegion();
+            },
+          ),
+      ],
+    );
+  }
+}
+
+/// Small pill control rendered in the transport's extras slot.
+class _TransportChip extends StatelessWidget {
+  final String? label;
+  final IconData? icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _TransportChip({
+    super.key,
+    this.label,
+    this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? MuzicianTheme.sky : MuzicianTheme.textMuted;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: active
+              ? MuzicianTheme.sky.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active
+                ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                : MuzicianTheme.glassBorder,
+          ),
+        ),
+        child: icon != null
+            ? Icon(icon, size: 14, color: color)
+            : Text(
+                label!,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+      ),
     );
   }
 }
