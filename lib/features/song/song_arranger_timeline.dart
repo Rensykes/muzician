@@ -18,6 +18,26 @@ import 'song_track_header.dart';
 const double _kTickWidth = 4.0;
 const double _kRulerHeight = 32;
 const double _kLaneHeight = 64;
+
+/// Pre-computed pattern content for in-clip thumbnails.
+class NoteClipPreview {
+  final List<NotePatternNote> notes;
+  final int lengthTicks;
+  final int minMidi;
+  final int maxMidi;
+  const NoteClipPreview({
+    required this.notes,
+    required this.lengthTicks,
+    required this.minMidi,
+    required this.maxMidi,
+  });
+}
+
+class DrumClipPreview {
+  final List<DrumLaneSequence> lanes;
+  final int lengthTicks;
+  const DrumClipPreview({required this.lanes, required this.lengthTicks});
+}
 const double _kGutterCompact = 140;
 const double _kGutterTablet = 220;
 const double _kTabletBreakpoint = 600;
@@ -98,6 +118,44 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
         if (entry.value > 1) entry.key,
     };
 
+    final notePatternById = {for (final p in project.notePatterns) p.id: p};
+    final drumPatternById = {for (final p in project.drumPatterns) p.id: p};
+    final notePreviewByClipId = <String, NoteClipPreview>{};
+    final drumPreviewByClipId = <String, DrumClipPreview>{};
+    final clipLabelById = <String, String>{};
+    for (final clip in project.clips) {
+      switch (clip.patternType) {
+        case SongPatternType.note:
+          final pattern = notePatternById[clip.patternId];
+          if (pattern == null || pattern.notes.isEmpty) break;
+          var minMidi = pattern.notes.first.midiNote;
+          var maxMidi = minMidi;
+          for (final n in pattern.notes) {
+            if (n.midiNote < minMidi) minMidi = n.midiNote;
+            if (n.midiNote > maxMidi) maxMidi = n.midiNote;
+          }
+          notePreviewByClipId[clip.id] = NoteClipPreview(
+            notes: pattern.notes,
+            lengthTicks: pattern.lengthTicks,
+            minMidi: minMidi,
+            maxMidi: maxMidi,
+          );
+          clipLabelById[clip.id] = pattern.name;
+        case SongPatternType.drum:
+          final pattern = drumPatternById[clip.patternId];
+          if (pattern == null) break;
+          if (pattern.lanes.any((l) => l.activeTicks.isNotEmpty)) {
+            drumPreviewByClipId[clip.id] = DrumClipPreview(
+              lanes: pattern.lanes,
+              lengthTicks: pattern.lengthTicks,
+            );
+          }
+          clipLabelById[clip.id] = pattern.name;
+        case SongPatternType.audio:
+          break;
+      }
+    }
+
     final audioPatternById = {for (final p in project.audioPatterns) p.id: p};
     final audioAssetById = {for (final a in project.audioAssets) a.id: a};
     final audioPeaksByClipId = <String, List<int>>{};
@@ -165,6 +223,9 @@ class _SongArrangerTimelineState extends ConsumerState<SongArrangerTimeline> {
                     sharedPatternIds: sharedPatternIds,
                     audioPeaksByClipId: audioPeaksByClipId,
                     audioBrokenClipIds: audioBrokenClipIds,
+                    notePreviewByClipId: notePreviewByClipId,
+                    drumPreviewByClipId: drumPreviewByClipId,
+                    clipLabelById: clipLabelById,
                     measureTicks: widget.measureTicks,
                     totalMeasures: project.config.totalMeasures,
                     timelineWidth: timelineWidth,
@@ -428,6 +489,9 @@ class _TrackLane extends ConsumerStatefulWidget {
   final Set<String> sharedPatternIds;
   final Map<String, List<int>> audioPeaksByClipId;
   final Set<String> audioBrokenClipIds;
+  final Map<String, NoteClipPreview> notePreviewByClipId;
+  final Map<String, DrumClipPreview> drumPreviewByClipId;
+  final Map<String, String> clipLabelById;
   final int measureTicks;
   final int totalMeasures;
   final double timelineWidth;
@@ -442,6 +506,9 @@ class _TrackLane extends ConsumerStatefulWidget {
     required this.sharedPatternIds,
     required this.audioPeaksByClipId,
     required this.audioBrokenClipIds,
+    required this.notePreviewByClipId,
+    required this.drumPreviewByClipId,
+    required this.clipLabelById,
     required this.measureTicks,
     required this.totalMeasures,
     required this.timelineWidth,
@@ -789,6 +856,9 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
                       sharedPatternIds: widget.sharedPatternIds,
                       audioPeaksByClipId: widget.audioPeaksByClipId,
                       audioBrokenClipIds: widget.audioBrokenClipIds,
+                      notePreviewByClipId: widget.notePreviewByClipId,
+                      drumPreviewByClipId: widget.drumPreviewByClipId,
+                      clipLabelById: widget.clipLabelById,
                       measureTicks: widget.measureTicks,
                       totalMeasures: widget.totalMeasures,
                       trackColor: switch (widget.track.type) {
@@ -1090,6 +1160,9 @@ class _ClipLanePainter extends CustomPainter {
   final Set<String> sharedPatternIds;
   final Map<String, List<int>> audioPeaksByClipId;
   final Set<String> audioBrokenClipIds;
+  final Map<String, NoteClipPreview> notePreviewByClipId;
+  final Map<String, DrumClipPreview> drumPreviewByClipId;
+  final Map<String, String> clipLabelById;
   final int measureTicks;
   final int totalMeasures;
   final Color trackColor;
@@ -1107,6 +1180,9 @@ class _ClipLanePainter extends CustomPainter {
     required this.sharedPatternIds,
     required this.audioPeaksByClipId,
     required this.audioBrokenClipIds,
+    required this.notePreviewByClipId,
+    required this.drumPreviewByClipId,
+    required this.clipLabelById,
     required this.measureTicks,
     required this.totalMeasures,
     required this.trackColor,
@@ -1211,6 +1287,22 @@ class _ClipLanePainter extends CustomPainter {
       }
       if (audioBrokenClipIds.contains(clip.id)) {
         _paintBrokenStripes(canvas, rect);
+      }
+
+      // Pattern-content thumbnails.
+      final notePreview = notePreviewByClipId[clip.id];
+      if (notePreview != null) {
+        _paintNotePreview(canvas, rect, notePreview);
+      }
+      final drumPreview = drumPreviewByClipId[clip.id];
+      if (drumPreview != null) {
+        _paintDrumPreview(canvas, rect, drumPreview);
+      }
+
+      // Pattern-name label (when the clip is wide enough).
+      final label = clipLabelById[clip.id];
+      if (label != null && label.isNotEmpty) {
+        _paintClipLabel(canvas, rect.outerRect, label);
       }
 
       // Shared-pattern badge.
@@ -1318,6 +1410,85 @@ class _ClipLanePainter extends CustomPainter {
     canvas.restore();
   }
 
+  /// Mini piano-roll thumbnail: one rect per note, x scaled by tick, y by
+  /// pitch within the pattern's own range.
+  void _paintNotePreview(Canvas canvas, RRect rect, NoteClipPreview preview) {
+    final inner = rect.outerRect.deflate(5);
+    if (inner.width <= 4 || inner.height <= 6 || preview.lengthTicks <= 0) {
+      return;
+    }
+    canvas.save();
+    canvas.clipRRect(rect);
+    final range = (preview.maxMidi - preview.minMidi + 1).clamp(1, 128);
+    final rowH = (inner.height / range).clamp(2.0, 5.0);
+    final paint = Paint()..color = Colors.white.withValues(alpha: 0.85);
+    for (final note in preview.notes) {
+      final left =
+          inner.left + (note.startTick / preview.lengthTicks) * inner.width;
+      final w = ((note.durationTicks / preview.lengthTicks) * inner.width)
+          .clamp(2.0, inner.width);
+      // Higher pitch → higher on screen.
+      final t = range == 1
+          ? 0.5
+          : 1.0 - (note.midiNote - preview.minMidi) / (range - 1);
+      final top = inner.top + t * (inner.height - rowH);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(left, top, w, rowH),
+          const Radius.circular(1.5),
+        ),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  /// Step-dot grid: one row per drum lane that has hits.
+  void _paintDrumPreview(Canvas canvas, RRect rect, DrumClipPreview preview) {
+    final inner = rect.outerRect.deflate(6);
+    if (inner.width <= 4 || inner.height <= 6 || preview.lengthTicks <= 0) {
+      return;
+    }
+    final activeLanes = [
+      for (final lane in preview.lanes)
+        if (lane.activeTicks.isNotEmpty) lane,
+    ];
+    if (activeLanes.isEmpty) return;
+    canvas.save();
+    canvas.clipRRect(rect);
+    final rowH = inner.height / activeLanes.length;
+    final dotR = (rowH / 2).clamp(1.5, 3.0);
+    final paint = Paint()..color = Colors.white.withValues(alpha: 0.85);
+    for (var row = 0; row < activeLanes.length; row++) {
+      final cy = inner.top + rowH * (row + 0.5);
+      for (final tick in activeLanes[row].activeTicks) {
+        final cx = inner.left + (tick / preview.lengthTicks) * inner.width;
+        canvas.drawCircle(Offset(cx, cy), dotR, paint);
+      }
+    }
+    canvas.restore();
+  }
+
+  /// Pattern name in the clip's top-left corner.
+  void _paintClipLabel(Canvas canvas, Rect clipRect, String label) {
+    if (clipRect.width < 60) return;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.9),
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: clipRect.width - 28);
+    tp.paint(canvas, Offset(clipRect.left + 6, clipRect.top + 3));
+  }
+
   void _paintBrokenStripes(Canvas canvas, RRect rect) {
     final paint = Paint()
       ..color = const Color(0xCCB23A3A)
@@ -1375,6 +1546,9 @@ class _ClipLanePainter extends CustomPainter {
       clipLengths != oldDelegate.clipLengths ||
       audioPeaksByClipId != oldDelegate.audioPeaksByClipId ||
       audioBrokenClipIds != oldDelegate.audioBrokenClipIds ||
+      notePreviewByClipId != oldDelegate.notePreviewByClipId ||
+      drumPreviewByClipId != oldDelegate.drumPreviewByClipId ||
+      clipLabelById != oldDelegate.clipLabelById ||
       totalMeasures != oldDelegate.totalMeasures ||
       trackColor != oldDelegate.trackColor ||
       currentPlaybackTick != oldDelegate.currentPlaybackTick ||
