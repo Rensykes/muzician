@@ -432,26 +432,47 @@ class AudioClipPattern {
   final String name;
   final String assetId;
 
+  /// Milliseconds shaved off the asset's head / tail at playback time.
+  final int trimStartMs;
+  final int trimEndMs;
+
   const AudioClipPattern({
     required this.id,
     required this.name,
     required this.assetId,
+    this.trimStartMs = 0,
+    this.trimEndMs = 0,
   });
 
-  AudioClipPattern copyWith({String? id, String? name, String? assetId}) =>
-      AudioClipPattern(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        assetId: assetId ?? this.assetId,
-      );
+  AudioClipPattern copyWith({
+    String? id,
+    String? name,
+    String? assetId,
+    int? trimStartMs,
+    int? trimEndMs,
+  }) => AudioClipPattern(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    assetId: assetId ?? this.assetId,
+    trimStartMs: trimStartMs ?? this.trimStartMs,
+    trimEndMs: trimEndMs ?? this.trimEndMs,
+  );
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'assetId': assetId};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'assetId': assetId,
+    'trimStartMs': trimStartMs,
+    'trimEndMs': trimEndMs,
+  };
 
   factory AudioClipPattern.fromJson(Map<String, dynamic> json) =>
       AudioClipPattern(
         id: json['id'] as String,
         name: json['name'] as String,
         assetId: json['assetId'] as String,
+        trimStartMs: json['trimStartMs'] as int? ?? 0,
+        trimEndMs: json['trimEndMs'] as int? ?? 0,
       );
 }
 
