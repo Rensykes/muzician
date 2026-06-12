@@ -54,35 +54,51 @@ class _SongScreenState extends ConsumerState<SongScreen> {
         bottom: false,
         child: Column(
           children: [
-            // Header
+            // Header — collapses to a slim row on height-starved (landscape)
+            // viewports so the timeline keeps the vertical space.
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+              padding: MediaQuery.sizeOf(context).height < 500
+                  ? const EdgeInsets.fromLTRB(24, 4, 8, 0)
+                  : const EdgeInsets.fromLTRB(24, 16, 8, 0),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Song',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            color: MuzicianTheme.textPrimary,
-                            letterSpacing: -0.5,
+                    child: MediaQuery.sizeOf(context).height < 500
+                        ? const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Song',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: MuzicianTheme.textPrimary,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Song',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                  color: MuzicianTheme.textPrimary,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              Text(
+                                '${project.tracks.length} tracks',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: MuzicianTheme.textMuted,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        Text(
-                          '${project.tracks.length} tracks',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: MuzicianTheme.textMuted,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                   Consumer(builder: (context, ref, _) {
                     final locked = ref.watch(isProjectLockedProvider);
