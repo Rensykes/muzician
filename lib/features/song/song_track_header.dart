@@ -179,6 +179,8 @@ class _TrackOverflowMenu extends ConsumerWidget {
       color: MuzicianTheme.surface,
       items: const [
         PopupMenuItem(value: 'volume', child: Text('Volume')),
+        PopupMenuItem(value: 'moveUp', child: Text('Move up')),
+        PopupMenuItem(value: 'moveDown', child: Text('Move down')),
         PopupMenuItem(value: 'rename', child: Text('Rename')),
         PopupMenuItem(value: 'delete', child: Text('Delete')),
       ],
@@ -187,6 +189,12 @@ class _TrackOverflowMenu extends ConsumerWidget {
     switch (value) {
       case 'volume':
         _showVolumeDialog(context, ref, track);
+        break;
+      case 'moveUp':
+        ref.read(songProjectProvider.notifier).moveTrack(track.id, -1);
+        break;
+      case 'moveDown':
+        ref.read(songProjectProvider.notifier).moveTrack(track.id, 1);
         break;
       case 'rename':
         _showRenameDialog(context, ref, track);

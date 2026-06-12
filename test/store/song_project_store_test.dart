@@ -151,6 +151,134 @@ void main() {
     expect(roundTrip.volume, 0.25);
   });
 
+  test('transposeClipPattern shifts all notes; rejects out-of-range', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final trackId = notifier.addTrack(SongTrackType.note);
+    final clipId = notifier.createEmptyNotePatternClip(
+      trackId: trackId,
+      startTick: 0,
+    );
+    final pattern = container.read(songProjectProvider).notePatterns.single;
+    notifier.applyNotePattern(
+      pattern.id,
+      pattern.copyWith(
+        notes: const [
+          NotePatternNote(
+              id: 'n1', midiNote: 60, startTick: 0, durationTicks: 4),
+          NotePatternNote(
+              id: 'n2', midiNote: 64, startTick: 4, durationTicks: 4),
+        ],
+      ),
+    );
+
+    expect(notifier.transposeClipPattern(clipId, 12), isTrue);
+    var notes = container.read(songProjectProvider).notePatterns.single.notes;
+    expect(notes.map((n) => n.midiNote), [72, 76]);
+
+    expect(notifier.transposeClipPattern(clipId, -1), isTrue);
+    notes = container.read(songProjectProvider).notePatterns.single.notes;
+    expect(notes.map((n) => n.midiNote), [71, 75]);
+
+    // 71 + 60 = 131 > 127 → rejected, unchanged.
+    expect(notifier.transposeClipPattern(clipId, 60), isFalse);
+    notes = container.read(songProjectProvider).notePatterns.single.notes;
+    expect(notes.map((n) => n.midiNote), [71, 75]);
+  });
+
+  test('moveClipToTrack moves between same-type tracks only', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final a = notifier.addTrack(SongTrackType.note, name: 'A');
+    final b = notifier.addTrack(SongTrackType.note, name: 'B');
+    final d = notifier.addTrack(SongTrackType.drum, name: 'D');
+    final clipId = notifier.createEmptyNotePatternClip(
+      trackId: a,
+      startTick: 0,
+    );
+
+    expect(notifier.moveClipToTrack(clipId, d), isFalse); // type mismatch
+    expect(notifier.moveClipToTrack(clipId, b), isTrue);
+    expect(
+      container
+          .read(songProjectProvider)
+          .clips
+          .single
+          .trackId,
+      b,
+    );
+
+    // Occupied target slot → rejected.
+    notifier.createEmptyNotePatternClip(trackId: a, startTick: 0);
+    final blocking = notifier.createEmptyNotePatternClip(
+      trackId: b,
+      startTick: 0,
+    );
+    expect(blocking, isNotEmpty);
+    final clipOnA = container
+        .read(songProjectProvider)
+        .clips
+        .firstWhere((c) => c.trackId == a);
+    expect(notifier.moveClipToTrack(clipOnA.id, b), isFalse);
+  });
+
+  test('addClipReference pastes a shared-pattern clip', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final a = notifier.addTrack(SongTrackType.note, name: 'A');
+    final b = notifier.addTrack(SongTrackType.note, name: 'B');
+    notifier.createEmptyNotePatternClip(trackId: a, startTick: 0);
+    final pattern = container.read(songProjectProvider).notePatterns.single;
+
+    final pasted = notifier.addClipReference(
+      patternId: pattern.id,
+      patternType: SongPatternType.note,
+      trackId: b,
+      startTick: 16,
+    );
+    expect(pasted, isNotNull);
+    final clips = container.read(songProjectProvider).clips;
+    expect(clips, hasLength(2));
+    expect(clips.map((c) => c.patternId).toSet(), hasLength(1));
+
+    // Type mismatch → null.
+    final d = notifier.addTrack(SongTrackType.drum, name: 'D');
+    expect(
+      notifier.addClipReference(
+        patternId: pattern.id,
+        patternType: SongPatternType.note,
+        trackId: d,
+        startTick: 0,
+      ),
+      isNull,
+    );
+  });
+
+  test('moveTrack reorders tracks by delta', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songProjectProvider.notifier);
+    final a = notifier.addTrack(SongTrackType.note, name: 'A');
+    final b = notifier.addTrack(SongTrackType.note, name: 'B');
+    final c = notifier.addTrack(SongTrackType.note, name: 'C');
+
+    notifier.moveTrack(c, -1);
+    List<String> ordered() {
+      final tracks = [...container.read(songProjectProvider).tracks]
+        ..sort((x, y) => x.order.compareTo(y.order));
+      return tracks.map((t) => t.name).toList();
+    }
+
+    expect(ordered(), ['A', 'C', 'B']);
+    notifier.moveTrack(a, 2);
+    expect(ordered(), ['C', 'B', 'A']);
+    notifier.moveTrack(b, -5); // clamped to top
+    expect(ordered(), ['B', 'C', 'A']);
+  });
+
   test('deleteClip cleans up orphaned pattern', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
