@@ -101,4 +101,51 @@ void main() {
     await tester.pump();
     expect(find.text('X'), findsNothing);
   });
+
+  testWidgets('card clears the top safe-area inset (Dynamic Island)',
+      (tester) async {
+    final topKey = GlobalKey();
+    const islandInset = 59.0; // iPhone 17 Pro top padding
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(402, 874),
+            padding: EdgeInsets.only(top: islandInset, bottom: 34),
+          ),
+          child: Scaffold(
+            body: Builder(
+              builder: (context) => Stack(
+                children: [
+                  // Target hugging the very top of the screen.
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    child: SizedBox(key: topKey, width: 120, height: 30),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    child: ElevatedButton(
+                      onPressed: () => startCoachTour(context, [
+                        CoachStep(key: topKey, title: 'Top', body: 'near island'),
+                      ]),
+                      child: const Text('go'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('go'));
+    await tester.pump();
+
+    // The tooltip card must sit fully below the top inset.
+    final cardTop = tester.getTopLeft(find.text('Top')).dy;
+    expect(cardTop, greaterThanOrEqualTo(islandInset));
+  });
 }

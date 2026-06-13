@@ -86,6 +86,7 @@ class _CoachTourState extends State<_CoachTour> {
       return const SizedBox.shrink();
     }
     final spot = rect.inflate(8);
+    final safe = MediaQuery.paddingOf(context);
     return Stack(
       children: [
         Positioned.fill(
@@ -95,21 +96,36 @@ class _CoachTourState extends State<_CoachTour> {
             child: CustomPaint(painter: _ScrimPainter(spot)),
           ),
         ),
-        _buildCard(size, spot, step),
+        _buildCard(size, safe, spot, step),
       ],
     );
   }
 
-  Widget _buildCard(Size size, Rect spot, CoachStep step) {
+  Widget _buildCard(Size size, EdgeInsets safe, Rect spot, CoachStep step) {
     const cardWidth = 300.0;
-    final placeBelow = spot.bottom + 12 + 170 < size.height;
+    // Conservative height estimate used only to pick a side and clamp; the
+    // card itself is mainAxisSize.min.
+    const estCardHeight = 210.0;
+    final minTop = safe.top + 8;
+    final maxTop = (size.height - safe.bottom - estCardHeight - 8)
+        .clamp(minTop, size.height);
+    // Prefer the side of the target with room; never let the card slide under
+    // the status bar / Dynamic Island or below the home indicator.
+    final double top;
+    if (size.height - safe.bottom - spot.bottom >= estCardHeight + 12) {
+      top = (spot.bottom + 12).clamp(minTop, maxTop);
+    } else if (spot.top - safe.top >= estCardHeight + 12) {
+      top = (spot.top - estCardHeight - 12).clamp(minTop, maxTop);
+    } else {
+      // Target spans most of the screen — park the card inside the safe band.
+      top = minTop;
+    }
     var left = spot.center.dx - cardWidth / 2;
     left = left.clamp(12.0, size.width - cardWidth - 12);
     final isFirst = _index == 0;
     final isLast = _index == widget.steps.length - 1;
     return Positioned(
-      top: placeBelow ? spot.bottom + 12 : null,
-      bottom: placeBelow ? null : size.height - spot.top + 12,
+      top: top,
       left: left,
       width: cardWidth,
       child: Material(
