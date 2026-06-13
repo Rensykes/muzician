@@ -15,6 +15,7 @@ import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/project_chip.dart';
 import '../../ui/transport_strip.dart' as transport;
+import 'song_export_actions.dart';
 import '../../utils/note_utils.dart' as note_utils;
 import '../_mockup_shell.dart' show showWidgetSheet, showPickerSheet;
 import 'song_arranger_timeline.dart';
@@ -110,14 +111,6 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                     child: ProjectChip(),
                   ),
                   IconButton(
-                    tooltip: 'New Song',
-                    icon: const Icon(
-                      Icons.note_add_outlined,
-                      color: MuzicianTheme.sky,
-                    ),
-                    onPressed: () => _confirmNewSong(context),
-                  ),
-                  IconButton(
                     tooltip: 'Add Track',
                     icon: const Icon(
                       Icons.add_circle_outline,
@@ -132,6 +125,35 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                       color: MuzicianTheme.sky,
                     ),
                     onPressed: () => _showSavePanel(context),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'More',
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: MuzicianTheme.sky,
+                    ),
+                    color: MuzicianTheme.surface,
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'new':
+                          _confirmNewSong(context);
+                        case 'import':
+                          _confirmImportFromWriter(context);
+                        case 'export':
+                          exportSongToWav(context, ref);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'new', child: Text('New song')),
+                      PopupMenuItem(
+                        value: 'import',
+                        child: Text('Import from Writer'),
+                      ),
+                      PopupMenuItem(
+                        value: 'export',
+                        child: Text('Export WAV'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -318,6 +340,42 @@ class _SongScreenState extends ConsumerState<SongScreen> {
     if (confirmed != true) return;
     ref.read(songPlaybackProvider.notifier).stopPlayback();
     await ref.read(songProjectProvider.notifier).loadProject(song_rules.getDefaultSongProject());
+  }
+
+  Future<void> _confirmImportFromWriter(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    final hasContent = ref.read(songProjectProvider).tracks.isNotEmpty;
+    if (hasContent) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: MuzicianTheme.surface,
+          title: const Text(
+            'Import from Writer?',
+            style: TextStyle(color: MuzicianTheme.textPrimary),
+          ),
+          content: const Text(
+            'This replaces the current song with a skeleton built from the '
+            'Writer arrangement (sections become markers, chords become '
+            'note tracks, drum lanes become drum tracks).',
+            style: TextStyle(color: MuzicianTheme.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    ref.read(songPlaybackProvider.notifier).stopPlayback();
+    ref.read(songProjectProvider.notifier).importFromSongwriter();
   }
 }
 

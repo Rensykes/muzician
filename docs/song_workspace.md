@@ -58,6 +58,37 @@ Solo takes priority over mute — if any track is soloed, only soloed tracks pla
 - **Auto-follow**: the timeline scrolls to keep the playhead visible during
   playback; a manual horizontal scroll pauses following until the next play.
 
+## Clip operations
+
+Selecting a clip opens the action bar: edit pattern, split at the playhead
+(`splitClipAtTick` — slices into two unique patterns; shared siblings keep the
+original), duplicate, copy-for-paste (long-press a lane → Paste), transpose
+note clips (±1 / ±octave), move to another same-type track, audio trim
+(head/tail, honored by the scheduler), make-unique, delete. The transport
+`SNAP` chip toggles measure vs beat snapping; the track menu reorders tracks
+and sets per-track volume. Clips render content previews: note thumbnails,
+drum step dots, audio waveforms, plus the pattern name and a shared-pattern
+badge.
+
+## Markers & zoom
+
+Double-tap the ruler to drop a labeled marker (verse, chorus, …); tap a marker
+flag to rename or delete it. Pinch horizontally on the timeline to zoom
+(`songTimelineZoomProvider`, 0.5×–3×).
+
+## Cross-feature
+
+- **Hum a melody**: the add-clip sheet on note tracks creates an empty clip and
+  opens the piano-roll editor (hum recorder included) straight away.
+- **Import from Writer**: the header overflow menu rebuilds the song from the
+  Songwriter arrangement (`songFromSongwriter`): sections → measures + a marker
+  per instance, the harmony lane → a note track of per-bar chord stabs, drum
+  lanes → drum tracks, save lanes → voicing note tracks; tempo / time signature
+  / key copied over.
+- **Export WAV**: the overflow menu renders note + drum tracks to a mono PCM16
+  WAV (`renderSongPcm`) and writes it via the platform save dialog. Audio clips
+  are excluded in v1 (a dialog notes this when the song has any).
+
 ## Save / Load
 
 Song projects save as `SongProjectSnapshot` through the shared save browser.
