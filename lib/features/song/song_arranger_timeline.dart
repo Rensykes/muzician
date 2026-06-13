@@ -13,6 +13,7 @@ import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/glass_snackbar.dart';
 import 'song_audio_actions.dart';
+import 'song_pattern_editor_launcher.dart';
 import 'song_track_header.dart';
 
 const double _kBaseTickWidth = 4.0;
@@ -1141,6 +1142,29 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
                       startTick: startTick,
                       lengthTicks: lengthTicks,
                     );
+              },
+            ),
+            _AddClipOption(
+              label: 'Hum a melody',
+              icon: Icons.mic_none,
+              color: MuzicianTheme.violet,
+              onTap: () {
+                Navigator.pop(ctx);
+                final clipId = ref
+                    .read(songProjectProvider.notifier)
+                    .createEmptyNotePatternClip(
+                      trackId: widget.track.id,
+                      startTick: startTick,
+                      lengthTicks: lengthTicks,
+                    );
+                final clip = ref
+                    .read(songProjectProvider)
+                    .clips
+                    .firstWhere((c) => c.id == clipId);
+                ref.read(songSelectedClipIdProvider.notifier).state = clipId;
+                // The clip editor mounts the full piano-roll shell, hum
+                // recorder included — jump straight in.
+                openClipEditor(context, ref, clip);
               },
             ),
             _AddClipOption(

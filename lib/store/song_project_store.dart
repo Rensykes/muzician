@@ -7,6 +7,7 @@ import '../models/piano_roll.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../models/song_project.dart';
+import '../schema/rules/song_from_writer_rules.dart';
 import '../schema/rules/song_audio_rules.dart'
     show audioClipLengthTicks, audioTickToMs;
 import '../schema/rules/song_import_rules.dart' as import_rules;
@@ -16,6 +17,7 @@ import '../utils/note_utils.dart';
 import 'save_system_store.dart';
 import 'song_audio_repository.dart';
 import 'song_sessions_store.dart';
+import 'songwriter_store.dart';
 
 class SongProjectNotifier extends Notifier<SongProject> {
   bool _hydrating = false;
@@ -670,6 +672,15 @@ class SongProjectNotifier extends Notifier<SongProject> {
       newClip.startTick + patternLen,
     );
     return newClip.id;
+  }
+
+  /// Replaces the current song with a skeleton generated from the Writer's
+  /// arrangement (sections → measures + markers, harmony → chord stabs,
+  /// drum lanes → drum tracks, save lanes → voicing tracks).
+  void importFromSongwriter() {
+    final writer = ref.read(songwriterProvider);
+    final saves = ref.read(saveSystemProvider).saves;
+    state = songFromSongwriter(writer, saves);
   }
 
   // ── Markers ─────────────────────────────────────────────────────────────────
