@@ -184,6 +184,19 @@ sizes in either orientation.
 
 ---
 
+## Interactive in-app guide
+
+Both the Song and Writer headers have a **`?`** button that launches a
+step-through **coach-mark tour**: it dims the screen, spotlights one real UI
+element at a time (transport, timeline, add-track, overflow on Song; header,
+sections, add-section on Writer) and shows a tooltip with Back / Skip / Next.
+It runs only when you tap `?` (no auto-popup), works in portrait and landscape,
+and gracefully skips any step whose target isn't on screen.
+
+**Code:** engine `lib/ui/core/coach_overlay.dart` (`CoachStep`,
+`startCoachTour`); step scripts `lib/features/song/song_coach_steps.dart` and
+`lib/features/songwriter/songwriter_coach_steps.dart`.
+
 ## Known follow-up
 
 - The **Fretboard** (and possibly **Piano**) tab still overflows in landscape —

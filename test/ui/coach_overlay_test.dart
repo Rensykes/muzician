@@ -14,8 +14,8 @@ void main() {
             builder: (context) {
               return Column(
                 children: [
-                  Container(key: keyA, width: 80, height: 40),
-                  Container(key: keyB, width: 80, height: 40),
+                  SizedBox(key: keyA, width: 80, height: 40),
+                  SizedBox(key: keyB, width: 80, height: 40),
                   ElevatedButton(
                     onPressed: () => startCoachTour(context, [
                       CoachStep(key: keyA, title: 'First', body: 'Step one'),
@@ -56,8 +56,8 @@ void main() {
           body: Builder(
             builder: (context) => Column(
               children: [
-                Container(key: keyA, width: 80, height: 40),
-                Container(key: keyC, width: 80, height: 40),
+                SizedBox(key: keyA, width: 80, height: 40),
+                SizedBox(key: keyC, width: 80, height: 40),
                 ElevatedButton(
                   onPressed: () => startCoachTour(context, [
                     CoachStep(key: keyA, title: 'A', body: 'a'),
