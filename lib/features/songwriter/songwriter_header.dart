@@ -12,10 +12,12 @@ class SongwriterHeader extends ConsumerWidget {
     super.key,
     this.onOpenSaveLoad,
     this.onOpenStructure,
+    this.onStartTour,
   });
 
   final VoidCallback? onOpenSaveLoad;
   final VoidCallback? onOpenStructure;
+  final VoidCallback? onStartTour;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -71,6 +73,12 @@ class SongwriterHeader extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  if (onStartTour != null)
+                    IconBtn(
+                      key: const Key('writerHelpButton'),
+                      icon: Icons.help_outline_rounded,
+                      onTap: onStartTour!,
+                    ),
                   IconBtn(
                     icon: Icons.more_vert,
                     onTap: () => _showOverflowMenu(context, ref),
@@ -87,6 +95,7 @@ class SongwriterHeader extends ConsumerWidget {
           onTempoTap: () => _editTempo(context, ref),
           onNewProject: () => _confirmNew(context, notifier),
           onOverflow: compact ? () => _showOverflowMenu(context, ref) : null,
+          onHelp: compact ? onStartTour : null,
         ),
       ],
     );
@@ -221,6 +230,7 @@ class _WriterConfigStrip extends ConsumerWidget {
     required this.onTempoTap,
     required this.onNewProject,
     this.onOverflow,
+    this.onHelp,
   });
   final String keyLabel;
   final int tempo;
@@ -231,6 +241,9 @@ class _WriterConfigStrip extends ConsumerWidget {
   /// Compact (landscape) mode: the title row is hidden, so the strip hosts
   /// the overflow-menu button.
   final VoidCallback? onOverflow;
+
+  /// Compact mode: the strip also hosts the coach-tour help button.
+  final VoidCallback? onHelp;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -280,6 +293,12 @@ class _WriterConfigStrip extends ConsumerWidget {
             ),
             _stripDivider(),
             IconBtn(icon: Icons.add_box_outlined, onTap: onNewProject),
+            if (onHelp != null)
+              IconBtn(
+                key: const Key('writerHelpButton'),
+                icon: Icons.help_outline_rounded,
+                onTap: onHelp!,
+              ),
             if (onOverflow != null)
               IconBtn(icon: Icons.more_vert, onTap: onOverflow!),
           ],

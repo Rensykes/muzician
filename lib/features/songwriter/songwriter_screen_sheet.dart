@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
+import '../../ui/core/coach_overlay.dart';
+import 'songwriter_coach_steps.dart';
 import '../../theme/muzician_theme.dart';
 import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
@@ -17,8 +19,16 @@ import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
 
-class SongwriterScreenSheet extends ConsumerWidget {
+class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({super.key});
+
+  @override
+  ConsumerState<SongwriterScreenSheet> createState() =>
+      _SongwriterScreenSheetState();
+}
+
+class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
+  final _coachKeys = WriterCoachKeys();
 
   void _openSaveLoad(BuildContext context) {
     showWidgetSheet(
@@ -38,7 +48,7 @@ class SongwriterScreenSheet extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final project = ref.watch(songwriterProvider);
     final notifier = ref.read(songwriterProvider.notifier);
     return Container(
@@ -54,13 +64,20 @@ class SongwriterScreenSheet extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SongwriterHeader(
-              onOpenSaveLoad: () => _openSaveLoad(context),
-              onOpenStructure: () => _openStructure(context),
+            KeyedSubtree(
+              key: _coachKeys.header,
+              child: SongwriterHeader(
+                onOpenSaveLoad: () => _openSaveLoad(context),
+                onOpenStructure: () => _openStructure(context),
+                onStartTour: () =>
+                    startCoachTour(context, writerCoachSteps(_coachKeys)),
+              ),
             ),
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
+              child: KeyedSubtree(
+                key: _coachKeys.body,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
                   final twoColumns = constraints.maxWidth >= 700;
                   final columnWidth = twoColumns
                       ? (constraints.maxWidth - 28 * 2 - 24) / 2
@@ -91,17 +108,21 @@ class SongwriterScreenSheet extends ConsumerWidget {
                           ),
                       Padding(
                         padding: const EdgeInsets.only(top: 12),
-                        child: _AddSectionRule(
-                          key: const Key('songwriterAddSection'),
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            notifier.addSection(label: null, lengthBars: 8);
-                          },
+                        child: KeyedSubtree(
+                          key: _coachKeys.addSection,
+                          child: _AddSectionRule(
+                            key: const Key('songwriterAddSection'),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              notifier.addSection(label: null, lengthBars: 8);
+                            },
+                          ),
                         ),
                       ),
                     ],
                   );
-                },
+                  },
+                ),
               ),
             ),
           ],
