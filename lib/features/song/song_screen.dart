@@ -13,8 +13,10 @@ import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
+import '../../ui/core/coach_overlay.dart';
 import '../../ui/project_chip.dart';
 import '../../ui/transport_strip.dart' as transport;
+import 'song_coach_steps.dart';
 import 'song_export_actions.dart';
 import '../../utils/note_utils.dart' as note_utils;
 import '../_mockup_shell.dart' show showWidgetSheet, showPickerSheet;
@@ -31,6 +33,8 @@ class SongScreen extends ConsumerStatefulWidget {
 }
 
 class _SongScreenState extends ConsumerState<SongScreen> {
+  final _coachKeys = SongCoachKeys();
+
   @override
   void initState() {
     super.initState();
@@ -111,6 +115,17 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                     child: ProjectChip(),
                   ),
                   IconButton(
+                    key: const Key('songHelpButton'),
+                    tooltip: 'Guide',
+                    icon: const Icon(
+                      Icons.help_outline_rounded,
+                      color: MuzicianTheme.sky,
+                    ),
+                    onPressed: () =>
+                        startCoachTour(context, songCoachSteps(_coachKeys)),
+                  ),
+                  IconButton(
+                    key: _coachKeys.addTrack,
                     tooltip: 'Add Track',
                     icon: const Icon(
                       Icons.add_circle_outline,
@@ -127,6 +142,7 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                     onPressed: () => _showSavePanel(context),
                   ),
                   PopupMenuButton<String>(
+                    key: _coachKeys.overflow,
                     tooltip: 'More',
                     icon: const Icon(
                       Icons.more_vert,
@@ -160,11 +176,16 @@ class _SongScreenState extends ConsumerState<SongScreen> {
             ),
             const SizedBox(height: 4),
             // Shared transport strip
-            _SongTransportStrip(project: project, playback: playback),
+            KeyedSubtree(
+              key: _coachKeys.transport,
+              child: _SongTransportStrip(project: project, playback: playback),
+            ),
             const SizedBox(height: 4),
             // Arranger timeline
             Expanded(
-              child: project.tracks.isEmpty
+              child: KeyedSubtree(
+                key: _coachKeys.timeline,
+                child: project.tracks.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -199,6 +220,7 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                       ),
                       currentPlaybackTick: playback.currentTick,
                     ),
+              ),
             ),
             const SongClipActionBar(),
           ],
