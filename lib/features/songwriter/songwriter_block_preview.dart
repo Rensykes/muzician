@@ -100,6 +100,7 @@ void showHarmonyBlockSheet(
   required void Function(VoicingSuggestion) onAcceptVoicing,
   required void Function(ThirdAboveSuggestion) onAcceptThirdAbove,
   required void Function(String saveId) onAcceptLibrary,
+  VoidCallback? onEditChord,
 }) {
   final hasChord = block.chordRootPc != null && block.chordQuality != null;
   final title = block.chordSymbol ?? (hasChord ? '?' : 'Harmony');
@@ -167,6 +168,21 @@ void showHarmonyBlockSheet(
               ],
             ),
           ),
+          if (onEditChord != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('editChordButton'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  onEditChord();
+                },
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Edit chord & lyrics'),
+              ),
+            ),
+          ],
         ],
       ),
     ),

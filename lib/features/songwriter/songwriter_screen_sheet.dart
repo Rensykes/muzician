@@ -6,9 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_library_match_rules.dart';
+import '../../schema/rules/songwriter_third_above_rules.dart';
+import '../../schema/rules/songwriter_voicing_rules.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/coach_overlay.dart';
+import '../../utils/note_utils.dart';
+import 'songwriter_block_preview.dart';
 import 'songwriter_coach_steps.dart';
 import '../../theme/muzician_theme.dart';
 import 'drum_pattern_sheet.dart';
@@ -534,7 +539,7 @@ class _BarRow extends ConsumerWidget {
                 block: owner,
                 instanceIndex: instanceIndex,
                 isActive: isActiveCell(i, span),
-                onTap: () => _editBlock(context, ref, owner),
+                onTap: () => _onTapBlock(context, ref, owner),
                 onLongPress: () =>
                     _removeBlock(context, notifier, owner),
               ));
@@ -542,13 +547,17 @@ class _BarRow extends ConsumerWidget {
             } else if (owner != null) {
               i++;
             } else {
+              // Snapshot `i` — it is mutated by this while-loop, so a closure
+              // capturing it directly would read its post-loop value (`end`),
+              // landing every empty-cell tap on the start of the next row.
+              final bar = i;
               cells.add(_BarCell(
-                key: activeKey(i, 1),
+                key: activeKey(bar, 1),
                 flex: 1,
                 block: null,
                 instanceIndex: instanceIndex,
-                isActive: isActiveCell(i, 1),
-                onTap: () => _addAt(context, ref, i),
+                isActive: isActiveCell(bar, 1),
+                onTap: () => _addAt(context, ref, bar),
               ));
               i++;
             }
@@ -635,6 +644,73 @@ class _BarRow extends ConsumerWidget {
             );
       }
     }
+  }
+
+  /// Tap on a placed block. Chord blocks open the voicings / harmony /
+  /// library sheet (with an "Edit chord & lyrics" escape hatch); silent
+  /// lyric-only blocks go straight to the chord editor.
+  void _onTapBlock(BuildContext context, WidgetRef ref, SongBlock block) {
+    final isChord = !block.isSilent &&
+        block.chordRootPc != null &&
+        block.chordQuality != null;
+    if (!isChord) {
+      _editBlock(context, ref, block);
+      return;
+    }
+
+    final cfg = ref.read(songwriterProvider).config;
+    final notifier = ref.read(songwriterProvider.notifier);
+    final voicings = suggestVoicings(
+      chordRootPc: block.chordRootPc!,
+      quality: block.chordQuality!,
+    );
+    final thirdAbove = suggestThirdAbove(
+      chordRootPc: block.chordRootPc!,
+      chordQuality: block.chordQuality!,
+      chordTonePcs: _chordPcs(block),
+      keyRootPc: cfg.keyRoot,
+      keyScaleName: cfg.keyScaleName,
+    );
+    final matches = matchLibrary(
+      harmonyBlock: block,
+      searchableSaves: notifier.searchableSavesForLibraryMatch(),
+      keyRootPc: cfg.keyRoot,
+      keyScaleName: cfg.keyScaleName,
+    );
+
+    showHarmonyBlockSheet(
+      context,
+      block: block,
+      voicings: voicings,
+      thirdAbove: thirdAbove,
+      chordMatches: matches.chordMatches,
+      scaleMatches: matches.scaleMatches,
+      onAcceptVoicing: (v) => notifier.acceptVoicingSuggestion(
+        sectionId: section.id,
+        harmonyBlockId: block.id,
+        suggestion: v,
+      ),
+      onAcceptThirdAbove: (s) => notifier.acceptThirdAboveSuggestion(
+        sectionId: section.id,
+        harmonyBlockId: block.id,
+        suggestion: s,
+      ),
+      onAcceptLibrary: (saveId) => notifier.acceptLibraryMatch(
+        sectionId: section.id,
+        harmonyBlockId: block.id,
+        saveId: saveId,
+      ),
+      onEditChord: () => _editBlock(context, ref, block),
+    );
+  }
+
+  List<int> _chordPcs(SongBlock block) {
+    final out = <int>[];
+    for (final name in block.chordNotes) {
+      final pc = noteToPC[name];
+      if (pc != null && !out.contains(pc)) out.add(pc);
+    }
+    return out;
   }
 
   Future<void> _editBlock(
