@@ -42,18 +42,16 @@ void main() {
     chordNotes: ['C', 'E', 'G'], romanNumeral: 'I',
   );
 
-  test('chord match: save.pendingChord.symbol == block.chordSymbol', () {
+  test('chord match: save note-set equals chord tones (pitch-class set)', () {
     final m = matchLibrary(
       harmonyBlock: cMajorBlock,
       searchableSaves: [
         _save(
           id: 's1', name: 'C voicing', selectedNotes: ['C', 'E', 'G'],
-          pendingChord: _pc('C'),
           updatedAt: 100,
         ),
         _save(
-          id: 's2', name: 'D voicing', selectedNotes: ['D', 'F#'],
-          pendingChord: _pc('D', root: 'D'),
+          id: 's2', name: 'D voicing', selectedNotes: ['D', 'F#', 'A'],
           updatedAt: 200,
         ),
       ],
@@ -63,6 +61,40 @@ void main() {
     expect(m.chordMatches.length, 1);
     expect(m.chordMatches.single.entry.id, 's1');
     expect(m.chordMatches.single.kind, LibraryMatchKind.chord);
+  });
+
+  test('chord match ignores octave and repetition', () {
+    final m = matchLibrary(
+      harmonyBlock: cMajorBlock,
+      searchableSaves: [
+        // C3,E3,G3,C4 + a duplicate G → pitch-class set {C,E,G}.
+        _save(
+          id: 's1', name: 'C wide',
+          selectedNotes: ['C3', 'E3', 'G3', 'C4', 'G4'],
+          updatedAt: 100,
+        ),
+      ],
+      keyRootPc: 0,
+      keyScaleName: 'major',
+    );
+    expect(m.chordMatches.single.entry.id, 's1');
+  });
+
+  test('a superset chord (Cmaj7) does NOT match a C triad', () {
+    final m = matchLibrary(
+      harmonyBlock: cMajorBlock,
+      searchableSaves: [
+        _save(
+          id: 's1', name: 'Cmaj7', selectedNotes: ['C', 'E', 'G', 'B'],
+          updatedAt: 100,
+        ),
+      ],
+      keyRootPc: 0,
+      keyScaleName: 'major',
+    );
+    expect(m.chordMatches, isEmpty);
+    // It still fits the C major scale, so it lands in the scale bucket.
+    expect(m.scaleMatches.single.entry.id, 's1');
   });
 
   test('scale match: every selectedNote is in the key scale', () {
@@ -95,7 +127,6 @@ void main() {
       searchableSaves: [
         _save(
           id: 's1', name: 'C voicing', selectedNotes: ['C', 'E', 'G'],
-          pendingChord: _pc('C'),
           updatedAt: 100,
         ),
       ],
