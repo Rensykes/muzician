@@ -9,12 +9,17 @@ import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
+import '../../store/save_system_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/coach_overlay.dart';
+import '../../ui/glass_snackbar.dart';
+import '../../ui/save_browser_panel.dart';
 import '../../utils/note_utils.dart';
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_coach_steps.dart';
+import 'songwriter_save_lane_filter.dart';
 import '../../theme/muzician_theme.dart';
 import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
@@ -590,6 +595,7 @@ class _BarRow extends ConsumerWidget {
       keyScaleName: keyScaleName,
       instanceIndex: instanceIndex,
       currentLyric: '',
+      onPickFromLibrary: () => _pickFromLibrary(context, ref, bar),
     );
     if (block == null) return;
     final laneId = lane.id.isEmpty
@@ -711,6 +717,42 @@ class _BarRow extends ConsumerWidget {
       if (pc != null && !out.contains(pc)) out.add(pc);
     }
     return out;
+  }
+
+  /// Opens the project save browser (piano / fretboard / piano-roll voicings)
+  /// and drops the chosen save as a save-lane block at [bar] — no chord wheel.
+  void _pickFromLibrary(BuildContext context, WidgetRef ref, int bar) {
+    final selId = ref.read(saveSystemProvider).selectedProjectId;
+    if (selId == null) {
+      showGlassSnackbar(
+        context,
+        title: 'No project',
+        message: 'Select a project to browse its library.',
+        contentType: ContentType.warning,
+      );
+      return;
+    }
+    if (lane.id.isEmpty) onEnsureLane();
+    showWidgetSheet(
+      context: context,
+      title: 'From library',
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: SaveBrowserPanel(
+          rootFolderId: selId,
+          allowedInstruments: songwriterSaveLaneAllowedInstruments,
+          onPick: (entry) {
+            Navigator.of(context).pop();
+            HapticFeedback.selectionClick();
+            ref.read(songwriterProvider.notifier).addLibraryBlockAt(
+                  sectionId: section.id,
+                  saveId: entry.id,
+                  startBar: bar,
+                );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _editBlock(
