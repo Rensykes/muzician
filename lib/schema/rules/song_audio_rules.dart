@@ -43,6 +43,7 @@ class ScheduledAudioClip {
   final AudioAsset asset;
   final int startMs;
   final int endMs;
+  final double volume; // owning track's playback gain
 
   const ScheduledAudioClip({
     required this.clip,
@@ -50,17 +51,21 @@ class ScheduledAudioClip {
     required this.asset,
     required this.startMs,
     required this.endMs,
+    this.volume = 1.0,
   });
+
+  /// Playback offset into the asset for a given song-time [nowMs].
+  int offsetIntoAsset(int nowMs) => pattern.trimStartMs + (nowMs - startMs);
 }
 
 /// Returns every audio clip that should play given the project's current
 /// mute/solo state, with its absolute start and end times in milliseconds.
 List<ScheduledAudioClip> schedulableAudioClips(SongProject project) {
   final hasSolo = project.tracks.any((t) => t.isSolo);
-  final audible = <String>{
+  final volumeByTrack = <String, double>{
     for (final t in project.tracks)
       if (t.type == SongTrackType.audio && (hasSolo ? t.isSolo : !t.isMuted))
-        t.id,
+        t.id: t.volume,
   };
   final patternById = {for (final p in project.audioPatterns) p.id: p};
   final assetById = {for (final a in project.audioAssets) a.id: a};
@@ -68,19 +73,24 @@ List<ScheduledAudioClip> schedulableAudioClips(SongProject project) {
   final out = <ScheduledAudioClip>[];
   for (final clip in project.clips) {
     if (clip.patternType != SongPatternType.audio) continue;
-    if (!audible.contains(clip.trackId)) continue;
+    final volume = volumeByTrack[clip.trackId];
+    if (volume == null) continue;
     final pattern = patternById[clip.patternId];
     if (pattern == null) continue;
     final asset = assetById[pattern.assetId];
     if (asset == null) continue;
     final startMs = audioTickToMs(clip.startTick, project.config);
+    final playableMs = (asset.durationMs - pattern.trimStartMs - pattern.trimEndMs)
+        .clamp(0, asset.durationMs);
+    if (playableMs <= 0) continue;
     out.add(
       ScheduledAudioClip(
         clip: clip,
         pattern: pattern,
         asset: asset,
         startMs: startMs,
-        endMs: startMs + asset.durationMs,
+        endMs: startMs + playableMs,
+        volume: volume,
       ),
     );
   }

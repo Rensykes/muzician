@@ -82,6 +82,7 @@ class SongTrack {
   final int order;
   final bool isMuted;
   final bool isSolo;
+  final double volume; // 0.0–1.0 playback gain
 
   const SongTrack({
     required this.id,
@@ -90,6 +91,7 @@ class SongTrack {
     required this.order,
     this.isMuted = false,
     this.isSolo = false,
+    this.volume = 1.0,
   });
 
   SongTrack copyWith({
@@ -99,6 +101,7 @@ class SongTrack {
     int? order,
     bool? isMuted,
     bool? isSolo,
+    double? volume,
   }) => SongTrack(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -106,6 +109,7 @@ class SongTrack {
     order: order ?? this.order,
     isMuted: isMuted ?? this.isMuted,
     isSolo: isSolo ?? this.isSolo,
+    volume: volume ?? this.volume,
   );
 
   Map<String, dynamic> toJson() => {
@@ -115,6 +119,7 @@ class SongTrack {
     'order': order,
     'isMuted': isMuted,
     'isSolo': isSolo,
+    'volume': volume,
   };
 
   factory SongTrack.fromJson(Map<String, dynamic> json) => SongTrack(
@@ -124,6 +129,7 @@ class SongTrack {
     order: json['order'] as int,
     isMuted: json['isMuted'] as bool? ?? false,
     isSolo: json['isSolo'] as bool? ?? false,
+    volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
   );
 }
 
@@ -426,30 +432,78 @@ class AudioClipPattern {
   final String name;
   final String assetId;
 
+  /// Milliseconds shaved off the asset's head / tail at playback time.
+  final int trimStartMs;
+  final int trimEndMs;
+
   const AudioClipPattern({
     required this.id,
     required this.name,
     required this.assetId,
+    this.trimStartMs = 0,
+    this.trimEndMs = 0,
   });
 
-  AudioClipPattern copyWith({String? id, String? name, String? assetId}) =>
-      AudioClipPattern(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        assetId: assetId ?? this.assetId,
-      );
+  AudioClipPattern copyWith({
+    String? id,
+    String? name,
+    String? assetId,
+    int? trimStartMs,
+    int? trimEndMs,
+  }) => AudioClipPattern(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    assetId: assetId ?? this.assetId,
+    trimStartMs: trimStartMs ?? this.trimStartMs,
+    trimEndMs: trimEndMs ?? this.trimEndMs,
+  );
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'assetId': assetId};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'assetId': assetId,
+    'trimStartMs': trimStartMs,
+    'trimEndMs': trimEndMs,
+  };
 
   factory AudioClipPattern.fromJson(Map<String, dynamic> json) =>
       AudioClipPattern(
         id: json['id'] as String,
         name: json['name'] as String,
         assetId: json['assetId'] as String,
+        trimStartMs: json['trimStartMs'] as int? ?? 0,
+        trimEndMs: json['trimEndMs'] as int? ?? 0,
       );
 }
 
+
+// ── SongMarker ────────────────────────────────────────────────────────────────
+
+/// A labeled flag on the song ruler (verse, chorus, …).
+class SongMarker {
+  final String id;
+  final int tick;
+  final String label;
+
+  const SongMarker({required this.id, required this.tick, required this.label});
+
+  SongMarker copyWith({String? id, int? tick, String? label}) => SongMarker(
+    id: id ?? this.id,
+    tick: tick ?? this.tick,
+    label: label ?? this.label,
+  );
+
+  Map<String, dynamic> toJson() => {'id': id, 'tick': tick, 'label': label};
+
+  factory SongMarker.fromJson(Map<String, dynamic> json) => SongMarker(
+    id: json['id'] as String,
+    tick: json['tick'] as int? ?? 0,
+    label: json['label'] as String? ?? '',
+  );
+}
+
 // ── SongProject ───────────────────────────────────────────────────────────────
+
 
 class SongProject {
   final SongProjectConfig config;
@@ -459,6 +513,7 @@ class SongProject {
   final List<DrumPattern> drumPatterns;
   final List<AudioAsset> audioAssets;
   final List<AudioClipPattern> audioPatterns;
+  final List<SongMarker> markers;
 
   const SongProject({
     required this.config,
@@ -468,6 +523,7 @@ class SongProject {
     required this.drumPatterns,
     this.audioAssets = const [],
     this.audioPatterns = const [],
+    this.markers = const [],
   });
 
   SongProject copyWith({
@@ -478,6 +534,7 @@ class SongProject {
     List<DrumPattern>? drumPatterns,
     List<AudioAsset>? audioAssets,
     List<AudioClipPattern>? audioPatterns,
+    List<SongMarker>? markers,
   }) => SongProject(
     config: config ?? this.config,
     tracks: tracks ?? this.tracks,
@@ -486,6 +543,7 @@ class SongProject {
     drumPatterns: drumPatterns ?? this.drumPatterns,
     audioAssets: audioAssets ?? this.audioAssets,
     audioPatterns: audioPatterns ?? this.audioPatterns,
+    markers: markers ?? this.markers,
   );
 
   Map<String, dynamic> toJson() => {
@@ -496,6 +554,7 @@ class SongProject {
     'drumPatterns': drumPatterns.map((p) => p.toJson()).toList(),
     'audioAssets': audioAssets.map((a) => a.toJson()).toList(),
     'audioPatterns': audioPatterns.map((p) => p.toJson()).toList(),
+    'markers': markers.map((m) => m.toJson()).toList(),
   };
 
   factory SongProject.fromJson(Map<String, dynamic> json) => SongProject(
@@ -517,6 +576,9 @@ class SongProject {
         .toList(),
     audioPatterns: (json['audioPatterns'] as List<dynamic>? ?? const [])
         .map((p) => AudioClipPattern.fromJson(p as Map<String, dynamic>))
+        .toList(),
+    markers: (json['markers'] as List<dynamic>? ?? const [])
+        .map((m) => SongMarker.fromJson(m as Map<String, dynamic>))
         .toList(),
   );
 }

@@ -34,9 +34,12 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
+      final saveSystem = container.read(saveSystemProvider.notifier);
+      final dumpId = saveSystem.ensureDumpFolder();
+      saveSystem.selectProject(dumpId);
       final folderId = container
           .read(saveSystemProvider.notifier)
-          .createSaveFolder('Piano Saves', null);
+          .createSaveFolder('Piano Saves', dumpId);
       expect(folderId, isNotNull);
 
       final saveId = container

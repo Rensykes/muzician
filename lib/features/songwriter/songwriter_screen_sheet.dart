@@ -6,7 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_library_match_rules.dart';
+import '../../schema/rules/songwriter_third_above_rules.dart';
+import '../../schema/rules/songwriter_voicing_rules.dart';
+import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
+import '../../ui/core/coach_overlay.dart';
+import '../../utils/note_utils.dart';
+import 'songwriter_block_preview.dart';
+import 'songwriter_coach_steps.dart';
 import '../../theme/muzician_theme.dart';
 import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
@@ -16,8 +24,16 @@ import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
 
-class SongwriterScreenSheet extends ConsumerWidget {
+class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({super.key});
+
+  @override
+  ConsumerState<SongwriterScreenSheet> createState() =>
+      _SongwriterScreenSheetState();
+}
+
+class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
+  final _coachKeys = WriterCoachKeys();
 
   void _openSaveLoad(BuildContext context) {
     showWidgetSheet(
@@ -37,7 +53,7 @@ class SongwriterScreenSheet extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final project = ref.watch(songwriterProvider);
     final notifier = ref.read(songwriterProvider.notifier);
     return Container(
@@ -53,32 +69,65 @@ class SongwriterScreenSheet extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SongwriterHeader(
-              onOpenSaveLoad: () => _openSaveLoad(context),
-              onOpenStructure: () => _openStructure(context),
+            KeyedSubtree(
+              key: _coachKeys.header,
+              child: SongwriterHeader(
+                onOpenSaveLoad: () => _openSaveLoad(context),
+                onOpenStructure: () => _openStructure(context),
+                onStartTour: () =>
+                    startCoachTour(context, writerCoachSteps(_coachKeys)),
+              ),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
-                children: [
-                  if (project.sections.isEmpty)
-                    const _EmptyState(key: Key('songwriterEmptyHint')),
-                  for (final section in project.sections)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 36),
-                      child: _SectionSheet(sectionId: section.id),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: _AddSectionRule(
-                      key: const Key('songwriterAddSection'),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        notifier.addSection(label: null, lengthBars: 8);
-                      },
-                    ),
-                  ),
-                ],
+              child: KeyedSubtree(
+                key: _coachKeys.body,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                  final twoColumns = constraints.maxWidth >= 700;
+                  final columnWidth = twoColumns
+                      ? (constraints.maxWidth - 28 * 2 - 24) / 2
+                      : null;
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
+                    children: [
+                      if (project.sections.isEmpty)
+                        const _EmptyState(key: Key('songwriterEmptyHint')),
+                      if (twoColumns)
+                        // Wide layout: sections flow in two columns.
+                        Wrap(
+                          spacing: 24,
+                          runSpacing: 36,
+                          children: [
+                            for (final section in project.sections)
+                              SizedBox(
+                                width: columnWidth,
+                                child: _SectionSheet(sectionId: section.id),
+                              ),
+                          ],
+                        )
+                      else
+                        for (final section in project.sections)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 36),
+                            child: _SectionSheet(sectionId: section.id),
+                          ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: KeyedSubtree(
+                          key: _coachKeys.addSection,
+                          child: _AddSectionRule(
+                            key: const Key('songwriterAddSection'),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              notifier.addSection(label: null, lengthBars: 8);
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                  },
+                ),
               ),
             ),
           ],
@@ -180,6 +229,22 @@ class _SectionInstance extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(
+      songwriterActivePositionProvider.select(
+        (p) => p != null &&
+            p.sectionId == section.id &&
+            p.instanceIndex == instanceIndex,
+      ),
+      (prev, next) {
+        if (next && !(prev ?? false)) {
+          Scrollable.ensureVisible(
+            context,
+            duration: const Duration(milliseconds: 300),
+            alignment: 0.2,
+          );
+        }
+      },
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -434,6 +499,20 @@ class _BarRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
+    final activeBar = ref.watch(
+      songwriterActivePositionProvider.select(
+        (p) => p != null &&
+                p.sectionId == section.id &&
+                p.instanceIndex == instanceIndex
+            ? p.localBar
+            : null,
+      ),
+    );
+    bool isActiveCell(int startBar, int span) =>
+        activeBar != null && activeBar >= startBar && activeBar < startBar + span;
+    Key? activeKey(int startBar, int span) => isActiveCell(startBar, span)
+        ? Key('activeBarCell_${section.id}_${instanceIndex}_$startBar')
+        : null;
     final blockByStart = <int, SongBlock>{};
     final blockSpan = <int, SongBlock>{};
     for (final b in lane.blocks) {
@@ -455,10 +534,12 @@ class _BarRow extends ConsumerWidget {
             if (owner != null && owner.startBar == i) {
               final span = owner.spanBars.clamp(1, end - i);
               cells.add(_BarCell(
+                key: activeKey(i, span),
                 flex: span,
                 block: owner,
                 instanceIndex: instanceIndex,
-                onTap: () => _editBlock(context, ref, owner),
+                isActive: isActiveCell(i, span),
+                onTap: () => _onTapBlock(context, ref, owner),
                 onLongPress: () =>
                     _removeBlock(context, notifier, owner),
               ));
@@ -466,11 +547,17 @@ class _BarRow extends ConsumerWidget {
             } else if (owner != null) {
               i++;
             } else {
+              // Snapshot `i` — it is mutated by this while-loop, so a closure
+              // capturing it directly would read its post-loop value (`end`),
+              // landing every empty-cell tap on the start of the next row.
+              final bar = i;
               cells.add(_BarCell(
+                key: activeKey(bar, 1),
                 flex: 1,
                 block: null,
                 instanceIndex: instanceIndex,
-                onTap: () => _addAt(context, ref, i),
+                isActive: isActiveCell(bar, 1),
+                onTap: () => _addAt(context, ref, bar),
               ));
               i++;
             }
@@ -559,6 +646,73 @@ class _BarRow extends ConsumerWidget {
     }
   }
 
+  /// Tap on a placed block. Chord blocks open the voicings / harmony /
+  /// library sheet (with an "Edit chord & lyrics" escape hatch); silent
+  /// lyric-only blocks go straight to the chord editor.
+  void _onTapBlock(BuildContext context, WidgetRef ref, SongBlock block) {
+    final isChord = !block.isSilent &&
+        block.chordRootPc != null &&
+        block.chordQuality != null;
+    if (!isChord) {
+      _editBlock(context, ref, block);
+      return;
+    }
+
+    final cfg = ref.read(songwriterProvider).config;
+    final notifier = ref.read(songwriterProvider.notifier);
+    final voicings = suggestVoicings(
+      chordRootPc: block.chordRootPc!,
+      quality: block.chordQuality!,
+    );
+    final thirdAbove = suggestThirdAbove(
+      chordRootPc: block.chordRootPc!,
+      chordQuality: block.chordQuality!,
+      chordTonePcs: _chordPcs(block),
+      keyRootPc: cfg.keyRoot,
+      keyScaleName: cfg.keyScaleName,
+    );
+    final matches = matchLibrary(
+      harmonyBlock: block,
+      searchableSaves: notifier.searchableSavesForLibraryMatch(),
+      keyRootPc: cfg.keyRoot,
+      keyScaleName: cfg.keyScaleName,
+    );
+
+    showHarmonyBlockSheet(
+      context,
+      block: block,
+      voicings: voicings,
+      thirdAbove: thirdAbove,
+      chordMatches: matches.chordMatches,
+      scaleMatches: matches.scaleMatches,
+      onAcceptVoicing: (v) => notifier.acceptVoicingSuggestion(
+        sectionId: section.id,
+        harmonyBlockId: block.id,
+        suggestion: v,
+      ),
+      onAcceptThirdAbove: (s) => notifier.acceptThirdAboveSuggestion(
+        sectionId: section.id,
+        harmonyBlockId: block.id,
+        suggestion: s,
+      ),
+      onAcceptLibrary: (saveId) => notifier.acceptLibraryMatch(
+        sectionId: section.id,
+        harmonyBlockId: block.id,
+        saveId: saveId,
+      ),
+      onEditChord: () => _editBlock(context, ref, block),
+    );
+  }
+
+  List<int> _chordPcs(SongBlock block) {
+    final out = <int>[];
+    for (final name in block.chordNotes) {
+      final pc = noteToPC[name];
+      if (pc != null && !out.contains(pc)) out.add(pc);
+    }
+    return out;
+  }
+
   Future<void> _editBlock(
     BuildContext context,
     WidgetRef ref,
@@ -628,17 +782,20 @@ class _BarRow extends ConsumerWidget {
 
 class _BarCell extends StatelessWidget {
   const _BarCell({
+    super.key,
     required this.flex,
     required this.block,
     required this.instanceIndex,
     required this.onTap,
     this.onLongPress,
+    this.isActive = false,
   });
   final int flex;
   final SongBlock? block;
   final int instanceIndex;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -652,16 +809,22 @@ class _BarCell extends StatelessWidget {
           height: 64,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: block != null
-                ? MuzicianTheme.violet.withValues(alpha: 0.18)
-                : Colors.transparent,
+            color: isActive
+                ? MuzicianTheme.violet.withValues(alpha: 0.34)
+                : (block != null
+                      ? MuzicianTheme.violet.withValues(alpha: 0.18)
+                      : Colors.transparent),
             border: Border(
               left: BorderSide(
-                color: MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                color: isActive
+                    ? MuzicianTheme.violet
+                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
               right: BorderSide(
-                color: MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                color: isActive
+                    ? MuzicianTheme.violet
+                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
