@@ -692,6 +692,32 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  /// Inserts a save-lane block at [startBar] referencing an existing [saveId],
+  /// without going through a harmony chord. Used by the add-bar sheet's "From
+  /// library" picker. No-ops when the section is missing or the placement
+  /// overlaps the destination save lane.
+  void addLibraryBlockAt({
+    required String sectionId,
+    required String saveId,
+    required int startBar,
+    int spanBars = 1,
+  }) {
+    final section = state.sections
+        .where((s) => s.id == sectionId)
+        .firstOrNull;
+    if (section == null) return;
+    if (!_canPlaceSaveBlockInSection(section, startBar, spanBars)) return;
+    final laneId = _findOrCreateSaveLane(sectionId);
+    if (laneId == null) return;
+    addSaveBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      saveId: saveId,
+      startBar: startBar,
+      spanBars: spanBars,
+    );
+  }
+
   /// Updates the project's display name and renames its linked top-level
   /// folder if one with the old name exists. Whitespace-only names are ignored.
   void setProjectName(String name) {
