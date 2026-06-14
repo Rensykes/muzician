@@ -1,10 +1,10 @@
 /// Library-match rule for Songwriter Phase C v2-b.
 ///
-/// Classifies user `SaveEntry`s as either a chord-match (the save's detected
-/// `pendingChord.symbol` equals the harmony block's `chordSymbol`) or a
-/// scale-match (every note in the save's `selectedNotes` is in the project
-/// key's scale). Chord-match takes precedence — a save that satisfies both
-/// only appears in the chord bucket.
+/// Classifies user `SaveEntry`s as either a **chord-match** (the save's note
+/// set, reduced to pitch classes, exactly equals the harmony block's chord
+/// tones — octave- and repetition-agnostic) or a **scale-match** (every note
+/// in the save is in the project key's scale). Chord-match takes precedence —
+/// a save that satisfies both only appears in the chord bucket.
 library;
 
 import '../../models/save_system.dart';
@@ -19,6 +19,29 @@ class LibraryMatch {
   final LibraryMatchKind kind;
 }
 
+/// Pitch class (0–11) of a note name, tolerant of an octave suffix
+/// (`'C'`, `'C4'`, `'F#3'` all map). Returns null for unknown names.
+int? _pcOf(String name) {
+  // Strip a trailing octave number (and any sign) so 'C4'/'C-1' → 'C'.
+  var head = name;
+  while (head.isNotEmpty &&
+      (head.codeUnitAt(head.length - 1) ^ 0x30) <= 9) {
+    head = head.substring(0, head.length - 1);
+  }
+  if (head.endsWith('-')) head = head.substring(0, head.length - 1);
+  return noteToPC[head];
+}
+
+/// Pitch-class set of a list of note names (octave / repetition collapsed).
+Set<int> _pcSet(Iterable<String> notes) {
+  final out = <int>{};
+  for (final n in notes) {
+    final pc = _pcOf(n);
+    if (pc != null) out.add(pc);
+  }
+  return out;
+}
+
 ({List<LibraryMatch> chordMatches, List<LibraryMatch> scaleMatches})
 matchLibrary({
   required SongBlock harmonyBlock,
@@ -26,7 +49,20 @@ matchLibrary({
   required int? keyRootPc,
   required String? keyScaleName,
 }) {
-  final chordSymbol = harmonyBlock.chordSymbol;
+  // The chord's target pitch-class set, from the block's chord notes (falling
+  // back to root + quality intervals when the block carries no note names).
+  var chordPcs = _pcSet(harmonyBlock.chordNotes);
+  if (chordPcs.isEmpty &&
+      harmonyBlock.chordRootPc != null &&
+      harmonyBlock.chordQuality != null) {
+    final intervals = chordIntervals[harmonyBlock.chordQuality];
+    if (intervals != null) {
+      chordPcs = {
+        for (final i in intervals) (harmonyBlock.chordRootPc! + i) % 12,
+      };
+    }
+  }
+
   final scalePcs = <int>{};
   if (keyRootPc != null && keyScaleName != null) {
     final intervals = scaleIntervals[keyScaleName];
@@ -40,25 +76,21 @@ matchLibrary({
   final chord = <LibraryMatch>[];
   final scale = <LibraryMatch>[];
   for (final save in searchableSaves) {
-    final snap = save.snapshot;
-    final chordHit =
-        chordSymbol != null && snap.pendingChord?.symbol == chordSymbol;
-    if (chordHit) {
+    final notes = save.snapshot.selectedNotes;
+    if (notes.isEmpty) continue;
+    final savePcs = _pcSet(notes);
+
+    // Chord-match: the save's pitch-class set is exactly the chord's tones.
+    if (chordPcs.isNotEmpty &&
+        savePcs.length == chordPcs.length &&
+        savePcs.containsAll(chordPcs)) {
       chord.add(LibraryMatch(entry: save, kind: LibraryMatchKind.chord));
       continue;
     }
+
+    // Scale-match: every note fits the project key's scale.
     if (scalePcs.isEmpty) continue;
-    final notes = snap.selectedNotes;
-    if (notes.isEmpty) continue;
-    var allInScale = true;
-    for (final n in notes) {
-      final pc = noteToPC[n];
-      if (pc == null || !scalePcs.contains(pc)) {
-        allInScale = false;
-        break;
-      }
-    }
-    if (allInScale) {
+    if (savePcs.every(scalePcs.contains)) {
       scale.add(LibraryMatch(entry: save, kind: LibraryMatchKind.scale));
     }
   }
