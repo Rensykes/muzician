@@ -690,7 +690,6 @@ class _BarRow extends ConsumerWidget {
       voicings: voicings,
       thirdAbove: thirdAbove,
       chordMatches: matches.chordMatches,
-      scaleMatches: matches.scaleMatches,
       onAcceptVoicing: (v) => notifier.acceptVoicingSuggestion(
         sectionId: section.id,
         harmonyBlockId: block.id,
