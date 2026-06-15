@@ -96,7 +96,6 @@ void showHarmonyBlockSheet(
   required List<VoicingSuggestion> voicings,
   required ThirdAboveSuggestion? thirdAbove,
   required List<LibraryMatch> chordMatches,
-  required List<LibraryMatch> scaleMatches,
   required void Function(VoicingSuggestion) onAcceptVoicing,
   required void Function(ThirdAboveSuggestion) onAcceptThirdAbove,
   required void Function(String saveId) onAcceptLibrary,
@@ -159,7 +158,6 @@ void showHarmonyBlockSheet(
                 ),
                 _LibraryTab(
                   chordMatches: chordMatches,
-                  scaleMatches: scaleMatches,
                   onAccept: (id) {
                     Navigator.pop(context);
                     onAcceptLibrary(id);
@@ -365,76 +363,50 @@ class _VoicingCard extends StatelessWidget {
 class _LibraryTab extends StatelessWidget {
   const _LibraryTab({
     required this.chordMatches,
-    required this.scaleMatches,
     required this.onAccept,
   });
+
+  /// Only exact chord-note matches are shown. When there are none, the tab
+  /// shows a short hint and no cards — saves that merely fit the key are not
+  /// surfaced here.
   final List<LibraryMatch> chordMatches;
-  final List<LibraryMatch> scaleMatches;
   final void Function(String saveId) onAccept;
 
   @override
   Widget build(BuildContext context) {
-    if (chordMatches.isEmpty && scaleMatches.isEmpty) {
+    if (chordMatches.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text("No matching saves in this song's folder yet."),
+        child: Text('No saved voicing matches these notes.'),
       );
     }
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (chordMatches.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                'Matches this chord',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              'Matches this chord',
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
-            SizedBox(
-              height: 110,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: chordMatches.length,
-                separatorBuilder: (context, idx) => const SizedBox(width: 8),
-                itemBuilder: (_, i) {
-                  final m = chordMatches[i];
-                  return _LibraryMatchCard(
-                    key: Key('libraryCard_${m.entry.id}'),
-                    match: m,
-                    onTap: () => onAccept(m.entry.id),
-                  );
-                },
-              ),
+          ),
+          SizedBox(
+            height: 110,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: chordMatches.length,
+              separatorBuilder: (context, idx) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final m = chordMatches[i];
+                return _LibraryMatchCard(
+                  key: Key('libraryCard_${m.entry.id}'),
+                  match: m,
+                  onTap: () => onAccept(m.entry.id),
+                );
+              },
             ),
-          ],
-          if (scaleMatches.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                'Fits this key',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            SizedBox(
-              height: 110,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: scaleMatches.length,
-                separatorBuilder: (context, idx) => const SizedBox(width: 8),
-                itemBuilder: (_, i) {
-                  final m = scaleMatches[i];
-                  return _LibraryMatchCard(
-                    key: Key('libraryCard_${m.entry.id}'),
-                    match: m,
-                    onTap: () => onAccept(m.entry.id),
-                  );
-                },
-              ),
-            ),
-          ],
+          ),
         ],
       ),
     );
