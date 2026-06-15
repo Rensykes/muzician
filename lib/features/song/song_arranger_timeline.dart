@@ -745,6 +745,14 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
     return (tick / unit).round() * unit;
   }
 
+  /// Snap a tick down to the start of the snap unit it falls in. Used for a
+  /// clip's start so pressing anywhere inside a bar anchors to that bar's
+  /// start, not the nearest boundary (which could round up to the next bar).
+  int _snapStartDown(int tick) {
+    final unit = _snapTicks;
+    return (tick ~/ unit) * unit;
+  }
+
   /// First clip on this track that starts strictly after [tick] (excluding
   /// the optionally-passed clip id), or null.
   int? _nextClipStartAfter(int tick, {String? excludingClipId}) {
@@ -778,7 +786,7 @@ class _TrackLaneState extends ConsumerState<_TrackLane> {
     if (_clipAt(tick) != null) return;
 
     final unit = _snapTicks;
-    final start = _snapToMeasure(tick).clamp(
+    final start = _snapStartDown(tick).clamp(
       0,
       widget.measureTicks * widget.totalMeasures - unit,
     );
