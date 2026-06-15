@@ -375,9 +375,40 @@ class _LibraryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (chordMatches.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text('No saved voicing matches these notes.'),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.library_music_outlined,
+                size: 28,
+                color: MuzicianTheme.textMuted.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'No saved voicing matches these notes',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Save a voicing with these exact notes to see it here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: MuzicianTheme.textMuted.withValues(alpha: 0.8),
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
     return SingleChildScrollView(
