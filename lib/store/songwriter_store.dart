@@ -315,6 +315,26 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     ));
   }
 
+  void addLyricBlock({
+    required String sectionId,
+    required String laneId,
+    required int startBar,
+    required int spanBars,
+    String text = '',
+    int verseCount = 1,
+  }) {
+    _replaceLane(sectionId, laneId, (l) {
+      final candidate = makeLyricBlock(
+        startBar: startBar,
+        spanBars: spanBars,
+        text: text,
+        verseCount: verseCount,
+      );
+      if (blocksOverlap(l.blocks, candidate)) return l; // soft: skip overlaps
+      return l.copyWith(blocks: [...l.blocks, candidate]);
+    });
+  }
+
   void removeBlock({
     required String sectionId,
     required String laneId,
