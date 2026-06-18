@@ -32,6 +32,18 @@ void main() {
     expect(lane.blocks.length, 2);
   });
 
+  test('addLyricBlock clamps non-positive spanBars to 1', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'V', lengthBars: 4);
+    final s = c.read(songwriterProvider).sections.single.id;
+    n.addLane(sectionId: s, kind: SongLaneKind.lyrics, label: 'Lyrics');
+    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    n.addLyricBlock(sectionId: s, laneId: l, startBar: 0, spanBars: 0, text: 'x');
+    expect(c.read(songwriterProvider).sections.single.lanes.single.blocks.single.spanBars, 1);
+  });
+
   test('setBlockLyric updates a lyric-lane block per verse index', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);

@@ -326,7 +326,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     _replaceLane(sectionId, laneId, (l) {
       final candidate = makeLyricBlock(
         startBar: startBar,
-        spanBars: spanBars,
+        spanBars: spanBars < 1 ? 1 : spanBars,
         text: text,
         verseCount: verseCount,
       );
