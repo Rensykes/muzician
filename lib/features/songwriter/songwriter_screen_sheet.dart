@@ -267,6 +267,17 @@ class _SectionInstance extends ConsumerWidget {
             instanceIndex: instanceIndex,
           ),
         ],
+        // Lyrics lanes (one strip per lyrics lane on this section).
+        for (final lane
+            in section.lanes.where((l) => l.kind == SongLaneKind.lyrics)) ...[
+          const SizedBox(height: 8),
+          _LyricLaneRow(
+            key: Key('sheetLyricLane_${lane.id}_$instanceIndex'),
+            section: section,
+            lane: lane,
+            instanceIndex: instanceIndex,
+          ),
+        ],
       ],
     );
   }
@@ -381,6 +392,13 @@ class _SectionHeading extends ConsumerWidget {
                         spanBars: section.lengthBars,
                       );
                 }
+                if (value == 'addLyricLane') {
+                  ref.read(songwriterProvider.notifier).addLane(
+                        sectionId: section.id,
+                        kind: SongLaneKind.lyrics,
+                        label: 'Lyrics',
+                      );
+                }
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(
@@ -389,6 +407,15 @@ class _SectionHeading extends ConsumerWidget {
                   child: ListTile(
                     leading: Icon(Icons.graphic_eq),
                     title: Text('Add drum lane'),
+                    dense: true,
+                  ),
+                ),
+                PopupMenuItem(
+                  key: Key('addLyricLaneSheetAction'),
+                  value: 'addLyricLane',
+                  child: ListTile(
+                    leading: Icon(Icons.lyrics_outlined),
+                    title: Text('Add lyrics lane'),
                     dense: true,
                   ),
                 ),
@@ -1202,6 +1229,174 @@ class _DrumLaneRow extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _LyricLaneRow extends ConsumerWidget {
+  const _LyricLaneRow({
+    super.key,
+    required this.section,
+    required this.lane,
+    required this.instanceIndex,
+  });
+
+  final SongSection section;
+  final SongLane lane;
+  final int instanceIndex;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
+    final notifier = ref.read(songwriterProvider.notifier);
+    final ownerByBar = <int, SongBlock>{};
+    for (final b in lane.blocks) {
+      for (var i = b.startBar; i < b.endBar; i++) {
+        ownerByBar[i] = b;
+      }
+    }
+
+    final cells = <Widget>[];
+    var i = 0;
+    while (i < bars) {
+      final owner = ownerByBar[i];
+      if (owner != null && owner.startBar == i) {
+        final span = owner.spanBars.clamp(1, bars - i);
+        final text = instanceIndex < owner.lyrics.length
+            ? owner.lyrics[instanceIndex]
+            : '';
+        cells.add(Expanded(
+          flex: span,
+          child: GestureDetector(
+            key: Key('sheetLyricTile_${owner.id}'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _editLyric(context, notifier, owner, text),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: MuzicianTheme.sky.withValues(alpha: 0.12),
+                border: Border.all(
+                  color: MuzicianTheme.sky.withValues(alpha: 0.45),
+                ),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                text.isEmpty ? 'Add lyrics' : text,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: text.isEmpty
+                      ? MuzicianTheme.textMuted
+                      : MuzicianTheme.textPrimary,
+                ),
+              ),
+            ),
+          ),
+        ));
+        i += span;
+      } else if (owner != null) {
+        i++;
+      } else {
+        final bar = i;
+        cells.add(Expanded(
+          flex: 1,
+          child: GestureDetector(
+            key: Key('sheetLyricEmpty_${lane.id}_$bar'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => notifier.addLyricBlock(
+              sectionId: section.id,
+              laneId: lane.id,
+              startBar: bar,
+              spanBars: 1,
+              verseCount: section.repeat,
+            ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              height: 28,
+              decoration: BoxDecoration(
+                border: Border.all(color: MuzicianTheme.glassBorder),
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+          ),
+        ));
+        i++;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          key: Key('sheetLyricJot_${lane.id}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: lane.blocks.isEmpty
+              ? () => notifier.addLyricBlock(
+                    sectionId: section.id,
+                    laneId: lane.id,
+                    startBar: 0,
+                    spanBars: bars,
+                    verseCount: section.repeat,
+                  )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 4),
+            child: Text(
+              lane.label ?? 'Lyrics',
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 11,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        ),
+        Row(children: cells),
+      ],
+    );
+  }
+
+  void _editLyric(
+    BuildContext context,
+    SongwriterNotifier notifier,
+    SongBlock block,
+    String current,
+  ) {
+    final controller = TextEditingController(text: current);
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: MuzicianTheme.surface,
+        title: const Text('Lyrics', style: TextStyle(color: MuzicianTheme.textPrimary)),
+        content: TextField(
+          key: const Key('lyricLaneEditField'),
+          controller: controller,
+          autofocus: true,
+          maxLines: null,
+          style: const TextStyle(color: MuzicianTheme.textPrimary),
+          decoration: const InputDecoration(hintText: 'Type lyrics…'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('lyricLaneEditSave'),
+            onPressed: () {
+              notifier.setBlockLyric(
+                sectionId: section.id,
+                laneId: lane.id,
+                blockId: block.id,
+                verseIndex: instanceIndex,
+                text: controller.text,
+              );
+              Navigator.pop(dialogCtx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 }
