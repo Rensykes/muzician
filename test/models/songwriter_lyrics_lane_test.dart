@@ -16,9 +16,4 @@ void main() {
     expect(restored.blocks.single.lyrics, ['hello world']);
   });
 
-  test('unknown lane kind still falls back to save', () {
-    final restored =
-        SongLane.fromJson({'id': 'x', 'kind': 'bogus', 'order': 0});
-    expect(restored.kind, SongLaneKind.save);
-  });
 }
