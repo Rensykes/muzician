@@ -191,24 +191,8 @@ class _SectionSheet extends ConsumerWidget {
               ),
             ),
           ),
-        if (section.lanes.any((l) => l.kind == SongLaneKind.save)) ...[
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                for (final lane
-                    in section.lanes.where((l) => l.kind == SongLaneKind.save))
-                  _SaveLaneChip(
-                    label: lane.label ?? 'Save',
-                    count: lane.blocks.length,
-                  ),
-              ],
-            ),
-          ),
-        ],
+        // Save-lane blocks are rendered inline on the bar grid (badge over a
+        // chord, or a standalone save cell), so no separate lane summary here.
       ],
     );
   }
@@ -526,6 +510,16 @@ class _BarRow extends ConsumerWidget {
         blockSpan[i] = b;
       }
     }
+    // Save-lane blocks are surfaced inline on the bar grid: as a badge over the
+    // chord that shares the bar, or as a standalone save cell on an empty bar.
+    final saveBySpan = <int, SongBlock>{};
+    for (final l in section.lanes.where((l) => l.kind == SongLaneKind.save)) {
+      for (final b in l.blocks) {
+        for (var i = b.startBar; i < b.endBar; i++) {
+          saveBySpan[i] = b;
+        }
+      }
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final perRow = constraints.maxWidth >= 360 ? 4 : 4;
@@ -538,19 +532,43 @@ class _BarRow extends ConsumerWidget {
             final owner = blockSpan[i];
             if (owner != null && owner.startBar == i) {
               final span = owner.spanBars.clamp(1, end - i);
+              final save = saveBySpan[i];
               cells.add(_BarCell(
                 key: activeKey(i, span),
                 flex: span,
                 block: owner,
+                saveBlock: save,
                 instanceIndex: instanceIndex,
                 isActive: isActiveCell(i, span),
                 onTap: () => _onTapBlock(context, ref, owner),
+                onSaveTap:
+                    save == null ? null : () => _onTapSave(context, ref, save),
                 onLongPress: () =>
                     _removeBlock(context, notifier, owner),
               ));
               i += span;
             } else if (owner != null) {
               i++;
+            } else if (saveBySpan[i] != null) {
+              // Standalone save (placed on a bar with no chord). Render it as a
+              // save cell spanning its bars; tap removes it (with undo).
+              final save = saveBySpan[i]!;
+              if (save.startBar == i) {
+                final span = save.spanBars.clamp(1, end - i);
+                cells.add(_BarCell(
+                  key: Key('saveCell_${save.id}_$instanceIndex'),
+                  flex: span,
+                  block: null,
+                  saveBlock: save,
+                  saveName: _saveName(ref, save),
+                  instanceIndex: instanceIndex,
+                  isActive: isActiveCell(i, span),
+                  onTap: () => _onTapSave(context, ref, save),
+                ));
+                i += span;
+              } else {
+                i++; // covered by a spanning save that started earlier
+              }
             } else {
               // Snapshot `i` — it is mutated by this while-loop, so a closure
               // capturing it directly would read its post-loop value (`end`),
@@ -819,6 +837,44 @@ class _BarRow extends ConsumerWidget {
       ),
     );
   }
+
+  /// Display name for a save block, resolved from the save system; falls back
+  /// to 'Save' when the referenced entry is missing.
+  String _saveName(WidgetRef ref, SongBlock save) {
+    final id = save.saveId;
+    if (id == null) return 'Save';
+    final entry =
+        ref.read(saveSystemProvider).saves.where((s) => s.id == id).firstOrNull;
+    return entry?.name ?? 'Save';
+  }
+
+  /// Tapping a save (its badge on a chord, or a standalone save cell) removes
+  /// it from the save lane, with an undo affordance.
+  void _onTapSave(BuildContext context, WidgetRef ref, SongBlock save) {
+    final notifier = ref.read(songwriterProvider.notifier);
+    final saveLane = section.lanes.firstWhere(
+      (l) =>
+          l.kind == SongLaneKind.save &&
+          l.blocks.any((b) => b.id == save.id),
+      orElse: () => const SongLane(id: '', kind: SongLaneKind.save, order: 0),
+    );
+    if (saveLane.id.isEmpty) return;
+    HapticFeedback.lightImpact();
+    notifier.removeBlock(
+      sectionId: section.id,
+      laneId: saveLane.id,
+      blockId: save.id,
+    );
+    showUndoSnack(
+      context,
+      'Save removed',
+      () => notifier.insertBlock(
+        sectionId: section.id,
+        laneId: saveLane.id,
+        block: save,
+      ),
+    );
+  }
 }
 
 class _BarCell extends StatelessWidget {
@@ -828,15 +884,23 @@ class _BarCell extends StatelessWidget {
     required this.block,
     required this.instanceIndex,
     required this.onTap,
+    this.saveBlock,
+    this.saveName,
+    this.onSaveTap,
     this.onLongPress,
     this.isActive = false,
   });
   final int flex;
   final SongBlock? block;
+  final SongBlock? saveBlock;
+  final String? saveName;
   final int instanceIndex;
   final VoidCallback onTap;
+  final VoidCallback? onSaveTap;
   final VoidCallback? onLongPress;
   final bool isActive;
+
+  bool get _isSaveOnly => block == null && saveBlock != null;
 
   @override
   Widget build(BuildContext context) {
@@ -854,92 +918,151 @@ class _BarCell extends StatelessWidget {
                 ? MuzicianTheme.violet.withValues(alpha: 0.34)
                 : (block != null
                       ? MuzicianTheme.violet.withValues(alpha: 0.18)
-                      : Colors.transparent),
+                      : _isSaveOnly
+                          ? MuzicianTheme.sky.withValues(alpha: 0.14)
+                          : Colors.transparent),
             border: Border(
               left: BorderSide(
                 color: isActive
                     ? MuzicianTheme.violet
-                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                    : _isSaveOnly
+                        ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                        : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
               right: BorderSide(
                 color: isActive
                     ? MuzicianTheme.violet
-                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                    : _isSaveOnly
+                        ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                        : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Stack(
             children: [
-              if (block == null)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    '\u00b7',
-                    style: TextStyle(
-                      color: MuzicianTheme.textMuted,
-                      fontSize: 18,
+              Positioned.fill(child: _content()),
+              // Badge marking a save that shares the bar with a chord. Its own
+              // tap target so it can be removed without opening the chord sheet.
+              if (block != null && saveBlock != null)
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: GestureDetector(
+                    onTap: onSaveTap,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      key: Key('saveBadge_${saveBlock!.id}_$instanceIndex'),
+                      padding: const EdgeInsets.all(2),
+                      child: const Icon(
+                        Icons.bookmark,
+                        size: 13,
+                        color: MuzicianTheme.sky,
+                      ),
                     ),
-                  ),
-                )
-              else if (block!.isSilent)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Container(
-                    key: Key('silentCell_${block!.id}_$instanceIndex'),
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: MuzicianTheme.textMuted,
-                    ),
-                  ),
-                )
-              else ...[
-                const Spacer(),
-                Text(
-                  block!.chordSymbol ?? '?',
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
                   ),
                 ),
-                if ((block!.romanNumeral ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    block!.romanNumeral!,
-                    style: const TextStyle(
-                      color: MuzicianTheme.violet,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ],
-              if (block != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  instanceIndex < block!.lyrics.length
-                      ? block!.lyrics[instanceIndex]
-                      : '',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textSecondary,
-                    fontSize: 12,
-                    height: 1.25,
-                  ),
-                ),
-                const Spacer(),
-              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _content() {
+    if (_isSaveOnly) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.bookmark, size: 16, color: MuzicianTheme.sky),
+          const SizedBox(height: 2),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              saveName ?? 'Save',
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (block == null)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              '\u00b7',
+              style: TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 18,
+              ),
+            ),
+          )
+        else if (block!.isSilent)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Container(
+              key: Key('silentCell_${block!.id}_$instanceIndex'),
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: MuzicianTheme.textMuted,
+              ),
+            ),
+          )
+        else ...[
+          const Spacer(),
+          Text(
+            block!.chordSymbol ?? '?',
+            style: const TextStyle(
+              color: MuzicianTheme.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          if ((block!.romanNumeral ?? '').isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              block!.romanNumeral!,
+              style: const TextStyle(
+                color: MuzicianTheme.violet,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ],
+        if (block != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            instanceIndex < block!.lyrics.length
+                ? block!.lyrics[instanceIndex]
+                : '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: MuzicianTheme.textSecondary,
+              fontSize: 12,
+              height: 1.25,
+            ),
+          ),
+          const Spacer(),
+        ],
+      ],
     );
   }
 }
@@ -1079,43 +1202,6 @@ class _DrumLaneRow extends ConsumerWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _SaveLaneChip extends StatelessWidget {
-  const _SaveLaneChip({required this.label, required this.count});
-  final String label;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: MuzicianTheme.teal.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: MuzicianTheme.teal.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.bookmark_outline_rounded,
-            size: 12,
-            color: MuzicianTheme.teal,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '$label \u00b7 $count',
-            style: const TextStyle(
-              color: MuzicianTheme.teal,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

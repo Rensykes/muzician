@@ -61,4 +61,60 @@ void main() {
     expect(picked, isNotNull);
     expect(picked!.name, 'Riff');
   });
+
+  testWidgets('list tap on empty part of the row still invokes onPick',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final settings = container.read(settingsProvider.notifier);
+    await settings.hydrate();
+    // List mode (not grid) is where the row stretches full width and most of
+    // the row is empty space to the right of the short save name.
+    await settings.setSaveBrowserGrid(false);
+
+    final ss = container.read(saveSystemProvider.notifier);
+    final folderId = ss.createSaveFolder('MyFolder', null);
+    ss.saveSnapshot(
+      'Riff',
+      folderId!,
+      FretboardSnapshot(
+        tuning: TuningName.standard,
+        numFrets: 12,
+        capo: 0,
+        selectedCells: const [],
+        selectedNotes: const ['C', 'E', 'G'],
+        viewMode: FretboardViewMode.exact,
+      ),
+    );
+
+    SaveEntry? picked;
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: SaveBrowserPanel(
+            instrumentFilter: 'fretboard',
+            onPick: (e) => picked = e,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('MyFolder'));
+    await tester.pumpAndSettle();
+
+    // Tap the centre of the name row — empty space to the right of "Riff",
+    // not on the text glyphs. The whole row must be tappable.
+    final rowGesture = find
+        .ancestor(
+          of: find.text('Riff'),
+          matching: find.byType(GestureDetector),
+        )
+        .first;
+    await tester.tap(rowGesture);
+    await tester.pumpAndSettle();
+    expect(picked, isNotNull);
+    expect(picked!.name, 'Riff');
+  });
 }

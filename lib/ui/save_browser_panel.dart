@@ -1193,6 +1193,11 @@ class _SaveRowState extends State<_SaveRow>
             children: [
               // ── Name row ──
               GestureDetector(
+                // Opaque so the whole row is tappable — the save name is short
+                // and left-aligned, leaving most of the row as empty space that
+                // would otherwise swallow taps (deferToChild) and make picking
+                // a save feel like it "does nothing".
+                behavior: HitTestBehavior.opaque,
                 onTap: widget.editMode ? widget.onRename : widget.onTap,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
