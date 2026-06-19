@@ -420,8 +420,9 @@ class _VerseLyricDialog extends StatefulWidget {
 }
 
 class _VerseLyricDialogState extends State<_VerseLyricDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialText);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
 
   @override
   void dispose() {
@@ -433,8 +434,10 @@ class _VerseLyricDialogState extends State<_VerseLyricDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: MuzicianTheme.surface,
-      title: Text('Lyrics — Verse ${widget.verseNumber}',
-          style: const TextStyle(color: MuzicianTheme.textPrimary)),
+      title: Text(
+        'Lyrics — Verse ${widget.verseNumber}',
+        style: const TextStyle(color: MuzicianTheme.textPrimary),
+      ),
       content: TextField(
         key: const Key('verseLyricField'),
         controller: _controller,
@@ -841,7 +844,7 @@ class _BarRow extends ConsumerWidget {
                   block: null,
                   instanceIndex: instanceIndex,
                   isActive: isActiveCell(bar, 1),
-                  onTap: () => _addAt(context, ref, bar),
+                  onTap: () => _onTapEmpty(context, ref, bar),
                 ),
               );
               i++;
@@ -860,6 +863,27 @@ class _BarRow extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+
+  void _onTapEmpty(BuildContext context, WidgetRef ref, int bar) {
+    showBarActionSheet(
+      context: context,
+      title: 'Bar ${bar + 1}',
+      actions: [
+        BarAction(
+          key: const Key('barActionAddChord'),
+          label: 'Add chord',
+          icon: Icons.piano,
+          onTap: () => _addAt(context, ref, bar),
+        ),
+        BarAction(
+          key: const Key('barActionAddLibrary'),
+          label: 'Add from library',
+          icon: Icons.library_music,
+          onTap: () => _pickFromLibrary(context, ref, bar),
+        ),
+      ],
     );
   }
 
@@ -939,7 +963,8 @@ class _BarRow extends ConsumerWidget {
   /// Tap on a placed block → unified, non-destructive action sheet.
   void _onTapBlock(BuildContext context, WidgetRef ref, SongBlock block) {
     final notifier = ref.read(songwriterProvider.notifier);
-    final isChord = !block.isSilent &&
+    final isChord =
+        !block.isSilent &&
         block.chordRootPc != null &&
         block.chordQuality != null;
     final save = section.lanes
@@ -1133,7 +1158,9 @@ class _BarRow extends ConsumerWidget {
       builder: (_) => _VerseLyricDialog(
         verseNumber: instanceIndex + 1,
         initialText: current,
-        onSave: (text) => ref.read(songwriterProvider.notifier).setBlockLyric(
+        onSave: (text) => ref
+            .read(songwriterProvider.notifier)
+            .setBlockLyric(
               sectionId: section.id,
               laneId: lane.id,
               blockId: block.id,
@@ -1319,11 +1346,7 @@ class _BarCell extends StatelessWidget {
                     child: Container(
                       key: Key('saveBadge_${saveBlock!.id}_$instanceIndex'),
                       padding: const EdgeInsets.all(2),
-                      child: Icon(
-                        saveIcon,
-                        size: 13,
-                        color: MuzicianTheme.sky,
-                      ),
+                      child: Icon(saveIcon, size: 13, color: MuzicianTheme.sky),
                     ),
                   ),
                 ),

@@ -20,18 +20,17 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          home: Scaffold(body: SongwriterScreenSheet()),
-        ),
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    // Tap the first empty bar cell (· placeholder) to open the add sheet.
+    // Tap the first empty bar cell (· placeholder) to open the add menu.
     await tester.tap(find.text('·').first);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('fromLibraryButton')), findsOneWidget);
+    // The add menu now surfaces "Add from library" directly as a menu action.
+    expect(find.byKey(const Key('barActionAddLibrary')), findsOneWidget);
   });
 
   test('addLibraryBlockAt inserts a save block at the given bar', () {
@@ -47,58 +46,61 @@ void main() {
         .read(songwriterProvider)
         .sections
         .firstWhere((s) => s.id == sectionId);
-    final saveLane =
-        section.lanes.firstWhere((l) => l.kind == SongLaneKind.save);
+    final saveLane = section.lanes.firstWhere(
+      (l) => l.kind == SongLaneKind.save,
+    );
     final block = saveLane.blocks.single;
     expect(block.saveId, 'save_42');
     expect(block.startBar, 2);
   });
 
-  testWidgets('a save block on an empty bar renders as a save cell in the grid',
-      (tester) async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final n = container.read(songwriterProvider.notifier);
-    n.addSection(label: 'Verse', lengthBars: 4);
-    final sectionId = container.read(songwriterProvider).sections.first.id;
-    n.addLibraryBlockAt(sectionId: sectionId, saveId: 'save_42', startBar: 1);
+  testWidgets(
+    'a save block on an empty bar renders as a save cell in the grid',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final n = container.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = container.read(songwriterProvider).sections.first.id;
+      n.addLibraryBlockAt(sectionId: sectionId, saveId: 'save_42', startBar: 1);
 
-    final saveBlockId = container
-        .read(songwriterProvider)
-        .sections
-        .firstWhere((s) => s.id == sectionId)
-        .lanes
-        .firstWhere((l) => l.kind == SongLaneKind.save)
-        .blocks
-        .single
-        .id;
+      final saveBlockId = container
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == sectionId)
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.save)
+          .blocks
+          .single
+          .id;
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: Scaffold(body: SongwriterScreenSheet()),
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
         ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 600));
+      );
+      await tester.pump(const Duration(milliseconds: 600));
 
-    expect(
-      find.byKey(Key('saveCell_${saveBlockId}_0')),
-      findsOneWidget,
-    );
-  });
+      expect(find.byKey(Key('saveCell_${saveBlockId}_0')), findsOneWidget);
+    },
+  );
 
-  testWidgets('a save sharing a chord bar renders a badge over the chord',
-      (tester) async {
+  testWidgets('a save sharing a chord bar renders a badge over the chord', (
+    tester,
+  ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final n = container.read(songwriterProvider.notifier);
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
 
-    final harmonyLaneId =
-        n.addLane(sectionId: sectionId, kind: SongLaneKind.harmony);
+    final harmonyLaneId = n.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.harmony,
+    );
     n.addHarmonyBlock(
       sectionId: sectionId,
       laneId: harmonyLaneId,
@@ -126,9 +128,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          home: Scaffold(body: SongwriterScreenSheet()),
-        ),
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
