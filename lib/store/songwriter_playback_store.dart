@@ -110,10 +110,20 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       measureTicks: measureTicks,
     );
 
+    // Anchor each tick to the wall clock. A fixed per-tick delay lets the
+    // body's work (state mutation → rebuilds, sinks, the active-position
+    // provider) accumulate into drift, so playback runs progressively late.
+    // Instead, target tick N at `tickDuration * N` from the clock start and
+    // wait only the remaining time; when we are behind, yield a microtask
+    // (so cancellation/UI still run) but do not add any extra wait.
+    final clock = Stopwatch()..start();
     var eventIndex = 0;
     for (var tick = 0; tick < endTick; tick++) {
       if (_version != version) return;
-      if (tick > 0) await Future<void>.delayed(tickDuration);
+      if (tick > 0) {
+        final lag = tickDuration * tick - clock.elapsed;
+        await Future<void>.delayed(lag > Duration.zero ? lag : Duration.zero);
+      }
       if (_version != version) return;
       state = state.copyWith(currentTick: () => tick);
       if (metronomeOn && tick % beatTicks == 0) {
@@ -153,9 +163,12 @@ final songwriterPlaybackProvider =
 final songwriterActivePositionProvider = Provider<SongwriterActivePosition?>((
   ref,
 ) {
-  final playback = ref.watch(songwriterPlaybackProvider);
-  final bar = playback.currentBar;
-  if (playback.status != SongwriterPlaybackStatus.playing || bar == null) {
+  // Select only (status, bar): the position changes per bar, so watching the
+  // whole state would recompute expandSections on every tick.
+  final (status, bar) = ref.watch(
+    songwriterPlaybackProvider.select((p) => (p.status, p.currentBar)),
+  );
+  if (status != SongwriterPlaybackStatus.playing || bar == null) {
     return null;
   }
   final sections = ref.watch(songwriterProvider.select((p) => p.sections));

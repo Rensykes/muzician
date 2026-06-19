@@ -132,6 +132,42 @@ void main() {
     ]);
   });
 
+  test('tick clock is wall-anchored: body cost does not accumulate as drift',
+      () async {
+    // Inject a heavy synchronous cost on every metronome beat. Without
+    // wall-clock anchoring the loop would add this on top of every tick's
+    // delay, so total playback time would balloon past the ideal span. With
+    // anchoring it is absorbed into the per-tick budget.
+    final container = ProviderContainer(overrides: [
+      songwriterMetronomeSinkProvider.overrideWithValue(
+        ({required bool accent}) async {
+          final spin = Stopwatch()..start();
+          while (spin.elapsedMilliseconds < 12) {
+            // Busy-wait to simulate per-beat UI/audio work on the loop isolate.
+          }
+        },
+      ),
+    ]);
+    addTearDown(container.dispose);
+
+    final sw = container.read(songwriterProvider.notifier);
+    sw.addSection(label: 'A', lengthBars: 2); // 2 bars 4/4 → 32 ticks.
+
+    final clock = Stopwatch()..start();
+    await container
+        .read(songwriterPlaybackProvider.notifier)
+        // 32 ticks * 4ms ≈ 124ms ideal span; 8 beats * 12ms = 96ms of injected
+        // cost. Anchored, total stays near the ideal span (cost overlaps the
+        // waits). Unanchored it would be ~124 + 96 ≈ 220ms+.
+        .startPlayback(tickDurationOverride: const Duration(milliseconds: 4));
+    final elapsedMs = clock.elapsedMilliseconds;
+
+    expect(container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.completed);
+    expect(elapsedMs, lessThan(180),
+        reason: 'drift not absorbed; loop ran for ${elapsedMs}ms');
+  });
+
   test('activePositionForBar maps a global bar to a section instance', () {
     final pos = activePositionForBar(
       [const SongSection(id: 's1', lengthBars: 2, order: 0, repeat: 2)],
