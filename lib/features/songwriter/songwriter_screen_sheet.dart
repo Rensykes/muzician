@@ -1192,16 +1192,14 @@ class _BarRow extends ConsumerWidget {
   }
 
   void _onTapSave(BuildContext context, WidgetRef ref, SongBlock save) {
+    // Replace-from-library is intentionally omitted for now: addLibraryBlockAt
+    // rejects a placement that overlaps the existing save, so a "replace" would
+    // silently no-op. It belongs with the upcoming forced-save flow. Tap stays
+    // non-destructive (menu); removal is an explicit item or a long-press.
     showBarActionSheet(
       context: context,
       title: _saveName(ref, save),
       actions: [
-        BarAction(
-          key: const Key('barActionOpenSave'),
-          label: 'Replace from library',
-          icon: Icons.swap_horiz,
-          onTap: () => _pickFromLibrary(context, ref, save.startBar),
-        ),
         BarAction(
           key: const Key('barActionRemoveSave'),
           label: 'Remove save',
