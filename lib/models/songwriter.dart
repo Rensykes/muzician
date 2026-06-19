@@ -4,7 +4,7 @@ library;
 import 'save_system.dart';
 import 'song_project.dart';
 
-enum SongLaneKind { harmony, save, drum, lyrics }
+enum SongLaneKind { harmony, save, drum }
 
 SongLaneKind _laneKindFromName(String? raw) {
   for (final v in SongLaneKind.values) {

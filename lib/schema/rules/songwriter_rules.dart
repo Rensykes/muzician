@@ -187,23 +187,6 @@ SongBlock makeSilentBlock({
   lyrics: List<String>.filled(verseCount.clamp(1, 16), ''),
 );
 
-SongBlock makeLyricBlock({
-  required int startBar,
-  required int spanBars,
-  String text = '',
-  int verseCount = 1,
-}) {
-  final count = verseCount.clamp(1, 16);
-  final lyrics = List<String>.filled(count, '', growable: true);
-  if (text.isNotEmpty) lyrics[0] = text;
-  return SongBlock(
-    id: generateId(),
-    startBar: startBar,
-    spanBars: spanBars,
-    lyrics: lyrics,
-  );
-}
-
 DrumPattern makeDrumPattern({String name = 'Pattern'}) => DrumPattern(
   id: generateId(),
   name: name,
