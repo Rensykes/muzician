@@ -161,6 +161,28 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     });
   }
 
+  /// Sets the free-text lyrics for one verse (repeat instance) of a section.
+  /// Grows the list to reach [verseIndex] and trims trailing empties, mirroring
+  /// [setBlockLyric].
+  void setSectionLyric({
+    required String sectionId,
+    required int verseIndex,
+    required String? text,
+  }) {
+    if (verseIndex < 0) return;
+    _replaceSection(sectionId, (s) {
+      final list = [...s.lyrics];
+      while (list.length <= verseIndex) {
+        list.add('');
+      }
+      list[verseIndex] = text ?? '';
+      while (list.isNotEmpty && list.last.isEmpty) {
+        list.removeLast();
+      }
+      return s.copyWith(lyrics: list);
+    });
+  }
+
   void removeSection(String sectionId) => _set(
     state.copyWith(
       sections: state.sections.where((s) => s.id != sectionId).toList(),
