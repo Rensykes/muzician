@@ -601,6 +601,64 @@ class _SectionHeading extends ConsumerWidget {
   }
 }
 
+/// One row in the unified bar action sheet. [onTap] runs after the sheet has
+/// closed.
+class BarAction {
+  const BarAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.key,
+    this.destructive = false,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Key? key;
+  final bool destructive;
+}
+
+/// Single, non-destructive entrypoint for a bar: a bottom sheet listing
+/// [actions]. Tapping a row closes the sheet, then invokes its callback.
+Future<void> showBarActionSheet({
+  required BuildContext context,
+  required String title,
+  required List<BarAction> actions,
+}) {
+  return showWidgetSheet(
+    context: context,
+    title: title,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final a in actions)
+          ListTile(
+            key: a.key,
+            leading: Icon(
+              a.icon,
+              color: a.destructive
+                  ? MuzicianTheme.red
+                  : MuzicianTheme.textPrimary,
+            ),
+            title: Text(
+              a.label,
+              style: TextStyle(
+                color: a.destructive
+                    ? MuzicianTheme.red
+                    : MuzicianTheme.textPrimary,
+              ),
+            ),
+            onTap: () {
+              Navigator.of(context).pop();
+              a.onTap();
+            },
+          ),
+      ],
+    ),
+  );
+}
+
 class _BarRow extends ConsumerWidget {
   const _BarRow({
     required this.section,
