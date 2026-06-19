@@ -45,6 +45,28 @@ void main() {
         c.read(songwriterProvider).sections.single.lanes.single.blocks.length, 1);
   });
 
+  test('rejected overlap insert is a no-op: no notify, same state instance', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'V', lengthBars: 8);
+    final s = c.read(songwriterProvider).sections.single.id;
+    n.addLane(sectionId: s, kind: SongLaneKind.save);
+    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    n.addSaveBlock(sectionId: s, laneId: l, saveId: 'a', startBar: 0, spanBars: 4);
+
+    final before = c.read(songwriterProvider);
+    var notifications = 0;
+    final sub = c.listen(songwriterProvider, (_, _) => notifications++);
+    addTearDown(sub.close);
+
+    // Overlapping insert -> rejected by blocksOverlap -> must not touch state.
+    n.addSaveBlock(sectionId: s, laneId: l, saveId: 'b', startBar: 2, spanBars: 4);
+
+    expect(notifications, 0);
+    expect(identical(c.read(songwriterProvider), before), isTrue);
+  });
+
   test('clearing the key removes stale roman numerals from harmony blocks', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);
