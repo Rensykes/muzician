@@ -146,4 +146,43 @@ void main() {
       1,
     );
   });
+
+  testWidgets('tapping a standalone save opens a menu and does not remove it',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.first.id;
+    n.addLane(sectionId: sectionId, kind: SongLaneKind.save, label: 'Guitar');
+    final saveLaneId = container.read(songwriterProvider).sections.first.lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save).id;
+    n.addSaveBlock(
+      sectionId: sectionId,
+      laneId: saveLaneId,
+      saveId: 'save-xyz',
+      startBar: 0,
+      spanBars: 1,
+    );
+    final saveBlockId = container.read(songwriterProvider).sections.first.lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save).blocks.first.id;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byKey(Key('saveCell_${saveBlockId}_0')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('barActionRemoveSave')), findsOneWidget);
+    expect(
+      container.read(songwriterProvider).sections.first.lanes
+          .firstWhere((l) => l.kind == SongLaneKind.save).blocks.length,
+      1,
+    );
+  });
 }

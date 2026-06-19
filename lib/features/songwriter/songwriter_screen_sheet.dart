@@ -822,6 +822,7 @@ class _BarRow extends ConsumerWidget {
                     instanceIndex: instanceIndex,
                     isActive: isActiveCell(i, span),
                     onTap: () => _onTapSave(context, ref, save),
+                    onLongPress: () => _removeSave(context, ref, save),
                   ),
                 );
                 i += span;
@@ -1191,7 +1192,25 @@ class _BarRow extends ConsumerWidget {
   }
 
   void _onTapSave(BuildContext context, WidgetRef ref, SongBlock save) {
-    _removeSave(context, ref, save);
+    showBarActionSheet(
+      context: context,
+      title: _saveName(ref, save),
+      actions: [
+        BarAction(
+          key: const Key('barActionOpenSave'),
+          label: 'Replace from library',
+          icon: Icons.swap_horiz,
+          onTap: () => _pickFromLibrary(context, ref, save.startBar),
+        ),
+        BarAction(
+          key: const Key('barActionRemoveSave'),
+          label: 'Remove save',
+          icon: Icons.bookmark_remove,
+          destructive: true,
+          onTap: () => _removeSave(context, ref, save),
+        ),
+      ],
+    );
   }
 
   /// Removes a save block (its badge on a chord, or a standalone save cell)
