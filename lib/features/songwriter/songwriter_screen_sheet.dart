@@ -7,9 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_library_match_rules.dart';
+import '../../schema/rules/songwriter_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
 import '../../store/save_system_store.dart';
+import '../../ui/save_card_label.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/coach_overlay.dart';
@@ -673,6 +675,9 @@ class _BarRow extends ConsumerWidget {
                   flex: span,
                   block: owner,
                   saveBlock: save,
+                  saveIcon: save == null
+                      ? Icons.bookmark
+                      : _saveIcon(ref, save),
                   instanceIndex: instanceIndex,
                   isActive: isActiveCell(i, span),
                   onTap: () => _onTapBlock(context, ref, owner),
@@ -698,6 +703,7 @@ class _BarRow extends ConsumerWidget {
                     block: null,
                     saveBlock: save,
                     saveName: _saveName(ref, save),
+                    saveIcon: _saveIcon(ref, save),
                     instanceIndex: instanceIndex,
                     isActive: isActiveCell(i, span),
                     onTap: () => _onTapSave(context, ref, save),
@@ -992,6 +998,18 @@ class _BarRow extends ConsumerWidget {
     return entry?.name ?? 'Save';
   }
 
+  /// Instrument icon for a save block: piano for a piano save, guitar
+  /// (music note) for a fretboard save. Falls back to a bookmark when the
+  /// referenced save can't be resolved.
+  IconData _saveIcon(WidgetRef ref, SongBlock save) {
+    final snapshot = resolveBlockSnapshot(
+      save,
+      ref.read(saveSystemProvider).saves,
+    );
+    if (snapshot == null) return Icons.bookmark;
+    return saveInstrumentIcon(snapshot.instrument);
+  }
+
   /// Tapping a save (its badge on a chord, or a standalone save cell) removes
   /// it from the save lane, with an undo affordance.
   void _onTapSave(BuildContext context, WidgetRef ref, SongBlock save) {
@@ -1029,6 +1047,7 @@ class _BarCell extends StatelessWidget {
     required this.onTap,
     this.saveBlock,
     this.saveName,
+    this.saveIcon = Icons.bookmark,
     this.onSaveTap,
     this.onLongPress,
     this.isActive = false,
@@ -1037,6 +1056,7 @@ class _BarCell extends StatelessWidget {
   final SongBlock? block;
   final SongBlock? saveBlock;
   final String? saveName;
+  final IconData saveIcon;
   final int instanceIndex;
   final VoidCallback onTap;
   final VoidCallback? onSaveTap;
@@ -1098,8 +1118,8 @@ class _BarCell extends StatelessWidget {
                     child: Container(
                       key: Key('saveBadge_${saveBlock!.id}_$instanceIndex'),
                       padding: const EdgeInsets.all(2),
-                      child: const Icon(
-                        Icons.bookmark,
+                      child: Icon(
+                        saveIcon,
                         size: 13,
                         color: MuzicianTheme.sky,
                       ),
@@ -1119,7 +1139,7 @@ class _BarCell extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.bookmark, size: 16, color: MuzicianTheme.sky),
+          Icon(saveIcon, size: 16, color: MuzicianTheme.sky),
           const SizedBox(height: 2),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
