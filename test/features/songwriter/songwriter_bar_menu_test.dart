@@ -266,4 +266,65 @@ void main() {
       1,
     );
   });
+
+  testWidgets('long-pressing a chord removes it (with undo)', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.first.id;
+    n.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.harmony,
+      label: 'Harmony',
+    );
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.harmony)
+        .id;
+    n.addHarmonyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: const SongBlock(
+        id: 'b1',
+        startBar: 0,
+        spanBars: 1,
+        chordSymbol: 'C',
+        chordQuality: 'maj',
+        chordRootPc: 0,
+        chordNotes: ['C', 'E', 'G'],
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.longPress(find.text('C').first);
+    await tester.pumpAndSettle();
+
+    // Long-press removes the chord directly (no menu).
+    expect(
+      container
+          .read(songwriterProvider)
+          .sections
+          .first
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.harmony)
+          .blocks,
+      isEmpty,
+    );
+    // Undo affordance shown.
+    expect(find.text('Block removed'), findsOneWidget);
+
+    // Drain the undo snackbar's auto-dismiss timer before teardown.
+    await tester.pump(const Duration(seconds: 5));
+  });
 }

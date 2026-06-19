@@ -45,8 +45,10 @@ Contents depend on cell state:
   - **Remove chord** → `_removeBlock` (+ undo).
   - If a save badge shares the bar: **Remove save** item too.
 - **Silent / lyric-only block:** Lyrics — Verse N · Remove.
-- **Standalone save cell:** **Open / replace** (→ library picker) · **Remove
-  save**.
+- **Standalone save cell:** **Remove save**. (A "Replace from library" item was
+  considered but dropped: `addLibraryBlockAt` rejects a placement overlapping the
+  existing save, so a replace would silently no-op. Replace ships with the
+  upcoming forced fretboard/piano-save flow.)
 - **Empty bar:** **Add chord** (→ chord sheet) · **Add from library**.
 
 Tap is never destructive: every removal is an explicit menu item.
@@ -83,7 +85,7 @@ serve different jobs and do not interact. No change to section lyrics.
 |---|---|---|
 | Chord bar | Action sheet (change / voicings / lyrics / remove) | Remove chord (+undo) |
 | Silent block | Action sheet (lyrics / remove) | Remove (+undo) |
-| Standalone save | Action sheet (open-replace / remove) | Remove save (+undo) |
+| Standalone save | Action sheet (remove save) | Remove save (+undo) |
 | Empty bar | Add sheet (chord / library) | — |
 
 ## Out of scope
