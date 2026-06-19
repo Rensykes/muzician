@@ -405,6 +405,63 @@ class _SectionLyricsDialogState extends State<_SectionLyricsDialog> {
   }
 }
 
+class _VerseLyricDialog extends StatefulWidget {
+  const _VerseLyricDialog({
+    required this.verseNumber,
+    required this.initialText,
+    required this.onSave,
+  });
+  final int verseNumber;
+  final String initialText;
+  final ValueChanged<String> onSave;
+
+  @override
+  State<_VerseLyricDialog> createState() => _VerseLyricDialogState();
+}
+
+class _VerseLyricDialogState extends State<_VerseLyricDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialText);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: MuzicianTheme.surface,
+      title: Text('Lyrics — Verse ${widget.verseNumber}',
+          style: const TextStyle(color: MuzicianTheme.textPrimary)),
+      content: TextField(
+        key: const Key('verseLyricField'),
+        controller: _controller,
+        autofocus: true,
+        maxLines: null,
+        minLines: 2,
+        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        decoration: const InputDecoration(hintText: 'Words for this verse…'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          key: const Key('verseLyricSave'),
+          onPressed: () {
+            widget.onSave(_controller.text);
+            Navigator.pop(context);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
 class _SectionHeading extends ConsumerWidget {
   const _SectionHeading({required this.section});
   final SongSection section;
@@ -1019,6 +1076,26 @@ class _BarRow extends ConsumerWidget {
       n.removeBlock(sectionId: section.id, laneId: lane.id, blockId: block.id);
       n.addHarmonyBlock(sectionId: section.id, laneId: lane.id, block: next);
     }
+  }
+
+  void _editVerseLyric(BuildContext context, WidgetRef ref, SongBlock block) {
+    final current = instanceIndex < block.lyrics.length
+        ? block.lyrics[instanceIndex]
+        : '';
+    showDialog<void>(
+      context: context,
+      builder: (_) => _VerseLyricDialog(
+        verseNumber: instanceIndex + 1,
+        initialText: current,
+        onSave: (text) => ref.read(songwriterProvider.notifier).setBlockLyric(
+              sectionId: section.id,
+              laneId: lane.id,
+              blockId: block.id,
+              verseIndex: instanceIndex,
+              text: text,
+            ),
+      ),
+    );
   }
 
   void _removeBlock(
