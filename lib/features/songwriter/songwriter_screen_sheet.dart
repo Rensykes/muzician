@@ -1335,7 +1335,8 @@ class _BarCell extends StatelessWidget {
             children: [
               Positioned.fill(child: _content()),
               // Badge marking a save that shares the bar with a chord. Its own
-              // tap target so it can be removed without opening the chord sheet.
+              // tap target so it opens the save action menu directly, instead of
+              // the chord's menu.
               if (block != null && saveBlock != null)
                 Positioned(
                   top: 2,
