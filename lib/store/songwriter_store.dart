@@ -121,14 +121,23 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     _set(state.copyWith(sections: [...state.sections, section]));
   }
 
+  /// True when [next] is element-wise `identical` to [prev] (same order, same
+  /// instances). Used to skip a `_set` when a map callback returned unchanged
+  /// instances — avoids a wasted Riverpod rebuild + persist write.
+  static bool _sameElements<T>(List<T> prev, List<T> next) {
+    if (prev.length != next.length) return false;
+    for (var i = 0; i < prev.length; i++) {
+      if (!identical(prev[i], next[i])) return false;
+    }
+    return true;
+  }
+
   void _replaceSection(String sectionId, SongSection Function(SongSection) f) {
-    _set(
-      state.copyWith(
-        sections: state.sections
-            .map((s) => s.id == sectionId ? f(s) : s)
-            .toList(),
-      ),
-    );
+    final sections = state.sections
+        .map((s) => s.id == sectionId ? f(s) : s)
+        .toList();
+    if (_sameElements(state.sections, sections)) return; // nothing changed
+    _set(state.copyWith(sections: sections));
   }
 
   void renameSection(String sectionId, String? label) => _replaceSection(
@@ -240,12 +249,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     String laneId,
     SongLane Function(SongLane) f,
   ) {
-    _replaceSection(
-      sectionId,
-      (s) => s.copyWith(
-        lanes: s.lanes.map((l) => l.id == laneId ? f(l) : l).toList(),
-      ),
-    );
+    _replaceSection(sectionId, (s) {
+      final lanes = s.lanes.map((l) => l.id == laneId ? f(l) : l).toList();
+      if (_sameElements(s.lanes, lanes)) return s; // lane unchanged
+      return s.copyWith(lanes: lanes);
+    });
   }
 
   void setLaneRepeat({
