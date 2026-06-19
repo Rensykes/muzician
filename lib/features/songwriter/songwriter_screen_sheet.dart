@@ -935,19 +935,64 @@ class _BarRow extends ConsumerWidget {
     }
   }
 
-  /// Tap on a placed block. Chord blocks open the voicings / harmony /
-  /// library sheet (with an "Edit chord & lyrics" escape hatch); silent
-  /// lyric-only blocks go straight to the chord editor.
+  /// Tap on a placed block → unified, non-destructive action sheet.
   void _onTapBlock(BuildContext context, WidgetRef ref, SongBlock block) {
-    final isChord =
-        !block.isSilent &&
+    final notifier = ref.read(songwriterProvider.notifier);
+    final isChord = !block.isSilent &&
         block.chordRootPc != null &&
         block.chordQuality != null;
-    if (!isChord) {
-      _editBlock(context, ref, block);
-      return;
-    }
+    final save = section.lanes
+        .where((l) => l.kind == SongLaneKind.save)
+        .expand((l) => l.blocks)
+        .where((b) => b.startBar < block.endBar && block.startBar < b.endBar)
+        .firstOrNull;
 
+    showBarActionSheet(
+      context: context,
+      title: isChord ? (block.chordSymbol ?? 'Chord') : 'Bar',
+      actions: [
+        if (isChord)
+          BarAction(
+            key: const Key('barActionChangeChord'),
+            label: 'Change chord',
+            icon: Icons.edit,
+            onTap: () => _editBlock(context, ref, block),
+          ),
+        if (isChord)
+          BarAction(
+            key: const Key('barActionVoicings'),
+            label: 'Voicings & library',
+            icon: Icons.library_music,
+            onTap: () => _openHarmonyTools(context, ref, block),
+          ),
+        BarAction(
+          key: const Key('barActionLyrics'),
+          label: 'Lyrics — Verse ${instanceIndex + 1}',
+          icon: Icons.lyrics_outlined,
+          onTap: () => _editVerseLyric(context, ref, block),
+        ),
+        if (save != null)
+          BarAction(
+            key: const Key('barActionRemoveSave'),
+            label: 'Remove save',
+            icon: Icons.bookmark_remove,
+            destructive: true,
+            onTap: () => _removeSave(context, ref, save),
+          ),
+        BarAction(
+          key: const Key('barActionRemove'),
+          label: isChord ? 'Remove chord' : 'Remove',
+          icon: Icons.delete_outline,
+          destructive: true,
+          onTap: () => _removeBlock(context, notifier, block),
+        ),
+      ],
+    );
+  }
+
+  /// Opens the voicings / harmony / library sheet for a chord block (with an
+  /// "Edit chord & lyrics" escape hatch).
+  void _openHarmonyTools(BuildContext context, WidgetRef ref, SongBlock block) {
     final cfg = ref.read(songwriterProvider).config;
     final notifier = ref.read(songwriterProvider.notifier);
     final voicings = suggestVoicings(
@@ -1145,9 +1190,13 @@ class _BarRow extends ConsumerWidget {
     return saveInstrumentIcon(snapshot.instrument);
   }
 
-  /// Tapping a save (its badge on a chord, or a standalone save cell) removes
-  /// it from the save lane, with an undo affordance.
   void _onTapSave(BuildContext context, WidgetRef ref, SongBlock save) {
+    _removeSave(context, ref, save);
+  }
+
+  /// Removes a save block (its badge on a chord, or a standalone save cell)
+  /// from the save lane, with an undo affordance.
+  void _removeSave(BuildContext context, WidgetRef ref, SongBlock save) {
     final notifier = ref.read(songwriterProvider.notifier);
     final saveLane = section.lanes.firstWhere(
       (l) =>
@@ -1349,6 +1398,8 @@ class _BarCell extends StatelessWidget {
                 ? block!.lyrics[instanceIndex]
                 : '',
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: MuzicianTheme.textSecondary,
               fontSize: 12,

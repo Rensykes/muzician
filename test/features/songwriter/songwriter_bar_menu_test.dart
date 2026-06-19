@@ -64,6 +64,7 @@ void main() {
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
     n.setSectionRepeat(sectionId, 2);
+    n.addLane(sectionId: sectionId, kind: SongLaneKind.harmony, label: 'Harmony');
     final laneId = container.read(songwriterProvider).sections.first.lanes
         .firstWhere((l) => l.kind == SongLaneKind.harmony).id;
     n.addHarmonyBlock(
@@ -104,5 +105,45 @@ void main() {
     final block = container.read(songwriterProvider).sections.first.lanes
         .firstWhere((l) => l.kind == SongLaneKind.harmony).blocks.first;
     expect(block.lyrics, ['', 'second verse words']);
+  });
+
+  testWidgets('tapping a chord opens the action sheet and does not remove it',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.first.id;
+    n.addLane(sectionId: sectionId, kind: SongLaneKind.harmony, label: 'Harmony');
+    final laneId = container.read(songwriterProvider).sections.first.lanes
+        .firstWhere((l) => l.kind == SongLaneKind.harmony).id;
+    n.addHarmonyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: const SongBlock(
+        id: 'b1', startBar: 0, spanBars: 1, chordSymbol: 'C',
+        chordQuality: 'maj', chordRootPc: 0, chordNotes: ['C', 'E', 'G'],
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.text('C').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('barActionChangeChord')), findsOneWidget);
+    expect(find.byKey(const Key('barActionLyrics')), findsOneWidget);
+    expect(find.byKey(const Key('barActionRemove')), findsOneWidget);
+    expect(
+      container.read(songwriterProvider).sections.first.lanes
+          .firstWhere((l) => l.kind == SongLaneKind.harmony).blocks.length,
+      1,
+    );
   });
 }
