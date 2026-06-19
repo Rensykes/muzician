@@ -222,8 +222,6 @@ SongProject songFromSongwriter(
               type: SongPatternType.drum,
               startTick: startTick,
             );
-          case SongLaneKind.lyrics:
-            break; // lyrics carry no audio
         }
       }
     }

@@ -174,8 +174,6 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                 }
               }
             }
-          case SongLaneKind.lyrics:
-            break; // lyrics carry no audio
         }
       }
     }

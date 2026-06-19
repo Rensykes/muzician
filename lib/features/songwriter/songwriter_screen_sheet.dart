@@ -88,49 +88,49 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                 key: _coachKeys.body,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final twoColumns = constraints.maxWidth >= 700;
-                    final columnWidth = twoColumns
-                        ? (constraints.maxWidth - 28 * 2 - 24) / 2
-                        : null;
-                    return ListView(
-                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
-                      children: [
-                        if (project.sections.isEmpty)
-                          const _EmptyState(key: Key('songwriterEmptyHint')),
-                        if (twoColumns)
-                          // Wide layout: sections flow in two columns.
-                          Wrap(
-                            spacing: 24,
-                            runSpacing: 36,
-                            children: [
-                              for (final section in project.sections)
-                                SizedBox(
-                                  width: columnWidth,
-                                  child: _SectionSheet(sectionId: section.id),
-                                ),
-                            ],
-                          )
-                        else
-                          for (final section in project.sections)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 36),
-                              child: _SectionSheet(sectionId: section.id),
-                            ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: KeyedSubtree(
-                            key: _coachKeys.addSection,
-                            child: _AddSectionRule(
-                              key: const Key('songwriterAddSection'),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                notifier.addSection(label: null, lengthBars: 8);
-                              },
-                            ),
+                  final twoColumns = constraints.maxWidth >= 700;
+                  final columnWidth = twoColumns
+                      ? (constraints.maxWidth - 28 * 2 - 24) / 2
+                      : null;
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
+                    children: [
+                      if (project.sections.isEmpty)
+                        const _EmptyState(key: Key('songwriterEmptyHint')),
+                      if (twoColumns)
+                        // Wide layout: sections flow in two columns.
+                        Wrap(
+                          spacing: 24,
+                          runSpacing: 36,
+                          children: [
+                            for (final section in project.sections)
+                              SizedBox(
+                                width: columnWidth,
+                                child: _SectionSheet(sectionId: section.id),
+                              ),
+                          ],
+                        )
+                      else
+                        for (final section in project.sections)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 36),
+                            child: _SectionSheet(sectionId: section.id),
+                          ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: KeyedSubtree(
+                          key: _coachKeys.addSection,
+                          child: _AddSectionRule(
+                            key: const Key('songwriterAddSection'),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              notifier.addSection(label: null, lengthBars: 8);
+                            },
                           ),
                         ),
-                      ],
-                    );
+                      ),
+                    ],
+                  );
                   },
                 ),
               ),
@@ -162,8 +162,11 @@ class _SectionSheet extends ConsumerWidget {
 
     final harmonyLane = section.lanes.firstWhere(
       (l) => l.kind == SongLaneKind.harmony,
-      orElse: () =>
-          const SongLane(id: '', kind: SongLaneKind.harmony, order: 0),
+      orElse: () => const SongLane(
+        id: '',
+        kind: SongLaneKind.harmony,
+        order: 0,
+      ),
     );
 
     return Column(
@@ -217,8 +220,7 @@ class _SectionInstance extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.listen(
       songwriterActivePositionProvider.select(
-        (p) =>
-            p != null &&
+        (p) => p != null &&
             p.sectionId == section.id &&
             p.instanceIndex == instanceIndex,
       ),
@@ -256,24 +258,10 @@ class _SectionInstance extends ConsumerWidget {
           onEnsureLane: onEnsureLane,
         ),
         // Drum lanes (one strip per drum lane on this section).
-        for (final lane in section.lanes.where(
-          (l) => l.kind == SongLaneKind.drum,
-        )) ...[
+        for (final lane in section.lanes.where((l) => l.kind == SongLaneKind.drum)) ...[
           const SizedBox(height: 8),
           _DrumLaneRow(
             key: Key('sheetDrumLane_${lane.id}_$instanceIndex'),
-            section: section,
-            lane: lane,
-            instanceIndex: instanceIndex,
-          ),
-        ],
-        // Lyrics lanes (one strip per lyrics lane on this section).
-        for (final lane in section.lanes.where(
-          (l) => l.kind == SongLaneKind.lyrics,
-        )) ...[
-          const SizedBox(height: 8),
-          _LyricLaneRow(
-            key: Key('sheetLyricLane_${lane.id}_$instanceIndex'),
             section: section,
             lane: lane,
             instanceIndex: instanceIndex,
@@ -368,15 +356,10 @@ class _SectionHeading extends ConsumerWidget {
               ),
             PopupMenuButton<String>(
               key: Key('sheetSectionMenu_${section.id}'),
-              icon: const Icon(
-                Icons.more_vert,
-                color: MuzicianTheme.textPrimary,
-              ),
+              icon: const Icon(Icons.more_vert, color: MuzicianTheme.textPrimary),
               onSelected: (value) async {
                 if (value == 'addDrumLane') {
-                  ref
-                      .read(songwriterProvider.notifier)
-                      .addLane(
+                  ref.read(songwriterProvider.notifier).addLane(
                         sectionId: section.id,
                         kind: SongLaneKind.drum,
                         label: 'Beat',
@@ -388,26 +371,14 @@ class _SectionHeading extends ConsumerWidget {
                       .lanes
                       .lastWhere((l) => l.kind == SongLaneKind.drum)
                       .id;
-                  final patternId = ref
-                      .read(songwriterProvider.notifier)
+                  final patternId = ref.read(songwriterProvider.notifier)
                       .addDrumPattern(name: 'Pattern');
-                  ref
-                      .read(songwriterProvider.notifier)
-                      .addDrumBlock(
+                  ref.read(songwriterProvider.notifier).addDrumBlock(
                         sectionId: section.id,
                         laneId: laneId,
                         patternId: patternId,
                         startBar: 0,
                         spanBars: section.lengthBars,
-                      );
-                }
-                if (value == 'addLyricLane') {
-                  ref
-                      .read(songwriterProvider.notifier)
-                      .addLane(
-                        sectionId: section.id,
-                        kind: SongLaneKind.lyrics,
-                        label: 'Lyrics',
                       );
                 }
               },
@@ -418,15 +389,6 @@ class _SectionHeading extends ConsumerWidget {
                   child: ListTile(
                     leading: Icon(Icons.graphic_eq),
                     title: Text('Add drum lane'),
-                    dense: true,
-                  ),
-                ),
-                PopupMenuItem(
-                  key: Key('addLyricLaneSheetAction'),
-                  value: 'addLyricLane',
-                  child: ListTile(
-                    leading: Icon(Icons.lyrics_outlined),
-                    title: Text('Add lyrics lane'),
                     dense: true,
                   ),
                 ),
@@ -460,7 +422,10 @@ class _SectionHeading extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Container(height: 1, color: MuzicianTheme.glassBorder),
+        Container(
+          height: 1,
+          color: MuzicianTheme.glassBorder,
+        ),
       ],
     );
   }
@@ -525,8 +490,7 @@ class _BarRow extends ConsumerWidget {
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
     final activeBar = ref.watch(
       songwriterActivePositionProvider.select(
-        (p) =>
-            p != null &&
+        (p) => p != null &&
                 p.sectionId == section.id &&
                 p.instanceIndex == instanceIndex
             ? p.localBar
@@ -534,9 +498,7 @@ class _BarRow extends ConsumerWidget {
       ),
     );
     bool isActiveCell(int startBar, int span) =>
-        activeBar != null &&
-        activeBar >= startBar &&
-        activeBar < startBar + span;
+        activeBar != null && activeBar >= startBar && activeBar < startBar + span;
     Key? activeKey(int startBar, int span) => isActiveCell(startBar, span)
         ? Key('activeBarCell_${section.id}_${instanceIndex}_$startBar')
         : null;
@@ -571,21 +533,19 @@ class _BarRow extends ConsumerWidget {
             if (owner != null && owner.startBar == i) {
               final span = owner.spanBars.clamp(1, end - i);
               final save = saveBySpan[i];
-              cells.add(
-                _BarCell(
-                  key: activeKey(i, span),
-                  flex: span,
-                  block: owner,
-                  saveBlock: save,
-                  instanceIndex: instanceIndex,
-                  isActive: isActiveCell(i, span),
-                  onTap: () => _onTapBlock(context, ref, owner),
-                  onSaveTap: save == null
-                      ? null
-                      : () => _onTapSave(context, ref, save),
-                  onLongPress: () => _removeBlock(context, notifier, owner),
-                ),
-              );
+              cells.add(_BarCell(
+                key: activeKey(i, span),
+                flex: span,
+                block: owner,
+                saveBlock: save,
+                instanceIndex: instanceIndex,
+                isActive: isActiveCell(i, span),
+                onTap: () => _onTapBlock(context, ref, owner),
+                onSaveTap:
+                    save == null ? null : () => _onTapSave(context, ref, save),
+                onLongPress: () =>
+                    _removeBlock(context, notifier, owner),
+              ));
               i += span;
             } else if (owner != null) {
               i++;
@@ -595,18 +555,16 @@ class _BarRow extends ConsumerWidget {
               final save = saveBySpan[i]!;
               if (save.startBar == i) {
                 final span = save.spanBars.clamp(1, end - i);
-                cells.add(
-                  _BarCell(
-                    key: Key('saveCell_${save.id}_$instanceIndex'),
-                    flex: span,
-                    block: null,
-                    saveBlock: save,
-                    saveName: _saveName(ref, save),
-                    instanceIndex: instanceIndex,
-                    isActive: isActiveCell(i, span),
-                    onTap: () => _onTapSave(context, ref, save),
-                  ),
-                );
+                cells.add(_BarCell(
+                  key: Key('saveCell_${save.id}_$instanceIndex'),
+                  flex: span,
+                  block: null,
+                  saveBlock: save,
+                  saveName: _saveName(ref, save),
+                  instanceIndex: instanceIndex,
+                  isActive: isActiveCell(i, span),
+                  onTap: () => _onTapSave(context, ref, save),
+                ));
                 i += span;
               } else {
                 i++; // covered by a spanning save that started earlier
@@ -616,16 +574,14 @@ class _BarRow extends ConsumerWidget {
               // capturing it directly would read its post-loop value (`end`),
               // landing every empty-cell tap on the start of the next row.
               final bar = i;
-              cells.add(
-                _BarCell(
-                  key: activeKey(bar, 1),
-                  flex: 1,
-                  block: null,
-                  instanceIndex: instanceIndex,
-                  isActive: isActiveCell(bar, 1),
-                  onTap: () => _addAt(context, ref, bar),
-                ),
-              );
+              cells.add(_BarCell(
+                key: activeKey(bar, 1),
+                flex: 1,
+                block: null,
+                instanceIndex: instanceIndex,
+                isActive: isActiveCell(bar, 1),
+                onTap: () => _addAt(context, ref, bar),
+              ));
               i++;
             }
           }
@@ -662,18 +618,16 @@ class _BarRow extends ConsumerWidget {
     if (block == null) return;
     final laneId = lane.id.isEmpty
         ? ref
-              .read(songwriterProvider)
-              .sections
-              .firstWhere((s) => s.id == section.id)
-              .lanes
-              .firstWhere((l) => l.kind == SongLaneKind.harmony)
-              .id
+            .read(songwriterProvider)
+            .sections
+            .firstWhere((s) => s.id == section.id)
+            .lanes
+            .firstWhere((l) => l.kind == SongLaneKind.harmony)
+            .id
         : lane.id;
     HapticFeedback.selectionClick();
     if (block.isSilent) {
-      ref
-          .read(songwriterProvider.notifier)
-          .addSilentBlock(
+      ref.read(songwriterProvider.notifier).addSilentBlock(
             sectionId: section.id,
             laneId: laneId,
             startBar: bar,
@@ -690,9 +644,7 @@ class _BarRow extends ConsumerWidget {
           .lastWhere((b) => b.startBar == bar)
           .id;
       if (block.lyrics.isNotEmpty) {
-        ref
-            .read(songwriterProvider.notifier)
-            .setBlockLyric(
+        ref.read(songwriterProvider.notifier).setBlockLyric(
               sectionId: section.id,
               laneId: laneId,
               blockId: newBlockId,
@@ -701,13 +653,13 @@ class _BarRow extends ConsumerWidget {
             );
       }
     } else {
-      ref
-          .read(songwriterProvider.notifier)
-          .addHarmonyBlock(sectionId: section.id, laneId: laneId, block: block);
+      ref.read(songwriterProvider.notifier).addHarmonyBlock(
+            sectionId: section.id,
+            laneId: laneId,
+            block: block,
+          );
       if (block.lyrics.isNotEmpty) {
-        ref
-            .read(songwriterProvider.notifier)
-            .setBlockLyric(
+        ref.read(songwriterProvider.notifier).setBlockLyric(
               sectionId: section.id,
               laneId: laneId,
               blockId: block.id,
@@ -722,8 +674,7 @@ class _BarRow extends ConsumerWidget {
   /// library sheet (with an "Edit chord & lyrics" escape hatch); silent
   /// lyric-only blocks go straight to the chord editor.
   void _onTapBlock(BuildContext context, WidgetRef ref, SongBlock block) {
-    final isChord =
-        !block.isSilent &&
+    final isChord = !block.isSilent &&
         block.chordRootPc != null &&
         block.chordQuality != null;
     if (!isChord) {
@@ -810,9 +761,7 @@ class _BarRow extends ConsumerWidget {
           onPick: (entry) {
             Navigator.of(context).pop();
             HapticFeedback.selectionClick();
-            ref
-                .read(songwriterProvider.notifier)
-                .addLibraryBlockAt(
+            ref.read(songwriterProvider.notifier).addLibraryBlockAt(
                   sectionId: section.id,
                   saveId: entry.id,
                   startBar: bar,
@@ -844,9 +793,7 @@ class _BarRow extends ConsumerWidget {
     if (next == null) return;
     HapticFeedback.selectionClick();
     // Write the lyric for this instance.
-    ref
-        .read(songwriterProvider.notifier)
-        .setBlockLyric(
+    ref.read(songwriterProvider.notifier).setBlockLyric(
           sectionId: section.id,
           laneId: lane.id,
           blockId: block.id,
@@ -856,8 +803,16 @@ class _BarRow extends ConsumerWidget {
     // If chord state changed (non-silent), replace the block.
     if (!next.isSilent) {
       final n = ref.read(songwriterProvider.notifier);
-      n.removeBlock(sectionId: section.id, laneId: lane.id, blockId: block.id);
-      n.addHarmonyBlock(sectionId: section.id, laneId: lane.id, block: next);
+      n.removeBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        blockId: block.id,
+      );
+      n.addHarmonyBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        block: next,
+      );
     }
   }
 
@@ -888,11 +843,8 @@ class _BarRow extends ConsumerWidget {
   String _saveName(WidgetRef ref, SongBlock save) {
     final id = save.saveId;
     if (id == null) return 'Save';
-    final entry = ref
-        .read(saveSystemProvider)
-        .saves
-        .where((s) => s.id == id)
-        .firstOrNull;
+    final entry =
+        ref.read(saveSystemProvider).saves.where((s) => s.id == id).firstOrNull;
     return entry?.name ?? 'Save';
   }
 
@@ -902,7 +854,8 @@ class _BarRow extends ConsumerWidget {
     final notifier = ref.read(songwriterProvider.notifier);
     final saveLane = section.lanes.firstWhere(
       (l) =>
-          l.kind == SongLaneKind.save && l.blocks.any((b) => b.id == save.id),
+          l.kind == SongLaneKind.save &&
+          l.blocks.any((b) => b.id == save.id),
       orElse: () => const SongLane(id: '', kind: SongLaneKind.save, order: 0),
     );
     if (saveLane.id.isEmpty) return;
@@ -966,23 +919,23 @@ class _BarCell extends StatelessWidget {
                 : (block != null
                       ? MuzicianTheme.violet.withValues(alpha: 0.18)
                       : _isSaveOnly
-                      ? MuzicianTheme.sky.withValues(alpha: 0.14)
-                      : Colors.transparent),
+                          ? MuzicianTheme.sky.withValues(alpha: 0.14)
+                          : Colors.transparent),
             border: Border(
               left: BorderSide(
                 color: isActive
                     ? MuzicianTheme.violet
                     : _isSaveOnly
-                    ? MuzicianTheme.sky.withValues(alpha: 0.5)
-                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                        ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                        : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
               right: BorderSide(
                 color: isActive
                     ? MuzicianTheme.violet
                     : _isSaveOnly
-                    ? MuzicianTheme.sky.withValues(alpha: 0.5)
-                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                        ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                        : MuzicianTheme.textMuted.withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
@@ -1052,7 +1005,10 @@ class _BarCell extends StatelessWidget {
             padding: EdgeInsets.only(top: 8),
             child: Text(
               '\u00b7',
-              style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 18),
+              style: TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 18,
+              ),
             ),
           )
         else if (block!.isSilent)
@@ -1150,77 +1106,75 @@ class _DrumLaneRow extends ConsumerWidget {
               final pattern = owner.patternId == null
                   ? null
                   : patternsById[owner.patternId];
-              cells.add(
-                Expanded(
-                  flex: span,
-                  child: GestureDetector(
-                    key: Key('sheetDrumTile_${owner.patternId ?? owner.id}'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (owner.patternId == null) return;
-                      showSongwriterDrumPatternSheet(
-                        context: context,
-                        patternId: owner.patternId!,
-                      );
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
+              cells.add(Expanded(
+                flex: span,
+                child: GestureDetector(
+                  key: Key(
+                    'sheetDrumTile_${owner.patternId ?? owner.id}',
+                  ),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (owner.patternId == null) return;
+                    showSongwriterDrumPatternSheet(
+                      context: context,
+                      patternId: owner.patternId!,
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: MuzicianTheme.orange.withValues(alpha: 0.18),
+                      border: Border.all(
+                        color: MuzicianTheme.orange.withValues(alpha: 0.5),
                       ),
-                      decoration: BoxDecoration(
-                        color: MuzicianTheme.orange.withValues(alpha: 0.18),
-                        border: Border.all(
-                          color: MuzicianTheme.orange.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.graphic_eq,
+                          size: 14,
+                          color: MuzicianTheme.textPrimary,
                         ),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.graphic_eq,
-                            size: 14,
-                            color: MuzicianTheme.textPrimary,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              pattern?.name ?? 'pattern?',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: MuzicianTheme.textPrimary,
-                              ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            pattern?.name ?? 'pattern?',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: MuzicianTheme.textPrimary,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              );
+              ));
               i += span;
             } else if (owner != null) {
               i++;
             } else {
-              cells.add(
-                Expanded(
-                  flex: 1,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    height: 28,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: MuzicianTheme.glassBorder,
-                        style: BorderStyle.solid,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
+              cells.add(Expanded(
+                flex: 1,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  height: 28,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: MuzicianTheme.glassBorder,
+                      style: BorderStyle.solid,
                     ),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-              );
+              ));
               i++;
             }
           }
@@ -1252,209 +1206,6 @@ class _DrumLaneRow extends ConsumerWidget {
   }
 }
 
-class _LyricLaneRow extends ConsumerWidget {
-  const _LyricLaneRow({
-    super.key,
-    required this.section,
-    required this.lane,
-    required this.instanceIndex,
-  });
-
-  final SongSection section;
-  final SongLane lane;
-  final int instanceIndex;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
-    final notifier = ref.read(songwriterProvider.notifier);
-    final ownerByBar = <int, SongBlock>{};
-    for (final b in lane.blocks) {
-      for (var i = b.startBar; i < b.endBar; i++) {
-        ownerByBar[i] = b;
-      }
-    }
-
-    final cells = <Widget>[];
-    var i = 0;
-    while (i < bars) {
-      final owner = ownerByBar[i];
-      if (owner != null && owner.startBar == i) {
-        final span = owner.spanBars.clamp(1, bars - i);
-        final text = instanceIndex < owner.lyrics.length
-            ? owner.lyrics[instanceIndex]
-            : '';
-        cells.add(
-          Expanded(
-            flex: span,
-            child: GestureDetector(
-              key: Key('sheetLyricTile_${owner.id}'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _editLyric(context, notifier, owner, text),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: MuzicianTheme.sky.withValues(alpha: 0.12),
-                  border: Border.all(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.45),
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  text.isEmpty ? 'Add lyrics' : text,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: text.isEmpty
-                        ? MuzicianTheme.textMuted
-                        : MuzicianTheme.textPrimary,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-        i += span;
-      } else if (owner != null) {
-        i++;
-      } else {
-        final bar = i;
-        cells.add(
-          Expanded(
-            flex: 1,
-            child: GestureDetector(
-              key: Key('sheetLyricEmpty_${lane.id}_$bar'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => notifier.addLyricBlock(
-                sectionId: section.id,
-                laneId: lane.id,
-                startBar: bar,
-                spanBars: 1,
-                verseCount: section.repeat,
-              ),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                height: 28,
-                decoration: BoxDecoration(
-                  border: Border.all(color: MuzicianTheme.glassBorder),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-            ),
-          ),
-        );
-        i++;
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        GestureDetector(
-          key: Key('sheetLyricJot_${lane.id}'),
-          behavior: HitTestBehavior.opaque,
-          onTap: lane.blocks.isEmpty
-              ? () => notifier.addLyricBlock(
-                  sectionId: section.id,
-                  laneId: lane.id,
-                  startBar: 0,
-                  spanBars: bars,
-                  verseCount: section.repeat,
-                )
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 4),
-            child: Text(
-              lane.label ?? 'Lyrics',
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
-                fontSize: 11,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ),
-        ),
-        Row(children: cells),
-      ],
-    );
-  }
-
-  void _editLyric(
-    BuildContext context,
-    SongwriterNotifier notifier,
-    SongBlock block,
-    String current,
-  ) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => _LyricEditDialog(
-        initialText: current,
-        onSave: (text) => notifier.setBlockLyric(
-          sectionId: section.id,
-          laneId: lane.id,
-          blockId: block.id,
-          verseIndex: instanceIndex,
-          text: text,
-        ),
-      ),
-    );
-  }
-}
-
-class _LyricEditDialog extends StatefulWidget {
-  const _LyricEditDialog({required this.initialText, required this.onSave});
-  final String initialText;
-  final ValueChanged<String> onSave;
-
-  @override
-  State<_LyricEditDialog> createState() => _LyricEditDialogState();
-}
-
-class _LyricEditDialogState extends State<_LyricEditDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialText,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: MuzicianTheme.surface,
-      title: const Text(
-        'Lyrics',
-        style: TextStyle(color: MuzicianTheme.textPrimary),
-      ),
-      content: TextField(
-        key: const Key('lyricLaneEditField'),
-        controller: _controller,
-        autofocus: true,
-        maxLines: null,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
-        decoration: const InputDecoration(hintText: 'Type lyrics…'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          key: const Key('lyricLaneEditSave'),
-          onPressed: () {
-            widget.onSave(_controller.text);
-            Navigator.pop(context);
-          },
-          child: const Text('Save'),
-        ),
-      ],
-    );
-  }
-}
-
 class _AddSectionRule extends StatelessWidget {
   const _AddSectionRule({super.key, required this.onTap});
   final VoidCallback onTap;
@@ -1469,7 +1220,10 @@ class _AddSectionRule extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Container(height: 1, color: MuzicianTheme.glassBorder),
+              child: Container(
+                height: 1,
+                color: MuzicianTheme.glassBorder,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1494,7 +1248,10 @@ class _AddSectionRule extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Container(height: 1, color: MuzicianTheme.glassBorder),
+              child: Container(
+                height: 1,
+                color: MuzicianTheme.glassBorder,
+              ),
             ),
           ],
         ),
