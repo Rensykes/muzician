@@ -11,7 +11,8 @@ import 'package:muzician/store/songwriter_store.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('tapping a chord block opens the Voicings / Library sheet',
+  testWidgets(
+      'the Voicings & library action opens the Voicings / Library sheet',
       (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -49,7 +50,11 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 600));
 
+    // Tapping the chord opens the unified action sheet; the voicings sheet is
+    // reached via its "Voicings & library" action.
     await tester.tap(find.text('C').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('barActionVoicings')));
     await tester.pumpAndSettle();
 
     // The voicings sheet, not the chord editor.
