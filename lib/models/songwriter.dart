@@ -317,6 +317,9 @@ class SongSection {
   final int order;
   final int repeat; // loops the whole section N times
   final List<SongLane> lanes;
+  // Free-text lyrics for the section, one entry per repeat instance (verse).
+  // Decoupled from bars: see [SongBlock.lyrics] for the per-chord variant.
+  final List<String> lyrics;
 
   const SongSection({
     required this.id,
@@ -325,6 +328,7 @@ class SongSection {
     this.label,
     this.repeat = 1,
     this.lanes = const [],
+    this.lyrics = const [],
   });
 
   SongSection copyWith({
@@ -333,6 +337,7 @@ class SongSection {
     int? order,
     int? repeat,
     List<SongLane>? lanes,
+    List<String>? lyrics,
     bool clearLabel = false,
   }) => SongSection(
     id: id,
@@ -341,6 +346,7 @@ class SongSection {
     order: order ?? this.order,
     repeat: repeat ?? this.repeat,
     lanes: lanes ?? this.lanes,
+    lyrics: lyrics ?? this.lyrics,
   );
 
   Map<String, dynamic> toJson() => {
@@ -350,6 +356,7 @@ class SongSection {
     'order': order,
     'repeat': repeat,
     'lanes': lanes.map((l) => l.toJson()).toList(),
+    'lyrics': lyrics,
   };
 
   factory SongSection.fromJson(Map<String, dynamic> json) => SongSection(
@@ -362,6 +369,9 @@ class SongSection {
         (json['lanes'] as List?)
             ?.map((l) => SongLane.fromJson(l as Map<String, dynamic>))
             .toList() ??
+        const [],
+    lyrics:
+        (json['lyrics'] as List?)?.map((e) => e as String).toList() ??
         const [],
   );
 }
