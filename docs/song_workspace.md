@@ -40,6 +40,55 @@ New empty patterns default to 1 measure.
 Song-level transport plays all audible tracks. Muted tracks are silent unless soloed.
 Solo takes priority over mute — if any track is soloed, only soloed tracks play.
 
+### Transport controls
+
+- **Per-track volume** (`SongTrack.volume`, 0–1, default 1): set from the track
+  menu's Volume slider. Note/drum sink volume is `0.8 × track.volume`; audio
+  clips pass the gain to the player.
+- **Loop region**: long-press-drag on the measure ruler selects a
+  measure-snapped region (painted teal). The tick clock wraps at the loop end;
+  audio clips that start inside the region re-arm on each pass. The loop chip
+  in the transport clears it.
+- **Practice tempo**: the `1×/¾×/½×` chip scales the tick duration only
+  (patterns play slower; audio clips keep their natural speed, so they drift
+  under a multiplier — practice tempo is meant for note/drum material).
+- **Metronome + count-in**: the metronome chip toggles
+  `settings.metronomeEnabled` (clicks every beat, accented on the measure);
+  the `1·2·3` chip enables a one-measure count-in before the clock starts.
+- **Auto-follow**: the timeline scrolls to keep the playhead visible during
+  playback; a manual horizontal scroll pauses following until the next play.
+
+## Clip operations
+
+Selecting a clip opens the action bar: edit pattern, split at the playhead
+(`splitClipAtTick` — slices into two unique patterns; shared siblings keep the
+original), duplicate, copy-for-paste (long-press a lane → Paste), transpose
+note clips (±1 / ±octave), move to another same-type track, audio trim
+(head/tail, honored by the scheduler), make-unique, delete. The transport
+`SNAP` chip toggles measure vs beat snapping; the track menu reorders tracks
+and sets per-track volume. Clips render content previews: note thumbnails,
+drum step dots, audio waveforms, plus the pattern name and a shared-pattern
+badge.
+
+## Markers & zoom
+
+Double-tap the ruler to drop a labeled marker (verse, chorus, …); tap a marker
+flag to rename or delete it. Pinch horizontally on the timeline to zoom
+(`songTimelineZoomProvider`, 0.5×–3×).
+
+## Cross-feature
+
+- **Hum a melody**: the add-clip sheet on note tracks creates an empty clip and
+  opens the piano-roll editor (hum recorder included) straight away.
+- **Import from Writer**: the header overflow menu rebuilds the song from the
+  Songwriter arrangement (`songFromSongwriter`): sections → measures + a marker
+  per instance, the harmony lane → a note track of per-bar chord stabs, drum
+  lanes → drum tracks, save lanes → voicing note tracks; tempo / time signature
+  / key copied over.
+- **Export WAV**: the overflow menu renders note + drum tracks to a mono PCM16
+  WAV (`renderSongPcm`) and writes it via the platform save dialog. Audio clips
+  are excluded in v1 (a dialog notes this when the song has any).
+
 ## Save / Load
 
 Song projects save as `SongProjectSnapshot` through the shared save browser.

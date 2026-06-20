@@ -62,6 +62,7 @@ class AudioPlayersClipSink implements SongAudioClipSink {
   Future<void> startClip({
     required AudioAsset asset,
     required int offsetMs,
+    double volume = 1.0,
   }) async {
     var player = _players[asset.id];
     if (player == null) {
@@ -74,6 +75,7 @@ class AudioPlayersClipSink implements SongAudioClipSink {
       await player.setSource(DeviceFileSource(file.path));
       _players[asset.id] = player;
     }
+    await player.setVolume(volume.clamp(0.0, 1.0));
     await player.seek(Duration(milliseconds: offsetMs));
     await player.resume();
   }

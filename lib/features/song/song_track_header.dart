@@ -178,12 +178,24 @@ class _TrackOverflowMenu extends ConsumerWidget {
       position: position,
       color: MuzicianTheme.surface,
       items: const [
+        PopupMenuItem(value: 'volume', child: Text('Volume')),
+        PopupMenuItem(value: 'moveUp', child: Text('Move up')),
+        PopupMenuItem(value: 'moveDown', child: Text('Move down')),
         PopupMenuItem(value: 'rename', child: Text('Rename')),
         PopupMenuItem(value: 'delete', child: Text('Delete')),
       ],
     );
     if (!context.mounted || value == null) return;
     switch (value) {
+      case 'volume':
+        _showVolumeDialog(context, ref, track);
+        break;
+      case 'moveUp':
+        ref.read(songProjectProvider.notifier).moveTrack(track.id, -1);
+        break;
+      case 'moveDown':
+        ref.read(songProjectProvider.notifier).moveTrack(track.id, 1);
+        break;
       case 'rename':
         _showRenameDialog(context, ref, track);
         break;
@@ -191,6 +203,66 @@ class _TrackOverflowMenu extends ConsumerWidget {
         ref.read(songProjectProvider.notifier).deleteTrack(track.id);
         break;
     }
+  }
+
+  void _showVolumeDialog(BuildContext context, WidgetRef ref, SongTrack track) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: MuzicianTheme.surface,
+        title: const Text(
+          'Track Volume',
+          style: TextStyle(color: MuzicianTheme.textPrimary),
+        ),
+        content: Consumer(
+          builder: (_, dialogRef, _) {
+            final volume = dialogRef.watch(
+              songProjectProvider.select(
+                (p) => p.tracks
+                    .firstWhere((t) => t.id == track.id, orElse: () => track)
+                    .volume,
+              ),
+            );
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.volume_down,
+                  color: MuzicianTheme.textMuted,
+                  size: 18,
+                ),
+                Expanded(
+                  child: Slider(
+                    key: Key('trackVolumeSlider_${track.id}'),
+                    value: volume,
+                    activeColor: MuzicianTheme.sky,
+                    onChanged: (v) => dialogRef
+                        .read(songProjectProvider.notifier)
+                        .setTrackVolume(track.id, v),
+                  ),
+                ),
+                SizedBox(
+                  width: 36,
+                  child: Text(
+                    '${(volume * 100).round()}%',
+                    style: const TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showRenameDialog(BuildContext context, WidgetRef ref, SongTrack track) {

@@ -208,7 +208,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
             alignment: Alignment.bottomCenter,
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              key.noteName,
+              '${key.noteName}${key.octave}',
               style: TextStyle(
                 color: isSelected
                     ? Colors.white

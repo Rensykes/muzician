@@ -50,6 +50,90 @@ void main() {
     expect(events.single.midiNotes, [60]);
   });
 
+  test('buildPlaybackEvents groups same-tick notes by track volume', () {
+    final project = song_rules.getDefaultSongProject().copyWith(
+      tracks: const [
+        SongTrack(
+          id: 'loud',
+          name: 'Loud',
+          type: SongTrackType.note,
+          order: 0,
+        ),
+        SongTrack(
+          id: 'soft',
+          name: 'Soft',
+          type: SongTrackType.note,
+          order: 1,
+          volume: 0.5,
+        ),
+      ],
+      clips: const [
+        SongClipInstance(
+          id: 'c1',
+          trackId: 'loud',
+          patternId: 'p1',
+          patternType: SongPatternType.note,
+          startTick: 0,
+        ),
+        SongClipInstance(
+          id: 'c2',
+          trackId: 'soft',
+          patternId: 'p2',
+          patternType: SongPatternType.note,
+          startTick: 0,
+        ),
+      ],
+      notePatterns: const [
+        NotePattern(
+          id: 'p1',
+          name: 'A',
+          lengthTicks: 16,
+          notes: [
+            NotePatternNote(
+              id: 'n1',
+              midiNote: 60,
+              startTick: 0,
+              durationTicks: 4,
+            ),
+          ],
+          pitchRangeStart: 48,
+          pitchRangeEnd: 84,
+          snapTicks: 1,
+          highlightedNotes: [],
+        ),
+        NotePattern(
+          id: 'p2',
+          name: 'B',
+          lengthTicks: 16,
+          notes: [
+            NotePatternNote(
+              id: 'n2',
+              midiNote: 64,
+              startTick: 0,
+              durationTicks: 4,
+            ),
+          ],
+          pitchRangeStart: 48,
+          pitchRangeEnd: 84,
+          snapTicks: 1,
+          highlightedNotes: [],
+        ),
+      ],
+    );
+
+    final events = rules.buildPlaybackEvents(project);
+    expect(events, hasLength(1));
+    final event = events.single;
+    // Flattened view still exposes everything.
+    expect(event.midiNotes, [60, 64]);
+    // Grouped view separates the volumes.
+    expect(event.noteGroups, hasLength(2));
+    final loud = event.noteGroups.firstWhere((g) => g.volume == 1.0);
+    final soft = event.noteGroups.firstWhere((g) => g.volume == 0.5);
+    expect(loud.midiNotes, [60]);
+    expect(soft.midiNotes, [64]);
+  });
+
   test('mute and solo are applied before event expansion', () {
     final project = song_rules.getDefaultSongProject().copyWith(
       tracks: const [

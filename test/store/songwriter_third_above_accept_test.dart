@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_third_above_rules.dart';
 import 'package:muzician/schema/rules/songwriter_voicing_rules.dart';
@@ -13,10 +14,15 @@ VoicingSuggestion firstVoicingForC() =>
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  // Accept actions are project-scoped: they save into the selected
+  // project's folder, so every test runs with a real project selected.
   ProviderContainer freshContainer() {
     final c = ProviderContainer();
     addTearDown(c.dispose);
-    c.read(saveSystemProvider.notifier);
+    final saveSystem = c.read(saveSystemProvider.notifier);
+    final projectId =
+        saveSystem.createProject('Untitled song', const ProjectConfig())!;
+    saveSystem.selectProject(projectId);
     return c;
   }
 

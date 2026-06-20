@@ -12,10 +12,12 @@ class SongwriterHeader extends ConsumerWidget {
     super.key,
     this.onOpenSaveLoad,
     this.onOpenStructure,
+    this.onStartTour,
   });
 
   final VoidCallback? onOpenSaveLoad;
   final VoidCallback? onOpenStructure;
+  final VoidCallback? onStartTour;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,63 +27,75 @@ class SongwriterHeader extends ConsumerWidget {
         ? 'No key'
         : '${chromaticNotes[config.keyRoot!]} ${config.keyScaleName ?? ''}'
               .trim();
+    // Landscape phones are height-starved: drop the title row and reach the
+    // overflow menu from a trailing button on the config strip instead.
+    final compact = MediaQuery.sizeOf(context).height < 500;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         const SizedBox(height: 4),
-        SizedBox(
-          height: 52,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => _showOverflowMenu(context, ref),
-                  child: const Text(
-                    'Writer',
-                    style: TextStyle(
-                      color: MuzicianTheme.textPrimary,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => _editProjectName(
-                      context,
-                      ref,
-                      ref.read(songwriterProvider).name,
-                    ),
-                    child: Text(
-                      ref.watch(songwriterProvider.select((p) => p.name)),
-                      style: const TextStyle(
-                        color: MuzicianTheme.textMuted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+        if (!compact)
+          SizedBox(
+            height: 52,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => _showOverflowMenu(context, ref),
+                    child: const Text(
+                      'Writer',
+                      style: TextStyle(
+                        color: MuzicianTheme.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-                IconBtn(
-                  icon: Icons.more_vert,
-                  onTap: () => _showOverflowMenu(context, ref),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _editProjectName(
+                        context,
+                        ref,
+                        ref.read(songwriterProvider).name,
+                      ),
+                      child: Text(
+                        ref.watch(songwriterProvider.select((p) => p.name)),
+                        style: const TextStyle(
+                          color: MuzicianTheme.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  if (onStartTour != null)
+                    IconBtn(
+                      key: const Key('writerHelpButton'),
+                      icon: Icons.help_outline_rounded,
+                      onTap: onStartTour!,
+                    ),
+                  IconBtn(
+                    icon: Icons.more_vert,
+                    onTap: () => _showOverflowMenu(context, ref),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 4),
+        if (!compact) const SizedBox(height: 4),
         _WriterConfigStrip(
           keyLabel: keyLabel,
           tempo: config.tempo,
           onKeyTap: () => _editKey(context, ref),
           onTempoTap: () => _editTempo(context, ref),
           onNewProject: () => _confirmNew(context, notifier),
+          onOverflow: compact ? () => _showOverflowMenu(context, ref) : null,
+          onHelp: compact ? onStartTour : null,
         ),
       ],
     );
@@ -215,12 +229,21 @@ class _WriterConfigStrip extends ConsumerWidget {
     required this.onKeyTap,
     required this.onTempoTap,
     required this.onNewProject,
+    this.onOverflow,
+    this.onHelp,
   });
   final String keyLabel;
   final int tempo;
   final VoidCallback onKeyTap;
   final VoidCallback onTempoTap;
   final VoidCallback onNewProject;
+
+  /// Compact (landscape) mode: the title row is hidden, so the strip hosts
+  /// the overflow-menu button.
+  final VoidCallback? onOverflow;
+
+  /// Compact mode: the strip also hosts the coach-tour help button.
+  final VoidCallback? onHelp;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -270,6 +293,14 @@ class _WriterConfigStrip extends ConsumerWidget {
             ),
             _stripDivider(),
             IconBtn(icon: Icons.add_box_outlined, onTap: onNewProject),
+            if (onHelp != null)
+              IconBtn(
+                key: const Key('writerHelpButton'),
+                icon: Icons.help_outline_rounded,
+                onTap: onHelp!,
+              ),
+            if (onOverflow != null)
+              IconBtn(icon: Icons.more_vert, onTap: onOverflow!),
           ],
         ),
       ),

@@ -121,14 +121,23 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     _set(state.copyWith(sections: [...state.sections, section]));
   }
 
+  /// True when [next] is element-wise `identical` to [prev] (same order, same
+  /// instances). Used to skip a `_set` when a map callback returned unchanged
+  /// instances — avoids a wasted Riverpod rebuild + persist write.
+  static bool _sameElements<T>(List<T> prev, List<T> next) {
+    if (prev.length != next.length) return false;
+    for (var i = 0; i < prev.length; i++) {
+      if (!identical(prev[i], next[i])) return false;
+    }
+    return true;
+  }
+
   void _replaceSection(String sectionId, SongSection Function(SongSection) f) {
-    _set(
-      state.copyWith(
-        sections: state.sections
-            .map((s) => s.id == sectionId ? f(s) : s)
-            .toList(),
-      ),
-    );
+    final sections = state.sections
+        .map((s) => s.id == sectionId ? f(s) : s)
+        .toList();
+    if (_sameElements(state.sections, sections)) return; // nothing changed
+    _set(state.copyWith(sections: sections));
   }
 
   void renameSection(String sectionId, String? label) => _replaceSection(
@@ -158,6 +167,28 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         return l.copyWith(blocks: blocks);
       }).toList();
       return s.copyWith(repeat: clamped, lanes: lanes);
+    });
+  }
+
+  /// Sets the free-text lyrics for one verse (repeat instance) of a section.
+  /// Grows the list to reach [verseIndex] and trims trailing empties, mirroring
+  /// [setBlockLyric].
+  void setSectionLyric({
+    required String sectionId,
+    required int verseIndex,
+    required String? text,
+  }) {
+    if (verseIndex < 0) return;
+    _replaceSection(sectionId, (s) {
+      final list = [...s.lyrics];
+      while (list.length <= verseIndex) {
+        list.add('');
+      }
+      list[verseIndex] = text ?? '';
+      while (list.isNotEmpty && list.last.isEmpty) {
+        list.removeLast();
+      }
+      return s.copyWith(lyrics: list);
     });
   }
 
@@ -218,12 +249,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     String laneId,
     SongLane Function(SongLane) f,
   ) {
-    _replaceSection(
-      sectionId,
-      (s) => s.copyWith(
-        lanes: s.lanes.map((l) => l.id == laneId ? f(l) : l).toList(),
-      ),
-    );
+    _replaceSection(sectionId, (s) {
+      final lanes = s.lanes.map((l) => l.id == laneId ? f(l) : l).toList();
+      if (_sameElements(s.lanes, lanes)) return s; // lane unchanged
+      return s.copyWith(lanes: lanes);
+    });
   }
 
   void setLaneRepeat({
@@ -689,6 +719,32 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       saveId: saveId,
       startBar: harmonyBlock.startBar,
       spanBars: harmonyBlock.spanBars,
+    );
+  }
+
+  /// Inserts a save-lane block at [startBar] referencing an existing [saveId],
+  /// without going through a harmony chord. Used by the add-bar sheet's "From
+  /// library" picker. No-ops when the section is missing or the placement
+  /// overlaps the destination save lane.
+  void addLibraryBlockAt({
+    required String sectionId,
+    required String saveId,
+    required int startBar,
+    int spanBars = 1,
+  }) {
+    final section = state.sections
+        .where((s) => s.id == sectionId)
+        .firstOrNull;
+    if (section == null) return;
+    if (!_canPlaceSaveBlockInSection(section, startBar, spanBars)) return;
+    final laneId = _findOrCreateSaveLane(sectionId);
+    if (laneId == null) return;
+    addSaveBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      saveId: saveId,
+      startBar: startBar,
+      spanBars: spanBars,
     );
   }
 

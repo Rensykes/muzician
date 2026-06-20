@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
@@ -73,7 +74,9 @@ void main() {
     final sw = c.read(songwriterProvider.notifier);
     sw.setProjectName('Song A');
 
-    final rootId = saves.createSaveFolder('Song A', null)!;
+    // Library-match scope is the selected project's subtree.
+    final rootId = saves.createProject('Song A', const ProjectConfig())!;
+    saves.selectProject(rootId);
     final innerId = saves.createSaveFolder('Verse', rootId)!;
     final deeperId = saves.createSaveFolder('Chord palette', innerId)!;
     final unrelatedId = saves.createSaveFolder('Other song', null)!;
