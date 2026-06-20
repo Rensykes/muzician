@@ -35,6 +35,7 @@ Future<SongBlock?> showHarmonyChordSheet(
   SongBlock? existing,
   int instanceIndex = 0,
   String currentLyric = '',
+  VoidCallback? onPickFromLibrary,
 }) {
   return showModalBottomSheet<SongBlock>(
     context: context,
@@ -58,6 +59,7 @@ Future<SongBlock?> showHarmonyChordSheet(
           existing: existing,
           instanceIndex: instanceIndex,
           currentLyric: currentLyric,
+          onPickFromLibrary: onPickFromLibrary,
         ),
       ),
     ),
@@ -73,6 +75,7 @@ class _HarmonySheet extends StatefulWidget {
     this.existing,
     this.instanceIndex = 0,
     this.currentLyric = '',
+    this.onPickFromLibrary,
   });
   final int startBar;
   final int spanBars;
@@ -81,6 +84,7 @@ class _HarmonySheet extends StatefulWidget {
   final SongBlock? existing;
   final int instanceIndex;
   final String currentLyric;
+  final VoidCallback? onPickFromLibrary;
 
   @override
   State<_HarmonySheet> createState() => _HarmonySheetState();
@@ -148,6 +152,24 @@ class _HarmonySheetState extends State<_HarmonySheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Only on add (not edit): drop an existing project save instead of
+          // authoring a chord.
+          if (widget.onPickFromLibrary != null && widget.existing == null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const Key('fromLibraryButton'),
+                onPressed: () {
+                  // Close this chord sheet, then open the library picker.
+                  Navigator.of(context).pop();
+                  widget.onPickFromLibrary!();
+                },
+                icon: const Icon(Icons.library_music_outlined, size: 18),
+                label: const Text('From library'),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           SwitchListTile(
             key: const Key('silentToggle'),
             title: const Text('Silent placeholder (lyric only)'),

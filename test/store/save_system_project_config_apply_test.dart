@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/models/fretboard.dart';
-import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/save_system_store.dart';

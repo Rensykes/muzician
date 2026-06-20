@@ -119,10 +119,6 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final folder = ref
-        .read(saveSystemProvider)
-        .folders
-        .firstWhere((f) => f.id == widget.projectId);
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF141826),

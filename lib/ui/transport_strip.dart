@@ -27,7 +27,7 @@ const List<String> kTimeSignatureOptions = <String>[
 /// Returns `--.--.--` when [tick] is null.
 String tickToBarBeatDisplay(int? tick, TimeSignature ts) {
   if (tick == null) return '--.--.--';
-  final beatTicks = ts.beatUnit == 8 ? 2 : 4;
+  final beatTicks = ts.ticksPerBeat;
   final measureTicks = beatTicks * ts.beatsPerMeasure;
   final bar = (tick ~/ measureTicks) + 1;
   final remainder = tick % measureTicks;
@@ -53,6 +53,10 @@ class TransportStrip extends StatelessWidget {
   /// readout. Receives `+1` for up-drag, `-1` for down-drag.
   final ValueChanged<int>? onBpmDelta;
 
+  /// Extra controls rendered after the readouts (e.g. tempo-multiplier or
+  /// metronome chips supplied by the hosting workspace).
+  final List<Widget> extras;
+
   const TransportStrip({
     super.key,
     required this.bpm,
@@ -65,6 +69,7 @@ class TransportStrip extends StatelessWidget {
     required this.onBpmTap,
     required this.onSigTap,
     this.onBpmDelta,
+    this.extras = const [],
   });
 
   @override
@@ -90,26 +95,37 @@ class TransportStrip extends StatelessWidget {
             Container(width: 1, height: 20, color: MuzicianTheme.glassBorder),
             const SizedBox(width: 10),
             Expanded(
-              child: Row(
-                children: [
-                  _Readout(
-                    label: 'BPM',
-                    value: '$bpm',
-                    accent: true,
-                    onTap: onBpmTap,
-                    onVerticalDragUpdate: onBpmDelta == null
-                        ? null
-                        : (d) {
-                            if (d.delta.dy.abs() > 4) {
-                              onBpmDelta!(d.delta.dy < 0 ? 1 : -1);
-                            }
-                          },
-                  ),
-                  const SizedBox(width: 8),
-                  _Readout(label: 'BAR', value: barBeat),
-                  const SizedBox(width: 8),
-                  _Readout(label: 'SIG', value: timeSigLabel, onTap: onSigTap),
-                ],
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _Readout(
+                      label: 'BPM',
+                      value: '$bpm',
+                      accent: true,
+                      onTap: onBpmTap,
+                      onVerticalDragUpdate: onBpmDelta == null
+                          ? null
+                          : (d) {
+                              if (d.delta.dy.abs() > 4) {
+                                onBpmDelta!(d.delta.dy < 0 ? 1 : -1);
+                              }
+                            },
+                    ),
+                    const SizedBox(width: 8),
+                    _Readout(label: 'BAR', value: barBeat),
+                    const SizedBox(width: 8),
+                    _Readout(
+                      label: 'SIG',
+                      value: timeSigLabel,
+                      onTap: onSigTap,
+                    ),
+                    for (final extra in extras) ...[
+                      const SizedBox(width: 8),
+                      extra,
+                    ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -198,31 +214,28 @@ class _Readout extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            value,
-            style: TextStyle(
-              color: MuzicianTheme.textPrimary,
-              fontSize: accent ? 14 : 12,
-              fontWeight: accent ? FontWeight.w700 : FontWeight.w600,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-            overflow: TextOverflow.ellipsis,
+        Text(
+          value,
+          style: TextStyle(
+            color: MuzicianTheme.textPrimary,
+            fontSize: accent ? 14 : 12,
+            fontWeight: accent ? FontWeight.w700 : FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ],
     );
     final tappable = onTap != null || onVerticalDragUpdate != null;
-    return Expanded(
-      child: tappable
-          ? GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onTap,
-              onVerticalDragUpdate: onVerticalDragUpdate,
-              child: row,
-            )
-          : row,
-    );
+    // Intrinsic width: the readout row lives inside a horizontal scroll view,
+    // so it must shrink-wrap rather than expand.
+    return tappable
+        ? GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onVerticalDragUpdate: onVerticalDragUpdate,
+            child: row,
+          )
+        : row;
   }
 }
 

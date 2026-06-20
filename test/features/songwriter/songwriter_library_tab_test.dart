@@ -41,7 +41,6 @@ void main() {
               voicings: const [],
               thirdAbove: null,
               chordMatches: const [],
-              scaleMatches: const [],
               onAcceptVoicing: (_) {},
               onAcceptThirdAbove: (_) {},
               onAcceptLibrary: (_) {},
@@ -69,7 +68,6 @@ void main() {
               voicings: const [],
               thirdAbove: null,
               chordMatches: const [],
-              scaleMatches: const [],
               onAcceptVoicing: (_) {},
               onAcceptThirdAbove: (_) {},
               onAcceptLibrary: (_) {},
@@ -83,11 +81,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Library'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('No matching saves'), findsOneWidget);
+    expect(find.textContaining('No saved voicing matches'), findsOneWidget);
   });
 
-  testWidgets('Library tab renders chord + scale groups; tap fires '
-      'onAcceptLibrary with the right saveId and closes sheet', (tester) async {
+  testWidgets('Library tab renders only chord-note matches; tap fires '
+      'onAcceptLibrary with the right saveId', (tester) async {
     String? pickedId;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -101,10 +99,6 @@ void main() {
               chordMatches: [
                 LibraryMatch(entry: _save('chord1', 'Chord A'),
                     kind: LibraryMatchKind.chord),
-              ],
-              scaleMatches: [
-                LibraryMatch(entry: _save('scale1', 'Scale A'),
-                    kind: LibraryMatchKind.scale),
               ],
               onAcceptVoicing: (_) {},
               onAcceptThirdAbove: (_) {},
@@ -121,7 +115,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Matches this chord'), findsOneWidget);
-    expect(find.text('Fits this key'), findsOneWidget);
+    expect(find.text('Fits this key'), findsNothing);
 
     await tester.tap(find.byKey(const Key('libraryCard_chord1')));
     await tester.pumpAndSettle();

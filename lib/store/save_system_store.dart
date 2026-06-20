@@ -32,14 +32,25 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
         return;
       }
     }
-    // First v3 launch — wipe legacy blobs.
+    // First v3 launch — wipe legacy blobs, but only when legacy data was
+    // actually present (a truly fresh install has nothing to clean, and the
+    // audio-dir wipe touches path_provider, which test environments lack).
+    var hadLegacy = false;
     for (final key in legacySaveSystemStorageKeys) {
-      await prefs.remove(key);
+      if (prefs.containsKey(key)) {
+        hadLegacy = true;
+        await prefs.remove(key);
+      }
     }
     for (final key in legacySessionKeys) {
-      await prefs.remove(key);
+      if (prefs.containsKey(key)) {
+        hadLegacy = true;
+        await prefs.remove(key);
+      }
     }
-    await _wipeAudioDir();
+    if (hadLegacy) {
+      await _wipeAudioDir();
+    }
     state = state.copyWith(hydrated: true);
     await _persist();
   }

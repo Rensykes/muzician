@@ -23,14 +23,17 @@ List<SongTrack> audibleTracks(SongProject project) {
 /// Events are returned in ascending tick order with de-duplicated,
 /// sorted MIDI notes and drum lanes per tick.
 List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
-  final activeTrackIds = audibleTracks(
-    project,
-  ).map((track) => track.id).toSet();
-  final tickMap = <int, ({Set<int> midiNotes, Set<DrumLaneId> drumLanes})>{};
+  final volumeByTrack = {
+    for (final t in audibleTracks(project)) t.id: t.volume,
+  };
+  // tick → volume → notes / lanes
+  final notesAt = <int, Map<double, Set<int>>>{};
+  final drumsAt = <int, Map<double, Set<DrumLaneId>>>{};
 
   for (final clip in project.clips.where(
-    (clip) => activeTrackIds.contains(clip.trackId),
+    (clip) => volumeByTrack.containsKey(clip.trackId),
   )) {
+    final volume = volumeByTrack[clip.trackId]!;
     switch (clip.patternType) {
       case SongPatternType.note:
         final pattern = project.notePatterns.firstWhere(
@@ -38,11 +41,7 @@ List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
         );
         for (final note in pattern.notes) {
           final tick = clip.startTick + note.startTick;
-          final bucket = tickMap.putIfAbsent(
-            tick,
-            () => (midiNotes: <int>{}, drumLanes: <DrumLaneId>{}),
-          );
-          bucket.midiNotes.add(note.midiNote);
+          ((notesAt[tick] ??= {})[volume] ??= {}).add(note.midiNote);
         }
       case SongPatternType.drum:
         final pattern = project.drumPatterns.firstWhere(
@@ -50,12 +49,8 @@ List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
         );
         for (final lane in pattern.lanes) {
           for (final activeTick in lane.activeTicks) {
-            final absoluteTick = clip.startTick + activeTick;
-            final bucket = tickMap.putIfAbsent(
-              absoluteTick,
-              () => (midiNotes: <int>{}, drumLanes: <DrumLaneId>{}),
-            );
-            bucket.drumLanes.add(lane.laneId);
+            final tick = clip.startTick + activeTick;
+            ((drumsAt[tick] ??= {})[volume] ??= {}).add(lane.laneId);
           }
         }
       case SongPatternType.audio:
@@ -65,13 +60,21 @@ List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
     }
   }
 
-  final sortedTicks = tickMap.keys.toList()..sort();
+  final sortedTicks = {...notesAt.keys, ...drumsAt.keys}.toList()..sort();
   return [
     for (final tick in sortedTicks)
       SongPlaybackEvent(
         tick: tick,
-        midiNotes: tickMap[tick]!.midiNotes.toList()..sort(),
-        drumLanes: tickMap[tick]!.drumLanes.toList(),
+        noteGroups: [
+          for (final entry in (notesAt[tick] ?? const <double, Set<int>>{})
+              .entries)
+            (volume: entry.key, midiNotes: entry.value.toList()..sort()),
+        ],
+        drumGroups: [
+          for (final entry
+              in (drumsAt[tick] ?? const <double, Set<DrumLaneId>>{}).entries)
+            (volume: entry.key, drumLanes: entry.value.toList()),
+        ],
       ),
   ];
 }
