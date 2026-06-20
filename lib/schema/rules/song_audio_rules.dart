@@ -4,19 +4,16 @@ library;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import '../../models/piano_roll.dart';
 import '../../models/song_project.dart';
 import 'song_rules.dart' show songTicksPerMeasure;
-
-int _ticksPerBeat(TimeSignature ts) => ts.beatUnit == 8 ? 2 : 4;
 
 /// Returns the grid length, in ticks, that the given asset should occupy at
 /// the project's current tempo.  Audio always plays at native rate, so the
 /// real duration is the source of truth and this is a derived view.
 int audioClipLengthTicks(AudioAsset asset, SongProjectConfig config) {
   final beatsPerSecond = config.tempo / 60.0;
-  final ticksPerBeat = _ticksPerBeat(config.timeSignature);
-  final ticks = (asset.durationMs / 1000.0) * beatsPerSecond * ticksPerBeat;
+  final perBeat = config.timeSignature.ticksPerBeat;
+  final ticks = (asset.durationMs / 1000.0) * beatsPerSecond * perBeat;
   return math.max(1, ticks.round());
 }
 
@@ -24,8 +21,7 @@ int audioClipLengthTicks(AudioAsset asset, SongProjectConfig config) {
 /// given absolute tick at the project's current tempo.
 int audioTickToMs(int tick, SongProjectConfig config) {
   final beatsPerSecond = config.tempo / 60.0;
-  final ticksPerBeat = _ticksPerBeat(config.timeSignature);
-  final beats = tick / ticksPerBeat;
+  final beats = tick / config.timeSignature.ticksPerBeat;
   return (beats / beatsPerSecond * 1000.0).round();
 }
 

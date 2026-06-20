@@ -89,7 +89,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     );
 
     final cfg = project.config;
-    final beatTicks = cfg.beatUnit == 8 ? 2 : 4;
+    final beatTicks = cfg.ticksPerBeat;
     final measureTicks = beatTicks * cfg.beatsPerBar;
     final totalBars = flattenedBarCount(project.sections);
     final endTick = totalBars * measureTicks;
