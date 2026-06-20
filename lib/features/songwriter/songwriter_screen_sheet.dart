@@ -1149,7 +1149,16 @@ class _BarRow extends ConsumerWidget {
     }
   }
 
-  void _editVerseLyric(BuildContext context, WidgetRef ref, SongBlock block) {
+  /// Edits the per-verse lyric of [block]. [laneId] defaults to this row's
+  /// harmony lane, but a save block lives in its own save lane, so callers pass
+  /// that lane's id explicitly.
+  void _editVerseLyric(
+    BuildContext context,
+    WidgetRef ref,
+    SongBlock block, {
+    String? laneId,
+  }) {
+    final targetLaneId = laneId ?? lane.id;
     final current = instanceIndex < block.lyrics.length
         ? block.lyrics[instanceIndex]
         : '';
@@ -1162,7 +1171,7 @@ class _BarRow extends ConsumerWidget {
             .read(songwriterProvider.notifier)
             .setBlockLyric(
               sectionId: section.id,
-              laneId: lane.id,
+              laneId: targetLaneId,
               blockId: block.id,
               verseIndex: instanceIndex,
               text: text,
@@ -1170,6 +1179,15 @@ class _BarRow extends ConsumerWidget {
       ),
     );
   }
+
+  /// Resolves the save lane that owns [save], or empty id if none.
+  String _saveLaneId(SongBlock save) => section.lanes
+      .firstWhere(
+        (l) =>
+            l.kind == SongLaneKind.save && l.blocks.any((b) => b.id == save.id),
+        orElse: () => const SongLane(id: '', kind: SongLaneKind.save, order: 0),
+      )
+      .id;
 
   void _removeBlock(
     BuildContext context,
@@ -1228,6 +1246,13 @@ class _BarRow extends ConsumerWidget {
       title: _saveName(ref, save),
       actions: [
         BarAction(
+          key: const Key('barActionLyrics'),
+          label: 'Lyrics — Verse ${instanceIndex + 1}',
+          icon: Icons.lyrics_outlined,
+          onTap: () =>
+              _editVerseLyric(context, ref, save, laneId: _saveLaneId(save)),
+        ),
+        BarAction(
           key: const Key('barActionRemoveSave'),
           label: 'Remove save',
           icon: Icons.bookmark_remove,
@@ -1242,16 +1267,12 @@ class _BarRow extends ConsumerWidget {
   /// from the save lane, with an undo affordance.
   void _removeSave(BuildContext context, WidgetRef ref, SongBlock save) {
     final notifier = ref.read(songwriterProvider.notifier);
-    final saveLane = section.lanes.firstWhere(
-      (l) =>
-          l.kind == SongLaneKind.save && l.blocks.any((b) => b.id == save.id),
-      orElse: () => const SongLane(id: '', kind: SongLaneKind.save, order: 0),
-    );
-    if (saveLane.id.isEmpty) return;
+    final saveLaneId = _saveLaneId(save);
+    if (saveLaneId.isEmpty) return;
     HapticFeedback.lightImpact();
     notifier.removeBlock(
       sectionId: section.id,
-      laneId: saveLane.id,
+      laneId: saveLaneId,
       blockId: save.id,
     );
     showUndoSnack(
@@ -1259,7 +1280,7 @@ class _BarRow extends ConsumerWidget {
       'Save removed',
       () => notifier.insertBlock(
         sectionId: section.id,
-        laneId: saveLane.id,
+        laneId: saveLaneId,
         block: save,
       ),
     );
@@ -1381,6 +1402,24 @@ class _BarCell extends StatelessWidget {
               ),
             ),
           ),
+          if (instanceIndex < saveBlock!.lyrics.length &&
+              saveBlock!.lyrics[instanceIndex].isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                saveBlock!.lyrics[instanceIndex],
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 11,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ],
         ],
       );
     }

@@ -327,4 +327,116 @@ void main() {
     // Drain the undo snackbar's auto-dismiss timer before teardown.
     await tester.pump(const Duration(seconds: 5));
   });
+
+  testWidgets('save menu offers Lyrics and writes the save block lyric', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.first.id;
+    n.addLane(sectionId: sectionId, kind: SongLaneKind.save, label: 'Guitar');
+    final saveLaneId = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .id;
+    n.addSaveBlock(
+      sectionId: sectionId,
+      laneId: saveLaneId,
+      saveId: 'save-xyz',
+      startBar: 0,
+      spanBars: 1,
+    );
+    final saveBlockId = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .blocks
+        .first
+        .id;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byKey(Key('saveCell_${saveBlockId}_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('barActionLyrics')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('verseLyricField')),
+      'sing here',
+    );
+    await tester.tap(find.byKey(const Key('verseLyricSave')));
+    await tester.pumpAndSettle();
+
+    final saveBlock = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .blocks
+        .first;
+    expect(saveBlock.lyrics, ['sing here']);
+  });
+
+  testWidgets('a save cell renders its verse lyric', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.first.id;
+    n.addLane(sectionId: sectionId, kind: SongLaneKind.save, label: 'Guitar');
+    final saveLaneId = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .id;
+    n.addSaveBlock(
+      sectionId: sectionId,
+      laneId: saveLaneId,
+      saveId: 'save-xyz',
+      startBar: 0,
+      spanBars: 1,
+    );
+    final saveBlockId = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.save)
+        .blocks
+        .first
+        .id;
+    n.setBlockLyric(
+      sectionId: sectionId,
+      laneId: saveLaneId,
+      blockId: saveBlockId,
+      verseIndex: 0,
+      text: 'verse one',
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.text('verse one'), findsOneWidget);
+  });
 }
