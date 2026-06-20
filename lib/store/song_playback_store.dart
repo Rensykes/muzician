@@ -154,7 +154,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
             microseconds: (baseTickDuration.inMicroseconds / multiplier)
                 .round(),
           );
-    final beatTicks = project.config.timeSignature.beatUnit == 8 ? 2 : 4;
+    final beatTicks = project.config.timeSignature.ticksPerBeat;
     final measureTicks =
         beatTicks * project.config.timeSignature.beatsPerMeasure;
 

@@ -35,11 +35,18 @@ class PianoRollNote {
   );
 }
 
+/// Ticks per beat for a time-signature denominator: x/8 signatures use 2 ticks
+/// per beat, everything else 4. Single source of truth for the tick grid across
+/// playback, offline render, and the songwriter.
+int ticksPerBeatForUnit(int beatUnit) => beatUnit == 8 ? 2 : 4;
+
 class TimeSignature {
   final int beatsPerMeasure;
   final int beatUnit; // 4 or 8
 
   const TimeSignature({required this.beatsPerMeasure, required this.beatUnit});
+
+  int get ticksPerBeat => ticksPerBeatForUnit(beatUnit);
 
   Map<String, dynamic> toJson() => {
     'beatsPerMeasure': beatsPerMeasure,

@@ -166,7 +166,7 @@ class _MetaRow extends StatelessWidget {
     required this.timeSig,
   });
 
-  int get _beatTicks => timeSig.beatUnit == 8 ? 2 : 4;
+  int get _beatTicks => timeSig.ticksPerBeat;
   int get _measureTicks => _beatTicks * timeSig.beatsPerMeasure;
   String get _lengthLabel {
     final measures = stepCount ~/ _measureTicks;
@@ -421,7 +421,7 @@ class _DrumGridState extends State<_DrumGrid> {
   @override
   Widget build(BuildContext context) {
     final stepCount = widget.pattern.lengthTicks;
-    final beatTicks = widget.timeSig.beatUnit == 8 ? 2 : 4;
+    final beatTicks = widget.timeSig.ticksPerBeat;
     final totalGridWidth = _gridWidth(stepCount, beatTicks);
 
     return Row(

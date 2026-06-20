@@ -16,7 +16,11 @@ import 'song_rules.dart' as song_rules;
 /// (snare/hats/clap/crash). Per-track volume is honored.
 Int16List renderSongPcm(SongProject project, {int sampleRate = 44100}) {
   final ticksTotal = song_rules.songTotalTicks(project.config);
-  final tickMs = (60000 / project.config.tempo) / 4;
+  // Match the playback/audio grid: x/8 signatures use 2 ticks per beat, others
+  // 4. Hardcoding 4 here double-speeds x/8 exports relative to in-app playback.
+  final tickMs =
+      (60000 / project.config.tempo) /
+      project.config.timeSignature.ticksPerBeat;
   final tailMs = 1000;
   final totalSamples =
       ((ticksTotal * tickMs + tailMs) / 1000 * sampleRate).ceil();

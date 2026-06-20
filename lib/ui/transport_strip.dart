@@ -27,7 +27,7 @@ const List<String> kTimeSignatureOptions = <String>[
 /// Returns `--.--.--` when [tick] is null.
 String tickToBarBeatDisplay(int? tick, TimeSignature ts) {
   if (tick == null) return '--.--.--';
-  final beatTicks = ts.beatUnit == 8 ? 2 : 4;
+  final beatTicks = ts.ticksPerBeat;
   final measureTicks = beatTicks * ts.beatsPerMeasure;
   final bar = (tick ~/ measureTicks) + 1;
   final remainder = tick % measureTicks;

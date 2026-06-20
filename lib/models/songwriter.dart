@@ -1,6 +1,7 @@
 /// Songwriter project model — section/lane/block arrangement tree.
 library;
 
+import 'piano_roll.dart' show ticksPerBeatForUnit;
 import 'save_system.dart';
 import 'song_project.dart';
 
@@ -143,6 +144,8 @@ class SongwriterConfig {
     this.keyRoot,
     this.keyScaleName,
   });
+
+  int get ticksPerBeat => ticksPerBeatForUnit(beatUnit);
 
   SongwriterConfig copyWith({
     int? tempo,

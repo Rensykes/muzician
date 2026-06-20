@@ -126,7 +126,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   List<SaveEntry> saves,
 ) {
   final cfg = project.config;
-  final beatTicks = cfg.beatUnit == 8 ? 2 : 4;
+  final beatTicks = cfg.ticksPerBeat;
   final measureTicks = beatTicks * cfg.beatsPerBar;
 
   final byId = {for (final s in project.sections) s.id: s};
