@@ -45,11 +45,15 @@ Contents depend on cell state:
   - **Remove chord** → `_removeBlock` (+ undo).
   - If a save badge shares the bar: **Remove save** item too.
 - **Silent / lyric-only block:** Lyrics — Verse N · Remove.
-- **Standalone save cell:** **Remove save**. (A "Replace from library" item was
+- **Standalone save cell:** **Lyrics — Verse N** (→ per-verse lyric dialog on
+  the save block, see §3) · **Remove save**. (A "Replace from library" item was
   considered but dropped: `addLibraryBlockAt` rejects a placement overlapping the
   existing save, so a replace would silently no-op. Replace ships with the
   upcoming forced fretboard/piano-save flow.)
 - **Empty bar:** **Add chord** (→ chord sheet) · **Add from library**.
+
+A save sits on a bar like a chord, so it is treated the same: it carries its
+own per-verse lyrics and exposes the Lyrics action.
 
 Tap is never destructive: every removal is an explicit menu item.
 
@@ -60,16 +64,20 @@ the action sheet (standalone) or the chord sheet with a "Remove save" item
 (badge). Long-press on a save cell triggers delete (+ undo), matching chord
 bars.
 
-### 3. Per-verse bar lyrics
+### 3. Per-verse bar lyrics (chord, silent, and save blocks)
 
 - **Editing:** the "Lyrics — Verse N" action opens a focused multi-line lyric
-  dialog (a reused `_VerseLyricDialog`, controller disposed) that reads
+  dialog (`_VerseLyricDialog`, controller disposed) that reads
   `block.lyrics[instanceIndex]` and writes via
   `setBlockLyric(verseIndex: instanceIndex)`. `N = instanceIndex + 1`. No model
   change — `SongBlock.lyrics` and `setBlockLyric` already support per-verse.
-- **Visibility:** each bar cell renders its verse's lyric
-  (`block.lyrics[instanceIndex]`, empty → nothing or a faint affordance) as a
-  small text line within the cell. Because each verse renders its own
+  `_editVerseLyric` takes an optional `laneId`: chord/silent blocks default to
+  the row's harmony lane; a save block passes its own save lane id (resolved by
+  `_saveLaneId`) so the lyric is written on the save block in the save lane.
+- **Visibility:** each cell renders its verse's lyric
+  (`block.lyrics[instanceIndex]` for chord/silent, `saveBlock.lyrics[...]` for
+  standalone saves), empty → nothing, as a small capped (`maxLines: 1`) text
+  line within the cell. Because each verse renders its own
   `_BarRow(instanceIndex: i)`, verse 1's row shows verse 1's words and verse 2's
   row shows verse 2's.
 
@@ -85,7 +93,7 @@ serve different jobs and do not interact. No change to section lyrics.
 |---|---|---|
 | Chord bar | Action sheet (change / voicings / lyrics / remove) | Remove chord (+undo) |
 | Silent block | Action sheet (lyrics / remove) | Remove (+undo) |
-| Standalone save | Action sheet (remove save) | Remove save (+undo) |
+| Standalone save | Action sheet (lyrics / remove save) | Remove save (+undo) |
 | Empty bar | Add sheet (chord / library) | — |
 
 ## Out of scope
@@ -107,6 +115,8 @@ serve different jobs and do not interact. No change to section lyrics.
     instanceIndex` (verse 2 row → index 1).
   - A bar with `lyrics: ['v1', 'v2']` in a ×2 section shows `v1` in instance 0's
     row and `v2` in instance 1's row.
+  - The save action menu offers Lyrics; saving writes the **save block's** lyric
+    (in its save lane), and a save cell renders its verse lyric.
 - **Manual (serve-sim):** tap chord → menu (nothing deleted); tap save → menu;
   long-press → delete; set ×2, add a chord, give verses different lyrics, see
   each verse row show its own words.
