@@ -487,6 +487,11 @@ git commit -m "feat(songwriter): chord bar tap opens unified action sheet"
 
 Currently `_onTapSave` removes the save immediately (with undo). Split: `_removeSave` keeps the removal logic; `_onTapSave` opens an action sheet instead.
 
+> **As shipped (post-plan):** the "Replace from library" item below was dropped
+> — `addLibraryBlockAt` rejects an overlapping placement, so replace silently
+> no-opped. The final save menu is **Lyrics — Verse N** + **Remove save** (see
+> the "Post-plan additions" section at the end).
+
 - [ ] **Step 1: Add a "save tap does not delete" test**
 
 Append to `test/features/songwriter/songwriter_bar_menu_test.dart`:
@@ -694,6 +699,23 @@ git commit -m "feat(songwriter): empty bar tap opens add menu"
 
 ## Final verification
 
-- [ ] `flutter test` — all pass.
-- [ ] `dart analyze` — no issues.
-- [ ] All tasks committed.
+- [x] `flutter test` — all pass (610).
+- [x] `dart analyze` — no issues.
+- [x] All tasks committed + pushed.
+
+## Post-plan additions (as shipped)
+
+Changes made after the original 6 tasks, during review/iteration:
+
+- **Dropped "Replace from library"** from the save menu (`ee4392d`):
+  `addLibraryBlockAt` rejects a placement overlapping the existing save, so the
+  replace silently no-opped. Real replace ships with the forced-save flow.
+- **Long-press delete test** (`23cacf0`): added the missing widget test for the
+  headline long-press = delete gesture (+ undo snackbar), refreshed a stale
+  save-badge comment, and amended the spec re: the dropped replace.
+- **Per-verse lyrics on save bars** (treat bar and save the same): the save
+  action menu gained **Lyrics — Verse N**, editing the save block's own lyrics
+  in its save lane. `_editVerseLyric` now takes an optional `laneId` (defaults to
+  the row's harmony lane; saves pass their save lane via the new `_saveLaneId`).
+  Save cells render their per-verse lyric. Tests: save menu writes the save
+  block lyric; save cell renders it.
