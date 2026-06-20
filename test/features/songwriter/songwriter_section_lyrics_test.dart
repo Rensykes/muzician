@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
-import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
