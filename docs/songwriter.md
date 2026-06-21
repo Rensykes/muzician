@@ -32,6 +32,8 @@ else broken (the referenced save was deleted).
 | Function | Purpose |
 |---|---|
 | `romanNumeralFor(chordRootPc, quality, keyRootPc?, keyScaleName?)` | Diatonic Roman numeral for a chord in a key, or `null` (no key / non-diatonic). Cased by quality (`dim` → `vii°`, minor → lowercase). |
+| `resolveSnapshotChord(snapshot)` | The chord a save block resolves to, for degree display: prefers the snapshot's explicit `pendingChord`, else detects one from `selectedNotes` via `detectFirstChord`. Returns a `ResolvedChord(rootPc, quality, symbol)` or `null`. |
+| `saveBlockRomanNumeral(snapshot, keyRootPc?, keyScaleName?)` | Convenience: `resolveSnapshotChord` + `romanNumeralFor`. The Roman numeral a save block maps to in the key, or `null`. |
 | `blocksOverlap(existing, candidate)` | Half-open overlap check within a lane; touching edges and gaps are allowed; self (same id) ignored. |
 | `makeSection` / `makeLane` / `makeSaveBlock` / `makeHarmonyBlock` | UUID-stamped factories. |
 | `flattenedBarCount(sections)` | Total bars after expanding section repeats (Σ `lengthBars * repeat`). |
@@ -92,6 +94,20 @@ Sessions live in `@muzician/songwriter_sessions/v1` — a per-project map of
 persisted immediately and the incoming session is loaded from the map (or
 seeded via `_defaultFor` when no session exists yet); leaving the project
 clears to empty.
+
+## Scale degrees on bar cells
+
+Both bar-cell kinds in the sheet grid (`songwriter_screen_sheet.dart`) show a
+Roman numeral under their label when the chord is diatonic to the project key:
+
+- **Harmony cells** render `block.chordSymbol` + `block.romanNumeral` (computed
+  at block creation, recomputed by `setKey`).
+- **Save cells** resolve their snapshot's chord via `saveBlockRomanNumeral`
+  (`pendingChord`, else detected from the saved notes) and render it under the
+  save name, keyed `saveRoman_<blockId>_<instance>`.
+
+A non-diatonic chord (or no key) yields `null` and no numeral is shown — only
+the symbol/name. Example in C major: a saved F-major voicing shows `IV`.
 
 ## Save / Load
 
