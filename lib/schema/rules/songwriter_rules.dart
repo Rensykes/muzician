@@ -347,9 +347,13 @@ class ResolvedChord {
 ResolvedChord? resolveSnapshotChord(InstrumentSnapshot? snapshot) {
   if (snapshot == null) return null;
 
+  // noteToPC is keyed by sharp spellings only, so normalize any flat-spelled
+  // root (e.g. a legacy/imported save or a future flats display mode) to its
+  // sharp equivalent before lookup; otherwise the chord would be silently
+  // dropped and no degree shown.
   final pending = snapshot.pendingChord;
   if (pending != null) {
-    final pc = noteToPC[pending.root];
+    final pc = noteToPC[toSharp(pending.root)];
     if (pc != null) {
       return ResolvedChord(
         rootPc: pc,
@@ -359,7 +363,9 @@ ResolvedChord? resolveSnapshotChord(InstrumentSnapshot? snapshot) {
     }
   }
 
-  final detected = detectFirstChord(snapshot.selectedNotes);
+  final detected = detectFirstChord(
+    snapshot.selectedNotes.map(toSharp).toList(),
+  );
   if (detected != null) {
     final pc = noteToPC[detected.root];
     if (pc != null) {
