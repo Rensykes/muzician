@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/save_system.dart';
 import '../../store/piano_roll_store.dart';
+import '../../store/save_system_store.dart';
+import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 
 /// A panel that lets the user save and load piano roll snapshots.
@@ -17,7 +19,16 @@ class PianoRollSavePanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final selectedId = ref.watch(
+      saveSystemProvider.select((s) => s.selectedProjectId),
+    );
+    if (selectedId == null) {
+      return const ProjectRequiredPlaceholder(
+        message: 'Pick a project (or Dump)\nto save and load piano-roll snapshots.',
+      );
+    }
     return SaveBrowserPanel(
+      rootFolderId: selectedId,
       instrumentFilter: 'piano_roll',
       captureSnapshot: () => _captureSnapshot(ref),
       onLoad: (snap) => _loadSnapshot(ref, snap),
@@ -73,3 +84,4 @@ class PianoRollSavePanel extends ConsumerWidget {
     }
   }
 }
+

@@ -106,7 +106,7 @@ class _GridPainter extends CustomPainter {
     }
 
     // Vertical grid lines
-    final beatTicks = timeSig.beatUnit == 8 ? 2 : 4;
+    final beatTicks = timeSig.ticksPerBeat;
     final measureTicks = rules.ticksPerMeasure(timeSig);
     for (int tick = 0; tick <= totalTicks; tick++) {
       final x = tick * cellW;
@@ -271,7 +271,7 @@ class _RulerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final measureTicks = rules.ticksPerMeasure(timeSig);
-    final beatTicks = timeSig.beatUnit == 8 ? 2 : 4;
+    final beatTicks = timeSig.ticksPerBeat;
 
     for (int tick = 0; tick < totalTicks; tick++) {
       final x = tick * cellW;

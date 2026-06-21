@@ -14,6 +14,7 @@ import '../schema/rules/save_system_rules.dart';
 import '../store/fretboard_store.dart';
 import '../store/piano_roll_store.dart';
 import '../store/piano_store.dart';
+import '../store/project_config_sync.dart';
 import '../store/save_system_store.dart';
 import '../store/settings_store.dart';
 import '../theme/muzician_theme.dart';
@@ -50,6 +51,10 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   /// of running the normal load/select action.
   final void Function(SaveEntry entry)? onPick;
 
+  /// Virtual root: when set, navigation stops at this folder and Back
+  /// cannot escape it.  null = full tree (traditional behaviour).
+  final String? rootFolderId;
+
   const SaveBrowserPanel({
     super.key,
     this.instrumentFilter,
@@ -57,6 +62,7 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
     this.captureSnapshot,
     this.onLoad,
     this.onPick,
+    this.rootFolderId,
   });
 
   @override
@@ -68,6 +74,15 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   String? _selectedSaveId;
   bool _editMode = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _currentFolderId = widget.rootFolderId;
+  }
+
+  bool get _atVirtualRoot =>
+      widget.rootFolderId != null && _currentFolderId == widget.rootFolderId;
+
   // ── Computed helpers ──────────────────────────────────────────────────────
 
   List<SaveFolder> _breadcrumb(List<SaveFolder> allFolders) {
@@ -77,6 +92,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
       final f = allFolders.where((f) => f.id == walkId).firstOrNull;
       if (f == null) break;
       crumbs.insert(0, f);
+      if (walkId == widget.rootFolderId) break; // stop at virtual root
       walkId = f.parentId;
     }
     return crumbs;
@@ -519,7 +535,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           _Breadcrumb(
             breadcrumb: breadcrumb,
             onRoot: () => setState(() {
-              _currentFolderId = null;
+              _currentFolderId = widget.rootFolderId;
               _selectedSaveId = null;
             }),
             onNavigate: (id) => setState(() {
@@ -527,9 +543,13 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
               _selectedSaveId = null;
             }),
             onBack: () => setState(() {
-              _currentFolderId = breadcrumb.length > 1
+              if (_atVirtualRoot) return;
+              final parent = breadcrumb.length > 1
                   ? breadcrumb[breadcrumb.length - 2].id
                   : null;
+              _currentFolderId = (widget.rootFolderId != null && parent == null)
+                  ? widget.rootFolderId
+                  : parent;
               _selectedSaveId = null;
             }),
           ),
@@ -603,8 +623,15 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
         // saves
         ...saves.map((save) {
           final isSelected = _selectedSaveId == save.id;
+          final projectKey = ref.watch(activeProjectKeyProvider);
+          final offKey = snapshotOffKey(
+            save.snapshot,
+            scaleRoot: projectKey?.root,
+            scaleName: projectKey?.scaleName,
+          );
           return _SaveRow(
             save: save,
+            offKey: offKey,
             isSelected: isSelected,
             isActiveSession: activeSession?.saveId == save.id,
             editMode: _editMode,
@@ -674,11 +701,18 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
       ),
       ...saves.map((save) {
         final label = saveCardLabel(save.snapshot);
+        final projectKey = ref.watch(activeProjectKeyProvider);
+        final offKey = snapshotOffKey(
+          save.snapshot,
+          scaleRoot: projectKey?.root,
+          scaleName: projectKey?.scaleName,
+        );
         return _SaveCard(
           name: save.name,
           instrument: save.snapshot.instrument,
           labelText: label.kind == SaveCardLabelKind.notes ? null : label.text,
           noteChips: label.notes,
+          offKey: offKey,
           selected: _selectedSaveId == save.id,
           onTap: () {
             if (widget.onPick != null) {
@@ -1024,6 +1058,7 @@ class _FolderRow extends StatelessWidget {
 
 class _SaveRow extends StatefulWidget {
   final SaveEntry save;
+  final bool offKey;
   final bool isSelected;
   final bool isActiveSession;
   final bool editMode;
@@ -1043,6 +1078,7 @@ class _SaveRow extends StatefulWidget {
 
   const _SaveRow({
     required this.save,
+    this.offKey = false,
     required this.isSelected,
     required this.isActiveSession,
     required this.editMode,
@@ -1157,6 +1193,11 @@ class _SaveRowState extends State<_SaveRow>
             children: [
               // ── Name row ──
               GestureDetector(
+                // Opaque so the whole row is tappable — the save name is short
+                // and left-aligned, leaving most of the row as empty space that
+                // would otherwise swallow taps (deferToChild) and make picking
+                // a save feel like it "does nothing".
+                behavior: HitTestBehavior.opaque,
                 onTap: widget.editMode ? widget.onRename : widget.onTap,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -1183,6 +1224,14 @@ class _SaveRowState extends State<_SaveRow>
                         const SizedBox(width: 4),
                       ],
                       Text(_icon, style: const TextStyle(fontSize: 14)),
+                      if (widget.offKey) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 14,
+                          color: MuzicianTheme.orange,
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -1523,6 +1572,7 @@ class _SaveCard extends StatelessWidget {
   final String instrument;
   final String? labelText; // chord symbol / scale / 'Highlight'
   final List<String> noteChips; // shown when labelText is null
+  final bool offKey;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
@@ -1533,6 +1583,7 @@ class _SaveCard extends StatelessWidget {
     required this.labelText,
     required this.noteChips,
     required this.onTap,
+    this.offKey = false,
     this.selected = false,
     this.onLongPress,
   });
@@ -1564,6 +1615,12 @@ class _SaveCard extends StatelessWidget {
               children: [
                 Icon(saveInstrumentIcon(instrument), size: 16),
                 const Spacer(),
+                if (offKey)
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 14,
+                    color: MuzicianTheme.orange,
+                  ),
               ],
             ),
             const SizedBox(height: 6),

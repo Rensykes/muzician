@@ -13,12 +13,16 @@ import 'features/song/song_screen.dart';
 import 'features/songwriter/songwriter_feature.dart';
 import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
 import 'models/piano.dart' show PianoViewMode;
+import 'models/save_system.dart';
+import 'utils/note_utils.dart' show chromaticNotes;
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
+import 'store/project_config_sync.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
-import 'store/songwriter_store.dart';
-import 'store/song_session_store.dart';
+import 'store/song_sessions_store.dart';
+import 'store/songwriter_sessions_store.dart';
+import 'ui/project_chip.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
@@ -81,9 +85,23 @@ class _AppShellState extends ConsumerState<_AppShell> {
     Future.microtask(() async {
       await ref.read(saveSystemProvider.notifier).hydrate();
       await ref.read(settingsProvider.notifier).hydrate();
-      await ref.read(songSessionProvider).hydrate();
-      await ref.read(songwriterProvider.notifier).hydrate();
+      await ref.read(songSessionsProvider.notifier).hydrate();
+      await ref.read(songwriterSessionsProvider.notifier).hydrate();
       await NotePlayer.instance.init();
+      final notifier = ref.read(saveSystemProvider.notifier);
+      var selected = ref.read(saveSystemProvider).selectedProjectId;
+      if (selected == null) {
+        // First launch (or selection cleared): default to Dump so the user can
+        // create saves freely on Fretboard / Piano / Roll without being forced
+        // through a project-creation modal. Song / Songwriter still prompt
+        // when entered because Dump is not a real project.
+        selected = notifier.ensureDumpFolder();
+        notifier.selectProject(selected);
+      } else {
+        notifier.selectProject(selected);
+      }
+      // Mount the project config syncer (Provider body runs on first read).
+      ref.read(projectConfigSyncProvider);
     });
   }
 
@@ -321,14 +339,18 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
     final activeScale = ref.watch(activeScaleProvider);
     final activeChord = ref.watch(activeChordProvider);
     final chordCommitted = ref.watch(fretboardChordCommittedProvider);
+    final scaleInfo = _resolveScaleDockState(ref, activeScale);
+    final chordOffKey = ref.watch(fretboardBinding.chordOffKey);
 
     return InstrumentScreen(
       binding: fretboardBinding,
       title: 'Fretboard',
-      appBarChipLabel: state.selectedNotes.isEmpty
-          ? null
-          : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+      appBarChipLabel: null,
       appBarActions: [
+        const Padding(
+          padding: EdgeInsets.only(right: 4),
+          child: ProjectChip(),
+        ),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 0),
@@ -373,7 +395,9 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       emptySubtitle:
           'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('fret-detect'),
-      scaleHasValue: activeScale != null,
+      scaleHasValue: scaleInfo.hasValue,
+      scaleLabel: scaleInfo.label,
+      scaleOffKey: chordOffKey,
       chordHasValue: activeChord != null || chordCommitted,
       onScalePanelRequested: () => showWidgetSheet(
         context: context,
@@ -488,18 +512,21 @@ class _PianoScreen extends ConsumerStatefulWidget {
 class _PianoScreenState extends ConsumerState<_PianoScreen> {
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(pianoProvider);
     final activeScale = ref.watch(pianoActiveScaleProvider);
     final activeChord = ref.watch(pianoActiveChordProvider);
     final chordCommitted = ref.watch(pianoChordCommittedProvider);
+    final scaleInfo = _resolveScaleDockState(ref, activeScale);
+    final chordOffKey = ref.watch(pianoBinding.chordOffKey);
 
     return InstrumentScreen(
       binding: pianoBinding,
       title: 'Piano',
-      appBarChipLabel: state.selectedNotes.isEmpty
-          ? null
-          : '${state.selectedNotes.length} note${state.selectedNotes.length == 1 ? "" : "s"}',
+      appBarChipLabel: null,
       appBarActions: [
+        const Padding(
+          padding: EdgeInsets.only(right: 4),
+          child: ProjectChip(),
+        ),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 1),
@@ -533,7 +560,9 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
       emptySubtitle:
           'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('piano-detect'),
-      scaleHasValue: activeScale != null,
+      scaleHasValue: scaleInfo.hasValue,
+      scaleLabel: scaleInfo.label,
+      scaleOffKey: chordOffKey,
       chordHasValue: activeChord != null || chordCommitted,
       onScalePanelRequested: () => showWidgetSheet(
         context: context,
@@ -786,4 +815,31 @@ class _SettingsScreen extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Combines the user-set active scale (`activeScale*Provider`) and the active
+/// project's locked key into the dock-tab label + accent state.
+///
+/// Priority: project key wins when a project is active and has a key set;
+/// otherwise the user-set active scale; otherwise the default "Scale" label
+/// with no accent.
+({bool hasValue, String label}) _resolveScaleDockState(
+  WidgetRef ref,
+  ({String root, String scaleName})? activeScale,
+) {
+  final project = ref.watch(selectedProjectProvider);
+  if (project != null && project.kind == SaveFolderKind.project) {
+    final cfg = project.projectConfig;
+    if (cfg?.keyRootPc != null && cfg!.keyScaleName != null) {
+      final root = chromaticNotes[cfg.keyRootPc!];
+      return (hasValue: true, label: '$root ${cfg.keyScaleName}');
+    }
+  }
+  if (activeScale != null) {
+    return (
+      hasValue: true,
+      label: '${activeScale.root} ${activeScale.scaleName}',
+    );
+  }
+  return (hasValue: false, label: 'Scale');
 }

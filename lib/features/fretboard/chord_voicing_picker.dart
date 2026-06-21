@@ -9,7 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
+import '../../store/project_config_sync.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/out_of_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
 import 'chord_diagram.dart';
@@ -191,6 +193,35 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
     _selectedQuality = detected?.quality ?? '';
   }
 
+  /// If the chord has pitch classes outside the active project key, prompt
+  /// the user. Returns `true` when the user accepts (or no prompt is needed),
+  /// `false` when the user cancels — caller must abort all state changes.
+  Future<bool> _confirmIfOffKey(
+    List<String> chordNotes,
+    ({String root, String scaleName})? activeKey,
+  ) async {
+    if (activeKey == null) return true;
+    final outOfKey = chordPitchClassesOutOfKey(
+      chordNotes,
+      scaleRoot: activeKey.root,
+      scaleName: activeKey.scaleName,
+    );
+    if (outOfKey.isEmpty) return true;
+    if (!mounted) return false;
+    final notes = outOfKey.map(formatRootChoiceLabel).join(', ');
+    final result = await showDialog<OutOfKeyResult>(
+      context: context,
+      builder: (ctx) => OutOfKeyDialog(
+        title: 'Chord outside the key',
+        message:
+            'This chord contains $notes, which fall outside '
+            '${activeKey.root} ${activeKey.scaleName}. Apply anyway?',
+        showSuppressOption: false,
+      ),
+    );
+    return result != null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
@@ -228,6 +259,11 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
         ? _generateVoicings(chordNotes, stringMidis, capo: state.capo)
         : <ChordVoicing>[];
 
+    final activeKey = ref.watch(activeProjectKeyProvider);
+    final diatonic = activeKey == null
+        ? const <DiatonicChord>[]
+        : getDiatonicChords(activeKey.root, activeKey.scaleName);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -240,6 +276,28 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
             quality: _selectedQuality,
           ),
         ),
+        // Diatonic chord hint (project key only)
+        if (diatonic.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: DiatonicChordsHeader(
+              keyLabel: '${activeKey!.root} ${activeKey.scaleName}',
+            ),
+          ),
+          DiatonicChordsRow(
+            chords: diatonic,
+            selectedRoot: _selectedRoot,
+            selectedQuality: _selectedQuality,
+            accent: MuzicianTheme.violet,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            onTap: (root, quality) => setState(() {
+              _selectedRoot = root;
+              _selectedQuality = quality;
+              _selectedVoicingIdx = null;
+            }),
+          ),
+          const SizedBox(height: 10),
+        ],
         // Root pills
         RootPillRow(
           selectedRoot: _selectedRoot,
@@ -288,8 +346,13 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
                 rootNote: _selectedRoot,
                 openNotes: openNotes,
                 isSelected: _selectedVoicingIdx == i,
-                onPress: () {
+                onPress: () async {
                   HapticFeedback.mediumImpact();
+                  final apply = await _confirmIfOffKey(
+                    chordNotes,
+                    activeKey,
+                  );
+                  if (!apply) return;
                   setState(() {
                     _voicingCommitted = true;
                     _selectedVoicingIdx = i;

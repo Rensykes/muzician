@@ -57,6 +57,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(saveBrowserGrid: grid);
     await _persist();
   }
+
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(

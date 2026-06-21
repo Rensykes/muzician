@@ -7,12 +7,17 @@ import '../../models/piano_roll.dart' show TimeSignature;
 import '../../models/song_playback.dart';
 import '../../models/song_project.dart';
 import '../../schema/rules/song_rules.dart' as song_rules;
+import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
-import '../../store/song_session_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
+import '../../ui/core/coach_overlay.dart';
+import '../../ui/project_chip.dart';
 import '../../ui/transport_strip.dart' as transport;
+import 'song_coach_steps.dart';
+import 'song_export_actions.dart';
 import '../../utils/note_utils.dart' as note_utils;
 import '../_mockup_shell.dart' show showWidgetSheet, showPickerSheet;
 import 'song_arranger_timeline.dart';
@@ -28,6 +33,8 @@ class SongScreen extends ConsumerStatefulWidget {
 }
 
 class _SongScreenState extends ConsumerState<SongScreen> {
+  final _coachKeys = SongCoachKeys();
+
   @override
   void initState() {
     super.initState();
@@ -52,46 +59,73 @@ class _SongScreenState extends ConsumerState<SongScreen> {
         bottom: false,
         child: Column(
           children: [
-            // Header
+            // Header — collapses to a slim row on height-starved (landscape)
+            // viewports so the timeline keeps the vertical space.
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+              padding: MediaQuery.sizeOf(context).height < 500
+                  ? const EdgeInsets.fromLTRB(24, 4, 8, 0)
+                  : const EdgeInsets.fromLTRB(24, 16, 8, 0),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Song',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            color: MuzicianTheme.textPrimary,
-                            letterSpacing: -0.5,
+                    child: MediaQuery.sizeOf(context).height < 500
+                        ? const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Song',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: MuzicianTheme.textPrimary,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Song',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                  color: MuzicianTheme.textPrimary,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              Text(
+                                '${project.tracks.length} tracks',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: MuzicianTheme.textMuted,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        Text(
-                          '${project.tracks.length} tracks',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: MuzicianTheme.textMuted,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                  _SongScaleChip(config: project.config),
+                  Consumer(builder: (context, ref, _) {
+                    final locked = ref.watch(isProjectLockedProvider);
+                    if (locked) return const SizedBox.shrink();
+                    return _SongScaleChip(config: project.config);
+                  }),
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: ProjectChip(),
+                  ),
                   IconButton(
-                    tooltip: 'New Song',
+                    key: const Key('songHelpButton'),
+                    tooltip: 'Guide',
                     icon: const Icon(
-                      Icons.note_add_outlined,
+                      Icons.help_outline_rounded,
                       color: MuzicianTheme.sky,
                     ),
-                    onPressed: () => _confirmNewSong(context),
+                    onPressed: () =>
+                        startCoachTour(context, songCoachSteps(_coachKeys)),
                   ),
                   IconButton(
+                    key: _coachKeys.addTrack,
                     tooltip: 'Add Track',
                     icon: const Icon(
                       Icons.add_circle_outline,
@@ -107,16 +141,51 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                     ),
                     onPressed: () => _showSavePanel(context),
                   ),
+                  PopupMenuButton<String>(
+                    key: _coachKeys.overflow,
+                    tooltip: 'More',
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: MuzicianTheme.sky,
+                    ),
+                    color: MuzicianTheme.surface,
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'new':
+                          _confirmNewSong(context);
+                        case 'import':
+                          _confirmImportFromWriter(context);
+                        case 'export':
+                          exportSongToWav(context, ref);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'new', child: Text('New song')),
+                      PopupMenuItem(
+                        value: 'import',
+                        child: Text('Import from Writer'),
+                      ),
+                      PopupMenuItem(
+                        value: 'export',
+                        child: Text('Export WAV'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 4),
             // Shared transport strip
-            _SongTransportStrip(project: project, playback: playback),
+            KeyedSubtree(
+              key: _coachKeys.transport,
+              child: _SongTransportStrip(project: project, playback: playback),
+            ),
             const SizedBox(height: 4),
             // Arranger timeline
             Expanded(
-              child: project.tracks.isEmpty
+              child: KeyedSubtree(
+                key: _coachKeys.timeline,
+                child: project.tracks.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -151,6 +220,7 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                       ),
                       currentPlaybackTick: playback.currentTick,
                     ),
+              ),
             ),
             const SongClipActionBar(),
           ],
@@ -291,7 +361,43 @@ class _SongScreenState extends ConsumerState<SongScreen> {
     );
     if (confirmed != true) return;
     ref.read(songPlaybackProvider.notifier).stopPlayback();
-    await ref.read(songSessionProvider).clearAndReset();
+    await ref.read(songProjectProvider.notifier).loadProject(song_rules.getDefaultSongProject());
+  }
+
+  Future<void> _confirmImportFromWriter(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    final hasContent = ref.read(songProjectProvider).tracks.isNotEmpty;
+    if (hasContent) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: MuzicianTheme.surface,
+          title: const Text(
+            'Import from Writer?',
+            style: TextStyle(color: MuzicianTheme.textPrimary),
+          ),
+          content: const Text(
+            'This replaces the current song with a skeleton built from the '
+            'Writer arrangement (sections become markers, chords become '
+            'note tracks, drum lanes become drum tracks).',
+            style: TextStyle(color: MuzicianTheme.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    ref.read(songPlaybackProvider.notifier).stopPlayback();
+    ref.read(songProjectProvider.notifier).importFromSongwriter();
   }
 }
 
@@ -376,6 +482,15 @@ class _SongTransportStrip extends ConsumerWidget {
       );
     }
 
+    final metronomeOn = ref.watch(
+      settingsProvider.select((s) => s.metronomeEnabled),
+    );
+    final multiplierLabel = switch (playback.tempoMultiplier) {
+      0.75 => '¾×',
+      0.5 => '½×',
+      _ => '1×',
+    };
+
     return transport.TransportStrip(
       bpm: bpm,
       barBeat: barBeat,
@@ -387,6 +502,106 @@ class _SongTransportStrip extends ConsumerWidget {
       onBpmTap: onBpmTap,
       onSigTap: onSigTap,
       onBpmDelta: (delta) => songNotifier.setTempo(bpm + delta),
+      extras: [
+        _TransportChip(
+          key: const Key('tempoMultiplierChip'),
+          label: multiplierLabel,
+          active: playback.tempoMultiplier != 1.0,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            playbackNotifier.cycleTempoMultiplier();
+          },
+        ),
+        _TransportChip(
+          key: const Key('songMetronomeToggle'),
+          icon: Icons.timer_outlined,
+          active: metronomeOn,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ref
+                .read(settingsProvider.notifier)
+                .setMetronomeEnabled(!metronomeOn);
+          },
+        ),
+        _TransportChip(
+          key: const Key('countInToggle'),
+          label: '1·2·3',
+          active: playback.countInEnabled,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            playbackNotifier.toggleCountIn();
+          },
+        ),
+        _TransportChip(
+          key: const Key('snapToggle'),
+          label: ref.watch(songSnapToBeatProvider) ? 'SNAP ♩' : 'SNAP ▭',
+          active: ref.watch(songSnapToBeatProvider),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ref.read(songSnapToBeatProvider.notifier).state =
+                !ref.read(songSnapToBeatProvider);
+          },
+        ),
+        if (playback.hasLoop)
+          _TransportChip(
+            key: const Key('loopChip'),
+            icon: Icons.repeat_rounded,
+            active: true,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              playbackNotifier.clearLoopRegion();
+            },
+          ),
+      ],
+    );
+  }
+}
+
+/// Small pill control rendered in the transport's extras slot.
+class _TransportChip extends StatelessWidget {
+  final String? label;
+  final IconData? icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _TransportChip({
+    super.key,
+    this.label,
+    this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? MuzicianTheme.sky : MuzicianTheme.textMuted;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: active
+              ? MuzicianTheme.sky.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active
+                ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                : MuzicianTheme.glassBorder,
+          ),
+        ),
+        child: icon != null
+            ? Icon(icon, size: 14, color: color)
+            : Text(
+                label!,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+      ),
     );
   }
 }

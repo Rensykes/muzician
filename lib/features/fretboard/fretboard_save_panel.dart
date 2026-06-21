@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../store/fretboard_store.dart';
+import '../../store/save_system_store.dart';
+import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 
 /// A panel that lets the user save and load fretboard snapshots.
@@ -16,7 +18,16 @@ class FretboardSavePanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final selectedId = ref.watch(
+      saveSystemProvider.select((s) => s.selectedProjectId),
+    );
+    if (selectedId == null) {
+      return const ProjectRequiredPlaceholder(
+        message: 'Pick a project (or Dump)\nto save and load fretboard shapes.',
+      );
+    }
     return SaveBrowserPanel(
+      rootFolderId: selectedId,
       instrumentFilter: 'fretboard',
       captureSnapshot: () => _captureSnapshot(ref),
       onLoad: (snap) => _loadSnapshot(ref, snap),
@@ -88,3 +99,4 @@ class FretboardSavePanel extends ConsumerWidget {
     ref.read(scrollToFretProvider.notifier).state = snap.capo;
   }
 }
+

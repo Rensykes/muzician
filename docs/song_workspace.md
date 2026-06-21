@@ -40,6 +40,55 @@ New empty patterns default to 1 measure.
 Song-level transport plays all audible tracks. Muted tracks are silent unless soloed.
 Solo takes priority over mute — if any track is soloed, only soloed tracks play.
 
+### Transport controls
+
+- **Per-track volume** (`SongTrack.volume`, 0–1, default 1): set from the track
+  menu's Volume slider. Note/drum sink volume is `0.8 × track.volume`; audio
+  clips pass the gain to the player.
+- **Loop region**: long-press-drag on the measure ruler selects a
+  measure-snapped region (painted teal). The tick clock wraps at the loop end;
+  audio clips that start inside the region re-arm on each pass. The loop chip
+  in the transport clears it.
+- **Practice tempo**: the `1×/¾×/½×` chip scales the tick duration only
+  (patterns play slower; audio clips keep their natural speed, so they drift
+  under a multiplier — practice tempo is meant for note/drum material).
+- **Metronome + count-in**: the metronome chip toggles
+  `settings.metronomeEnabled` (clicks every beat, accented on the measure);
+  the `1·2·3` chip enables a one-measure count-in before the clock starts.
+- **Auto-follow**: the timeline scrolls to keep the playhead visible during
+  playback; a manual horizontal scroll pauses following until the next play.
+
+## Clip operations
+
+Selecting a clip opens the action bar: edit pattern, split at the playhead
+(`splitClipAtTick` — slices into two unique patterns; shared siblings keep the
+original), duplicate, copy-for-paste (long-press a lane → Paste), transpose
+note clips (±1 / ±octave), move to another same-type track, audio trim
+(head/tail, honored by the scheduler), make-unique, delete. The transport
+`SNAP` chip toggles measure vs beat snapping; the track menu reorders tracks
+and sets per-track volume. Clips render content previews: note thumbnails,
+drum step dots, audio waveforms, plus the pattern name and a shared-pattern
+badge.
+
+## Markers & zoom
+
+Double-tap the ruler to drop a labeled marker (verse, chorus, …); tap a marker
+flag to rename or delete it. Pinch horizontally on the timeline to zoom
+(`songTimelineZoomProvider`, 0.5×–3×).
+
+## Cross-feature
+
+- **Hum a melody**: the add-clip sheet on note tracks creates an empty clip and
+  opens the piano-roll editor (hum recorder included) straight away.
+- **Import from Writer**: the header overflow menu rebuilds the song from the
+  Songwriter arrangement (`songFromSongwriter`): sections → measures + a marker
+  per instance, the harmony lane → a note track of per-bar chord stabs, drum
+  lanes → drum tracks, save lanes → voicing note tracks; tempo / time signature
+  / key copied over.
+- **Export WAV**: the overflow menu renders note + drum tracks to a mono PCM16
+  WAV (`renderSongPcm`) and writes it via the platform save dialog. Audio clips
+  are excluded in v1 (a dialog notes this when the song has any).
+
 ## Save / Load
 
 Song projects save as `SongProjectSnapshot` through the shared save browser.
@@ -49,17 +98,24 @@ A saved project contains:
 
 ### Session auto-save
 
-In addition to the named save browser, the active Song workspace is
-auto-persisted to a single `SharedPreferences` slot (`@muzician/song_session/v1`)
-~500 ms after every mutation and restored on the next app launch.  This slot is
-overwritten — not appended — so it is a "last session" snapshot, not a save
-history.
+The active Song workspace is auto-persisted per project through
+`SongSessionsNotifier` (`lib/store/song_sessions_store.dart`), which stores a
+`Map<String, SongProject>` keyed by project ID in a single `SharedPreferences`
+slot (`@muzician/song_sessions/v1`).  Every mutation in `SongProjectNotifier`
+triggers a debounced (~500 ms) write of the map so the last session for every
+project is always saved.
 
-Tap the **New Song** button in the Song header to wipe the current session and
-start fresh.  A confirmation dialog protects against accidental overwrites; on
-confirm, the persisted blob is removed, the project is reset to its default
-empty state, and audio assets referenced only by the prior session are
-reconciled out of `appDocs/song_audio/`.
+`songProjectProvider` (`lib/store/song_project_store.dart`) watches
+`selectedProjectId` changes.  When the project changes, the current session is
+persisted under the previous project ID, and the session for the new project ID
+is loaded from the map (falling back to a default project seeded from the
+project's `ProjectConfig` if no session exists).  On app start,
+`songSessionsProvider.hydrate()` restores the full map from shared preferences.
+
+Tap the **New Song** button in the Song header to load
+`getDefaultSongProject()` into the current project's session slot.  A
+confirmation dialog protects against accidental overwrites; on confirm, the
+current project's session slot is replaced with the default empty song.
 
 ## Audio Playback Sink
 
@@ -90,6 +146,17 @@ Audio tracks host clips from microphone recordings or imported files.
 - **Web**: recording is disabled; import works via the standard file picker but files do not persist across reloads.
 - **Broken clips**: if a referenced file is missing on load, the clip renders with a red diagonal stripe and stays silent during playback.
 - **Auto-mute**: the target audio track is muted while you record so its prior clips do not bleed back through the mic.
+
+## Project lock
+
+When a project folder is selected (`isProjectLockedProvider`), the Song
+workspace inherits tempo and time signature from the project's `ProjectConfig`
+via `projectConfigSyncProvider` (`lib/store/project_config_sync.dart`), which
+also pushes the project key/scale into the Song store.  The scale chip is
+hidden and a `ProjectChip` widget is shown in the Song header next to the New
+Song / Add Track buttons.  Change project values through the project config
+sheet accessed from the project chip.  Dump and "no project" leave the scale
+chip visible and controls free.
 
 ## Limitations (v1)
 

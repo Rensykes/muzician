@@ -7,6 +7,7 @@ import '../schema/rules/piano_roll_rules.dart' as pr_rules;
 import '../utils/note_utils.dart';
 import 'fretboard.dart';
 import 'piano.dart';
+import 'project_config.dart';
 import 'song_project.dart';
 import 'songwriter.dart';
 
@@ -459,6 +460,20 @@ class ProgressionChordMeta {
 
 // ─── Folder & Save Entry ──────────────────────────────────────────────────────
 
+enum SaveFolderKind {
+  normal,
+  project,
+  dump;
+
+  String toJson() => name;
+  static SaveFolderKind fromJson(String? raw) {
+    for (final k in SaveFolderKind.values) {
+      if (k.name == raw) return k;
+    }
+    return SaveFolderKind.normal;
+  }
+}
+
 class SaveFolder {
   final String id;
   final String name;
@@ -466,6 +481,8 @@ class SaveFolder {
   final int createdAt;
   final int order;
   final ProgressionFolderMeta? progressionMeta;
+  final SaveFolderKind kind;
+  final ProjectConfig? projectConfig;
 
   const SaveFolder({
     required this.id,
@@ -474,16 +491,26 @@ class SaveFolder {
     required this.createdAt,
     required this.order,
     this.progressionMeta,
+    this.kind = SaveFolderKind.normal,
+    this.projectConfig,
   });
 
-  SaveFolder copyWith({String? name}) => SaveFolder(
-    id: id,
-    name: name ?? this.name,
-    parentId: parentId,
-    createdAt: createdAt,
-    order: order,
-    progressionMeta: progressionMeta,
-  );
+  SaveFolder copyWith({
+    String? name,
+    int? order,
+    SaveFolderKind? kind,
+    ProjectConfig? projectConfig,
+    bool clearProjectConfig = false,
+  }) => SaveFolder(
+        id: id,
+        name: name ?? this.name,
+        parentId: parentId,
+        createdAt: createdAt,
+        order: order ?? this.order,
+        progressionMeta: progressionMeta,
+        kind: kind ?? this.kind,
+        projectConfig: clearProjectConfig ? null : (projectConfig ?? this.projectConfig),
+      );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -492,6 +519,8 @@ class SaveFolder {
     'createdAt': createdAt,
     'order': order,
     'progressionMeta': progressionMeta?.toJson(),
+    'kind': kind.toJson(),
+    'projectConfig': projectConfig?.toJson(),
   };
 
   factory SaveFolder.fromJson(Map<String, dynamic> json) => SaveFolder(
@@ -504,6 +533,10 @@ class SaveFolder {
         ? ProgressionFolderMeta.fromJson(
             json['progressionMeta'] as Map<String, dynamic>,
           )
+        : null,
+    kind: SaveFolderKind.fromJson(json['kind'] as String?),
+    projectConfig: json['projectConfig'] != null
+        ? ProjectConfig.fromJson(json['projectConfig'] as Map<String, dynamic>)
         : null,
   );
 }
@@ -590,12 +623,14 @@ class SaveSystemState {
   final List<SaveEntry> saves;
   final ActiveSession? activeSession;
   final bool hydrated;
+  final String? selectedProjectId;
 
   const SaveSystemState({
     required this.folders,
     required this.saves,
     this.activeSession,
     required this.hydrated,
+    this.selectedProjectId,
   });
 
   SaveSystemState copyWith({
@@ -603,11 +638,14 @@ class SaveSystemState {
     List<SaveEntry>? saves,
     ActiveSession? Function()? activeSession,
     bool? hydrated,
+    String? Function()? selectedProjectId,
   }) => SaveSystemState(
     folders: folders ?? this.folders,
     saves: saves ?? this.saves,
     activeSession: activeSession != null ? activeSession() : this.activeSession,
     hydrated: hydrated ?? this.hydrated,
+    selectedProjectId:
+        selectedProjectId != null ? selectedProjectId() : this.selectedProjectId,
   );
 }
 

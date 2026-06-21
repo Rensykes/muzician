@@ -90,7 +90,7 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
     final timeSig = prState.config.timeSignature;
     // Quarter-note grid (ticksPerQuarter = 4). One "beat" spans 4 ticks for
     // x/4 signatures and 2 ticks for x/8 (eighth-note beats).
-    final beatTicks = timeSig.beatUnit == 8 ? 2 : 4;
+    final beatTicks = timeSig.ticksPerBeat;
     final measureTicks = beatTicks * timeSig.beatsPerMeasure;
     final tickDuration = rules.durationForTickDelta(1, tempo);
 

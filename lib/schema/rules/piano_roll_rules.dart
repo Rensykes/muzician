@@ -36,7 +36,7 @@ String midiToNoteWithOctave(int midi) {
 }
 
 int ticksPerMeasure(TimeSignature ts) {
-  final beatTicks = ts.beatUnit == 8 ? 2 : 4;
+  final beatTicks = ts.ticksPerBeat;
   return ts.beatsPerMeasure * beatTicks;
 }
 

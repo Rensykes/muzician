@@ -32,6 +32,8 @@ else broken (the referenced save was deleted).
 | Function | Purpose |
 |---|---|
 | `romanNumeralFor(chordRootPc, quality, keyRootPc?, keyScaleName?)` | Diatonic Roman numeral for a chord in a key, or `null` (no key / non-diatonic). Cased by quality (`dim` → `vii°`, minor → lowercase). |
+| `resolveSnapshotChord(snapshot)` | The chord a save block resolves to, for degree display: prefers the snapshot's explicit `pendingChord`, else detects one from `selectedNotes` via `detectFirstChord`. Returns a `ResolvedChord(rootPc, quality, symbol)` or `null`. |
+| `saveBlockRomanNumeral(snapshot, keyRootPc?, keyScaleName?)` | Convenience: `resolveSnapshotChord` + `romanNumeralFor`. The Roman numeral a save block maps to in the key, or `null`. |
 | `blocksOverlap(existing, candidate)` | Half-open overlap check within a lane; touching edges and gaps are allowed; self (same id) ignored. |
 | `makeSection` / `makeLane` / `makeSaveBlock` / `makeHarmonyBlock` | UUID-stamped factories. |
 | `flattenedBarCount(sections)` | Total bars after expanding section repeats (Σ `lengthBars * repeat`). |
@@ -41,9 +43,29 @@ else broken (the referenced save was deleted).
 ### Repeat semantics
 
 Playback flattening expands **section** repeats (whole section loops N×) and **lane**
-repeats (the lane's block pattern tiles N× from bar 0, clipped to the section). v1
-blocks are silent visual guides — flattening drives the playhead/highlighting; audio is
-metronome only.
+repeats (the lane's block pattern tiles N× from bar 0, clipped to the section).
+
+### Playback audio (`lib/schema/rules/songwriter_playback_rules.dart`)
+
+`flattenPlaybackEvents(project, saves)` turns the whole project into a sorted,
+tick-indexed event list the transport walks:
+
+- **Harmony blocks** sound their chord as a per-bar stab (block start + every bar
+  boundary inside the block, clipped to the section). Pitches come from
+  `chordNotes` stacked ascending from octave 4, falling back to
+  `chordRootPc` + `chordQuality` intervals. Silent blocks stay silent.
+- **Save blocks** resolve their snapshot (embedded → live save → broken) and sound
+  the voicing the same way: piano keys use `PianoCoordinate.midiNote`, fretboard
+  cells map string+fret through the tuning. Broken blocks are silent.
+- **Drum lane blocks** fire their referenced `DrumPattern` hits at native tick
+  resolution, tiled across the block's bar span.
+- The metronome click is unchanged and still gated by `settingsProvider.metronomeEnabled`.
+
+Sinks are injectable providers (`songwriterNoteSinkProvider`,
+`drumPatternPlaybackSinkProvider`, `songwriterMetronomeSinkProvider`) so tests can
+capture events. The sheet UI highlights the active bar cell via
+`songwriterActivePositionProvider` (global bar → section instance + local bar) and
+auto-scrolls the active section into view.
 
 ## Store (`lib/store/songwriter_store.dart`)
 
@@ -51,22 +73,62 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 
 | Method | Description |
 |---|---|
-| `hydrate()` | Restore the auto-saved session. |
-| `newProject()` | Reset to empty + clear the session slot. |
+| `newProject()` | Reset to empty + clear the session slot for the active project. |
 | `setKey(root, scaleName)` / `setTempo(tempo)` | Config edits; `setKey` recomputes harmony-lane Roman numerals. |
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
 | `makeBlockUnique(...)` | Detach a block from its live save by embedding a snapshot. |
 | `loadProject(project)` | Replace the whole project (named-save load). |
 
+The notifier no longer exposes a public `hydrate()`. Instead, `build()` listens
+to `saveSystemProvider.selectedProjectId` changes. When the project changes the
+outgoing session is immediately persisted via `songwriterSessionsProvider.put`
+and the incoming session is loaded via `.get`. If no session exists for the new
+project, `_defaultFor(next)` creates one seeded from the folder's
+`ProjectConfig`.
+
 ### Session auto-save
 
-The active project auto-persists to `@muzician/songwriter_session/v1` ~500 ms after
-each mutation (debounced; state captured at schedule time) and restores on launch. This
-slot is separate from the Song tab's `@muzician/song_session/v1` and is overwritten,
-not appended.
+Sessions live in `@muzician/songwriter_sessions/v1` — a per-project map of
+`Map<String, SongwriterProjectSnapshot>` keyed by project ID, debounced ~500 ms
+(state captured at schedule time). On project switch the outgoing session is
+persisted immediately and the incoming session is loaded from the map (or
+seeded via `_defaultFor` when no session exists yet); leaving the project
+clears to empty.
+
+## Scale degrees on bar cells
+
+Both bar-cell kinds in the sheet grid (`songwriter_screen_sheet.dart`) show a
+Roman numeral under their label when the chord is diatonic to the project key:
+
+- **Harmony cells** render `block.chordSymbol` + `block.romanNumeral` (computed
+  at block creation, recomputed by `setKey`).
+- **Save cells** resolve their snapshot's chord via `saveBlockRomanNumeral`
+  (`pendingChord`, else detected from the saved notes) and render it under the
+  save name, keyed `saveRoman_<blockId>_<instance>`.
+
+A non-diatonic chord (or no key) yields `null` and no numeral is shown — only
+the symbol/name. Example in C major: a saved F-major voicing shows `IV`.
 
 ## Save / Load
 
-Songwriter projects also save as a `SaveEntry` (`InstrumentSnapshot` filter
-`'songwriter'`) through the shared save browser, alongside fretboard / piano /
-piano-roll / song saves.
+Songwriter projects save as a `SaveEntry` (`InstrumentSnapshot` filter
+`'songwriter'`) through the shared `SaveBrowserPanel`. The panel is scoped to
+the selected project's folder via `rootFolderId: selected.id`, keeping the
+save/load view confined to the project subtree. `songwriterCaptureForTest`
+exposes the current snapshot for widget tests.
+
+## Project Config
+
+Songwriter uses `SaveSystemState.selectedProjectId` instead of the old
+folder-name convention. When a real project is selected (kind `project`),
+tempo and key chips in the header are locked; edit them through the project
+config sheet. Dump is rejected — `ProjectGateModal` blocks the tab until a
+project is selected.
+
+`projectConfigSyncProvider` (`lib/store/project_config_sync.dart`) pushes the
+active project's tempo and key into the songwriter store whenever a project is
+selected or its config changes. When loading a project that has no session yet,
+`_defaultFor` seeds a new `SongwriterProjectSnapshot` from the project folder's
+`ProjectConfig` (name, tempo, beatsPerBar, beatUnit, keyRoot, keyScaleName).
+
+Library-match scope is `getSavesInSubtree(folders, saves, selectedProjectId)`.
