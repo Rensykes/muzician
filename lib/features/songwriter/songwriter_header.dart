@@ -4,6 +4,7 @@ import '../../theme/muzician_theme.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
+import '../../store/writer_save_binding_store.dart';
 import '../../utils/note_utils.dart';
 import '../_mockup_shell.dart';
 
@@ -13,16 +14,19 @@ class SongwriterHeader extends ConsumerWidget {
     this.onOpenSaveLoad,
     this.onOpenStructure,
     this.onStartTour,
+    this.onSave,
   });
 
   final VoidCallback? onOpenSaveLoad;
   final VoidCallback? onOpenStructure;
   final VoidCallback? onStartTour;
+  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(songwriterProvider.select((p) => p.config));
     final notifier = ref.read(songwriterProvider.notifier);
+    final dirty = ref.watch(writerDirtyProvider);
     final keyLabel = config.keyRoot == null
         ? 'No key'
         : '${chromaticNotes[config.keyRoot!]} ${config.keyScaleName ?? ''}'
@@ -73,6 +77,36 @@ class SongwriterHeader extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  if (dirty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Row(
+                        key: const Key('writerUnsavedBadge'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.circle, size: 8,
+                              color: MuzicianTheme.orange),
+                          SizedBox(width: 4),
+                          Text(
+                            'Unsaved',
+                            style: TextStyle(
+                              color: MuzicianTheme.orange,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (onSave != null)
+                    IconBtn(
+                      key: const Key('writerSaveButton'),
+                      icon: Icons.save_rounded,
+                      color: dirty
+                          ? MuzicianTheme.orange
+                          : MuzicianTheme.textDim,
+                      onTap: dirty ? onSave! : () {},
+                    ),
                   if (onStartTour != null)
                     IconBtn(
                       key: const Key('writerHelpButton'),
@@ -110,6 +144,14 @@ class SongwriterHeader extends ConsumerWidget {
         children: [
           _MenuTile(
             icon: Icons.save_rounded,
+            label: 'Save',
+            onTap: () {
+              Navigator.pop(context);
+              onSave?.call();
+            },
+          ),
+          _MenuTile(
+            icon: Icons.folder_open_rounded,
             label: 'Save / Load',
             onTap: () {
               Navigator.pop(context);
