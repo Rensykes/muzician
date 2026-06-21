@@ -61,6 +61,26 @@ void main() {
       expect(resolveSnapshotChord(snap), isNull);
     });
 
+    test('normalizes a flat-spelled pendingChord root (Bb → A#)', () {
+      final snap = _fret(
+        pendingChord: const PendingChord(root: 'Bb', quality: '', symbol: 'Bb'),
+      );
+      final r = resolveSnapshotChord(snap);
+      expect(r, isNotNull);
+      expect(r!.rootPc, 10); // A#/Bb
+      expect(r.quality, '');
+    });
+
+    test('detects a chord from flat-spelled notes (Bb major)', () {
+      final snap = _fret(selectedNotes: const ['Bb', 'D', 'F']);
+      final r = resolveSnapshotChord(snap);
+      expect(r, isNotNull);
+      expect(r!.rootPc, 10); // A#/Bb
+      expect(r.quality, '');
+      // Bb major in F major → IV.
+      expect(romanNumeralFor(r.rootPc, r.quality, 5, 'major'), 'IV');
+    });
+
     test('end-to-end: detected chord → roman numeral in C major', () {
       final snap = _fret(selectedNotes: const ['F', 'A', 'C']);
       final r = resolveSnapshotChord(snap)!;
