@@ -47,6 +47,12 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   /// Called when the user taps "Load" on a selected save.
   final void Function(InstrumentSnapshot snap)? onLoad;
 
+  /// Called with the new save id after a successful "Save here".
+  final void Function(String saveId)? onSaved;
+
+  /// Called with the loaded save's id when a save is loaded (alongside onLoad).
+  final void Function(String saveId)? onLoadSaveId;
+
   /// Palette mode: when set, tapping a save returns it to the caller instead
   /// of running the normal load/select action.
   final void Function(SaveEntry entry)? onPick;
@@ -61,6 +67,8 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
     this.allowedInstruments,
     this.captureSnapshot,
     this.onLoad,
+    this.onSaved,
+    this.onLoadSaveId,
     this.onPick,
     this.rootFolderId,
   });
@@ -344,9 +352,10 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     );
     if (name == null || name.isEmpty) return;
     final snap = capture();
-    ref
+    final newId = ref
         .read(saveSystemProvider.notifier)
         .saveSnapshot(name, _currentFolderId!, snap);
+    if (newId != null) widget.onSaved?.call(newId);
     HapticFeedback.mediumImpact();
   }
 
@@ -463,6 +472,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     final onLoad = widget.onLoad;
     if (onLoad == null) return;
     ref.read(saveSystemProvider.notifier).loadSave(save.id, onLoad);
+    widget.onLoadSaveId?.call(save.id);
     HapticFeedback.mediumImpact();
   }
 
