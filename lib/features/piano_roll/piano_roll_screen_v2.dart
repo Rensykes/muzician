@@ -17,6 +17,7 @@ import '../../store/piano_roll_stack_builder_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/project_chip.dart';
 import '../../ui/transport_strip.dart' as transport;
 import '../../ui/core/app_info_panel.dart';
 import '../../utils/note_utils.dart';
@@ -172,6 +173,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           title: 'Roll',
           chipLabel: _headerChipLabel(state),
           actions: [
+            const ProjectChip(),
             IconBtn(
               icon: Icons.help_outline_rounded,
               onTap: () => _openPanel('help'),
@@ -274,6 +276,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           title: 'Roll',
           chipLabel: _headerChipLabel(state),
           actions: [
+            const ProjectChip(),
             IconBtn(
               icon: Icons.help_outline_rounded,
               onTap: () => _openPanel('help'),

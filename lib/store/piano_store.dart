@@ -7,6 +7,9 @@ import '../models/harmonic_analysis.dart';
 import '../models/piano.dart';
 import '../models/save_system.dart' show PianoSnapshot;
 import '../schema/rules/piano_rules.dart';
+import '../store/project_config_sync.dart';
+import '../utils/note_utils.dart'
+    show chordPitchClassesOutOfKey, getChordNotes, getScaleNotes;
 
 class PianoNotifier extends Notifier<PianoState> implements SelectionActions {
   @override
@@ -164,6 +167,27 @@ final pianoExactNotesProvider = Provider<List<ExactSelectionNote>>((ref) {
       .toList();
 });
 
+final pianoChordOffKeyProvider = Provider<bool>((ref) {
+  final key = ref.watch(activeProjectKeyProvider);
+  if (key == null) return false;
+  final scalePcs = getScaleNotes(key.root, key.scaleName).toSet();
+  if (scalePcs.isEmpty) return false;
+  final selected = ref.watch(pianoSelectedNotesProvider);
+  for (final n in selected) {
+    if (!scalePcs.contains(n)) return true;
+  }
+  final chord = ref.watch(pianoActiveChordProvider);
+  if (chord != null) {
+    final outOfKey = chordPitchClassesOutOfKey(
+      getChordNotes(chord.root, chord.quality),
+      scaleRoot: key.root,
+      scaleName: key.scaleName,
+    );
+    if (outOfKey.isNotEmpty) return true;
+  }
+  return false;
+});
+
 final pianoBinding = InstrumentBinding(
   selectedPitchClasses: pianoSelectedNotesProvider,
   highlightedNotes: pianoHighlightedNotesProvider,
@@ -177,4 +201,5 @@ final pianoBinding = InstrumentBinding(
   activeChord: pianoActiveChordProvider,
   manualEdit: pianoManualEditProvider,
   chordCommitted: pianoChordCommittedProvider,
+  chordOffKey: pianoChordOffKeyProvider,
 );

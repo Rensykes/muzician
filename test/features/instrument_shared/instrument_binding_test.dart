@@ -41,6 +41,7 @@ void main() {
     );
     final manualEdit = StateProvider<int>((_) => 0);
     final committed = StateProvider<bool>((_) => false);
+    final offKey = Provider<bool>((_) => false);
 
     final actions = _FakeActions();
     final binding = InstrumentBinding(
@@ -56,6 +57,7 @@ void main() {
       activeChord: activeChord,
       manualEdit: manualEdit,
       chordCommitted: committed,
+      chordOffKey: offKey,
     );
 
     final ScalePickerBinding scaleView = binding;

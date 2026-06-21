@@ -39,9 +39,12 @@ void main() {
       scaleName: 'major',
     );
 
+    final saveSystem = container.read(saveSystemProvider.notifier);
+    final dumpId = saveSystem.ensureDumpFolder();
+    saveSystem.selectProject(dumpId);
     final folderId = container
         .read(saveSystemProvider.notifier)
-        .createSaveFolder('Fretboard Saves', null);
+        .createSaveFolder('Fretboard Saves', dumpId);
     expect(folderId, isNotNull);
 
     final saveId = container

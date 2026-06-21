@@ -4,9 +4,18 @@ library;
 
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
+import '../../models/project_config.dart';
 import '../../models/save_system.dart';
 
-const saveSystemStorageKey = '@muzician/save-system/v2';
+const saveSystemStorageKey = '@muzician/save-system/v3';
+const legacySaveSystemStorageKeys = <String>[
+  '@muzician/save-system/v2',
+  '@muzician/save_system',
+];
+const legacySessionKeys = <String>[
+  '@muzician/song_session/v1',
+  '@muzician/songwriter_session/v1',
+];
 
 final _uuid = Uuid();
 
@@ -139,16 +148,17 @@ List<({String id, String name})> buildFolderBreadcrumb(
 String serialiseState({
   required List<SaveFolder> folders,
   required List<SaveEntry> saves,
+  required String? selectedProjectId,
 }) {
   return jsonEncode({
     'folders': folders.map((f) => f.toJson()).toList(),
     'saves': saves.map((s) => s.toJson()).toList(),
+    'selectedProjectId': selectedProjectId,
   });
 }
 
-({List<SaveFolder> folders, List<SaveEntry> saves})? deserialiseState(
-  String raw,
-) {
+({List<SaveFolder> folders, List<SaveEntry> saves, String? selectedProjectId})?
+    deserialiseState(String raw) {
   try {
     final parsed = jsonDecode(raw) as Map<String, dynamic>;
     if (parsed['folders'] is! List || parsed['saves'] is! List) return null;
@@ -158,8 +168,71 @@ String serialiseState({
     final saves = (parsed['saves'] as List)
         .map((s) => SaveEntry.fromJson(s as Map<String, dynamic>))
         .toList();
-    return (folders: folders, saves: saves);
+    final selectedProjectId = parsed['selectedProjectId'] as String?;
+    return (folders: folders, saves: saves, selectedProjectId: selectedProjectId);
   } catch (_) {
     return null;
   }
+}
+
+List<SaveFolder> getProjectFolders(List<SaveFolder> folders) {
+  return folders
+      .where((f) => f.parentId == null && f.kind == SaveFolderKind.project)
+      .toList()
+    ..sort((a, b) => a.order.compareTo(b.order));
+}
+
+SaveFolder? getDumpFolder(List<SaveFolder> folders) {
+  for (final f in folders) {
+    if (f.parentId == null && f.kind == SaveFolderKind.dump) return f;
+  }
+  return null;
+}
+
+Set<String> getSubtreeFolderIds(List<SaveFolder> folders, String rootId) {
+  final visited = <String>{rootId};
+  final queue = <String>[rootId];
+  while (queue.isNotEmpty) {
+    final current = queue.removeLast();
+    for (final f in folders) {
+      if (f.parentId == current && visited.add(f.id)) queue.add(f.id);
+    }
+  }
+  return visited;
+}
+
+List<SaveEntry> getSavesInSubtree(
+  List<SaveFolder> folders,
+  List<SaveEntry> saves,
+  String rootId,
+) {
+  final ids = getSubtreeFolderIds(folders, rootId);
+  return saves.where((s) => ids.contains(s.folderId)).toList()
+    ..sort((a, b) => a.order.compareTo(b.order));
+}
+
+bool isProjectRoot(SaveFolder f) => f.parentId == null && f.kind == SaveFolderKind.project;
+bool isDumpRoot(SaveFolder f) => f.parentId == null && f.kind == SaveFolderKind.dump;
+
+SaveFolder createProjectFolder(String name, ProjectConfig cfg, int siblingCount) {
+  return SaveFolder(
+    id: generateId(),
+    name: name.trim(),
+    parentId: null,
+    createdAt: DateTime.now().millisecondsSinceEpoch,
+    order: siblingCount,
+    kind: SaveFolderKind.project,
+    projectConfig: cfg,
+  );
+}
+
+SaveFolder createDumpFolder(int siblingCount) {
+  return SaveFolder(
+    id: generateId(),
+    name: 'Dump',
+    parentId: null,
+    createdAt: DateTime.now().millisecondsSinceEpoch,
+    order: siblingCount,
+    kind: SaveFolderKind.dump,
+  );
 }

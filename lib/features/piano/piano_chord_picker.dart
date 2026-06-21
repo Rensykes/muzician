@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/piano_store.dart';
+import '../../store/project_config_sync.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/out_of_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
 import '../instrument_shared/instrument_binding.dart';
@@ -116,6 +118,32 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
     _selectedQuality = detected?.quality ?? '';
   }
 
+  Future<bool> _confirmIfOffKey(
+    List<String> chordNotes,
+    ({String root, String scaleName})? activeKey,
+  ) async {
+    if (activeKey == null) return true;
+    final outOfKey = chordPitchClassesOutOfKey(
+      chordNotes,
+      scaleRoot: activeKey.root,
+      scaleName: activeKey.scaleName,
+    );
+    if (outOfKey.isEmpty) return true;
+    if (!mounted) return false;
+    final notes = outOfKey.map(formatRootChoiceLabel).join(', ');
+    final result = await showDialog<OutOfKeyResult>(
+      context: context,
+      builder: (ctx) => OutOfKeyDialog(
+        title: 'Chord outside the key',
+        message:
+            'This chord contains $notes, which fall outside '
+            '${activeKey.root} ${activeKey.scaleName}. Apply anyway?',
+        showSuppressOption: false,
+      ),
+    );
+    return result != null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final notifier = ref.read(pianoProvider.notifier);
@@ -142,6 +170,10 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
     }
 
     final octaveLabel = (4 + _octaveOffset).toString();
+    final activeKey = ref.watch(activeProjectKeyProvider);
+    final diatonic = activeKey == null
+        ? const <DiatonicChord>[]
+        : getDiatonicChords(activeKey.root, activeKey.scaleName);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -155,6 +187,24 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
             quality: _selectedQuality,
           ),
           const SizedBox(height: 10),
+          if (diatonic.isNotEmpty) ...[
+            DiatonicChordsHeader(
+              keyLabel: '${activeKey!.root} ${activeKey.scaleName}',
+            ),
+            const SizedBox(height: 6),
+            DiatonicChordsRow(
+              chords: diatonic,
+              selectedRoot: _selectedRoot,
+              selectedQuality: _selectedQuality,
+              accent: MuzicianTheme.violet,
+              onTap: (root, quality) => setState(() {
+                _selectedRoot = root;
+                _selectedQuality = quality;
+                _selectedVoicingIdx = null;
+              }),
+            ),
+            const SizedBox(height: 10),
+          ],
           // Root pills
           RootPillRow(
             selectedRoot: _selectedRoot,
@@ -249,8 +299,13 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
                     label: v.label,
                     noteLabels: chordNotes,
                     isSelected: _selectedVoicingIdx == i,
-                    onPress: () {
+                    onPress: () async {
                       HapticFeedback.mediumImpact();
+                      final apply = await _confirmIfOffKey(
+                        chordNotes,
+                        activeKey,
+                      );
+                      if (!apply) return;
                       setState(() {
                         _voicingCommitted = true;
                         _selectedVoicingIdx = i;

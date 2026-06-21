@@ -13,31 +13,37 @@ void main() {
     addTearDown(container.dispose);
     container.read(songwriterProvider.notifier).setProjectName('Song A');
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 600));
 
     expect(find.text('Song A'), findsOneWidget);
   });
 
-  testWidgets('tap chip → dialog → submit → setProjectName fires',
-      (tester) async {
+  testWidgets('tap chip → dialog → submit → setProjectName fires', (
+    tester,
+  ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 600));
 
-    await tester.tap(find.byKey(const Key('projectNameChip')));
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename project'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-        find.byKey(const Key('projectNameField')), 'Song B');
+    await tester.enterText(find.byKey(const Key('projectNameField')), 'Song B');
     await tester.tap(find.text('Save'));
     await tester.pump(const Duration(milliseconds: 600));
 
@@ -49,16 +55,19 @@ void main() {
     addTearDown(container.dispose);
     container.read(songwriterProvider.notifier).setProjectName('Song A');
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 600));
 
-    await tester.tap(find.byKey(const Key('projectNameChip')));
+    await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
-    await tester.enterText(
-        find.byKey(const Key('projectNameField')), '   ');
+    await tester.tap(find.text('Rename project'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('projectNameField')), '   ');
     await tester.tap(find.text('Save'));
     await tester.pump(const Duration(milliseconds: 600));
 

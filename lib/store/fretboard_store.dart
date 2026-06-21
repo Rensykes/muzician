@@ -8,6 +8,9 @@ import '../models/fretboard.dart';
 import '../models/harmonic_analysis.dart';
 import '../models/save_system.dart' show FretboardSnapshot;
 import '../schema/rules/fretboard_rules.dart';
+import '../store/project_config_sync.dart';
+import '../utils/note_utils.dart'
+    show chordPitchClassesOutOfKey, getChordNotes, getScaleNotes;
 
 class FretboardNotifier extends Notifier<FretboardState>
     implements SelectionActions {
@@ -270,6 +273,27 @@ final fretboardExactNotesProvider = Provider<List<ExactSelectionNote>>((ref) {
       .toList();
 });
 
+final fretboardChordOffKeyProvider = Provider<bool>((ref) {
+  final key = ref.watch(activeProjectKeyProvider);
+  if (key == null) return false;
+  final scalePcs = getScaleNotes(key.root, key.scaleName).toSet();
+  if (scalePcs.isEmpty) return false;
+  final selected = ref.watch(fretboardSelectedNotesProvider);
+  for (final n in selected) {
+    if (!scalePcs.contains(n)) return true;
+  }
+  final chord = ref.watch(activeChordProvider);
+  if (chord != null) {
+    final outOfKey = chordPitchClassesOutOfKey(
+      getChordNotes(chord.root, chord.quality),
+      scaleRoot: key.root,
+      scaleName: key.scaleName,
+    );
+    if (outOfKey.isNotEmpty) return true;
+  }
+  return false;
+});
+
 final fretboardBinding = InstrumentBinding(
   selectedPitchClasses: fretboardSelectedNotesProvider,
   highlightedNotes: fretboardHighlightedNotesProvider,
@@ -283,4 +307,5 @@ final fretboardBinding = InstrumentBinding(
   activeChord: activeChordProvider,
   manualEdit: fretboardManualEditProvider,
   chordCommitted: fretboardChordCommittedProvider,
+  chordOffKey: fretboardChordOffKeyProvider,
 );

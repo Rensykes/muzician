@@ -3,6 +3,7 @@
 library;
 
 import '../../models/save_system.dart';
+import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
 import 'save_system_rules.dart' show generateId;
@@ -174,6 +175,39 @@ SongBlock makeHarmonyBlock({
   romanNumeral: romanNumeral,
 );
 
+SongBlock makeSilentBlock({
+  required int startBar,
+  required int spanBars,
+  int verseCount = 1,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  isSilent: true,
+  lyrics: List<String>.filled(verseCount.clamp(1, 16), ''),
+);
+
+DrumPattern makeDrumPattern({String name = 'Pattern'}) => DrumPattern(
+  id: generateId(),
+  name: name,
+  lengthTicks: 16,
+  lanes: [
+    for (final id in DrumLaneId.values)
+      DrumLaneSequence(laneId: id, activeTicks: const []),
+  ],
+);
+
+SongBlock makeDrumBlock({
+  required String patternId,
+  required int startBar,
+  required int spanBars,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  patternId: patternId,
+);
+
 // ─── Expanded-Section Mapping ────────────────────────────────────────────────
 
 class ExpandedSection {
@@ -283,4 +317,78 @@ InstrumentSnapshot? resolveBlockSnapshot(
     if (e.id == id) return e.snapshot;
   }
   return null;
+}
+
+/// The chord a save block resolves to, for Roman-numeral display.
+class ResolvedChord {
+  const ResolvedChord({
+    required this.rootPc,
+    required this.quality,
+    required this.symbol,
+  });
+
+  /// Pitch class (0-11) of the chord root.
+  final int rootPc;
+
+  /// Chord quality string (e.g. `''`, `'m'`, `'maj7'`).
+  final String quality;
+
+  /// Display symbol (e.g. `'Cmaj7'`).
+  final String symbol;
+}
+
+/// Resolves the chord of a save block's [snapshot] for display.
+///
+/// Prefers an explicit [InstrumentSnapshot.pendingChord] (set when the user
+/// committed a chord on the source instrument). When absent, detects the first
+/// matching chord from the snapshot's [InstrumentSnapshot.selectedNotes] so
+/// that voicings saved by free note placement still surface a chord — and thus
+/// a scale degree. Returns null when no chord can be determined.
+ResolvedChord? resolveSnapshotChord(InstrumentSnapshot? snapshot) {
+  if (snapshot == null) return null;
+
+  // noteToPC is keyed by sharp spellings only, so normalize any flat-spelled
+  // root (e.g. a legacy/imported save or a future flats display mode) to its
+  // sharp equivalent before lookup; otherwise the chord would be silently
+  // dropped and no degree shown.
+  final pending = snapshot.pendingChord;
+  if (pending != null) {
+    final pc = noteToPC[toSharp(pending.root)];
+    if (pc != null) {
+      return ResolvedChord(
+        rootPc: pc,
+        quality: pending.quality,
+        symbol: pending.symbol,
+      );
+    }
+  }
+
+  final detected = detectFirstChord(
+    snapshot.selectedNotes.map(toSharp).toList(),
+  );
+  if (detected != null) {
+    final pc = noteToPC[detected.root];
+    if (pc != null) {
+      return ResolvedChord(
+        rootPc: pc,
+        quality: detected.quality,
+        symbol: '${detected.root}${detected.quality}',
+      );
+    }
+  }
+
+  return null;
+}
+
+/// The Roman numeral a save block's resolved chord maps to in the given key,
+/// or null when no chord can be resolved or it is non-diatonic. Convenience
+/// wrapper combining [resolveSnapshotChord] and [romanNumeralFor].
+String? saveBlockRomanNumeral(
+  InstrumentSnapshot? snapshot,
+  int? keyRootPc,
+  String? keyScaleName,
+) {
+  final chord = resolveSnapshotChord(snapshot);
+  if (chord == null) return null;
+  return romanNumeralFor(chord.rootPc, chord.quality, keyRootPc, keyScaleName);
 }

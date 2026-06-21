@@ -1,12 +1,16 @@
-/// Songwriter transport: a bar/tick clock that drives a playhead and a
-/// metronome. v1 blocks are silent visual guides — no block audio.
+/// Songwriter transport: a tick clock that drives a playhead, a metronome,
+/// and the project's audible events — harmony chord stabs, save-block
+/// voicings, and drum lane patterns (see [flattenPlaybackEvents]).
 library;
 
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
+import '../schema/rules/songwriter_playback_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
 import '../utils/note_player.dart';
+import 'drum_pattern_playback_store.dart';
+import 'save_system_store.dart';
 import 'settings_store.dart';
 import 'songwriter_store.dart';
 
@@ -17,6 +21,17 @@ final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((
 ) {
   return ({required bool accent}) async {
     NotePlayer.instance.playClick(accent: accent);
+  };
+});
+
+/// Sink that sounds a chord / voicing stab. Override in tests.
+typedef SongwriterNoteSink = void Function(List<int> midiNotes);
+
+final songwriterNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
+  return (midiNotes) {
+    for (final midi in midiNotes) {
+      NotePlayer.instance.previewNote(midi, volume: 0.6);
+    }
   };
 });
 
@@ -66,9 +81,15 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     final project = ref.read(songwriterProvider);
     final settings = ref.read(settingsProvider);
     final metronomeSink = ref.read(songwriterMetronomeSinkProvider);
+    final noteSink = ref.read(songwriterNoteSinkProvider);
+    final drumSink = ref.read(drumPatternPlaybackSinkProvider);
+    final events = flattenPlaybackEvents(
+      project,
+      ref.read(saveSystemProvider).saves,
+    );
 
     final cfg = project.config;
-    final beatTicks = cfg.beatUnit == 8 ? 2 : 4;
+    final beatTicks = cfg.ticksPerBeat;
     final measureTicks = beatTicks * cfg.beatsPerBar;
     final totalBars = flattenedBarCount(project.sections);
     final endTick = totalBars * measureTicks;
@@ -89,13 +110,32 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       measureTicks: measureTicks,
     );
 
+    // Anchor each tick to the wall clock. A fixed per-tick delay lets the
+    // body's work (state mutation → rebuilds, sinks, the active-position
+    // provider) accumulate into drift, so playback runs progressively late.
+    // Instead, target tick N at `tickDuration * N` from the clock start and
+    // wait only the remaining time; when we are behind, yield a microtask
+    // (so cancellation/UI still run) but do not add any extra wait.
+    final clock = Stopwatch()..start();
+    var eventIndex = 0;
     for (var tick = 0; tick < endTick; tick++) {
       if (_version != version) return;
-      if (tick > 0) await Future<void>.delayed(tickDuration);
+      if (tick > 0) {
+        final lag = tickDuration * tick - clock.elapsed;
+        await Future<void>.delayed(lag > Duration.zero ? lag : Duration.zero);
+      }
       if (_version != version) return;
       state = state.copyWith(currentTick: () => tick);
       if (metronomeOn && tick % beatTicks == 0) {
         unawaited(metronomeSink(accent: tick % measureTicks == 0));
+      }
+      while (eventIndex < events.length && events[eventIndex].tick == tick) {
+        final event = events[eventIndex];
+        eventIndex++;
+        if (event.midiNotes.isNotEmpty) noteSink(event.midiNotes);
+        if (event.drumLanes.isNotEmpty) {
+          unawaited(drumSink(event.drumLanes, 0.8));
+        }
       }
     }
     if (_version != version) return;
@@ -118,3 +158,19 @@ final songwriterPlaybackProvider =
     NotifierProvider<SongwriterPlaybackNotifier, SongwriterPlaybackState>(
       SongwriterPlaybackNotifier.new,
     );
+
+/// Sheet-space playhead position, or null when the transport is idle.
+final songwriterActivePositionProvider = Provider<SongwriterActivePosition?>((
+  ref,
+) {
+  // Select only (status, bar): the position changes per bar, so watching the
+  // whole state would recompute expandSections on every tick.
+  final (status, bar) = ref.watch(
+    songwriterPlaybackProvider.select((p) => (p.status, p.currentBar)),
+  );
+  if (status != SongwriterPlaybackStatus.playing || bar == null) {
+    return null;
+  }
+  final sections = ref.watch(songwriterProvider.select((p) => p.sections));
+  return activePositionForBar(sections, bar);
+});

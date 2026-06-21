@@ -58,18 +58,6 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
         .where((clip) => clip.patternId == patternId)
         .length;
     final timeSig = project.config.timeSignature;
-    final playback = ref.watch(drumPatternPlaybackProvider);
-    final playing = playback.status == DrumPatternPlaybackStatus.playing;
-
-    void togglePlayback() {
-      final notifier = ref.read(drumPatternPlaybackProvider.notifier);
-      if (playing) {
-        notifier.stop();
-      } else {
-        notifier.start(pattern: pattern, tempo: project.config.tempo);
-      }
-      HapticFeedback.lightImpact();
-    }
 
     void clearAll() {
       ref
@@ -91,12 +79,6 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
       appBar: AppBar(
         title: Text(pattern.name),
         actions: [
-          IconButton(
-            tooltip: playing ? 'Stop' : 'Play',
-            icon: Icon(playing ? Icons.stop : Icons.play_arrow),
-            color: MuzicianTheme.sky,
-            onPressed: togglePlayback,
-          ),
           IconButton(
             tooltip: 'Clear all',
             icon: const Icon(Icons.clear_all),
@@ -156,19 +138,14 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
             timeSig: timeSig,
           ),
           Expanded(
-            child: _DrumGrid(
+            child: DrumMachineEditorBody(
               pattern: pattern,
-              timeSig: timeSig,
-              playheadTick: playing ? playback.currentTick : null,
-              onToggle: (laneId, tick) {
-                HapticFeedback.lightImpact();
+              tempo: project.config.tempo,
+              beatUnit: timeSig.beatUnit,
+              onChanged: (updated) {
                 ref
                     .read(songProjectProvider.notifier)
-                    .toggleDrumStep(
-                      patternId: patternId,
-                      laneId: laneId,
-                      tick: tick,
-                    );
+                    .applyDrumPattern(patternId, updated);
               },
             ),
           ),
@@ -189,7 +166,7 @@ class _MetaRow extends StatelessWidget {
     required this.timeSig,
   });
 
-  int get _beatTicks => timeSig.beatUnit == 8 ? 2 : 4;
+  int get _beatTicks => timeSig.ticksPerBeat;
   int get _measureTicks => _beatTicks * timeSig.beatsPerMeasure;
   String get _lengthLabel {
     final measures = stepCount ~/ _measureTicks;
@@ -268,6 +245,125 @@ class _MetaChip extends StatelessWidget {
   }
 }
 
+/// Source-agnostic drum machine editor body.
+///
+/// Renders the same step grid + transport as [DrumMachineEditor] but reads
+/// from [pattern] and emits the full updated pattern via [onChanged]. Has no
+/// dependency on `songProjectProvider`, so it can be embedded by any feature
+/// that owns its own pattern storage (Songwriter, ad-hoc dialogs, etc.).
+class DrumMachineEditorBody extends ConsumerStatefulWidget {
+  const DrumMachineEditorBody({
+    super.key,
+    required this.pattern,
+    required this.tempo,
+    required this.onChanged,
+    this.beatUnit = 4,
+  });
+
+  final DrumPattern pattern;
+  final int tempo;
+  final int beatUnit;
+  final void Function(DrumPattern updated) onChanged;
+
+  @override
+  ConsumerState<DrumMachineEditorBody> createState() =>
+      _DrumMachineEditorBodyState();
+}
+
+class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
+  late DrumPattern _pattern;
+
+  @override
+  void initState() {
+    super.initState();
+    _pattern = widget.pattern;
+  }
+
+  @override
+  void didUpdateWidget(covariant DrumMachineEditorBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pattern.id != widget.pattern.id) {
+      _pattern = widget.pattern;
+    }
+  }
+
+  void _toggle(DrumLaneId laneId, int tick) {
+    final lanes = _pattern.lanes.map((l) {
+      if (l.laneId != laneId) return l;
+      final ticks = [...l.activeTicks];
+      if (ticks.contains(tick)) {
+        ticks.remove(tick);
+      } else {
+        ticks.add(tick);
+      }
+      ticks.sort();
+      return l.copyWith(activeTicks: ticks);
+    }).toList();
+    setState(() => _pattern = _pattern.copyWith(lanes: lanes));
+    widget.onChanged(_pattern);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playback = ref.watch(drumPatternPlaybackProvider);
+    final playing = playback.status == DrumPatternPlaybackStatus.playing;
+    final timeSig = TimeSignature(
+      beatsPerMeasure: 4,
+      beatUnit: widget.beatUnit,
+    );
+
+    void togglePlayback() {
+      final notifier = ref.read(drumPatternPlaybackProvider.notifier);
+      if (playing) {
+        notifier.stop();
+      } else {
+        notifier.start(pattern: _pattern, tempo: widget.tempo);
+      }
+      HapticFeedback.lightImpact();
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Transport row
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: playing ? 'Stop' : 'Play',
+                icon: Icon(playing ? Icons.stop : Icons.play_arrow),
+                color: MuzicianTheme.orange,
+                onPressed: togglePlayback,
+              ),
+              const Spacer(),
+              Text(
+                '${widget.tempo} BPM',
+                style: const TextStyle(
+                  color: MuzicianTheme.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Flexible(
+          child: _DrumGrid(
+            pattern: _pattern,
+            timeSig: timeSig,
+            playheadTick: playing ? playback.currentTick : null,
+            onToggle: (laneId, tick) {
+              HapticFeedback.lightImpact();
+              _toggle(laneId, tick);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DrumGrid extends StatefulWidget {
   final DrumPattern pattern;
   final TimeSignature timeSig;
@@ -325,7 +421,7 @@ class _DrumGridState extends State<_DrumGrid> {
   @override
   Widget build(BuildContext context) {
     final stepCount = widget.pattern.lengthTicks;
-    final beatTicks = widget.timeSig.beatUnit == 8 ? 2 : 4;
+    final beatTicks = widget.timeSig.ticksPerBeat;
     final totalGridWidth = _gridWidth(stepCount, beatTicks);
 
     return Row(

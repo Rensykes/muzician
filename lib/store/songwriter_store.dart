@@ -1,19 +1,18 @@
-/// Songwriter project Riverpod store with debounced session auto-save.
+/// Songwriter project Riverpod store with per-project session auto-save.
 library;
 
-import 'dart:async';
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../models/project_config.dart';
 import '../models/save_system.dart';
+import '../models/song_project.dart';
 import '../models/songwriter.dart';
+import '../schema/rules/save_system_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
 import '../schema/rules/songwriter_third_above_rules.dart';
 import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
 import 'save_system_store.dart';
-
-const _sessionKey = '@muzician/songwriter_session/v1';
+import 'songwriter_sessions_store.dart';
 
 SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
   config: SongwriterConfig(
@@ -27,46 +26,77 @@ SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
 );
 
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
-  Timer? _debounce;
+  bool _hydrating = false;
 
   @override
   SongwriterProjectSnapshot build() {
-    ref.onDispose(() => _debounce?.cancel());
+    // React to project selection changes.
+    ref.listen<String?>(
+      saveSystemProvider.select((s) => s.selectedProjectId),
+      (prev, next) {
+        // Persist outgoing immediately.
+        if (prev != null && prev != next) {
+          ref.read(songwriterSessionsProvider.notifier).put(prev, state);
+        }
+        if (next == null) {
+          _hydrating = true;
+          state = _emptyProject();
+          _hydrating = false;
+          return;
+        }
+        _hydrating = true;
+        final session = ref.read(songwriterSessionsProvider.notifier).get(next);
+        if (session != null) {
+          state = session;
+        } else {
+          state = _defaultFor(next);
+        }
+        _hydrating = false;
+      },
+    );
+
     return _emptyProject();
   }
 
-  // ── session persistence ──
-  Future<void> hydrate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sessionKey);
-    if (raw != null) {
-      try {
-        state = SongwriterProjectSnapshot.fromJson(
-          jsonDecode(raw) as Map<String, dynamic>,
-        );
-      } catch (_) {}
-    }
+  @override
+  set state(SongwriterProjectSnapshot value) {
+    super.state = value;
+    _schedulePersist(value);
   }
 
-  void _schedulePersist() {
-    _debounce?.cancel();
-    final snapshot = state; // capture now, not when the timer fires
-    _debounce = Timer(const Duration(milliseconds: 500), () async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_sessionKey, jsonEncode(snapshot.toJson()));
-    });
+  SongwriterProjectSnapshot _defaultFor(String projectId) {
+    final folder = ref.read(saveSystemProvider).folders.firstWhere((f) => f.id == projectId);
+    final cfg = folder.projectConfig ?? const ProjectConfig();
+    return SongwriterProjectSnapshot(
+      name: folder.name,
+      config: SongwriterConfig(
+        tempo: cfg.tempo,
+        beatsPerBar: cfg.beatsPerBar,
+        beatUnit: cfg.beatUnit,
+        keyRoot: cfg.keyRootPc,
+        keyScaleName: cfg.keyScaleName,
+      ),
+    );
+  }
+
+  void _schedulePersist(SongwriterProjectSnapshot project) {
+    if (_hydrating) return;
+    final id = ref.read(saveSystemProvider).selectedProjectId;
+    if (id != null) {
+      ref.read(songwriterSessionsProvider.notifier).put(id, project);
+    }
   }
 
   void _set(SongwriterProjectSnapshot next) {
     state = next;
-    _schedulePersist();
   }
 
   Future<void> newProject() async {
-    _debounce?.cancel();
     state = _emptyProject();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_sessionKey);
+    final id = ref.read(saveSystemProvider).selectedProjectId;
+    if (id != null) {
+      ref.read(songwriterSessionsProvider.notifier).remove(id);
+    }
   }
 
   // ── config ──
@@ -91,14 +121,23 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     _set(state.copyWith(sections: [...state.sections, section]));
   }
 
+  /// True when [next] is element-wise `identical` to [prev] (same order, same
+  /// instances). Used to skip a `_set` when a map callback returned unchanged
+  /// instances — avoids a wasted Riverpod rebuild + persist write.
+  static bool _sameElements<T>(List<T> prev, List<T> next) {
+    if (prev.length != next.length) return false;
+    for (var i = 0; i < prev.length; i++) {
+      if (!identical(prev[i], next[i])) return false;
+    }
+    return true;
+  }
+
   void _replaceSection(String sectionId, SongSection Function(SongSection) f) {
-    _set(
-      state.copyWith(
-        sections: state.sections
-            .map((s) => s.id == sectionId ? f(s) : s)
-            .toList(),
-      ),
-    );
+    final sections = state.sections
+        .map((s) => s.id == sectionId ? f(s) : s)
+        .toList();
+    if (_sameElements(state.sections, sections)) return; // nothing changed
+    _set(state.copyWith(sections: sections));
   }
 
   void renameSection(String sectionId, String? label) => _replaceSection(
@@ -112,10 +151,46 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     (s) => s.copyWith(lengthBars: lengthBars < 1 ? 1 : lengthBars),
   );
 
-  void setSectionRepeat(String sectionId, int repeat) => _replaceSection(
-    sectionId,
-    (s) => s.copyWith(repeat: repeat < 1 ? 1 : repeat),
-  );
+  void setSectionRepeat(String sectionId, int repeat) {
+    final clamped = repeat < 1 ? 1 : repeat;
+    _replaceSection(sectionId, (s) {
+      final lanes = s.lanes.map((l) {
+        if (l.kind != SongLaneKind.harmony) return l;
+        final blocks = l.blocks.map((b) {
+          if (b.lyrics.length >= clamped) return b;
+          final padded = [
+            ...b.lyrics,
+            for (var i = b.lyrics.length; i < clamped; i++) '',
+          ];
+          return b.copyWith(lyrics: padded);
+        }).toList();
+        return l.copyWith(blocks: blocks);
+      }).toList();
+      return s.copyWith(repeat: clamped, lanes: lanes);
+    });
+  }
+
+  /// Sets the free-text lyrics for one verse (repeat instance) of a section.
+  /// Grows the list to reach [verseIndex] and trims trailing empties, mirroring
+  /// [setBlockLyric].
+  void setSectionLyric({
+    required String sectionId,
+    required int verseIndex,
+    required String? text,
+  }) {
+    if (verseIndex < 0) return;
+    _replaceSection(sectionId, (s) {
+      final list = [...s.lyrics];
+      while (list.length <= verseIndex) {
+        list.add('');
+      }
+      list[verseIndex] = text ?? '';
+      while (list.isNotEmpty && list.last.isEmpty) {
+        list.removeLast();
+      }
+      return s.copyWith(lyrics: list);
+    });
+  }
 
   void removeSection(String sectionId) => _set(
     state.copyWith(
@@ -156,15 +231,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   // ── lanes ──
-  void addLane({
+  String addLane({
     required String sectionId,
     required SongLaneKind kind,
     String? label,
   }) {
+    final lane = makeLane(kind: kind, label: label, order: 0);
     _replaceSection(sectionId, (s) {
-      final lane = makeLane(kind: kind, label: label, order: s.lanes.length);
-      return s.copyWith(lanes: [...s.lanes, lane]);
+      final positioned = lane.copyWith(order: s.lanes.length);
+      return s.copyWith(lanes: [...s.lanes, positioned]);
     });
+    return lane.id;
   }
 
   void _replaceLane(
@@ -172,12 +249,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     String laneId,
     SongLane Function(SongLane) f,
   ) {
-    _replaceSection(
-      sectionId,
-      (s) => s.copyWith(
-        lanes: s.lanes.map((l) => l.id == laneId ? f(l) : l).toList(),
-      ),
-    );
+    _replaceSection(sectionId, (s) {
+      final lanes = s.lanes.map((l) => l.id == laneId ? f(l) : l).toList();
+      if (_sameElements(s.lanes, lanes)) return s; // lane unchanged
+      return s.copyWith(lanes: lanes);
+    });
   }
 
   void setLaneRepeat({
@@ -224,6 +300,49 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (blocksOverlap(l.blocks, block)) return l;
       return l.copyWith(blocks: [...l.blocks, block]);
     });
+  }
+
+  void setBlockLyric({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+    required int verseIndex,
+    required String? text,
+  }) {
+    if (verseIndex < 0) return;
+    _replaceLane(sectionId, laneId, (l) => l.copyWith(
+      blocks: l.blocks.map((b) {
+        if (b.id != blockId) return b;
+        final list = [...b.lyrics];
+        while (list.length <= verseIndex) {
+          list.add('');
+        }
+        list[verseIndex] = text ?? '';
+        while (list.isNotEmpty && list.last.isEmpty) {
+          list.removeLast();
+        }
+        return b.copyWith(lyrics: list);
+      }).toList(),
+    ));
+  }
+
+  void addSilentBlock({
+    required String sectionId,
+    required String laneId,
+    required int startBar,
+    required int spanBars,
+    int verseCount = 1,
+  }) {
+    _replaceLane(sectionId, laneId, (l) => l.copyWith(
+      blocks: [
+        ...l.blocks,
+        makeSilentBlock(
+          startBar: startBar,
+          spanBars: spanBars,
+          verseCount: verseCount,
+        ),
+      ],
+    ));
   }
 
   void removeBlock({
@@ -279,6 +398,70 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       sectionId,
       laneId,
       (l) => l.copyWith(blocks: [...l.blocks, block]),
+    );
+  }
+
+  String addDrumPattern({String name = 'Pattern'}) {
+    final pattern = makeDrumPattern(name: name);
+    _set(state.copyWith(drumPatterns: [...state.drumPatterns, pattern]));
+    return pattern.id;
+  }
+
+  void updateDrumPattern(DrumPattern updated) {
+    _set(
+      state.copyWith(
+        drumPatterns: state.drumPatterns
+            .map((p) => p.id == updated.id ? updated : p)
+            .toList(),
+      ),
+    );
+  }
+
+  void removeDrumPattern(String patternId) {
+    final patterns =
+        state.drumPatterns.where((p) => p.id != patternId).toList();
+    final sections = state.sections.map((s) {
+      final lanes = s.lanes.map((l) {
+        if (l.kind != SongLaneKind.drum) return l;
+        final blocks = l.blocks
+            .map((b) =>
+                b.patternId == patternId ? b.copyWith(clearPatternId: true) : b)
+            .toList();
+        return l.copyWith(blocks: blocks);
+      }).toList();
+      return s.copyWith(lanes: lanes);
+    }).toList();
+    _set(state.copyWith(drumPatterns: patterns, sections: sections));
+  }
+
+  void addDrumBlock({
+    required String sectionId,
+    required String laneId,
+    required String patternId,
+    required int startBar,
+    required int spanBars,
+  }) {
+    _set(
+      state.copyWith(
+        sections: state.sections.map((s) {
+          if (s.id != sectionId) return s;
+          return s.copyWith(
+            lanes: s.lanes.map((l) {
+              if (l.id != laneId || l.kind != SongLaneKind.drum) return l;
+              return l.copyWith(
+                blocks: [
+                  ...l.blocks,
+                  makeDrumBlock(
+                    patternId: patternId,
+                    startBar: startBar,
+                    spanBars: spanBars,
+                  ),
+                ],
+              );
+            }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -408,15 +591,18 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       return;
     }
 
-    final saves = ref.read(saveSystemProvider.notifier);
-    final folderId = _findOrCreateProjectFolderId(saves);
-    if (folderId == null) return;
+    final selId = ref.read(saveSystemProvider).selectedProjectId;
+    if (selId == null) return;
+    final selFolder = ref.read(saveSystemProvider).folders
+        .where((f) => f.id == selId).firstOrNull;
+    if (selFolder == null || selFolder.kind != SaveFolderKind.project) return;
 
+    final saves = ref.read(saveSystemProvider.notifier);
     final rootName = chromaticNotes[suggestion.rootPc];
     final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
     final saveId = saves.saveSnapshot(
       saveName,
-      folderId,
+      selId,
       voicingToSnapshot(suggestion),
     );
     if (saveId == null) return;
@@ -470,15 +656,19 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       return;
     }
 
+    final selId = ref.read(saveSystemProvider).selectedProjectId;
+    if (selId == null) return;
+    final selFolder = ref.read(saveSystemProvider).folders
+        .where((f) => f.id == selId).firstOrNull;
+    if (selFolder == null || selFolder.kind != SaveFolderKind.project) return;
+
     final saves = ref.read(saveSystemProvider.notifier);
-    final folderId = _findOrCreateProjectFolderId(saves);
-    if (folderId == null) return;
 
     final rootName = chromaticNotes[suggestion.rootPc];
     final saveName = '$rootName${suggestion.quality} — ${suggestion.label}';
     final saveId = saves.saveSnapshot(
       saveName,
-      folderId,
+      selId,
       thirdAboveToSnapshot(suggestion),
     );
     if (saveId == null) return;
@@ -532,6 +722,32 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  /// Inserts a save-lane block at [startBar] referencing an existing [saveId],
+  /// without going through a harmony chord. Used by the add-bar sheet's "From
+  /// library" picker. No-ops when the section is missing or the placement
+  /// overlaps the destination save lane.
+  void addLibraryBlockAt({
+    required String sectionId,
+    required String saveId,
+    required int startBar,
+    int spanBars = 1,
+  }) {
+    final section = state.sections
+        .where((s) => s.id == sectionId)
+        .firstOrNull;
+    if (section == null) return;
+    if (!_canPlaceSaveBlockInSection(section, startBar, spanBars)) return;
+    final laneId = _findOrCreateSaveLane(sectionId);
+    if (laneId == null) return;
+    addSaveBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      saveId: saveId,
+      startBar: startBar,
+      spanBars: spanBars,
+    );
+  }
+
   /// Updates the project's display name and renames its linked top-level
   /// folder if one with the old name exists. Whitespace-only names are ignored.
   void setProjectName(String name) {
@@ -540,28 +756,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     final old = state.name;
     if (trimmed == old) return;
     _set(state.copyWith(name: trimmed));
-    _renameProjectFolderIfExists(old, trimmed);
-  }
-
-  /// Returns the id of the project's top-level folder, or null when it does
-  /// not exist. Does NOT create the folder. Used by read-only callers.
-  String? _findProjectFolderId() {
-    final name = state.name.trim();
-    if (name.isEmpty) return null;
-    for (final f in ref.read(saveSystemProvider).folders) {
-      if (f.parentId == null && f.name == name) return f.id;
+    final sel = ref.read(saveSystemProvider).selectedProjectId;
+    if (sel != null) {
+      ref.read(saveSystemProvider.notifier).renameProject(sel, trimmed);
+    } else {
+      _renameProjectFolderIfExists(old, trimmed);
     }
-    return null;
-  }
-
-  /// Returns the id of the project's top-level folder, creating it if missing.
-  /// Used by accept flows that need to write a SaveEntry.
-  String? _findOrCreateProjectFolderId(SaveSystemNotifier saves) {
-    final existing = _findProjectFolderId();
-    if (existing != null) return existing;
-    final name = state.name.trim();
-    if (name.isEmpty) return null;
-    return saves.createSaveFolder(name, null);
   }
 
   void _renameProjectFolderIfExists(String oldName, String newName) {
@@ -575,25 +775,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     }
   }
 
-  /// Returns the saves visible to library-match: the project's top-level
-  /// folder plus every descendant folder. Returns empty when the project
-  /// folder does not exist. Does NOT auto-create the folder.
+  /// Returns the saves visible to library-match: selected project's subtree.
+  /// Returns empty when no project is selected.
   List<SaveEntry> searchableSavesForLibraryMatch() {
-    final rootId = _findProjectFolderId();
-    if (rootId == null) return const [];
-    final saves = ref.read(saveSystemProvider);
-    final include = <String>{rootId};
-    final queue = [rootId];
-    while (queue.isNotEmpty) {
-      final id = queue.removeLast();
-      for (final f in saves.folders) {
-        if (f.parentId == id) {
-          include.add(f.id);
-          queue.add(f.id);
-        }
-      }
-    }
-    return saves.saves.where((s) => include.contains(s.folderId)).toList();
+    final sv = ref.read(saveSystemProvider);
+    final selId = sv.selectedProjectId;
+    if (selId == null) return const [];
+    final f = sv.folders.where((f) => f.id == selId).firstOrNull;
+    if (f == null || f.kind != SaveFolderKind.project) return const [];
+    return getSavesInSubtree(sv.folders, sv.saves, selId);
   }
 
   String? _findOrCreateSaveLane(String sectionId) {

@@ -78,18 +78,22 @@ class CompactAppBar extends StatelessWidget {
             if (onClose != null)
               IconBtn(icon: Icons.close_rounded, onTap: onClose!),
             if (onClose != null) const SizedBox(width: 4),
-            Text(
-              title,
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MuzicianTheme.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
               ),
             ),
             if (chipLabel != null) ...[
               const SizedBox(width: 10),
-              StatusChip(label: chipLabel!),
+              Flexible(child: StatusChip(label: chipLabel!)),
             ],
             const Spacer(),
             ...actions,
@@ -116,6 +120,8 @@ class StatusChip extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: MuzicianTheme.textPrimary,
           fontSize: 11.5,
@@ -361,6 +367,10 @@ class DockTab extends StatelessWidget {
   final bool hasValue;
   final VoidCallback onTap;
   final int flex;
+
+  /// When true, paints a warning ring + warning icon overlay to flag that the
+  /// current selection conflicts with the locked-in key.
+  final bool warning;
   const DockTab({
     super.key,
     required this.icon,
@@ -369,10 +379,12 @@ class DockTab extends StatelessWidget {
     required this.hasValue,
     required this.onTap,
     this.flex = 1,
+    this.warning = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = warning ? MuzicianTheme.orange : color;
     return Expanded(
       flex: flex,
       child: GestureDetector(
@@ -382,14 +394,18 @@ class DockTab extends StatelessWidget {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
-            color: hasValue
-                ? color.withValues(alpha: 0.10)
-                : Colors.white.withValues(alpha: 0.04),
+            color: warning
+                ? MuzicianTheme.orange.withValues(alpha: 0.10)
+                : hasValue
+                    ? color.withValues(alpha: 0.10)
+                    : Colors.white.withValues(alpha: 0.04),
             border: Border.all(
-              color: hasValue
-                  ? color.withValues(alpha: 0.40)
-                  : MuzicianTheme.glassBorder,
-              width: 0.5,
+              color: warning
+                  ? MuzicianTheme.orange.withValues(alpha: 0.55)
+                  : hasValue
+                      ? color.withValues(alpha: 0.40)
+                      : MuzicianTheme.glassBorder,
+              width: warning ? 1.0 : 0.5,
             ),
             borderRadius: BorderRadius.circular(10),
           ),
@@ -402,9 +418,28 @@ class DockTab extends StatelessWidget {
                   Icon(
                     icon,
                     size: 18,
-                    color: hasValue ? color : MuzicianTheme.textMuted,
+                    color: (hasValue || warning)
+                        ? effectiveColor
+                        : MuzicianTheme.textMuted,
                   ),
-                  if (hasValue)
+                  if (warning)
+                    Positioned(
+                      top: -3,
+                      right: -6,
+                      child: Container(
+                        padding: const EdgeInsets.all(1),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF1E293B),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 11,
+                          color: MuzicianTheme.orange,
+                        ),
+                      ),
+                    )
+                  else if (hasValue)
                     Positioned(
                       top: -2,
                       right: -4,
@@ -425,7 +460,9 @@ class DockTab extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: hasValue ? color : MuzicianTheme.textMuted,
+                  color: (hasValue || warning)
+                      ? effectiveColor
+                      : MuzicianTheme.textMuted,
                 ),
               ),
             ],
