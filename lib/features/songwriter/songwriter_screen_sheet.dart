@@ -822,6 +822,7 @@ class _BarRow extends ConsumerWidget {
                     saveBlock: save,
                     saveName: _saveName(ref, save),
                     saveIcon: _saveIcon(ref, save),
+                    saveRoman: _saveRoman(ref, save),
                     instanceIndex: instanceIndex,
                     isActive: isActiveCell(i, span),
                     onTap: () => _onTapSave(context, ref, save),
@@ -1236,6 +1237,17 @@ class _BarRow extends ConsumerWidget {
     return saveInstrumentIcon(snapshot.instrument);
   }
 
+  /// Roman numeral for a save block: resolves the save's snapshot to a chord
+  /// (explicit pending chord or detected from its notes) and maps it to the
+  /// project key. Null when no chord resolves or it is non-diatonic.
+  String? _saveRoman(WidgetRef ref, SongBlock save) {
+    final snapshot = resolveBlockSnapshot(
+      save,
+      ref.read(saveSystemProvider).saves,
+    );
+    return saveBlockRomanNumeral(snapshot, keyRoot, keyScaleName);
+  }
+
   void _onTapSave(BuildContext context, WidgetRef ref, SongBlock save) {
     // Replace-from-library is intentionally omitted for now: addLibraryBlockAt
     // rejects a placement that overlaps the existing save, so a "replace" would
@@ -1297,6 +1309,7 @@ class _BarCell extends StatelessWidget {
     this.saveBlock,
     this.saveName,
     this.saveIcon = Icons.bookmark,
+    this.saveRoman,
     this.onSaveTap,
     this.onLongPress,
     this.isActive = false,
@@ -1306,6 +1319,7 @@ class _BarCell extends StatelessWidget {
   final SongBlock? saveBlock;
   final String? saveName;
   final IconData saveIcon;
+  final String? saveRoman;
   final int instanceIndex;
   final VoidCallback onTap;
   final VoidCallback? onSaveTap;
@@ -1402,6 +1416,19 @@ class _BarCell extends StatelessWidget {
               ),
             ),
           ),
+          if ((saveRoman ?? '').isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              saveRoman!,
+              key: Key('saveRoman_${saveBlock!.id}_$instanceIndex'),
+              style: const TextStyle(
+                color: MuzicianTheme.violet,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
           if (instanceIndex < saveBlock!.lyrics.length &&
               saveBlock!.lyrics[instanceIndex].isNotEmpty) ...[
             const SizedBox(height: 2),

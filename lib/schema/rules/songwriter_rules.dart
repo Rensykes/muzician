@@ -318,3 +318,71 @@ InstrumentSnapshot? resolveBlockSnapshot(
   }
   return null;
 }
+
+/// The chord a save block resolves to, for Roman-numeral display.
+class ResolvedChord {
+  const ResolvedChord({
+    required this.rootPc,
+    required this.quality,
+    required this.symbol,
+  });
+
+  /// Pitch class (0-11) of the chord root.
+  final int rootPc;
+
+  /// Chord quality string (e.g. `''`, `'m'`, `'maj7'`).
+  final String quality;
+
+  /// Display symbol (e.g. `'Cmaj7'`).
+  final String symbol;
+}
+
+/// Resolves the chord of a save block's [snapshot] for display.
+///
+/// Prefers an explicit [InstrumentSnapshot.pendingChord] (set when the user
+/// committed a chord on the source instrument). When absent, detects the first
+/// matching chord from the snapshot's [InstrumentSnapshot.selectedNotes] so
+/// that voicings saved by free note placement still surface a chord — and thus
+/// a scale degree. Returns null when no chord can be determined.
+ResolvedChord? resolveSnapshotChord(InstrumentSnapshot? snapshot) {
+  if (snapshot == null) return null;
+
+  final pending = snapshot.pendingChord;
+  if (pending != null) {
+    final pc = noteToPC[pending.root];
+    if (pc != null) {
+      return ResolvedChord(
+        rootPc: pc,
+        quality: pending.quality,
+        symbol: pending.symbol,
+      );
+    }
+  }
+
+  final detected = detectFirstChord(snapshot.selectedNotes);
+  if (detected != null) {
+    final pc = noteToPC[detected.root];
+    if (pc != null) {
+      return ResolvedChord(
+        rootPc: pc,
+        quality: detected.quality,
+        symbol: '${detected.root}${detected.quality}',
+      );
+    }
+  }
+
+  return null;
+}
+
+/// The Roman numeral a save block's resolved chord maps to in the given key,
+/// or null when no chord can be resolved or it is non-diatonic. Convenience
+/// wrapper combining [resolveSnapshotChord] and [romanNumeralFor].
+String? saveBlockRomanNumeral(
+  InstrumentSnapshot? snapshot,
+  int? keyRootPc,
+  String? keyScaleName,
+) {
+  final chord = resolveSnapshotChord(snapshot);
+  if (chord == null) return null;
+  return romanNumeralFor(chord.rootPc, chord.quality, keyRootPc, keyScaleName);
+}
