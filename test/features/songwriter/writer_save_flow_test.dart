@@ -80,4 +80,30 @@ void main() {
     await pump(tester, c);
     expect(find.byKey(const Key('writerUnsavedBadge')), findsNothing);
   });
+
+  testWidgets('unbound dirty project opens the Save/Load panel on save',
+      (tester) async {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final ss = c.read(saveSystemProvider.notifier);
+    final pid = ss.createProject('Proj', const ProjectConfig())!;
+    ss.selectProject(pid);
+    c.read(songwriterProvider.notifier).addSection(label: 'V', lengthBars: 4);
+    await pump(tester, c);
+    // Dirty + unbound → no choice dialog, opens the Save/Load sheet instead.
+    await tester.tap(find.byKey(const Key('writerSaveButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('writerSaveOverwrite')), findsNothing);
+    expect(find.text('Save / Load'), findsOneWidget);
+  });
+
+  testWidgets('save-as-new opens the Save/Load panel', (tester) async {
+    final (c, _, _) = seedDirtyBound();
+    await pump(tester, c);
+    await tester.tap(find.byKey(const Key('writerSaveButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('writerSaveAsNew')));
+    await tester.pumpAndSettle();
+    expect(find.text('Save / Load'), findsOneWidget);
+  });
 }

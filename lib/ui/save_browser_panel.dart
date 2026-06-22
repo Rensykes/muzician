@@ -480,7 +480,10 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     ref.read(saveSystemProvider.notifier).navigatePrev((snap) {
       widget.onLoad?.call(snap);
       final session = ref.read(saveSystemProvider).activeSession;
-      if (session != null) setState(() => _selectedSaveId = session.saveId);
+      if (session != null) {
+        setState(() => _selectedSaveId = session.saveId);
+        widget.onLoadSaveId?.call(session.saveId);
+      }
     });
     HapticFeedback.selectionClick();
   }
@@ -489,7 +492,10 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     ref.read(saveSystemProvider.notifier).navigateNext((snap) {
       widget.onLoad?.call(snap);
       final session = ref.read(saveSystemProvider).activeSession;
-      if (session != null) setState(() => _selectedSaveId = session.saveId);
+      if (session != null) {
+        setState(() => _selectedSaveId = session.saveId);
+        widget.onLoadSaveId?.call(session.saveId);
+      }
     });
     HapticFeedback.selectionClick();
   }
