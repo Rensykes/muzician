@@ -56,7 +56,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       },
     );
 
-    return _emptyProject();
+    // Cold start: the listener above only fires on project *changes*. When a
+    // project is already selected (restored during hydrate) before this provider
+    // is first read, seed directly from its saved working draft — otherwise the
+    // Writer would open blank until the user switched projects.
+    final id = ref.read(saveSystemProvider).selectedProjectId;
+    if (id == null) return _emptyProject();
+    final session = ref.read(songwriterSessionsProvider.notifier).get(id);
+    return session ?? _defaultFor(id);
   }
 
   @override

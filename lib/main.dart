@@ -15,14 +15,12 @@ import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
 import 'models/piano.dart' show PianoViewMode;
 import 'models/save_system.dart';
 import 'utils/note_utils.dart' show chromaticNotes;
+import 'store/app_bootstrap.dart';
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/project_config_sync.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
-import 'store/song_sessions_store.dart';
-import 'store/songwriter_sessions_store.dart';
-import 'store/writer_save_binding_store.dart';
 import 'ui/project_chip.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
@@ -84,24 +82,8 @@ class _AppShellState extends ConsumerState<_AppShell> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      await ref.read(saveSystemProvider.notifier).hydrate();
-      await ref.read(settingsProvider.notifier).hydrate();
-      await ref.read(songSessionsProvider.notifier).hydrate();
-      await ref.read(songwriterSessionsProvider.notifier).hydrate();
-      await ref.read(writerSaveBindingProvider.notifier).hydrate();
+      await hydrateStores(ref.read);
       await NotePlayer.instance.init();
-      final notifier = ref.read(saveSystemProvider.notifier);
-      var selected = ref.read(saveSystemProvider).selectedProjectId;
-      if (selected == null) {
-        // First launch (or selection cleared): default to Dump so the user can
-        // create saves freely on Fretboard / Piano / Roll without being forced
-        // through a project-creation modal. Song / Songwriter still prompt
-        // when entered because Dump is not a real project.
-        selected = notifier.ensureDumpFolder();
-        notifier.selectProject(selected);
-      } else {
-        notifier.selectProject(selected);
-      }
       // Mount the project config syncer (Provider body runs on first read).
       ref.read(projectConfigSyncProvider);
     });

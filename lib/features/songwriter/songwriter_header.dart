@@ -152,7 +152,7 @@ class SongwriterHeader extends ConsumerWidget {
           ),
           _MenuTile(
             icon: Icons.folder_open_rounded,
-            label: 'Save / Load',
+            label: 'Browse saves',
             onTap: () {
               Navigator.pop(context);
               onOpenSaveLoad?.call();

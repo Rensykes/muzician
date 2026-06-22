@@ -58,6 +58,18 @@ class SongSessionsNotifier extends Notifier<Map<String, SongProject>> {
     await prefs.remove(_kSongSessionsKey);
   }
 
+  /// Cancels any pending debounced write and persists the current state now.
+  /// Use at app-lifecycle flush points (e.g. before backgrounding) and in tests
+  /// that need a deterministic round-trip without waiting out the debounce.
+  Future<void> flush() async {
+    _debounce?.cancel();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kSongSessionsKey,
+      jsonEncode(state.map((k, v) => MapEntry(k, v.toJson()))),
+    );
+  }
+
   void _schedulePersist() {
     _debounce?.cancel();
     final snapshot = state;
