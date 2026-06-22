@@ -49,7 +49,14 @@ class SongProjectNotifier extends Notifier<SongProject> {
       },
     );
 
-    return rules.getDefaultSongProject();
+    // Cold start: the listener above only fires on project *changes*. When a
+    // project is already selected (restored during hydrate) before this provider
+    // is first read, seed directly from its saved working draft — otherwise the
+    // Song screen would open blank until the user switched projects.
+    final id = ref.read(saveSystemProvider).selectedProjectId;
+    if (id == null) return rules.getDefaultSongProject();
+    final session = ref.read(songSessionsProvider.notifier).get(id);
+    return session ?? _defaultFor(id);
   }
 
   @override
