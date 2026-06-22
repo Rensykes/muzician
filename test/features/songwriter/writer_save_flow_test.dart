@@ -94,7 +94,7 @@ void main() {
     await tester.tap(find.byKey(const Key('writerSaveButton')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('writerSaveOverwrite')), findsNothing);
-    expect(find.text('Save / Load'), findsOneWidget);
+    expect(find.text('Browse saves'), findsOneWidget);
   });
 
   testWidgets('save-as-new opens the Save/Load panel', (tester) async {
@@ -104,6 +104,6 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('writerSaveAsNew')));
     await tester.pumpAndSettle();
-    expect(find.text('Save / Load'), findsOneWidget);
+    expect(find.text('Browse saves'), findsOneWidget);
   });
 }

@@ -48,7 +48,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
   void _openSaveLoad(BuildContext context) {
     showWidgetSheet(
       context: context,
-      title: 'Save / Load',
+      title: 'Browse saves',
       child: const SongwriterSavePanel(),
     );
   }
