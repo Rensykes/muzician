@@ -13,6 +13,7 @@ import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
 import 'save_system_store.dart';
 import 'songwriter_sessions_store.dart';
+import 'writer_save_binding_store.dart';
 
 SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
   config: SongwriterConfig(
@@ -96,6 +97,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     final id = ref.read(saveSystemProvider).selectedProjectId;
     if (id != null) {
       ref.read(songwriterSessionsProvider.notifier).remove(id);
+      ref.read(writerSaveBindingProvider.notifier).clear(id);
     }
   }
 

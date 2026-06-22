@@ -4,6 +4,7 @@ import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
+import '../../store/writer_save_binding_store.dart';
 import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 
@@ -32,6 +33,11 @@ class SongwriterSavePanel extends ConsumerWidget {
           notifier.loadProject(snapshot);
         }
       },
+      onLoadSaveId: (saveId) => ref
+          .read(writerSaveBindingProvider.notifier)
+          .bind(selected.id, saveId),
+      onSaved: (saveId) =>
+          ref.read(writerSaveBindingProvider.notifier).bind(selected.id, saveId),
     );
   }
 }

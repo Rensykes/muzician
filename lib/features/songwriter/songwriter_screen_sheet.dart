@@ -10,9 +10,12 @@ import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
+import '../../models/save_system.dart';
 import '../../store/save_system_store.dart';
+import '../../store/writer_save_binding_store.dart';
 import '../../ui/save_card_label.dart';
 import '../../store/songwriter_playback_store.dart';
+import 'writer_save_choice_dialog.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/coach_overlay.dart';
 import '../../ui/glass_snackbar.dart';
@@ -50,6 +53,56 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
     );
   }
 
+  Future<void> _saveProject(BuildContext ctx) async {
+    final projectId = ref.read(saveSystemProvider).selectedProjectId;
+    if (projectId == null) return;
+    final binding = ref.read(writerSaveBindingProvider)[projectId];
+    final id = binding?.activeSaveId;
+    SaveEntry? entry;
+    if (id != null) {
+      for (final s in ref.read(saveSystemProvider).saves) {
+        if (s.id == id) {
+          entry = s;
+          break;
+        }
+      }
+    }
+    if (entry == null) {
+      _openSaveLoad(ctx);
+      return;
+    }
+    if (binding!.alwaysOverwrite) {
+      _overwrite(entry);
+      return;
+    }
+    final choice =
+        await showWriterSaveChoiceDialog(ctx, saveName: entry.name);
+    if (!mounted) return;
+    if (choice == null) return;
+    if (choice.action == WriterSaveAction.saveAsNew) {
+      // ignore: use_build_context_synchronously
+      _openSaveLoad(context);
+      return;
+    }
+    if (choice.dontAskAgain) {
+      ref
+          .read(writerSaveBindingProvider.notifier)
+          .setAlwaysOverwrite(projectId, true);
+    }
+    _overwrite(entry);
+  }
+
+  void _overwrite(SaveEntry entry) {
+    ref
+        .read(saveSystemProvider.notifier)
+        .updateSnapshot(entry.id, ref.read(songwriterProvider));
+    HapticFeedback.mediumImpact();
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Saved'), duration: Duration(seconds: 1)),
+    );
+  }
+
   void _openStructure(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -83,6 +136,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                 onOpenStructure: () => _openStructure(context),
                 onStartTour: () =>
                     startCoachTour(context, writerCoachSteps(_coachKeys)),
+                onSave: () => _saveProject(context),
               ),
             ),
             Expanded(
