@@ -68,8 +68,6 @@ class WriterSaveBindingNotifier
     _hydrated = true;
   }
 
-  WriterSaveBinding? get(String projectId) => state[projectId];
-
   /// Binds [projectId] to [saveId] and RESETS alwaysOverwrite. Called on load
   /// and on save (new or save-as-new).
   void bind(String projectId, String saveId) {

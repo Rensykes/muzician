@@ -105,7 +105,7 @@ class SongwriterHeader extends ConsumerWidget {
                       color: dirty
                           ? MuzicianTheme.orange
                           : MuzicianTheme.textDim,
-                      onTap: dirty ? onSave! : () {},
+                      onTap: onSave!,
                     ),
                   if (onStartTour != null)
                     IconBtn(

@@ -55,7 +55,6 @@ keyed by **project id** (`selectedProjectId`). Mirrors
 - Persisted to SharedPreferences key `@muzician/writer_save_bindings/v1`,
   debounced (500 ms).
 - `hydrate()` — called from `main.dart` next to the other hydrates.
-- `get(projectId)` → `WriterSaveBinding?`.
 - `bind(projectId, saveId)` — sets `activeSaveId = saveId`, **resets
   `alwaysOverwrite = false`**. Called on load and on save (new or overwrite).
 - `setAlwaysOverwrite(projectId, bool)` — sets the flag, keeps `activeSaveId`.
@@ -143,8 +142,9 @@ else:                                               // unbound / never saved
   `writerUnsavedBadge`.
 - A new `IconBtn` (`Icons.save_rounded`, key `writerSaveButton`) in the title
   row, calling a new `onSave` callback (wired from the screen sheet to
-  `_saveProject`). Visually enabled/highlighted only when `dirty`; tapping when
-  clean is a no-op (or hidden).
+  `_saveProject`). Highlighted (amber) only when `dirty`, dim otherwise, but
+  always functional — saving a clean project just re-overwrites the bound save
+  (or opens the panel if unbound). The overflow "Save" tile behaves the same.
 - Compact (landscape) layout: surface the Save action from the config-strip
   trailing button / overflow so it is still reachable.
 
@@ -172,11 +172,10 @@ Unit (`package:test` / Riverpod `ProviderContainer`):
 
 Widget:
 
-- `writer_save_flow_test.dart` — bound + !alwaysOverwrite → dialog shows;
-  Overwrite calls `updateSnapshot`; checkbox sets flag and next save is silent;
-  Save-as-new + unbound first-save open the Save/Load panel.
-- `writer_header_unsaved_test.dart` — badge visible when dirty, hidden when
-  clean; Save button enabled only when dirty.
+- `writer_save_flow_test.dart` — badge visible when dirty, absent when clean;
+  bound + !alwaysOverwrite → dialog shows; Overwrite calls `updateSnapshot`;
+  checkbox sets flag and next save is silent; Save-as-new + unbound first-save
+  open the Save/Load panel.
 
 ## Out of scope (YAGNI)
 
