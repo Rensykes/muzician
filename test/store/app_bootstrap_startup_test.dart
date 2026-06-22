@@ -22,8 +22,10 @@ void main() {
         .createProject('Vorrei', const ProjectConfig())!;
     c0.read(saveSystemProvider.notifier).selectProject(pid);
     c0.read(songwriterProvider.notifier).addSection(label: 'V', lengthBars: 4);
-    // Let the debounced persists flush to (mock) SharedPreferences.
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    // Flush the debounced session write deterministically — no real delay. The
+    // save-system write is immediate (un-debounced) and its microtasks are
+    // queued before flush's, so its blob is on disk once flush resolves.
+    await c0.read(songwriterSessionsProvider.notifier).flush();
     final prefs = await SharedPreferences.getInstance();
     final saveBlob = prefs.getString('@muzician/save-system/v3')!;
     final sessBlob = prefs.getString('@muzician/songwriter_sessions/v1')!;
