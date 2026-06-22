@@ -22,6 +22,7 @@ import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'store/song_sessions_store.dart';
 import 'store/songwriter_sessions_store.dart';
+import 'store/writer_save_binding_store.dart';
 import 'ui/project_chip.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
@@ -87,6 +88,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
       await ref.read(settingsProvider.notifier).hydrate();
       await ref.read(songSessionsProvider.notifier).hydrate();
       await ref.read(songwriterSessionsProvider.notifier).hydrate();
+      await ref.read(writerSaveBindingProvider.notifier).hydrate();
       await NotePlayer.instance.init();
       final notifier = ref.read(saveSystemProvider.notifier);
       var selected = ref.read(saveSystemProvider).selectedProjectId;
