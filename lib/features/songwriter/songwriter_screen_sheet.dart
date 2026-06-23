@@ -26,6 +26,7 @@ import 'songwriter_block_preview.dart';
 import 'songwriter_coach_steps.dart';
 import 'songwriter_save_lane_filter.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_header.dart';
@@ -426,12 +427,8 @@ class _SectionLyricsDialogState extends State<_SectionLyricsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: MuzicianTheme.surface,
-      title: const Text(
-        'Lyrics',
-        style: TextStyle(color: MuzicianTheme.textPrimary),
-      ),
+    return MuzicianDialog(
+      title: 'Lyrics',
       content: TextField(
         key: const Key('sectionLyricsField'),
         controller: _controller,
@@ -442,17 +439,18 @@ class _SectionLyricsDialogState extends State<_SectionLyricsDialog> {
         decoration: const InputDecoration(hintText: 'Type the lyrics…'),
       ),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Cancel',
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
         ),
-        TextButton(
-          key: const Key('sectionLyricsSave'),
+        MuzicianDialogButton(
+          'Save',
+          buttonKey: const Key('sectionLyricsSave'),
+          emphasis: MuzicianDialogEmphasis.primary,
           onPressed: () {
             widget.onSave(_controller.text);
             Navigator.pop(context);
           },
-          child: const Text('Save'),
         ),
       ],
     );
@@ -486,12 +484,8 @@ class _VerseLyricDialogState extends State<_VerseLyricDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: MuzicianTheme.surface,
-      title: Text(
-        'Lyrics — Verse ${widget.verseNumber}',
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
-      ),
+    return MuzicianDialog(
+      title: 'Lyrics — Verse ${widget.verseNumber}',
       content: TextField(
         key: const Key('verseLyricField'),
         controller: _controller,
@@ -502,17 +496,18 @@ class _VerseLyricDialogState extends State<_VerseLyricDialog> {
         decoration: const InputDecoration(hintText: 'Words for this verse…'),
       ),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Cancel',
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
         ),
-        TextButton(
-          key: const Key('verseLyricSave'),
+        MuzicianDialogButton(
+          'Save',
+          buttonKey: const Key('verseLyricSave'),
+          emphasis: MuzicianDialogEmphasis.primary,
           onPressed: () {
             widget.onSave(_controller.text);
             Navigator.pop(context);
           },
-          child: const Text('Save'),
         ),
       ],
     );
@@ -681,12 +676,8 @@ class _SectionHeading extends ConsumerWidget {
     final controller = TextEditingController(text: section.label ?? '');
     showDialog<void>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: const Text(
-          'Section name',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (dialogCtx) => MuzicianDialog(
+        title: 'Section name',
         content: TextField(
           key: Key('sectionLabel_${section.id}'),
           controller: controller,
@@ -695,11 +686,13 @@ class _SectionHeading extends ConsumerWidget {
           decoration: const InputDecoration(hintText: 'Verse, Chorus\u2026'),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Save',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () {
               notifier.renameSection(
                 section.id,
@@ -707,7 +700,6 @@ class _SectionHeading extends ConsumerWidget {
               );
               Navigator.pop(dialogCtx);
             },
-            child: const Text('Save'),
           ),
         ],
       ),
@@ -1841,12 +1833,8 @@ class _StepperDialogState extends State<_StepperDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: MuzicianTheme.surface,
-      title: Text(
-        widget.title,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
-      ),
+    return MuzicianDialog(
+      title: widget.title,
       content: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -1874,9 +1862,10 @@ class _StepperDialogState extends State<_StepperDialog> {
         ],
       ),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Done',
+          emphasis: MuzicianDialogEmphasis.primary,
           onPressed: () => Navigator.pop(context),
-          child: const Text('Done'),
         ),
       ],
     );

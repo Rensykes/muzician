@@ -12,6 +12,7 @@ import '../../store/settings_store.dart';
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/core/coach_overlay.dart';
 import '../../ui/project_chip.dart';
@@ -336,25 +337,21 @@ class _SongScreenState extends ConsumerState<SongScreen> {
     HapticFeedback.selectionClick();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: const Text(
-          'Start a new song?',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Start a new song?',
         content: const Text(
           'This overwrites your current session. Save it first from the Save / '
           'Load panel if you want to keep it.',
-          style: TextStyle(color: MuzicianTheme.textSecondary),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
           ),
-          FilledButton(
+          MuzicianDialogButton(
+            'New Song',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('New Song'),
           ),
         ],
       ),
@@ -370,26 +367,22 @@ class _SongScreenState extends ConsumerState<SongScreen> {
     if (hasContent) {
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: MuzicianTheme.surface,
-          title: const Text(
-            'Import from Writer?',
-            style: TextStyle(color: MuzicianTheme.textPrimary),
-          ),
+        builder: (ctx) => MuzicianDialog(
+          title: 'Import from Writer?',
           content: const Text(
             'This replaces the current song with a skeleton built from the '
             'Writer arrangement (sections become markers, chords become '
             'note tracks, drum lanes become drum tracks).',
-            style: TextStyle(color: MuzicianTheme.textSecondary),
           ),
           actions: [
-            TextButton(
+            MuzicianDialogButton(
+              'Cancel',
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
             ),
-            FilledButton(
+            MuzicianDialogButton(
+              'Import',
+              emphasis: MuzicianDialogEmphasis.primary,
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Import'),
             ),
           ],
         ),

@@ -14,6 +14,7 @@ import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
 import '../theme/muzician_theme.dart';
+import 'core/muzician_dialog.dart';
 import 'save_previews/save_preview_thumbnail.dart';
 
 class SaveTreeBrowser extends ConsumerStatefulWidget {
@@ -101,12 +102,8 @@ class _SaveTreeBrowserState extends ConsumerState<SaveTreeBrowser> {
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141826),
-        title: const Text(
-          'New folder',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'New folder',
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -118,19 +115,14 @@ class _SaveTreeBrowserState extends ConsumerState<SaveTreeBrowser> {
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: MuzicianTheme.textSecondary),
-            ),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Create',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text(
-              'Create',
-              style: TextStyle(color: MuzicianTheme.sky),
-            ),
           ),
         ],
       ),
@@ -148,12 +140,8 @@ class _SaveTreeBrowserState extends ConsumerState<SaveTreeBrowser> {
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141826),
-        title: const Text(
-          'Name your save',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Name your save',
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -165,19 +153,14 @@ class _SaveTreeBrowserState extends ConsumerState<SaveTreeBrowser> {
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: MuzicianTheme.textSecondary),
-            ),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Save',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text(
-              'Save',
-              style: TextStyle(color: MuzicianTheme.sky),
-            ),
           ),
         ],
       ),

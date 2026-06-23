@@ -11,6 +11,7 @@ import '../../schema/rules/song_rules.dart' as song_rules;
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 import '../../ui/glass_snackbar.dart';
 import 'song_audio_actions.dart';
 import 'song_pattern_editor_launcher.dart';
@@ -332,12 +333,8 @@ class _MeasureRulerState extends ConsumerState<_MeasureRuler> {
     final controller = TextEditingController();
     final label = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: const Text(
-          'Add Marker',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Add Marker',
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -348,13 +345,14 @@ class _MeasureRulerState extends ConsumerState<_MeasureRuler> {
           ),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Add',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Add'),
           ),
         ],
       ),
@@ -367,32 +365,27 @@ class _MeasureRulerState extends ConsumerState<_MeasureRuler> {
     final controller = TextEditingController(text: marker.label);
     final action = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: const Text(
-          'Edit Marker',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Edit Marker',
         content: TextField(
           controller: controller,
           autofocus: true,
           style: const TextStyle(color: MuzicianTheme.textPrimary),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Delete',
+            emphasis: MuzicianDialogEmphasis.destructive,
             onPressed: () => Navigator.pop(ctx, 'delete'),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: MuzicianTheme.red),
-            ),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Save',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.pop(ctx, 'save'),
-            child: const Text('Save'),
           ),
         ],
       ),

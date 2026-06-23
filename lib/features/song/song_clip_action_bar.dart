@@ -11,6 +11,7 @@ import '../../models/song_project.dart';
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 import 'song_pattern_editor_launcher.dart';
 
 class SongClipActionBar extends ConsumerWidget {
@@ -353,12 +354,8 @@ class SongClipActionBar extends ConsumerWidget {
   ) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: const Text(
-          'Trim Audio',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Trim Audio',
         content: Consumer(
           builder: (_, dialogRef, _) {
             final project = dialogRef.watch(songProjectProvider);
@@ -439,9 +436,10 @@ class SongClipActionBar extends ConsumerWidget {
           },
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Done',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Done'),
           ),
         ],
       ),

@@ -13,6 +13,7 @@ import '../../models/song_project.dart';
 import '../../store/drum_pattern_playback_store.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 
 const double _kCellSize = 32;
 const double _kCellMargin = 2;
@@ -85,30 +86,18 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
             onPressed: () async {
               final ok = await showDialog<bool>(
                 context: context,
-                builder: (ctx) => AlertDialog(
-                  backgroundColor: MuzicianTheme.surface,
-                  title: const Text(
-                    'Clear all steps?',
-                    style: TextStyle(color: MuzicianTheme.textPrimary),
-                  ),
-                  content: const Text(
-                    'This empties every lane on this pattern.',
-                    style: TextStyle(color: MuzicianTheme.textSecondary),
-                  ),
+                builder: (ctx) => MuzicianDialog(
+                  title: 'Clear all steps?',
+                  content: const Text('This empties every lane on this pattern.'),
                   actions: [
-                    TextButton(
+                    MuzicianDialogButton(
+                      'Cancel',
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(color: MuzicianTheme.textSecondary),
-                      ),
                     ),
-                    TextButton(
+                    MuzicianDialogButton(
+                      'Clear',
+                      emphasis: MuzicianDialogEmphasis.destructive,
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text(
-                        'Clear',
-                        style: TextStyle(color: MuzicianTheme.red),
-                      ),
                     ),
                   ],
                 ),

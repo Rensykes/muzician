@@ -13,6 +13,7 @@ import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../schema/rules/piano_roll_import_rules.dart' as import_rules;
 import '../../schema/rules/save_system_rules.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 
 // ── Widget ──────────────────────────────────────────────────────────────────
 
@@ -98,45 +99,26 @@ class _PianoRollSaveStackLoaderState
       if (conflicting.isNotEmpty) {
         final action = await showDialog<String>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF141826),
-            title: const Text(
-              'Notes already present',
-              style: TextStyle(
-                color: MuzicianTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+          builder: (ctx) => MuzicianDialog(
+            title: 'Notes already present',
             content: Text(
               '${conflicting.length} note${conflicting.length != 1 ? 's' : ''} '
               'already exist at this column. What would you like to do?',
-              style: const TextStyle(
-                color: MuzicianTheme.textSecondary,
-                fontSize: 13,
-              ),
             ),
             actions: [
-              TextButton(
+              MuzicianDialogButton(
+                'Cancel',
                 onPressed: () => Navigator.pop(ctx, 'cancel'),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(color: MuzicianTheme.textSecondary),
-                ),
               ),
-              TextButton(
+              MuzicianDialogButton(
+                'Keep both',
+                emphasis: MuzicianDialogEmphasis.primary,
                 onPressed: () => Navigator.pop(ctx, 'merge'),
-                child: const Text(
-                  'Keep both',
-                  style: TextStyle(color: MuzicianTheme.sky),
-                ),
               ),
-              TextButton(
+              MuzicianDialogButton(
+                'Overwrite',
+                color: MuzicianTheme.orange,
                 onPressed: () => Navigator.pop(ctx, 'overwrite'),
-                child: const Text(
-                  'Overwrite',
-                  style: TextStyle(color: MuzicianTheme.orange),
-                ),
               ),
             ],
           ),

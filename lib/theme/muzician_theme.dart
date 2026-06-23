@@ -18,6 +18,13 @@ abstract final class MuzicianTheme {
   static Color glassBg = Colors.white.withValues(alpha: 0.03);
   static Color glassBorder = Colors.white.withValues(alpha: 0.07);
 
+  // ── Dialog ──────────────────────────────────────────────────────────────
+  /// Elevated glass surface used by every modal dialog. Sits a step lighter
+  /// than [surface] so it reads as floating above the gradient scaffold.
+  static const Color dialogBg = Color(0xFF161B2E);
+  static const double dialogRadius = 16;
+  static Color dialogBorder = Colors.white.withValues(alpha: 0.08);
+
   // ── Text ────────────────────────────────────────────────────────────────
   static const Color textPrimary = Color(0xFFF1F5F9);
   static const Color textSecondary = Color(0xFF94A3B8);
@@ -49,6 +56,26 @@ abstract final class MuzicianTheme {
         color: textPrimary,
         fontSize: 18,
         fontWeight: FontWeight.w700,
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: dialogBg,
+      surfaceTintColor: Colors.transparent,
+      elevation: 16,
+      shadowColor: Colors.black54,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(dialogRadius),
+        side: BorderSide(color: dialogBorder),
+      ),
+      titleTextStyle: const TextStyle(
+        color: textPrimary,
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+      ),
+      contentTextStyle: const TextStyle(
+        color: textSecondary,
+        fontSize: 13,
+        height: 1.4,
       ),
     ),
   );

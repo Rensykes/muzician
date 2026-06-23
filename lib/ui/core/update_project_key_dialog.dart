@@ -5,7 +5,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../../theme/muzician_theme.dart';
+import 'muzician_dialog.dart';
 
 class UpdateProjectKeyDialog extends StatelessWidget {
   final String currentLabel;
@@ -43,55 +43,26 @@ class UpdateProjectKeyDialog extends StatelessWidget {
         : '$affectedSaves save${affectedSaves == 1 ? '' : 's'} under this '
             'project will inherit the new key. Notes outside the new scale '
             'will be flagged with a warning.';
-    return AlertDialog(
-      backgroundColor: const Color(0xFF141826),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'Update project key?',
-        style: TextStyle(
-          color: MuzicianTheme.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return MuzicianDialog(
+      title: 'Update project key?',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Change project key from $currentLabel to $newLabel?',
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 13,
-            ),
-          ),
+          Text('Change project key from $currentLabel to $newLabel?'),
           const SizedBox(height: 10),
-          Text(
-            detail,
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
-              fontSize: 12,
-            ),
-          ),
+          Text(detail, style: const TextStyle(fontSize: 12)),
         ],
       ),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Cancel',
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: MuzicianTheme.textSecondary),
-          ),
         ),
-        TextButton(
+        MuzicianDialogButton(
+          'Update',
+          emphasis: MuzicianDialogEmphasis.primary,
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text(
-            'Update',
-            style: TextStyle(
-              color: MuzicianTheme.sky,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
         ),
       ],
     );

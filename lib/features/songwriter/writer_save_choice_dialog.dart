@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../ui/core/muzician_dialog.dart';
 
 enum WriterSaveAction { overwrite, saveAsNew }
 
@@ -32,36 +33,35 @@ class _WriterSaveChoiceDialogState extends State<_WriterSaveChoiceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text("Save changes to '${widget.saveName}'?"),
-      content: CheckboxListTile(
-        key: const Key('writerSaveAlwaysCheckbox'),
-        contentPadding: EdgeInsets.zero,
-        controlAffinity: ListTileControlAffinity.leading,
+    return MuzicianDialog(
+      title: "Save changes to '${widget.saveName}'?",
+      content: MuzicianDialogCheckbox(
+        checkboxKey: const Key('writerSaveAlwaysCheckbox'),
         value: _dontAsk,
-        onChanged: (v) => setState(() => _dontAsk = v ?? false),
-        title: const Text('Always overwrite for this project'),
+        onChanged: (v) => setState(() => _dontAsk = v),
+        label: 'Always overwrite for this project',
       ),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Cancel',
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
         ),
-        TextButton(
-          key: const Key('writerSaveAsNew'),
+        MuzicianDialogButton(
+          'Save as new…',
+          buttonKey: const Key('writerSaveAsNew'),
           onPressed: () => Navigator.pop(
             context,
             WriterSaveChoice(WriterSaveAction.saveAsNew, _dontAsk),
           ),
-          child: const Text('Save as new…'),
         ),
-        FilledButton(
-          key: const Key('writerSaveOverwrite'),
+        MuzicianDialogButton(
+          'Overwrite',
+          buttonKey: const Key('writerSaveOverwrite'),
+          emphasis: MuzicianDialogEmphasis.primary,
           onPressed: () => Navigator.pop(
             context,
             WriterSaveChoice(WriterSaveAction.overwrite, _dontAsk),
           ),
-          child: const Text('Overwrite'),
         ),
       ],
     );
