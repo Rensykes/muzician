@@ -79,6 +79,64 @@ void main() {
       notifier.stop();
     });
 
+    test(
+      'loop clock is wall-anchored: per-loop body cost does not accumulate '
+      'as drift',
+      () async {
+        // One active hit per 8-tick loop carries a heavy synchronous cost.
+        // Without wall-clock anchoring this is added on top of every loop, so
+        // reaching the 5th hit takes far longer than the ideal span. Anchored,
+        // the cost is absorbed by the seven cost-free ticks that follow it.
+        final fifthHit = Completer<void>();
+        var hits = 0;
+        final c = ProviderContainer(
+          overrides: [
+            drumPatternPlaybackSinkProvider.overrideWithValue((
+              lanes,
+              volume,
+            ) async {
+              hits++;
+              if (hits >= 5) {
+                if (!fifthHit.isCompleted) fifthHit.complete();
+                return; // Measure time to *reach* the 5th hit, excluding cost.
+              }
+              // Synchronous busy-wait (runs inline before any await),
+              // simulating per-hit audio/UI work on the loop isolate.
+              final spin = Stopwatch()..start();
+              while (spin.elapsedMilliseconds < 12) {
+                // Busy-wait.
+              }
+            }),
+          ],
+        );
+        addTearDown(c.dispose);
+
+        const p = DrumPattern(
+          id: 'dp',
+          name: 'Beat',
+          lengthTicks: 8,
+          lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
+        );
+
+        final notifier = c.read(drumPatternPlaybackProvider.notifier);
+        final clock = Stopwatch()..start();
+        // tempo 7500 → tick = (60000 / 7500) / 4 = 2ms. Loop span = 8 × 2 =
+        // 16ms. The 5th hit is at the start of the 5th loop → tick 32 → 64ms
+        // ideal. Four intervening hits inject 4 × 12 = 48ms of cost; anchored
+        // that fits within the 64ms span. Unanchored total ≈ 64 + 48 = 112ms.
+        unawaited(notifier.start(pattern: p, tempo: 7500));
+        await fifthHit.future;
+        final elapsedMs = clock.elapsedMilliseconds;
+        notifier.stop();
+
+        expect(
+          elapsedMs,
+          lessThan(88),
+          reason: 'drift not absorbed; reached 5th hit in ${elapsedMs}ms',
+        );
+      },
+    );
+
     test('empty pattern does not enter playing state', () async {
       final c = makeContainer();
       final notifier = c.read(drumPatternPlaybackProvider.notifier);
