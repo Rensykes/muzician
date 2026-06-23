@@ -9,6 +9,7 @@ import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../schema/rules/songwriter_playback_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
 import '../utils/note_player.dart';
+import '../utils/tick_pacer.dart';
 import 'drum_pattern_playback_store.dart';
 import 'save_system_store.dart';
 import 'settings_store.dart';
@@ -95,7 +96,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     final endTick = totalBars * measureTicks;
     final metronomeOn = settings.metronomeEnabled;
     final tickDuration =
-        tickDurationOverride ?? pr_rules.durationForTickDelta(1, cfg.tempo);
+        tickDurationOverride ?? pr_rules.tickDuration(cfg.tempo);
 
     if (endTick <= 0) {
       state = state.copyWith(status: SongwriterPlaybackStatus.completed);
@@ -110,20 +111,14 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       measureTicks: measureTicks,
     );
 
-    // Anchor each tick to the wall clock. A fixed per-tick delay lets the
-    // body's work (state mutation → rebuilds, sinks, the active-position
-    // provider) accumulate into drift, so playback runs progressively late.
-    // Instead, target tick N at `tickDuration * N` from the clock start and
-    // wait only the remaining time; when we are behind, yield a microtask
-    // (so cancellation/UI still run) but do not add any extra wait.
-    final clock = Stopwatch()..start();
+    // [TickPacer] anchors each tick to the wall clock so the body's work
+    // (state mutation → rebuilds, sinks, the active-position provider) cannot
+    // accumulate into drift and make playback run progressively late.
+    final pacer = TickPacer(tickDuration);
     var eventIndex = 0;
     for (var tick = 0; tick < endTick; tick++) {
       if (_version != version) return;
-      if (tick > 0) {
-        final lag = tickDuration * tick - clock.elapsed;
-        await Future<void>.delayed(lag > Duration.zero ? lag : Duration.zero);
-      }
+      if (tick > 0) await pacer.awaitBoundary(tick);
       if (_version != version) return;
       state = state.copyWith(currentTick: () => tick);
       if (metronomeOn && tick % beatTicks == 0) {

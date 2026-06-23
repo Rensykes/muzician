@@ -85,33 +85,25 @@ void main() {
     });
   });
 
-  group('durationForTickDelta', () {
-    test('computes 500ms for 4 ticks at 120 BPM', () {
-      // 4 ticks × 125ms = 500ms
-      expect(
-        rules.durationForTickDelta(4, 120),
-        const Duration(milliseconds: 500),
-      );
+  group('tickDuration', () {
+    test('computes 125ms per tick at 120 BPM', () {
+      expect(rules.tickDuration(120), const Duration(milliseconds: 125));
     });
 
-    test('computes 1000ms for 4 ticks at 60 BPM', () {
-      // 4 ticks × 250ms = 1000ms
-      expect(
-        rules.durationForTickDelta(4, 60),
-        const Duration(milliseconds: 1000),
-      );
+    test('computes 250ms per tick at 60 BPM', () {
+      expect(rules.tickDuration(60), const Duration(milliseconds: 250));
     });
 
-    test('returns Duration.zero for zero tick delta', () {
-      expect(rules.durationForTickDelta(0, 120), Duration.zero);
+    test('a span is the tick duration times a tick count', () {
+      // 4 ticks at 120 BPM → 4 × 125ms = 500ms.
+      expect(rules.tickDuration(120) * 4, const Duration(milliseconds: 500));
     });
 
-    test('rounds fractional milliseconds correctly', () {
-      // 1 tick at 180 BPM → 60000/180/4 ≈ 83.333ms → rounded to 83ms
-      expect(
-        rules.durationForTickDelta(1, 180),
-        const Duration(milliseconds: 83),
-      );
+    test('keeps microsecond precision at tempos that do not divide evenly', () {
+      // 1 tick at 180 BPM → 60000/180/4 ≈ 83.333ms. Microsecond-precise
+      // (83333µs), not rounded to a whole millisecond, so the transport does
+      // not accrue a constant tempo offset.
+      expect(rules.tickDuration(180), const Duration(microseconds: 83333));
     });
   });
 

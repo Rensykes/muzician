@@ -309,5 +309,60 @@ void main() {
         await playbackFuture;
       },
     );
+
+    test(
+      'tick clock is wall-anchored: per-beat body cost does not accumulate '
+      'as drift',
+      () async {
+        // Inject a heavy synchronous cost on every metronome beat. Without
+        // wall-clock anchoring the loop adds this on top of every tick's fixed
+        // delay, so total playback time balloons past the ideal span. With
+        // anchoring it is absorbed into the per-tick budget.
+        final container = ProviderContainer(
+          overrides: [
+            pianoRollPlaybackSinkProvider.overrideWithValue(
+              (notes, volume) async {},
+            ),
+            pianoRollMetronomeSinkProvider.overrideWithValue(({
+              required bool accent,
+            }) async {
+              final spin = Stopwatch()..start();
+              while (spin.elapsedMilliseconds < 12) {
+                // Busy-wait simulating per-beat UI/audio work on the loop.
+              }
+            }),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        // ignore: invalid_use_of_protected_member
+        container.read(settingsProvider.notifier).state = AppSettings(
+          metronomeEnabled: true,
+        );
+        final pr = container.read(pianoRollProvider.notifier);
+        pr.setTotalMeasures(2); // 2 bars 4/4 → 32 ticks, 8 beats.
+        pr.selectColumn(0);
+
+        final notifier = container.read(pianoRollPlaybackProvider.notifier);
+        final clock = Stopwatch()..start();
+        // 32 ticks × 4ms ≈ 128ms ideal span; 8 beats × 12ms = 96ms injected
+        // cost. Anchored, total stays near the ideal span (cost overlaps the
+        // waits). Unanchored it would be ~128 + 96 ≈ 224ms.
+        await notifier.startPlayback(
+          tickDurationOverride: const Duration(milliseconds: 4),
+        );
+        final elapsedMs = clock.elapsedMilliseconds;
+
+        expect(
+          container.read(pianoRollPlaybackProvider).status,
+          PianoRollPlaybackStatus.completed,
+        );
+        expect(
+          elapsedMs,
+          lessThan(180),
+          reason: 'drift not absorbed; loop ran for ${elapsedMs}ms',
+        );
+      },
+    );
   });
 }

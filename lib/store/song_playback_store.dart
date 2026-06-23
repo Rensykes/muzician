@@ -11,10 +11,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song_playback.dart';
 import '../models/song_project.dart';
+import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../schema/rules/song_audio_rules.dart';
 import '../schema/rules/song_playback_rules.dart' as pb_rules;
 import '../schema/rules/song_rules.dart' as song_rules;
 import '../utils/note_player.dart';
+import '../utils/tick_pacer.dart';
 import 'settings_store.dart';
 import 'song_project_store.dart';
 
@@ -146,8 +148,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
     final events = pb_rules.buildPlaybackEvents(project);
     final multiplier = state.tempoMultiplier;
     final baseTickDuration =
-        tickDurationOverride ??
-        Duration(milliseconds: ((60000 / project.config.tempo) / 4).round());
+        tickDurationOverride ?? pr_rules.tickDuration(project.config.tempo);
     final tickDuration = multiplier == 1.0
         ? baseTickDuration
         : Duration(
@@ -222,10 +223,16 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
         });
       }
 
+      // [TickPacer] anchors each tick to the wall clock so per-tick body work
+      // (state mutation → rebuilds, sinks, audio scheduling) cannot accumulate
+      // into drift. The boundary is keyed off monotonic [elapsedTicks] (which
+      // keeps advancing across loop wraps), which also keeps the playhead
+      // aligned with the real-time `audioTickToMs` clip schedule.
+      final pacer = TickPacer(tickDuration);
       var tick = start;
       var eventIndex = 0;
       while (tick < end && _playbackVersion == version) {
-        if (elapsedTicks > 0) await Future<void>.delayed(tickDuration);
+        if (elapsedTicks > 0) await pacer.awaitBoundary(elapsedTicks);
         if (_playbackVersion != version) return;
         state = state.copyWith(currentTick: () => tick);
 
@@ -275,9 +282,9 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
       pendingStops.clear();
 
       if (_playbackVersion == version) {
-        // Let last notes decay.
+        // Let last notes decay — one quarter note (4 ticks).
         await Future<void>.delayed(
-          Duration(milliseconds: (60000 / project.config.tempo).round()),
+          pr_rules.tickDuration(project.config.tempo) * 4,
         );
         state = state.copyWith(
           status: SongPlaybackStatus.completed,

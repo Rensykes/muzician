@@ -11,6 +11,7 @@ import '../models/hum_to_midi.dart';
 import '../models/piano_roll_playback.dart';
 import '../schema/rules/piano_roll_playback_rules.dart' as rules;
 import '../utils/note_player.dart';
+import '../utils/tick_pacer.dart';
 import 'hum_to_midi_store.dart';
 import 'piano_roll_store.dart';
 import 'settings_store.dart';
@@ -60,7 +61,7 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
   ///   - hum status is [HumToMidiStatus.recording], [HumToMidiStatus.processing],
   ///     or [HumToMidiStatus.requestingPermission]
   ///   - there are no notes at or after the start tick
-  Future<void> startPlayback() async {
+  Future<void> startPlayback({Duration? tickDurationOverride}) async {
     if (state.status == PianoRollPlaybackStatus.playing) return;
 
     // ── Block while hum is active ──────────────────────────────────────────
@@ -92,7 +93,7 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
     // x/4 signatures and 2 ticks for x/8 (eighth-note beats).
     final beatTicks = timeSig.ticksPerBeat;
     final measureTicks = beatTicks * timeSig.beatsPerMeasure;
-    final tickDuration = rules.durationForTickDelta(1, tempo);
+    final tickDuration = tickDurationOverride ?? rules.tickDuration(tempo);
 
     if (events.isEmpty && !metronomeOn) {
       state = state.copyWith(
@@ -119,12 +120,14 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
     };
 
     // ── Advance the playhead one tick at a time ────────────────────────────
+    // [TickPacer] anchors each tick to the wall clock so per-tick body work
+    // (state mutation → rebuilds, the awaited note sink, the metronome) cannot
+    // accumulate into drift.
+    final pacer = TickPacer(tickDuration);
     for (var tick = startTick; tick < endTick; tick++) {
       if (_playbackVersion != version) return;
 
-      if (tick > startTick) {
-        await Future<void>.delayed(tickDuration);
-      }
+      if (tick > startTick) await pacer.awaitBoundary(tick - startTick);
 
       if (_playbackVersion != version) return;
 
@@ -143,9 +146,9 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
       }
     }
 
-    // ── Advance from the last audible/visible tick to the exclusive end ────
+    // ── Hold the final tick for its full duration before completing ────────
     if (_playbackVersion != version) return;
-    await Future<void>.delayed(tickDuration);
+    await pacer.awaitBoundary(endTick - startTick);
 
     // ── Transition to completed ────────────────────────────────────────────
     if (_playbackVersion != version) return;
