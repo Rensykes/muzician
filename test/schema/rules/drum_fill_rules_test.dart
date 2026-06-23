@@ -59,6 +59,10 @@ void main() {
       expect(euclid(16, 4, rotation: 1), [1, 5, 9, 13]);
     });
 
+    test('negative rotation rotates left', () {
+      expect(euclid(16, 4, rotation: -1), [3, 7, 11, 15]);
+    });
+
     test('zero / negative guards return empty', () {
       expect(euclid(16, 0), isEmpty);
       expect(euclid(0, 4), isEmpty);

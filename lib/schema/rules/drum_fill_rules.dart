@@ -20,7 +20,8 @@ List<int> everyN(int lengthTicks, int step, {int offset = 0}) {
 
 /// Euclidean rhythm: distributes [hits] pulses as evenly as possible across
 /// [lengthTicks] slots using Bjorklund's algorithm, then rotates the result by
-/// [rotation] slots. Returns sorted active ticks.
+/// [rotation] slots. Returns sorted active ticks. Negative [rotation] values
+/// rotate left (e.g. `rotation: -1` on a 16-slot pattern equals `rotation: 15`).
 ///
 /// `euclid(8, 3) == [0, 3, 6]`, `euclid(16, 4) == [0, 4, 8, 12]`.
 List<int> euclid(int lengthTicks, int hits, {int rotation = 0}) {
@@ -64,8 +65,9 @@ List<int> euclid(int lengthTicks, int hits, {int rotation = 0}) {
   }
 
   if (rotation != 0 && ticks.isNotEmpty) {
-    final r = rotation % lengthTicks;
-    return ticks.map((t) => (t + r) % lengthTicks).toList()..sort();
+    final shift = rotation % lengthTicks;
+    if (shift == 0) return ticks; // exact-multiple rotation is a no-op
+    return ticks.map((t) => (t + shift) % lengthTicks).toList()..sort();
   }
   return ticks;
 }
