@@ -7,6 +7,7 @@ import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
 import '../theme/muzician_theme.dart';
+import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
 import 'project_config_sheet.dart';
 
@@ -360,34 +361,18 @@ Future<void> _confirmDeleteProject(
           'This cannot be undone.';
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF141826),
-      title: const Text(
-        'Delete project?',
-        style: TextStyle(
-          color: MuzicianTheme.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      content: Text(
-        body,
-        style: const TextStyle(color: MuzicianTheme.textSecondary),
-      ),
+    builder: (ctx) => MuzicianDialog(
+      title: 'Delete project?',
+      content: Text(body),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Cancel',
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: MuzicianTheme.textSecondary),
-          ),
         ),
-        TextButton(
+        MuzicianDialogButton(
+          'Delete',
+          emphasis: MuzicianDialogEmphasis.destructive,
           onPressed: () => Navigator.pop(ctx, true),
-          child: const Text(
-            'Delete',
-            style: TextStyle(color: MuzicianTheme.red),
-          ),
         ),
       ],
     ),
@@ -452,16 +437,8 @@ Future<String?> _promptName(
   final ctrl = TextEditingController();
   return showDialog<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF141826),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: MuzicianTheme.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    builder: (ctx) => MuzicianDialog(
+      title: title,
       content: TextField(
         controller: ctrl,
         autofocus: true,
@@ -473,19 +450,14 @@ Future<String?> _promptName(
         onSubmitted: (_) => Navigator.pop(ctx, ctrl.text.trim()),
       ),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Cancel',
           onPressed: () => Navigator.pop(ctx),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: MuzicianTheme.textSecondary),
-          ),
         ),
-        TextButton(
+        MuzicianDialogButton(
+          'OK',
+          emphasis: MuzicianDialogEmphasis.primary,
           onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-          child: const Text(
-            'OK',
-            style: TextStyle(color: MuzicianTheme.sky),
-          ),
         ),
       ],
     ),

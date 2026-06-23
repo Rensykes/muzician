@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
@@ -186,56 +187,20 @@ class SongwriterHeader extends ConsumerWidget {
   ) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (dialogCtx) => Dialog(
-        backgroundColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: MuzicianTheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: MuzicianTheme.glassBorder),
+      builder: (dialogCtx) => MuzicianDialog(
+        title: 'New project?',
+        content: const Text('This clears the current songwriter session.'),
+        actions: [
+          MuzicianDialogButton(
+            'Cancel',
+            onPressed: () => Navigator.pop(dialogCtx, false),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'New project?',
-                style: TextStyle(
-                  color: MuzicianTheme.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'This clears the current songwriter session.',
-                style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _GlassTextButton(
-                    label: 'Cancel',
-                    onTap: () => Navigator.pop(dialogCtx, false),
-                  ),
-                  const SizedBox(width: 12),
-                  _GlassTextButton(
-                    label: 'New project',
-                    accent: true,
-                    onTap: () => Navigator.pop(dialogCtx, true),
-                  ),
-                ],
-              ),
-            ],
+          MuzicianDialogButton(
+            'New project',
+            emphasis: MuzicianDialogEmphasis.primary,
+            onPressed: () => Navigator.pop(dialogCtx, true),
           ),
-        ),
+        ],
       ),
     );
     if (ok == true) await notifier.newProject();
@@ -407,69 +372,40 @@ void _editProjectName(BuildContext context, WidgetRef ref, String current) {
   final controller = TextEditingController(text: current);
   showDialog<void>(
     context: context,
-    builder: (dialogCtx) => Dialog(
-      backgroundColor: Colors.transparent,
-      shadowColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: MuzicianTheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: MuzicianTheme.glassBorder),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Project name',
-              style: TextStyle(
-                color: MuzicianTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              key: const Key('projectNameField'),
-              controller: controller,
-              autofocus: true,
-              style: const TextStyle(color: MuzicianTheme.textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Name',
-                labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: MuzicianTheme.glassBorder),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: MuzicianTheme.sky),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _GlassTextButton(
-                  label: 'Cancel',
-                  onTap: () => Navigator.pop(dialogCtx),
-                ),
-                const SizedBox(width: 12),
-                _GlassTextButton(
-                  label: 'Save',
-                  accent: true,
-                  onTap: () {
-                    ref
-                        .read(songwriterProvider.notifier)
-                        .setProjectName(controller.text);
-                    Navigator.pop(dialogCtx);
-                  },
-                ),
-              ],
-            ),
-          ],
+    builder: (dialogCtx) => MuzicianDialog(
+      title: 'Project name',
+      content: TextField(
+        key: const Key('projectNameField'),
+        controller: controller,
+        autofocus: true,
+        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        decoration: InputDecoration(
+          labelText: 'Name',
+          labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: MuzicianTheme.sky),
+          ),
         ),
       ),
+      actions: [
+        MuzicianDialogButton(
+          'Cancel',
+          onPressed: () => Navigator.pop(dialogCtx),
+        ),
+        MuzicianDialogButton(
+          'Save',
+          emphasis: MuzicianDialogEmphasis.primary,
+          onPressed: () {
+            ref
+                .read(songwriterProvider.notifier)
+                .setProjectName(controller.text);
+            Navigator.pop(dialogCtx);
+          },
+        ),
+      ],
     ),
   );
 }
@@ -590,14 +526,9 @@ class _GlassPill extends StatelessWidget {
 }
 
 class _GlassTextButton extends StatelessWidget {
-  const _GlassTextButton({
-    required this.label,
-    required this.onTap,
-    this.accent = false,
-  });
+  const _GlassTextButton({required this.label, required this.onTap});
   final String label;
   final VoidCallback onTap;
-  final bool accent;
 
   @override
   Widget build(BuildContext context) {
@@ -605,8 +536,8 @@ class _GlassTextButton extends StatelessWidget {
       onTap: onTap,
       child: Text(
         label,
-        style: TextStyle(
-          color: accent ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+        style: const TextStyle(
+          color: MuzicianTheme.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),

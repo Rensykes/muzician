@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../schema/rules/song_render_rules.dart';
 import '../../store/song_project_store.dart';
+import '../../ui/core/muzician_dialog.dart';
 import '../../ui/glass_snackbar.dart';
 import '../../utils/wav_writer.dart';
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
@@ -35,25 +36,21 @@ Future<void> exportSongToWav(BuildContext context, WidgetRef ref) async {
   if (hasAudio) {
     final proceed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141826),
-        title: const Text(
-          'Export WAV',
-          style: TextStyle(color: Colors.white),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Export WAV',
         content: const Text(
           'Audio clips are not included in the export yet — only note and '
           'drum tracks are rendered.',
-          style: TextStyle(color: Colors.white70),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
           ),
-          FilledButton(
+          MuzicianDialogButton(
+            'Export',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Export'),
           ),
         ],
       ),

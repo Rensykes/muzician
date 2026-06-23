@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 
 class SongTrackHeader extends ConsumerWidget {
   final SongTrack track;
@@ -208,12 +209,8 @@ class _TrackOverflowMenu extends ConsumerWidget {
   void _showVolumeDialog(BuildContext context, WidgetRef ref, SongTrack track) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: const Text(
-          'Track Volume',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Track Volume',
         content: Consumer(
           builder: (_, dialogRef, _) {
             final volume = dialogRef.watch(
@@ -256,9 +253,10 @@ class _TrackOverflowMenu extends ConsumerWidget {
           },
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Done',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Done'),
           ),
         ],
       ),
@@ -269,12 +267,8 @@ class _TrackOverflowMenu extends ConsumerWidget {
     final controller = TextEditingController(text: track.name);
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: const Text(
-          'Rename Track',
-          style: TextStyle(color: MuzicianTheme.textPrimary),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Rename Track',
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -285,18 +279,19 @@ class _TrackOverflowMenu extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Rename',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () {
               ref
                   .read(songProjectProvider.notifier)
                   .renameTrack(track.id, controller.text);
               Navigator.pop(ctx);
             },
-            child: const Text('Rename'),
           ),
         ],
       ),

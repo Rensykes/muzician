@@ -7,6 +7,7 @@ import '../models/project_config.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
 import '../theme/muzician_theme.dart';
+import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
 
 /// Edit a project's global key, tempo, and time signature.
@@ -78,36 +79,22 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
         getSavesInSubtree(state.folders, state.saves, widget.projectId).length;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141826),
-        title: const Text(
-          'Apply project config?',
-          style: TextStyle(
-            color: MuzicianTheme.textPrimary,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+      builder: (ctx) => MuzicianDialog(
+        title: 'Apply project config?',
         content: Text(
           affected == 0
               ? 'No saves under this project yet — settings will apply going forward.'
               : '$affected save${affected == 1 ? '' : 's'} will be retuned / retimed. Continue?',
-          style: const TextStyle(color: MuzicianTheme.textSecondary),
         ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: MuzicianTheme.textSecondary),
-            ),
           ),
-          TextButton(
+          MuzicianDialogButton(
+            'Apply',
+            emphasis: MuzicianDialogEmphasis.primary,
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Apply',
-              style: TextStyle(color: MuzicianTheme.sky),
-            ),
           ),
         ],
       ),

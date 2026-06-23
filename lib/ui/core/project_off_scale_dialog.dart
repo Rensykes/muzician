@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../theme/muzician_theme.dart';
+import 'muzician_dialog.dart';
 
 enum ProjectOffScaleDecision { switchToDump, cancel }
 
@@ -24,48 +25,38 @@ class ProjectOffScaleDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF141826),
-      title: const Text(
-        'Note outside project key',
-        style: TextStyle(
-          color: MuzicianTheme.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return MuzicianDialog(
+      title: 'Note outside project key',
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             '"$noteName" is not in $keyLabel.',
-            style: const TextStyle(color: MuzicianTheme.textPrimary),
+            style: const TextStyle(
+              color: MuzicianTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             'Project "$projectName" is locked to its key. Switch to Dump to '
             'experiment with notes outside the key, or stay in the project.',
-            style: const TextStyle(color: MuzicianTheme.textSecondary),
           ),
         ],
       ),
       actions: [
-        TextButton(
+        MuzicianDialogButton(
+          'Stay in project',
           onPressed: () =>
               Navigator.of(context).pop(ProjectOffScaleDecision.cancel),
-          child: const Text(
-            'Stay in project',
-            style: TextStyle(color: MuzicianTheme.textSecondary),
-          ),
         ),
-        TextButton(
+        MuzicianDialogButton(
+          'Switch to Dump',
+          emphasis: MuzicianDialogEmphasis.primary,
+          color: MuzicianTheme.orange,
           onPressed: () =>
               Navigator.of(context).pop(ProjectOffScaleDecision.switchToDump),
-          child: const Text(
-            'Switch to Dump',
-            style: TextStyle(color: MuzicianTheme.orange),
-          ),
         ),
       ],
     );
