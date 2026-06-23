@@ -9,7 +9,9 @@ library;
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song_project.dart';
+import '../schema/rules/piano_roll_playback_rules.dart' as rules;
 import '../utils/note_player.dart';
+import '../utils/tick_pacer.dart';
 
 /// Signature for a function that plays [lanes] as drum voices at [volume].
 typedef DrumPatternPlaybackSink =
@@ -76,10 +78,8 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
     }
 
     // Sixteenth-grid tick: a quarter note spans 4 ticks, so one tick is a
-    // sixteenth.  ms = (60000 / tempo) / 4.
-    final tickDuration = Duration(
-      microseconds: ((60000000 / tempo) / 4).round(),
-    );
+    // sixteenth.
+    final tickDuration = rules.tickDuration(tempo);
 
     final version = ++_version;
     state = const DrumPatternPlaybackState(
@@ -87,14 +87,20 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
       currentTick: 0,
     );
 
+    // [TickPacer] anchors each tick to the wall clock so per-tick body work
+    // (state mutation → rebuilds, the drum sink) cannot accumulate into drift.
+    // The boundary is keyed off a monotonic [elapsedTicks] count, not the
+    // wrapping [tick], so the schedule survives loop wraps.
+    final pacer = TickPacer(tickDuration);
     var tick = 0;
+    var elapsedTicks = 0;
     while (_version == version) {
       state = state.copyWith(currentTick: () => tick);
       final lanes = lanesByTick[tick];
       if (lanes != null && lanes.isNotEmpty) {
         unawaited(sink(lanes, 0.8));
       }
-      await Future<void>.delayed(tickDuration);
+      await pacer.awaitBoundary(++elapsedTicks);
       if (_version != version) return;
       tick = (tick + 1) % length;
     }

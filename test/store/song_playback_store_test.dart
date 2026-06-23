@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/song_playback.dart';
@@ -282,6 +284,67 @@ void main() {
     playback.clearLoopRegion();
     expect(container.read(songPlaybackProvider).hasLoop, isFalse);
   });
+
+  test(
+    'tick clock is wall-anchored: per-beat body cost does not accumulate '
+    'as drift',
+    () async {
+      // A heavy synchronous cost on every metronome beat. Without wall-clock
+      // anchoring the loop adds this on top of every tick's delay, so reaching
+      // the final beat takes far longer than the ideal span. Anchored, it is
+      // absorbed into the per-tick budget.
+      final lastBeat = Completer<void>();
+      var beats = 0;
+      final container = ProviderContainer(
+        overrides: [
+          songNotePlaybackSinkProvider.overrideWith(
+            (_) => (notes, vol) async {},
+          ),
+          songDrumPlaybackSinkProvider.overrideWith(
+            (_) => (lanes, vol) async {},
+          ),
+          songMetronomeSinkProvider.overrideWith(
+            (_) => ({required bool accent}) async {
+              beats++;
+              if (beats >= 8) {
+                if (!lastBeat.isCompleted) lastBeat.complete();
+                return; // Exclude the final beat's cost from the measurement.
+              }
+              final spin = Stopwatch()..start();
+              while (spin.elapsedMilliseconds < 12) {
+                // Busy-wait simulating per-beat UI/audio work on the loop.
+              }
+            },
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(settingsProvider.notifier).setMetronomeEnabled(true);
+      container.read(songProjectProvider.notifier).setTotalMeasures(2);
+
+      final playback = container.read(songPlaybackProvider.notifier);
+      final clock = Stopwatch()..start();
+      // 2 bars 4/4 → 8 beats at ticks 0,4,…,28; override 4ms/tick puts the
+      // 8th beat at 112ms ideal. Seven intervening beats inject 7 × 12 = 84ms
+      // of cost; anchored that fits within the 112ms span. Unanchored total ≈
+      // 112 + 84 = 196ms.
+      unawaited(
+        playback.startPlayback(
+          tickDurationOverride: const Duration(milliseconds: 4),
+        ),
+      );
+      await lastBeat.future;
+      final elapsedMs = clock.elapsedMilliseconds;
+      playback.stopPlayback();
+
+      expect(
+        elapsedMs,
+        lessThan(150),
+        reason: 'drift not absorbed; reached final beat in ${elapsedMs}ms',
+      );
+    },
+  );
 }
 
 class _AudioCall {

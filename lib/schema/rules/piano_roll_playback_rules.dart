@@ -24,11 +24,14 @@ int resolvePlaybackEndTick(PianoRollState state) =>
 /// where [pr.ticksPerQuarter] is 4 (sixteenth-note grid).
 double millisecondsPerTick(int tempo) => 60000 / tempo / pr.ticksPerQuarter;
 
-/// Returns the [Duration] spanned by [tickDelta] ticks at [tempo] BPM.
+/// Wall-clock [Duration] of a single tick at [tempo] BPM, microsecond-precise.
 ///
-/// Rounds fractional milliseconds to the nearest millisecond.
-Duration durationForTickDelta(int tickDelta, int tempo) =>
-    Duration(milliseconds: (millisecondsPerTick(tempo) * tickDelta).round());
+/// Microsecond precision (rather than rounding to whole milliseconds) keeps a
+/// transport from accruing a constant tempo offset at tempos that don't divide
+/// evenly — e.g. 140 BPM is 107.14µs/tick, not 107ms. Multiply by a tick count
+/// for a span: `tickDuration(tempo) * ticks`.
+Duration tickDuration(int tempo) =>
+    Duration(microseconds: (millisecondsPerTick(tempo) * 1000).round());
 
 /// Groups [notes] into a sorted list of [PianoRollPlaybackEvent]s.
 ///
