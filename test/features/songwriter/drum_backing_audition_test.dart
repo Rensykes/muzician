@@ -39,6 +39,12 @@ void main() {
       ),
     );
     expect(find.byKey(const Key('backingToggle')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('backingToggle')));
+    await tester.pump();
+    final chip = tester.widget<FilterChip>(
+      find.byKey(const Key('backingToggle')),
+    );
+    expect(chip.selected, isTrue);
   });
 
   testWidgets('no backing toggle when backing is null', (tester) async {

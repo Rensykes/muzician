@@ -42,6 +42,11 @@ final drumPatternBackingSinkProvider = Provider<DrumPatternBackingSink>((ref) {
   };
 });
 
+/// Descriptor for the drum editor's "audition with backing": the section loop
+/// length in ticks and a `tick → midi pitches` chord bed that loops under the
+/// pattern.
+typedef DrumBackingDescriptor = ({int loopTicks, Map<int, List<int>> notesByTick});
+
 enum DrumPatternPlaybackStatus { idle, playing }
 
 /// Immutable transport state for the drum pattern audition.

@@ -260,7 +260,7 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
   /// Optional looping chord bed for "audition with backing". When non-null the
   /// editor shows a Backing toggle; when the toggle is on, Play loops over
   /// [backing.loopTicks] with the chord stabs in [backing.notesByTick].
-  final ({int loopTicks, Map<int, List<int>> notesByTick})? backing;
+  final DrumBackingDescriptor? backing;
 
   @override
   ConsumerState<DrumMachineEditorBody> createState() =>
@@ -375,7 +375,7 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
                   label: const Text('Backing'),
                   selected: _backingOn,
                   showCheckmark: false,
-                  onSelected: (v) => setState(() => _backingOn = v),
+                  onSelected: playing ? null : (v) => setState(() => _backingOn = v),
                   backgroundColor: MuzicianTheme.violet.withValues(alpha: 0.12),
                   selectedColor: MuzicianTheme.violet.withValues(alpha: 0.30),
                   side: BorderSide(
