@@ -11,7 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart' show TimeSignature;
 import '../../models/song_project.dart';
 import '../../schema/rules/drum_fill_rules.dart';
+import '../../schema/rules/drum_presets.dart';
 import '../../store/drum_pattern_playback_store.dart';
+import 'drum_library_sheet.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
@@ -250,6 +252,7 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
     required this.onChanged,
     this.beatUnit = 4,
     this.backing,
+    this.enableLibrary = false,
   });
 
   final DrumPattern pattern;
@@ -261,6 +264,10 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
   /// editor shows a Backing toggle; when the toggle is on, Play loops over
   /// [backing.loopTicks] with the chord stabs in [backing.notesByTick].
   final DrumBackingDescriptor? backing;
+
+  /// When true, the transport shows a Library button that replaces the pattern
+  /// with a chosen built-in preset (same id, so referencing blocks stay linked).
+  final bool enableLibrary;
 
   @override
   ConsumerState<DrumMachineEditorBody> createState() =>
@@ -323,6 +330,11 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
         onApply: (ticks) => _applyLaneTicks(laneId, ticks),
       ),
     );
+  }
+
+  void _applyPreset(DrumPreset preset) {
+    setState(() => _pattern = preset.toPattern(_pattern.id));
+    widget.onChanged(_pattern);
   }
 
   @override
@@ -389,6 +401,19 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
                 ),
               ],
               const Spacer(),
+              if (widget.enableLibrary) ...[
+                IconButton(
+                  key: const Key('drumLibraryButton'),
+                  tooltip: 'Drum library',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  color: MuzicianTheme.orange,
+                  icon: const Icon(Icons.library_music),
+                  onPressed: () =>
+                      showDrumLibrarySheet(context: context, onPick: _applyPreset),
+                ),
+                const SizedBox(width: 8),
+              ],
               Text(
                 '${widget.tempo} BPM',
                 style: const TextStyle(

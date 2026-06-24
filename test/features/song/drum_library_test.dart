@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/song/drum_library_sheet.dart';
+import 'package:muzician/features/song/drum_machine_editor.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/schema/rules/drum_presets.dart';
 
 void main() {
@@ -34,5 +37,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picked?.name, 'Four on the Floor');
+  });
+
+  DrumPattern emptyPattern(String id) => DrumPattern(
+    id: id,
+    name: 'Beat',
+    lengthTicks: 16,
+    lanes: [
+      for (final laneId in DrumLaneId.values)
+        DrumLaneSequence(laneId: laneId, activeTicks: const []),
+    ],
+  );
+
+  testWidgets('Library button applies a preset to the pattern, same id', (
+    tester,
+  ) async {
+    DrumPattern? captured;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: DrumMachineEditorBody(
+              pattern: emptyPattern('p1'),
+              tempo: 120,
+              enableLibrary: true,
+              onChanged: (p) => captured = p,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('drumLibraryButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('preset_Four on the Floor')));
+    await tester.pumpAndSettle();
+
+    expect(captured, isNotNull);
+    expect(captured!.id, 'p1'); // same id → block stays linked
+    final kick = captured!.lanes.firstWhere((l) => l.laneId == DrumLaneId.kick);
+    expect(kick.activeTicks, [0, 4, 8, 12]);
+  });
+
+  testWidgets('no Library button when enableLibrary is false', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: DrumMachineEditorBody(
+              pattern: emptyPattern('p1'),
+              tempo: 120,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('drumLibraryButton')), findsNothing);
   });
 }

@@ -61,6 +61,7 @@ class _Body extends ConsumerWidget {
         pattern: pattern,
         tempo: project.config.tempo,
         backing: backing,
+        enableLibrary: true,
         onChanged: (updated) {
           ref.read(songwriterProvider.notifier).updateDrumPattern(updated);
         },
