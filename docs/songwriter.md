@@ -67,6 +67,28 @@ capture events. The sheet UI highlights the active bar cell via
 `songwriterActivePositionProvider` (global bar → section instance + local bar) and
 auto-scrolls the active section into view.
 
+### Drum pattern editor (`lib/features/song/drum_machine_editor.dart`)
+
+Drum-lane blocks open the shared `DrumMachineEditorBody` — a step grid plus a
+transport row. Beyond tapping individual steps it offers:
+
+- **Clear all** — a transport button (with a confirm dialog) empties every lane.
+- **Per-lane fills** — each lane's menu places hits *every N steps* (with a start
+  offset) or by a *Euclidean* (Bjorklund) distribution, plus clear-lane. Pure
+  generators live in `lib/schema/rules/drum_fill_rules.dart`.
+- **Backing audition** (Songwriter only) — a **Backing** toggle loops the section's
+  harmony chords under the pattern (loops at section length; the pattern tiles).
+  Source: `sectionHarmonyLoop` in `songwriter_playback_rules.dart`.
+- **Drum library** (Songwriter only) — a **presets** picker (16 built-in loops/fills
+  in `lib/schema/rules/drum_presets.dart`) and **My loops** (custom loops saved as
+  `DrumLoopSnapshot` through the save system; see `docs/save_system.md`). Applying a
+  preset or a loop overwrites the current pattern in place, keeping its id so the
+  referencing block stays linked.
+
+The Songwriter drum sheet opts into the library and backing via `enableLibrary` /
+`backing` on `DrumMachineEditorBody`; the Song feature embeds the same body without
+them, so neither surface appears there.
+
 ## Store (`lib/store/songwriter_store.dart`)
 
 Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, SongwriterProjectSnapshot>`).

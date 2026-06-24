@@ -65,51 +65,11 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
         .length;
     final timeSig = project.config.timeSignature;
 
-    void clearAll() {
-      ref
-          .read(songProjectProvider.notifier)
-          .applyDrumPattern(
-            patternId,
-            pattern.copyWith(
-              lanes: [
-                for (final lane in pattern.lanes)
-                  lane.copyWith(activeTicks: const []),
-              ],
-            ),
-          );
-      HapticFeedback.mediumImpact();
-    }
-
     return Scaffold(
       backgroundColor: MuzicianTheme.scaffoldBg,
       appBar: AppBar(
         title: Text(pattern.name),
         actions: [
-          IconButton(
-            tooltip: 'Clear all',
-            icon: const Icon(Icons.clear_all),
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => MuzicianDialog(
-                  title: 'Clear all steps?',
-                  content: const Text('This empties every lane on this pattern.'),
-                  actions: [
-                    MuzicianDialogButton(
-                      'Cancel',
-                      onPressed: () => Navigator.pop(ctx, false),
-                    ),
-                    MuzicianDialogButton(
-                      'Clear',
-                      emphasis: MuzicianDialogEmphasis.destructive,
-                      onPressed: () => Navigator.pop(ctx, true),
-                    ),
-                  ],
-                ),
-              );
-              if (ok == true) clearAll();
-            },
-          ),
           TextButton(
             onPressed: () {
               ref
@@ -278,11 +238,13 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
 class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
   late DrumPattern _pattern;
   bool _backingOn = false;
+  late final DrumPatternPlaybackNotifier _playback;
 
   @override
   void initState() {
     super.initState();
     _pattern = widget.pattern;
+    _playback = ref.read(drumPatternPlaybackProvider.notifier);
   }
 
   @override
@@ -291,6 +253,20 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     if (oldWidget.pattern.id != widget.pattern.id) {
       _pattern = widget.pattern;
     }
+  }
+
+  @override
+  void dispose() {
+    // Stop the audition loop when the editor closes (e.g. the Songwriter drum
+    // pattern sheet is dismissed), so playback does not keep running in the
+    // background. The notifier is captured in initState because `ref` is not
+    // reliably usable from dispose().
+    try {
+      _playback.stop();
+    } catch (_) {
+      // Provider container already torn down — nothing left to stop.
+    }
+    super.dispose();
   }
 
   /// Persist [next] as the edited pattern and notify the host. Single source of
@@ -358,6 +334,40 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     ),
   );
 
+  void _clearAll() {
+    _commit(
+      _pattern.copyWith(
+        lanes: [
+          for (final lane in _pattern.lanes)
+            lane.copyWith(activeTicks: const []),
+        ],
+      ),
+    );
+    HapticFeedback.mediumImpact();
+  }
+
+  Future<void> _confirmClearAll() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => MuzicianDialog(
+        title: 'Clear all steps?',
+        content: const Text('This empties every lane on this pattern.'),
+        actions: [
+          MuzicianDialogButton(
+            'Cancel',
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          MuzicianDialogButton(
+            'Clear',
+            emphasis: MuzicianDialogEmphasis.destructive,
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) _clearAll();
+  }
+
   @override
   Widget build(BuildContext context) {
     final playback = ref.watch(drumPatternPlaybackProvider);
@@ -400,6 +410,14 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
                 icon: Icon(playing ? Icons.stop : Icons.play_arrow),
                 color: MuzicianTheme.orange,
                 onPressed: togglePlayback,
+              ),
+              IconButton(
+                key: const Key('drumClearAllButton'),
+                tooltip: 'Clear all',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.clear_all),
+                color: MuzicianTheme.textMuted,
+                onPressed: _confirmClearAll,
               ),
               if (widget.backing != null) ...[
                 const SizedBox(width: 4),
