@@ -249,12 +249,18 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
     required this.tempo,
     required this.onChanged,
     this.beatUnit = 4,
+    this.backing,
   });
 
   final DrumPattern pattern;
   final int tempo;
   final int beatUnit;
   final void Function(DrumPattern updated) onChanged;
+
+  /// Optional looping chord bed for "audition with backing". When non-null the
+  /// editor shows a Backing toggle; when the toggle is on, Play loops over
+  /// [backing.loopTicks] with the chord stabs in [backing.notesByTick].
+  final ({int loopTicks, Map<int, List<int>> notesByTick})? backing;
 
   @override
   ConsumerState<DrumMachineEditorBody> createState() =>
@@ -263,6 +269,7 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
 
 class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
   late DrumPattern _pattern;
+  bool _backingOn = false;
 
   @override
   void initState() {
@@ -332,7 +339,17 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
       if (playing) {
         notifier.stop();
       } else {
-        notifier.start(pattern: _pattern, tempo: widget.tempo);
+        final backing = widget.backing;
+        if (_backingOn && backing != null) {
+          notifier.start(
+            pattern: _pattern,
+            tempo: widget.tempo,
+            backingNotes: backing.notesByTick,
+            loopTicks: backing.loopTicks,
+          );
+        } else {
+          notifier.start(pattern: _pattern, tempo: widget.tempo);
+        }
       }
       HapticFeedback.lightImpact();
     }
@@ -351,6 +368,26 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
                 color: MuzicianTheme.orange,
                 onPressed: togglePlayback,
               ),
+              if (widget.backing != null) ...[
+                const SizedBox(width: 4),
+                FilterChip(
+                  key: const Key('backingToggle'),
+                  label: const Text('Backing'),
+                  selected: _backingOn,
+                  showCheckmark: false,
+                  onSelected: (v) => setState(() => _backingOn = v),
+                  backgroundColor: MuzicianTheme.violet.withValues(alpha: 0.12),
+                  selectedColor: MuzicianTheme.violet.withValues(alpha: 0.30),
+                  side: BorderSide(
+                    color: MuzicianTheme.violet.withValues(alpha: 0.5),
+                  ),
+                  labelStyle: const TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const Spacer(),
               Text(
                 '${widget.tempo} BPM',
