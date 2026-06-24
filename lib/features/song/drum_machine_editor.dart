@@ -10,10 +10,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart' show TimeSignature;
 import '../../models/song_project.dart';
+import '../../schema/rules/drum_fill_rules.dart';
+import '../../schema/rules/drum_presets.dart';
 import '../../store/drum_pattern_playback_store.dart';
+import 'drum_library_sheet.dart';
+import 'drum_loop_save_panel.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
+import '../_mockup_shell.dart';
 
 const double _kCellSize = 32;
 const double _kCellMargin = 2;
@@ -247,12 +252,23 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
     required this.tempo,
     required this.onChanged,
     this.beatUnit = 4,
+    this.backing,
+    this.enableLibrary = false,
   });
 
   final DrumPattern pattern;
   final int tempo;
   final int beatUnit;
   final void Function(DrumPattern updated) onChanged;
+
+  /// Optional looping chord bed for "audition with backing". When non-null the
+  /// editor shows a Backing toggle; when the toggle is on, Play loops over
+  /// [backing.loopTicks] with the chord stabs in [backing.notesByTick].
+  final DrumBackingDescriptor? backing;
+
+  /// When true, the transport shows a Library button that replaces the pattern
+  /// with a chosen built-in preset (same id, so referencing blocks stay linked).
+  final bool enableLibrary;
 
   @override
   ConsumerState<DrumMachineEditorBody> createState() =>
@@ -261,6 +277,7 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
 
 class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
   late DrumPattern _pattern;
+  bool _backingOn = false;
 
   @override
   void initState() {
@@ -276,21 +293,70 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     }
   }
 
-  void _toggle(DrumLaneId laneId, int tick) {
-    final lanes = _pattern.lanes.map((l) {
-      if (l.laneId != laneId) return l;
-      final ticks = [...l.activeTicks];
-      if (ticks.contains(tick)) {
-        ticks.remove(tick);
-      } else {
-        ticks.add(tick);
-      }
-      ticks.sort();
-      return l.copyWith(activeTicks: ticks);
-    }).toList();
-    setState(() => _pattern = _pattern.copyWith(lanes: lanes));
+  /// Persist [next] as the edited pattern and notify the host. Single source of
+  /// the "mutate → rebuild → onChanged" contract for every edit below.
+  void _commit(DrumPattern next) {
+    setState(() => _pattern = next);
     widget.onChanged(_pattern);
   }
+
+  /// Replace the active ticks of [laneId] by running [transform] over its
+  /// current ticks, leaving other lanes untouched, then commit.
+  void _mutateLane(
+    DrumLaneId laneId,
+    List<int> Function(List<int> ticks) transform,
+  ) {
+    final lanes = _pattern.lanes
+        .map(
+          (l) => l.laneId == laneId
+              ? l.copyWith(activeTicks: transform(l.activeTicks))
+              : l,
+        )
+        .toList();
+    _commit(_pattern.copyWith(lanes: lanes));
+  }
+
+  void _toggle(DrumLaneId laneId, int tick) {
+    _mutateLane(laneId, (ticks) {
+      final next = [...ticks];
+      if (next.contains(tick)) {
+        next.remove(tick);
+      } else {
+        next.add(tick);
+      }
+      next.sort();
+      return next;
+    });
+  }
+
+  void _applyLaneTicks(DrumLaneId laneId, List<int> ticks) =>
+      _mutateLane(laneId, (_) => ticks);
+
+  void _openLaneFill(DrumLaneId laneId) {
+    showWidgetSheet(
+      context: context,
+      title: 'Fill lane',
+      child: _LaneFillSheet(
+        lengthTicks: _pattern.lengthTicks,
+        ticksPerBeat: TimeSignature(
+          beatsPerMeasure: 4,
+          beatUnit: widget.beatUnit,
+        ).ticksPerBeat,
+        onApply: (ticks) => _applyLaneTicks(laneId, ticks),
+      ),
+    );
+  }
+
+  void _applyPreset(DrumPreset preset) =>
+      _commit(preset.toPattern(_pattern.id));
+
+  void _applyLoadedPattern(DrumPattern loaded) => _commit(
+    _pattern.copyWith(
+      name: loaded.name,
+      lengthTicks: loaded.lengthTicks,
+      lanes: loaded.lanes,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +372,17 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
       if (playing) {
         notifier.stop();
       } else {
-        notifier.start(pattern: _pattern, tempo: widget.tempo);
+        final backing = widget.backing;
+        if (_backingOn && backing != null) {
+          notifier.start(
+            pattern: _pattern,
+            tempo: widget.tempo,
+            backingNotes: backing.notesByTick,
+            loopTicks: backing.loopTicks,
+          );
+        } else {
+          notifier.start(pattern: _pattern, tempo: widget.tempo);
+        }
       }
       HapticFeedback.lightImpact();
     }
@@ -325,7 +401,53 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
                 color: MuzicianTheme.orange,
                 onPressed: togglePlayback,
               ),
+              if (widget.backing != null) ...[
+                const SizedBox(width: 4),
+                FilterChip(
+                  key: const Key('backingToggle'),
+                  label: const Text('Backing'),
+                  selected: _backingOn,
+                  showCheckmark: false,
+                  onSelected: playing ? null : (v) => setState(() => _backingOn = v),
+                  backgroundColor: MuzicianTheme.violet.withValues(alpha: 0.12),
+                  selectedColor: MuzicianTheme.violet.withValues(alpha: 0.30),
+                  side: BorderSide(
+                    color: MuzicianTheme.violet.withValues(alpha: 0.5),
+                  ),
+                  labelStyle: const TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const Spacer(),
+              if (widget.enableLibrary) ...[
+                IconButton(
+                  key: const Key('drumLibraryButton'),
+                  tooltip: 'Drum presets',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  color: MuzicianTheme.orange,
+                  icon: const Icon(Icons.library_music),
+                  onPressed: () =>
+                      showDrumLibrarySheet(context: context, onPick: _applyPreset),
+                ),
+                IconButton(
+                  key: const Key('drumLoopsButton'),
+                  tooltip: 'My loops',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  color: MuzicianTheme.orange,
+                  icon: const Icon(Icons.bookmarks_outlined),
+                  onPressed: () => showDrumLoopLibrarySheet(
+                    context: context,
+                    currentPattern: _pattern,
+                    onApply: _applyLoadedPattern,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Text(
                 '${widget.tempo} BPM',
                 style: const TextStyle(
@@ -346,6 +468,7 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
               HapticFeedback.lightImpact();
               _toggle(laneId, tick);
             },
+            onLaneMenu: _openLaneFill,
           ),
         ),
       ],
@@ -358,12 +481,14 @@ class _DrumGrid extends StatefulWidget {
   final TimeSignature timeSig;
   final int? playheadTick;
   final void Function(DrumLaneId laneId, int tick) onToggle;
+  final void Function(DrumLaneId laneId) onLaneMenu;
 
   const _DrumGrid({
     required this.pattern,
     required this.timeSig,
     required this.playheadTick,
     required this.onToggle,
+    required this.onLaneMenu,
   });
 
   @override
@@ -421,6 +546,7 @@ class _DrumGridState extends State<_DrumGrid> {
           lanes: widget.pattern.lanes,
           labels: _laneLabels,
           colors: _laneColors,
+          onLaneMenu: widget.onLaneMenu,
         ),
         // Scrollable grid: beat header + 8 lane rows
         Expanded(
@@ -460,11 +586,13 @@ class _LaneLabelsColumn extends StatelessWidget {
   final List<DrumLaneSequence> lanes;
   final Map<DrumLaneId, String> labels;
   final Map<DrumLaneId, Color> colors;
+  final void Function(DrumLaneId laneId) onLaneMenu;
 
   const _LaneLabelsColumn({
     required this.lanes,
     required this.labels,
     required this.colors,
+    required this.onLaneMenu,
   });
 
   @override
@@ -487,6 +615,8 @@ class _LaneLabelsColumn extends StatelessWidget {
               color: colors[lanes[i].laneId] ?? MuzicianTheme.textSecondary,
               activeCount: lanes[i].activeTicks.length,
               isEven: i % 2 == 0,
+              menuKey: Key('laneFillMenu_${lanes[i].laneId.name}'),
+              onMenu: () => onLaneMenu(lanes[i].laneId),
             ),
         ],
       ),
@@ -499,19 +629,23 @@ class _LaneLabel extends StatelessWidget {
   final Color color;
   final int activeCount;
   final bool isEven;
+  final Key menuKey;
+  final VoidCallback onMenu;
 
   const _LaneLabel({
     required this.label,
     required this.color,
     required this.activeCount,
     required this.isEven,
+    required this.menuKey,
+    required this.onMenu,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: _kLaneHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.only(left: 10),
       decoration: BoxDecoration(
         color: isEven
             ? Colors.white.withValues(alpha: 0.025)
@@ -549,6 +683,17 @@ class _LaneLabel extends StatelessWidget {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
+          IconButton(
+            key: menuKey,
+            tooltip: 'Fill lane',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            iconSize: 16,
+            color: MuzicianTheme.textMuted,
+            icon: const Icon(Icons.tune),
+            onPressed: onMenu,
+          ),
         ],
       ),
     );
@@ -708,6 +853,242 @@ class _StepCell extends StatelessWidget {
               : null,
         ),
       ),
+    );
+  }
+}
+
+/// Bottom-sheet controls for filling a single drum lane.
+///
+/// Offers musical "every-N" presets (derived from [ticksPerBeat]) with a start
+/// offset, a Euclidean generator (hits + rotation), and clear-lane. Each action
+/// emits the resulting tick list via [onApply] and closes the sheet.
+class _LaneFillSheet extends StatefulWidget {
+  final int lengthTicks;
+  final int ticksPerBeat;
+  final void Function(List<int> ticks) onApply;
+
+  const _LaneFillSheet({
+    required this.lengthTicks,
+    required this.ticksPerBeat,
+    required this.onApply,
+  });
+
+  @override
+  State<_LaneFillSheet> createState() => _LaneFillSheetState();
+}
+
+class _LaneFillSheetState extends State<_LaneFillSheet> {
+  int _offset = 0;
+  late int _hits;
+  int _rotation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default to one hit per beat, clamped to the pattern length.
+    final beats = (widget.lengthTicks / widget.ticksPerBeat).floor();
+    _hits = beats < 1 ? 1 : beats;
+  }
+
+  /// Distinct, ascending every-N step options derived from the beat size.
+  List<int> get _stepOptions {
+    final beat = widget.ticksPerBeat;
+    final raw = <int>{
+      1,
+      if (beat ~/ 2 >= 1) beat ~/ 2,
+      beat,
+      beat * 2,
+    }.where((s) => s <= widget.lengthTicks).toList()
+      ..sort();
+    return raw;
+  }
+
+  String _stepLabel(int step) {
+    final beat = widget.ticksPerBeat;
+    if (step == 1) return 'Every step';
+    if (step == beat ~/ 2) return 'Every ½ beat';
+    if (step == beat) return 'Every beat';
+    if (step == beat * 2) return 'Every 2 beats';
+    return 'Every $step steps';
+  }
+
+  void _applyAndClose(List<int> ticks) {
+    widget.onApply(ticks);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _FillSectionLabel('Every'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final step in _stepOptions)
+                ActionChip(
+                  key: Key('fillEvery_$step'),
+                  label: Text(_stepLabel(step)),
+                  backgroundColor: MuzicianTheme.orange.withValues(alpha: 0.18),
+                  side: BorderSide(
+                    color: MuzicianTheme.orange.withValues(alpha: 0.5),
+                  ),
+                  labelStyle: const TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onPressed: () =>
+                      _applyAndClose(everyN(widget.lengthTicks, step,
+                          offset: _offset)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _StepperRow(
+            label: 'Offset',
+            value: _offset,
+            minusKey: const Key('offsetMinus'),
+            plusKey: const Key('offsetPlus'),
+            onMinus: _offset > 0 ? () => setState(() => _offset--) : null,
+            onPlus: _offset < widget.lengthTicks - 1
+                ? () => setState(() => _offset++)
+                : null,
+          ),
+          const Divider(height: 28, color: Colors.white24),
+          const _FillSectionLabel('Euclidean'),
+          const SizedBox(height: 8),
+          _StepperRow(
+            label: 'Hits',
+            value: _hits,
+            minusKey: const Key('euclidHitsMinus'),
+            plusKey: const Key('euclidHitsPlus'),
+            onMinus: _hits > 1 ? () => setState(() => _hits--) : null,
+            onPlus: _hits < widget.lengthTicks
+                ? () => setState(() => _hits++)
+                : null,
+          ),
+          const SizedBox(height: 8),
+          _StepperRow(
+            label: 'Rotate',
+            value: _rotation,
+            minusKey: const Key('euclidRotMinus'),
+            plusKey: const Key('euclidRotPlus'),
+            onMinus: _rotation > 0 ? () => setState(() => _rotation--) : null,
+            onPlus: _rotation < widget.lengthTicks - 1
+                ? () => setState(() => _rotation++)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              key: const Key('fillEuclidApply'),
+              style: FilledButton.styleFrom(
+                backgroundColor: MuzicianTheme.orange,
+              ),
+              onPressed: () => _applyAndClose(
+                euclid(widget.lengthTicks, _hits, rotation: _rotation),
+              ),
+              child: const Text('Apply Euclidean'),
+            ),
+          ),
+          const Divider(height: 28, color: Colors.white24),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              key: const Key('fillClear'),
+              onPressed: () => _applyAndClose(const []),
+              child: const Text('Clear lane'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FillSectionLabel extends StatelessWidget {
+  final String text;
+  const _FillSectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        color: MuzicianTheme.textMuted,
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.6,
+      ),
+    );
+  }
+}
+
+class _StepperRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final Key minusKey;
+  final Key plusKey;
+  final VoidCallback? onMinus;
+  final VoidCallback? onPlus;
+
+  const _StepperRow({
+    required this.label,
+    required this.value,
+    required this.minusKey,
+    required this.plusKey,
+    required this.onMinus,
+    required this.onPlus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: MuzicianTheme.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        IconButton(
+          key: minusKey,
+          onPressed: onMinus,
+          icon: const Icon(Icons.remove_circle_outline),
+          color: MuzicianTheme.textSecondary,
+        ),
+        SizedBox(
+          width: 28,
+          child: Text(
+            '$value',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: MuzicianTheme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+        IconButton(
+          key: plusKey,
+          onPressed: onPlus,
+          icon: const Icon(Icons.add_circle_outline),
+          color: MuzicianTheme.textSecondary,
+        ),
+      ],
     );
   }
 }

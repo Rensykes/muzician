@@ -1616,6 +1616,7 @@ class _DrumLaneRow extends ConsumerWidget {
                       showSongwriterDrumPatternSheet(
                         context: context,
                         patternId: owner.patternId!,
+                        sectionId: section.id,
                       );
                     },
                     child: Container(
