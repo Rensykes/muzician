@@ -35,9 +35,9 @@ class _DrumLibraryBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categories = _orderedCategories;
-    // SingleChildScrollView + min Column scrolls when the sheet bounds it and
-    // sizes to content otherwise — robust regardless of the sheet's layout.
-    return SingleChildScrollView(
+    // The host sheet (_WidgetSheet) already wraps the child in a scroll view,
+    // so a plain Padding is enough here.
+    return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
