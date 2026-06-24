@@ -152,5 +152,67 @@ void main() {
         DrumPatternPlaybackStatus.idle,
       );
     });
+
+    test('backing notes fire through the backing sink when provided', () async {
+      final backing = <List<int>>[];
+      final c = ProviderContainer(
+        overrides: [
+          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol) async {}),
+          drumPatternBackingSinkProvider.overrideWithValue((notes) {
+            backing.add(notes);
+          }),
+        ],
+      );
+      addTearDown(c.dispose);
+      final notifier = c.read(drumPatternPlaybackProvider.notifier);
+
+      // Pattern loops every 4 ticks; backing loop is 8 ticks (two bars).
+      const p = DrumPattern(
+        id: 'p',
+        name: 'b',
+        lengthTicks: 4,
+        lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
+      );
+      unawaited(
+        notifier.start(
+          pattern: p,
+          tempo: 6000,
+          backingNotes: {
+            0: [60, 64, 67],
+            4: [62, 65, 69],
+          },
+          loopTicks: 8,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      notifier.stop();
+
+      final fired = backing.expand((n) => n).toSet();
+      expect(fired, containsAll(<int>[60, 64, 67, 62, 65, 69]));
+    });
+
+    test('backing sink is never called when no backing is provided', () async {
+      final backing = <List<int>>[];
+      final c = ProviderContainer(
+        overrides: [
+          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol) async {}),
+          drumPatternBackingSinkProvider.overrideWithValue((notes) {
+            backing.add(notes);
+          }),
+        ],
+      );
+      addTearDown(c.dispose);
+      final notifier = c.read(drumPatternPlaybackProvider.notifier);
+      const p = DrumPattern(
+        id: 'p',
+        name: 'b',
+        lengthTicks: 4,
+        lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
+      );
+      unawaited(notifier.start(pattern: p, tempo: 6000));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      notifier.stop();
+      expect(backing, isEmpty);
+    });
   });
 }

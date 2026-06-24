@@ -78,6 +78,9 @@ abstract class InstrumentSnapshot {
     if (instrument == 'piano') {
       return PianoSnapshot.fromJson(json);
     }
+    if (type == 'drum_loop' || instrument == 'drum_loop') {
+      return DrumLoopSnapshot.fromJson(json);
+    }
     return FretboardSnapshot.fromJson(json);
   }
 }
@@ -389,6 +392,38 @@ class SongProjectSnapshot extends InstrumentSnapshot {
   factory SongProjectSnapshot.fromJson(Map<String, dynamic> json) =>
       SongProjectSnapshot(
         project: SongProject.fromJson(json['project'] as Map<String, dynamic>),
+      );
+}
+
+/// A single reusable drum [DrumPattern] saved to the library. Loaded loops are
+/// applied into the pattern currently being edited (see the drum editor).
+class DrumLoopSnapshot extends InstrumentSnapshot {
+  final DrumPattern pattern;
+
+  const DrumLoopSnapshot({required this.pattern});
+
+  @override
+  String get instrument => 'drum_loop';
+
+  @override
+  List<String> get selectedNotes => const [];
+
+  @override
+  PendingChord? get pendingChord => null;
+
+  @override
+  PendingScale? get pendingScale => null;
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'drum_loop',
+    'instrument': 'drum_loop',
+    'pattern': pattern.toJson(),
+  };
+
+  factory DrumLoopSnapshot.fromJson(Map<String, dynamic> json) =>
+      DrumLoopSnapshot(
+        pattern: DrumPattern.fromJson(json['pattern'] as Map<String, dynamic>),
       );
 }
 

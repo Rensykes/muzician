@@ -29,6 +29,24 @@ final drumPatternPlaybackSinkProvider = Provider<DrumPatternPlaybackSink>((
   };
 });
 
+/// Signature for a function that sounds a chord/voicing backing stab.
+typedef DrumPatternBackingSink = void Function(List<int> midiNotes);
+
+/// Injected backing sink backed by [NotePlayer].  Override in tests to capture
+/// the chord stabs that play under the pattern during "audition with backing".
+final drumPatternBackingSinkProvider = Provider<DrumPatternBackingSink>((ref) {
+  return (midiNotes) {
+    for (final midi in midiNotes) {
+      NotePlayer.instance.previewNote(midi, volume: 0.6);
+    }
+  };
+});
+
+/// Descriptor for the drum editor's "audition with backing": the section loop
+/// length in ticks and a `tick → midi pitches` chord bed that loops under the
+/// pattern.
+typedef DrumBackingDescriptor = ({int loopTicks, Map<int, List<int>> notesByTick});
+
 enum DrumPatternPlaybackStatus { idle, playing }
 
 /// Immutable transport state for the drum pattern audition.
@@ -61,14 +79,26 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
   DrumPatternPlaybackState build() => const DrumPatternPlaybackState();
 
   /// Starts looping [pattern] at [tempo] BPM.  No-op if already playing or the
-  /// pattern is empty.  The loop wraps back to tick 0 after [DrumPattern.lengthTicks]
-  /// and runs until [stop] is called.
-  Future<void> start({required DrumPattern pattern, required int tempo}) async {
+  /// pattern is empty.
+  ///
+  /// Solo (default): the loop wraps after [DrumPattern.lengthTicks]. When
+  /// [backingNotes] + [loopTicks] are given (the drum editor's "audition with
+  /// backing"), the loop wraps after [loopTicks] instead; the drum pattern tiles
+  /// within it (`tick % length`) and the chord stabs in [backingNotes] fire via
+  /// [drumPatternBackingSinkProvider]. Runs until [stop] is called.
+  Future<void> start({
+    required DrumPattern pattern,
+    required int tempo,
+    Map<int, List<int>>? backingNotes,
+    int? loopTicks,
+  }) async {
     if (state.status == DrumPatternPlaybackStatus.playing) return;
     final length = pattern.lengthTicks;
     if (length <= 0) return;
+    final loop = (loopTicks != null && loopTicks > 0) ? loopTicks : length;
 
     final sink = ref.read(drumPatternPlaybackSinkProvider);
+    final backingSink = ref.read(drumPatternBackingSinkProvider);
 
     final lanesByTick = <int, List<DrumLaneId>>{};
     for (final lane in pattern.lanes) {
@@ -88,21 +118,34 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
     );
 
     // [TickPacer] anchors each tick to the wall clock so per-tick body work
-    // (state mutation → rebuilds, the drum sink) cannot accumulate into drift.
-    // The boundary is keyed off a monotonic [elapsedTicks] count, not the
-    // wrapping [tick], so the schedule survives loop wraps.
+    // (state mutation → rebuilds, the sinks) cannot accumulate into drift.
     final pacer = TickPacer(tickDuration);
     var tick = 0;
+    // elapsedTicks increases monotonically so TickPacer's boundary never resets
+    // across loop wraps (both `tick % loop` and `drumTick = tick % length`).
     var elapsedTicks = 0;
     while (_version == version) {
-      state = state.copyWith(currentTick: () => tick);
-      final lanes = lanesByTick[tick];
+      // The pattern tiles under the backing via `tick % length`. This lands on
+      // a clean phrase boundary at the loop wrap only when `length` divides
+      // `loop` — true for the common case (1-bar/16-tick pattern under a section
+      // whose measure is also 16 ticks, i.e. 4/4). Under other meters the
+      // pattern may restart mid-phrase at the wrap; accepted, and it mirrors the
+      // section transport.
+      final drumTick = tick % length;
+      // Keep the grid highlight inside the pattern even when the backing loop is
+      // longer than the pattern.
+      state = state.copyWith(currentTick: () => drumTick);
+      final lanes = lanesByTick[drumTick];
       if (lanes != null && lanes.isNotEmpty) {
         unawaited(sink(lanes, 0.8));
       }
+      if (backingNotes != null) {
+        final notes = backingNotes[tick];
+        if (notes != null && notes.isNotEmpty) backingSink(notes);
+      }
       await pacer.awaitBoundary(++elapsedTicks);
       if (_version != version) return;
-      tick = (tick + 1) % length;
+      tick = (tick + 1) % loop;
     }
   }
 
