@@ -10,6 +10,7 @@ import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
+import '../../store/drum_pattern_playback_store.dart' show DrumBackingDescriptor;
 import '../song/drum_machine_editor.dart';
 import '../_mockup_shell.dart';
 
@@ -67,7 +68,7 @@ class _Body extends ConsumerWidget {
     );
   }
 
-  ({int loopTicks, Map<int, List<int>> notesByTick})? _backingFor(
+  DrumBackingDescriptor? _backingFor(
     WidgetRef ref,
     SongwriterProjectSnapshot project,
   ) {

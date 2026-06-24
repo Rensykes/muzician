@@ -112,6 +112,38 @@ void main() {
     ],
   );
 
+  SongwriterProjectSnapshot projectNoChords() => const SongwriterProjectSnapshot(
+    name: 'demo',
+    config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+    drumPatterns: [
+      DrumPattern(
+        id: 'p1',
+        name: 'Beat',
+        lengthTicks: 16,
+        lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
+      ),
+    ],
+    sections: [
+      SongSection(
+        id: 's1',
+        lengthBars: 2,
+        order: 0,
+        lanes: [
+          SongLane(
+            id: 'h1',
+            kind: SongLaneKind.harmony,
+            order: 0,
+            blocks: [
+              // Harmony lane present but the block has no chord notes → the
+              // backing flattener yields an empty map → no toggle.
+              SongBlock(id: 'b1', startBar: 0, spanBars: 1),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+
   Future<void> openSheet(
     WidgetTester tester,
     ProviderContainer container,
@@ -161,6 +193,19 @@ void main() {
     container.read(songwriterProvider.notifier).loadProject(projectWithHarmony());
 
     await openSheet(tester, container, null);
+
+    expect(find.byKey(const Key('backingToggle')), findsNothing);
+  });
+
+  testWidgets('sheet shows no backing toggle when the section has no chords', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(songwriterProvider.notifier).loadProject(projectNoChords());
+
+    await openSheet(tester, container, 's1');
 
     expect(find.byKey(const Key('backingToggle')), findsNothing);
   });
