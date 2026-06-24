@@ -293,30 +293,44 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     }
   }
 
-  void _toggle(DrumLaneId laneId, int tick) {
-    final lanes = _pattern.lanes.map((l) {
-      if (l.laneId != laneId) return l;
-      final ticks = [...l.activeTicks];
-      if (ticks.contains(tick)) {
-        ticks.remove(tick);
-      } else {
-        ticks.add(tick);
-      }
-      ticks.sort();
-      return l.copyWith(activeTicks: ticks);
-    }).toList();
-    setState(() => _pattern = _pattern.copyWith(lanes: lanes));
+  /// Persist [next] as the edited pattern and notify the host. Single source of
+  /// the "mutate → rebuild → onChanged" contract for every edit below.
+  void _commit(DrumPattern next) {
+    setState(() => _pattern = next);
     widget.onChanged(_pattern);
   }
 
-  void _applyLaneTicks(DrumLaneId laneId, List<int> ticks) {
-    final lanes = _pattern.lanes.map((l) {
-      if (l.laneId != laneId) return l;
-      return l.copyWith(activeTicks: ticks);
-    }).toList();
-    setState(() => _pattern = _pattern.copyWith(lanes: lanes));
-    widget.onChanged(_pattern);
+  /// Replace the active ticks of [laneId] by running [transform] over its
+  /// current ticks, leaving other lanes untouched, then commit.
+  void _mutateLane(
+    DrumLaneId laneId,
+    List<int> Function(List<int> ticks) transform,
+  ) {
+    final lanes = _pattern.lanes
+        .map(
+          (l) => l.laneId == laneId
+              ? l.copyWith(activeTicks: transform(l.activeTicks))
+              : l,
+        )
+        .toList();
+    _commit(_pattern.copyWith(lanes: lanes));
   }
+
+  void _toggle(DrumLaneId laneId, int tick) {
+    _mutateLane(laneId, (ticks) {
+      final next = [...ticks];
+      if (next.contains(tick)) {
+        next.remove(tick);
+      } else {
+        next.add(tick);
+      }
+      next.sort();
+      return next;
+    });
+  }
+
+  void _applyLaneTicks(DrumLaneId laneId, List<int> ticks) =>
+      _mutateLane(laneId, (_) => ticks);
 
   void _openLaneFill(DrumLaneId laneId) {
     showWidgetSheet(
@@ -333,21 +347,16 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     );
   }
 
-  void _applyPreset(DrumPreset preset) {
-    setState(() => _pattern = preset.toPattern(_pattern.id));
-    widget.onChanged(_pattern);
-  }
+  void _applyPreset(DrumPreset preset) =>
+      _commit(preset.toPattern(_pattern.id));
 
-  void _applyLoadedPattern(DrumPattern loaded) {
-    setState(
-      () => _pattern = _pattern.copyWith(
-        name: loaded.name,
-        lengthTicks: loaded.lengthTicks,
-        lanes: loaded.lanes,
-      ),
-    );
-    widget.onChanged(_pattern);
-  }
+  void _applyLoadedPattern(DrumPattern loaded) => _commit(
+    _pattern.copyWith(
+      name: loaded.name,
+      lengthTicks: loaded.lengthTicks,
+      lanes: loaded.lanes,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
