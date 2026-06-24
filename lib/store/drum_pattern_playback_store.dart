@@ -116,6 +116,8 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
     // (state mutation → rebuilds, the sinks) cannot accumulate into drift.
     final pacer = TickPacer(tickDuration);
     var tick = 0;
+    // elapsedTicks increases monotonically so TickPacer's boundary never resets
+    // across loop wraps (both `tick % loop` and `drumTick = tick % length`).
     var elapsedTicks = 0;
     while (_version == version) {
       final drumTick = tick % length;
