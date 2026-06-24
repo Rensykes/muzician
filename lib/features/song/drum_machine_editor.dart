@@ -65,51 +65,11 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
         .length;
     final timeSig = project.config.timeSignature;
 
-    void clearAll() {
-      ref
-          .read(songProjectProvider.notifier)
-          .applyDrumPattern(
-            patternId,
-            pattern.copyWith(
-              lanes: [
-                for (final lane in pattern.lanes)
-                  lane.copyWith(activeTicks: const []),
-              ],
-            ),
-          );
-      HapticFeedback.mediumImpact();
-    }
-
     return Scaffold(
       backgroundColor: MuzicianTheme.scaffoldBg,
       appBar: AppBar(
         title: Text(pattern.name),
         actions: [
-          IconButton(
-            tooltip: 'Clear all',
-            icon: const Icon(Icons.clear_all),
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => MuzicianDialog(
-                  title: 'Clear all steps?',
-                  content: const Text('This empties every lane on this pattern.'),
-                  actions: [
-                    MuzicianDialogButton(
-                      'Cancel',
-                      onPressed: () => Navigator.pop(ctx, false),
-                    ),
-                    MuzicianDialogButton(
-                      'Clear',
-                      emphasis: MuzicianDialogEmphasis.destructive,
-                      onPressed: () => Navigator.pop(ctx, true),
-                    ),
-                  ],
-                ),
-              );
-              if (ok == true) clearAll();
-            },
-          ),
           TextButton(
             onPressed: () {
               ref
@@ -358,6 +318,40 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     ),
   );
 
+  void _clearAll() {
+    _commit(
+      _pattern.copyWith(
+        lanes: [
+          for (final lane in _pattern.lanes)
+            lane.copyWith(activeTicks: const []),
+        ],
+      ),
+    );
+    HapticFeedback.mediumImpact();
+  }
+
+  Future<void> _confirmClearAll() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => MuzicianDialog(
+        title: 'Clear all steps?',
+        content: const Text('This empties every lane on this pattern.'),
+        actions: [
+          MuzicianDialogButton(
+            'Cancel',
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          MuzicianDialogButton(
+            'Clear',
+            emphasis: MuzicianDialogEmphasis.destructive,
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) _clearAll();
+  }
+
   @override
   Widget build(BuildContext context) {
     final playback = ref.watch(drumPatternPlaybackProvider);
@@ -400,6 +394,14 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
                 icon: Icon(playing ? Icons.stop : Icons.play_arrow),
                 color: MuzicianTheme.orange,
                 onPressed: togglePlayback,
+              ),
+              IconButton(
+                key: const Key('drumClearAllButton'),
+                tooltip: 'Clear all',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.clear_all),
+                color: MuzicianTheme.textMuted,
+                onPressed: _confirmClearAll,
               ),
               if (widget.backing != null) ...[
                 const SizedBox(width: 4),

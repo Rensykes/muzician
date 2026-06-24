@@ -55,7 +55,7 @@ Storage key bumped to `@muzician/save-system/v3`. On first launch of the v3 code
 |---|---|
 | `PendingChord` | Root + quality pending detection (`root`, `quality`, `symbol`) |
 | `PendingScale` | Root + scale name pending detection |
-| `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot` |
+| `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot`, `DrumLoopSnapshot` |
 | `FretboardSnapshot` | Fretboard save: tuning, capo, selected cells, notes, view mode, pending chord/scale |
 | `PianoSnapshot` | Piano save: key range, selected keys, notes, view mode, pending chord/scale |
 | `PianoRollSnapshot` | Piano roll session: tempo, time signature, notes, range, snap, highlights, derivable chord/scale |
@@ -67,7 +67,7 @@ Storage key bumped to `@muzician/save-system/v3`. On first launch of the v3 code
 | `AppSettings` | User preferences — `suppressOutOfKeyAlert`, `noteVolume`, `showNoteLabels`, `humSensitivity`, `metronomeEnabled`, `saveBrowserGrid` |
 | `SaveSystemState` | Root state: `folders`, `saves`, `activeSession`, `hydrated`, `selectedProjectId` |
 
-> Snapshots use an `abstract class InstrumentSnapshot` with `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, and `SongwriterProjectSnapshot` subtypes. (It was `sealed` until `SongwriterProjectSnapshot` was added from `lib/models/songwriter.dart`; Dart `sealed` restricts subtypes to the same library, and dispatch is done via `is`-checks + the `fromJson` factory rather than exhaustive `switch`, so the base was relaxed to `abstract`.) All types implement `toJson` / `fromJson` for `SharedPreferences` persistence.
+> Snapshots use an `abstract class InstrumentSnapshot` with `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot`, and `DrumLoopSnapshot` subtypes. (It was `sealed` until `SongwriterProjectSnapshot` was added from `lib/models/songwriter.dart`; Dart `sealed` restricts subtypes to the same library, and dispatch is done via `is`-checks + the `fromJson` factory rather than exhaustive `switch`, so the base was relaxed to `abstract`.) All types implement `toJson` / `fromJson` for `SharedPreferences` persistence.
 
 ---
 
@@ -105,6 +105,13 @@ Songwriter arrangement project — ordered `SongSection`s, each holding parallel
 
 - `selectedNotes` aggregates unique pitch classes across all harmony-block `chordNotes`.
 - `pendingChord` and `pendingScale` return `null` — Songwriter saves do not produce chord/scale summaries.
+
+### DrumLoopSnapshot (`type: 'drum_loop'`)
+
+A single reusable drum loop (one `DrumPattern`) saved to the library so custom grooves persist and can be reused across projects. Defined in `lib/models/save_system.dart`.
+
+- `selectedNotes` is empty; `pendingChord` / `pendingScale` return `null`.
+- Saved + browsed via `DrumLoopSavePanel` (`lib/features/song/drum_loop_save_panel.dart`), a `SaveBrowserPanel` filtered to `'drum_loop'`. Loading applies the loop into the drum pattern currently being edited (`onLoad` → the editor's `_applyLoadedPattern`, keeping the pattern id so the referencing block stays linked). Built-in (non-saved) presets are code-defined in `lib/schema/rules/drum_presets.dart`.
 
 ---
 
@@ -192,7 +199,7 @@ A reusable nested folder browser used by all instrument save panels. Renders fol
 
 | Prop | Type | Description |
 |---|---|---|
-| `instrumentFilter` | `String?` | Filters saves to a single instrument type (`'fretboard'`, `'piano'`, `'piano_roll'`, `'song'`, `'songwriter'`) |
+| `instrumentFilter` | `String?` | Filters saves to a single instrument type (`'fretboard'`, `'piano'`, `'piano_roll'`, `'song'`, `'songwriter'`, `'drum_loop'`) |
 | `allowedInstruments` | `List<String>?` | Allowlist of snapshot types; overrides `instrumentFilter` when set |
 | `captureSnapshot` | `InstrumentSnapshot Function()?` | Captures a snapshot from the current instrument state for saving |
 | `onLoad` | `void Function(InstrumentSnapshot)?` | Applies a loaded snapshot to the current instrument |
