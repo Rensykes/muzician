@@ -95,4 +95,41 @@ void main() {
     );
     expect(find.byKey(const Key('drumLibraryButton')), findsNothing);
   });
+
+  testWidgets('My Loops button shows when enableLibrary is true', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: DrumMachineEditorBody(
+              pattern: emptyPattern('p1'),
+              tempo: 120,
+              enableLibrary: true,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('drumLoopsButton')), findsOneWidget);
+  });
+
+  testWidgets('My Loops button hidden when enableLibrary is false', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: DrumMachineEditorBody(
+              pattern: emptyPattern('p1'),
+              tempo: 120,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('drumLoopsButton')), findsNothing);
+  });
 }

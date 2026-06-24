@@ -14,6 +14,7 @@ import '../../schema/rules/drum_fill_rules.dart';
 import '../../schema/rules/drum_presets.dart';
 import '../../store/drum_pattern_playback_store.dart';
 import 'drum_library_sheet.dart';
+import 'drum_loop_save_panel.dart';
 import '../../store/song_project_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
@@ -337,6 +338,17 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     widget.onChanged(_pattern);
   }
 
+  void _applyLoadedPattern(DrumPattern loaded) {
+    setState(
+      () => _pattern = _pattern.copyWith(
+        name: loaded.name,
+        lengthTicks: loaded.lengthTicks,
+        lanes: loaded.lanes,
+      ),
+    );
+    widget.onChanged(_pattern);
+  }
+
   @override
   Widget build(BuildContext context) {
     final playback = ref.watch(drumPatternPlaybackProvider);
@@ -404,13 +416,26 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
               if (widget.enableLibrary) ...[
                 IconButton(
                   key: const Key('drumLibraryButton'),
-                  tooltip: 'Drum library',
+                  tooltip: 'Drum presets',
                   visualDensity: VisualDensity.compact,
                   iconSize: 20,
                   color: MuzicianTheme.orange,
                   icon: const Icon(Icons.library_music),
                   onPressed: () =>
                       showDrumLibrarySheet(context: context, onPick: _applyPreset),
+                ),
+                IconButton(
+                  key: const Key('drumLoopsButton'),
+                  tooltip: 'My loops',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  color: MuzicianTheme.orange,
+                  icon: const Icon(Icons.bookmarks_outlined),
+                  onPressed: () => showDrumLoopLibrarySheet(
+                    context: context,
+                    currentPattern: _pattern,
+                    onApply: _applyLoadedPattern,
+                  ),
                 ),
                 const SizedBox(width: 8),
               ],
