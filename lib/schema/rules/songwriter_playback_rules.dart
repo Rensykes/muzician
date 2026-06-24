@@ -189,3 +189,42 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
       ),
   ];
 }
+
+/// One looping backing bed for a single section's harmony, for the drum
+/// editor's "audition with backing" mode.
+///
+/// Returns the section's loop length in ticks and a `tick → midi pitches` map
+/// of per-bar chord stabs, indexed from tick 0. Harmony lanes use
+/// [chordMidiNotes]; save lanes use [snapshotMidiNotes]. Drum lanes are
+/// excluded — the backing is the chord bed only. Blocks tile via
+/// [tileLaneBlocks] and are clipped to the section.
+({int loopTicks, Map<int, List<int>> notesByTick}) sectionHarmonyLoop(
+  SongSection section,
+  SongwriterConfig config,
+  List<SaveEntry> saves,
+) {
+  final beatTicks = config.ticksPerBeat;
+  final measureTicks = beatTicks * config.beatsPerBar;
+  final loopTicks = section.lengthBars * measureTicks;
+  final notesAt = <int, List<int>>{};
+
+  for (final lane in section.lanes) {
+    if (lane.kind == SongLaneKind.drum) continue;
+    final blocks = tileLaneBlocks(lane, sectionLengthBars: section.lengthBars);
+    for (final block in blocks) {
+      final clippedEnd = block.endBar > section.lengthBars
+          ? section.lengthBars
+          : block.endBar;
+      final pitches = lane.kind == SongLaneKind.harmony
+          ? chordMidiNotes(block)
+          : snapshotMidiNotes(resolveBlockSnapshot(block, saves));
+      if (pitches.isEmpty) continue;
+      for (var bar = block.startBar; bar < clippedEnd; bar++) {
+        final tick = bar * measureTicks;
+        (notesAt[tick] ??= <int>[]).addAll(pitches);
+      }
+    }
+  }
+
+  return (loopTicks: loopTicks, notesByTick: notesAt);
+}
