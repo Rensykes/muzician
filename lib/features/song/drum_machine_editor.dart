@@ -238,11 +238,13 @@ class DrumMachineEditorBody extends ConsumerStatefulWidget {
 class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
   late DrumPattern _pattern;
   bool _backingOn = false;
+  late final DrumPatternPlaybackNotifier _playback;
 
   @override
   void initState() {
     super.initState();
     _pattern = widget.pattern;
+    _playback = ref.read(drumPatternPlaybackProvider.notifier);
   }
 
   @override
@@ -251,6 +253,20 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
     if (oldWidget.pattern.id != widget.pattern.id) {
       _pattern = widget.pattern;
     }
+  }
+
+  @override
+  void dispose() {
+    // Stop the audition loop when the editor closes (e.g. the Songwriter drum
+    // pattern sheet is dismissed), so playback does not keep running in the
+    // background. The notifier is captured in initState because `ref` is not
+    // reliably usable from dispose().
+    try {
+      _playback.stop();
+    } catch (_) {
+      // Provider container already torn down — nothing left to stop.
+    }
+    super.dispose();
   }
 
   /// Persist [next] as the edited pattern and notify the host. Single source of
