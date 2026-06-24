@@ -110,7 +110,7 @@ class _PresetTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$voices voices',
+                  voices == 1 ? '1 voice' : '$voices voices',
                   style: const TextStyle(
                     color: MuzicianTheme.textMuted,
                     fontSize: 11,

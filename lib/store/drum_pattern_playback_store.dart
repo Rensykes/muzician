@@ -125,6 +125,12 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
     // across loop wraps (both `tick % loop` and `drumTick = tick % length`).
     var elapsedTicks = 0;
     while (_version == version) {
+      // The pattern tiles under the backing via `tick % length`. This lands on
+      // a clean phrase boundary at the loop wrap only when `length` divides
+      // `loop` — true for the common case (1-bar/16-tick pattern under a section
+      // whose measure is also 16 ticks, i.e. 4/4). Under other meters the
+      // pattern may restart mid-phrase at the wrap; accepted, and it mirrors the
+      // section transport.
       final drumTick = tick % length;
       // Keep the grid highlight inside the pattern even when the backing loop is
       // longer than the pattern.
