@@ -336,11 +336,15 @@ class _SectionInstance extends ConsumerWidget {
               lane: lane,
               instanceIndex: instanceIndex,
               clipsById: {
-                for (final c in ref.read(songwriterProvider).audioClips)
+                for (final c in ref.watch(
+                  songwriterProvider.select((p) => p.audioClips),
+                ))
                   c.id: c,
               },
               assetsById: {
-                for (final a in ref.read(songwriterProvider).audioAssets)
+                for (final a in ref.watch(
+                  songwriterProvider.select((p) => p.audioAssets),
+                ))
                   a.id: a,
               },
             ),

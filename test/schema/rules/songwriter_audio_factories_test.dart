@@ -20,4 +20,22 @@ void main() {
     expect(block.startBar, 1);
     expect(block.spanBars, 2);
   });
+
+  group('audioBlockDefaultSpan', () {
+    test('4-bar section at startBar 0 → span 3', () {
+      expect(audioBlockDefaultSpan(sectionLengthBars: 4, startBar: 0), 3);
+    });
+
+    test('4-bar section at startBar 2 → span 2', () {
+      expect(audioBlockDefaultSpan(sectionLengthBars: 4, startBar: 2), 2);
+    });
+
+    test('4-bar section at startBar 3 → span 1', () {
+      expect(audioBlockDefaultSpan(sectionLengthBars: 4, startBar: 3), 1);
+    });
+
+    test('1-bar section at startBar 0 → span 1', () {
+      expect(audioBlockDefaultSpan(sectionLengthBars: 1, startBar: 0), 1);
+    });
+  });
 }

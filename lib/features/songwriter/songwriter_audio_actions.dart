@@ -1,9 +1,11 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
+import '../../schema/rules/songwriter_rules.dart';
 import '../../store/song_audio_repository.dart';
 import '../../store/songwriter_store.dart';
 import '../song/song_audio_picker_sheet.dart';
@@ -31,6 +33,8 @@ Future<void> showSongwriterAudioPicker(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
+          isDismissible: false,
+          enableDrag: false,
           builder: (_) => const SongwriterAudioRecorderSheet(countInMs: 0),
         );
         if (asset != null) {
@@ -50,10 +54,23 @@ Future<void> showSongwriterAudioPicker(
         final path = file?.path;
         if (file == null || path == null) return;
         final repo = ref.read(songwriterAudioRepositoryProvider);
+        int? durationMs;
+        final ext = file.name.split('.').last.toLowerCase();
+        if (ext != 'wav') {
+          final probe = AudioPlayer();
+          try {
+            await probe.setSource(DeviceFileSource(path));
+            durationMs = (await probe.getDuration())?.inMilliseconds;
+          } catch (_) {
+            // leave null; repository falls back to 0
+          } finally {
+            await probe.dispose();
+          }
+        }
         final asset = await repo.importExternalFile(
           sourcePath: path,
           sourceLabel: file.name,
-          explicitDurationMs: null,
+          explicitDurationMs: durationMs,
         );
         _commit(ref, sectionId, laneId, startBar, sectionLengthBars, asset);
       },
@@ -75,7 +92,10 @@ void _commit(
     assetId: asset.id,
     durationMs: asset.durationMs,
   );
-  final span = (sectionLengthBars - 1).clamp(1, sectionLengthBars);
+  final span = audioBlockDefaultSpan(
+    sectionLengthBars: sectionLengthBars,
+    startBar: startBar,
+  );
   store.addAudioBlock(
     sectionId: sectionId,
     laneId: laneId,

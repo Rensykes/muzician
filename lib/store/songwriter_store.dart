@@ -1,6 +1,8 @@
 /// Songwriter project Riverpod store with per-project session auto-save.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
@@ -12,6 +14,7 @@ import '../schema/rules/songwriter_third_above_rules.dart';
 import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
 import 'save_system_store.dart';
+import 'song_audio_repository.dart';
 import 'songwriter_sessions_store.dart';
 import 'writer_save_binding_store.dart';
 
@@ -558,8 +561,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     });
   }
 
-  /// Removes an audio block and its 1:1 clip. The underlying asset file is
-  /// reclaimed by the load-time orphan reconcile (see SongAudioRepository).
+  /// Removes an audio block, its 1:1 clip, and the underlying asset file when
+  /// no other clip references the same asset.
   void removeAudioBlock({
     required String sectionId,
     required String laneId,
@@ -570,10 +573,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .expand((s) => s.lanes)
         .where((l) => l.id == laneId)
         .firstOrNull;
-    final clipId = lane?.blocks
-        .where((b) => b.id == blockId)
-        .firstOrNull
-        ?.audioClipId;
+    final removedBlock = lane?.blocks.where((b) => b.id == blockId).firstOrNull;
+    final clipId = removedBlock?.audioClipId;
+    // Capture assetId before any state mutation.
+    final assetId = clipId == null
+        ? null
+        : state.audioClips.where((c) => c.id == clipId).firstOrNull?.assetId;
     _replaceLane(
       sectionId,
       laneId,
@@ -587,6 +592,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         ),
       );
     }
+    // Reclaim the asset when no remaining clip references it.
+    if (assetId != null && !state.audioClips.any((c) => c.assetId == assetId)) {
+      final assetInState = state.audioAssets.any((a) => a.id == assetId);
+      if (assetInState) {
+        _set(
+          state.copyWith(
+            audioAssets: state.audioAssets
+                .where((a) => a.id != assetId)
+                .toList(),
+          ),
+        );
+        unawaited(ref.read(songwriterAudioRepositoryProvider).delete(assetId));
+      }
+    }
   }
 
   /// Move/resize a block. Clamps to valid bounds; rejects (no-op) if the new
@@ -599,7 +618,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required int spanBars,
   }) {
     _replaceLane(sectionId, laneId, (l) {
-      final current = l.blocks.firstWhere((b) => b.id == blockId);
+      final current = l.blocks.where((b) => b.id == blockId).firstOrNull;
+      if (current == null) return l;
       final moved = current.copyWith(
         startBar: startBar < 0 ? 0 : startBar,
         spanBars: spanBars < 1 ? 1 : spanBars,

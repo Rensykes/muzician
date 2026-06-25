@@ -32,6 +32,8 @@ class SongwriterAudioRecorderState {
 
 class SongwriterAudioRecorderNotifier
     extends Notifier<SongwriterAudioRecorderState> {
+  bool _cancelled = false;
+
   @override
   SongwriterAudioRecorderState build() => const SongwriterAudioRecorderState();
 
@@ -41,6 +43,7 @@ class SongwriterAudioRecorderNotifier
         st != SongAudioRecorderStatus.error) {
       return;
     }
+    _cancelled = false;
     final driver = ref.read(songAudioRecorderDriverProvider);
     if (!await driver.ensurePermission()) {
       state = state.copyWith(
@@ -74,6 +77,13 @@ class SongwriterAudioRecorderNotifier
       final asset = await ref
           .read(songwriterAudioRepositoryProvider)
           .writeRecording(bytes);
+      if (_cancelled) {
+        try {
+          await ref.read(songwriterAudioRepositoryProvider).delete(asset.id);
+        } catch (_) {}
+        state = const SongwriterAudioRecorderState();
+        return;
+      }
       state = state.copyWith(
         status: SongAudioRecorderStatus.ready,
         pendingAsset: () => asset,
@@ -87,6 +97,7 @@ class SongwriterAudioRecorderNotifier
   }
 
   Future<void> cancel() async {
+    _cancelled = true;
     if (state.status == SongAudioRecorderStatus.idle) return;
     if (state.status == SongAudioRecorderStatus.recording) {
       try {
