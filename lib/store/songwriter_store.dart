@@ -32,29 +32,29 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   @override
   SongwriterProjectSnapshot build() {
     // React to project selection changes.
-    ref.listen<String?>(
-      saveSystemProvider.select((s) => s.selectedProjectId),
-      (prev, next) {
-        // Persist outgoing immediately.
-        if (prev != null && prev != next) {
-          ref.read(songwriterSessionsProvider.notifier).put(prev, state);
-        }
-        if (next == null) {
-          _hydrating = true;
-          state = _emptyProject();
-          _hydrating = false;
-          return;
-        }
+    ref.listen<String?>(saveSystemProvider.select((s) => s.selectedProjectId), (
+      prev,
+      next,
+    ) {
+      // Persist outgoing immediately.
+      if (prev != null && prev != next) {
+        ref.read(songwriterSessionsProvider.notifier).put(prev, state);
+      }
+      if (next == null) {
         _hydrating = true;
-        final session = ref.read(songwriterSessionsProvider.notifier).get(next);
-        if (session != null) {
-          state = session;
-        } else {
-          state = _defaultFor(next);
-        }
+        state = _emptyProject();
         _hydrating = false;
-      },
-    );
+        return;
+      }
+      _hydrating = true;
+      final session = ref.read(songwriterSessionsProvider.notifier).get(next);
+      if (session != null) {
+        state = session;
+      } else {
+        state = _defaultFor(next);
+      }
+      _hydrating = false;
+    });
 
     // Cold start: the listener above only fires on project *changes*. When a
     // project is already selected (restored during hydrate) before this provider
@@ -73,7 +73,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   SongwriterProjectSnapshot _defaultFor(String projectId) {
-    final folder = ref.read(saveSystemProvider).folders.firstWhere((f) => f.id == projectId);
+    final folder = ref
+        .read(saveSystemProvider)
+        .folders
+        .firstWhere((f) => f.id == projectId);
     final cfg = folder.projectConfig ?? const ProjectConfig();
     return SongwriterProjectSnapshot(
       name: folder.name,
@@ -319,20 +322,24 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String? text,
   }) {
     if (verseIndex < 0) return;
-    _replaceLane(sectionId, laneId, (l) => l.copyWith(
-      blocks: l.blocks.map((b) {
-        if (b.id != blockId) return b;
-        final list = [...b.lyrics];
-        while (list.length <= verseIndex) {
-          list.add('');
-        }
-        list[verseIndex] = text ?? '';
-        while (list.isNotEmpty && list.last.isEmpty) {
-          list.removeLast();
-        }
-        return b.copyWith(lyrics: list);
-      }).toList(),
-    ));
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) => l.copyWith(
+        blocks: l.blocks.map((b) {
+          if (b.id != blockId) return b;
+          final list = [...b.lyrics];
+          while (list.length <= verseIndex) {
+            list.add('');
+          }
+          list[verseIndex] = text ?? '';
+          while (list.isNotEmpty && list.last.isEmpty) {
+            list.removeLast();
+          }
+          return b.copyWith(lyrics: list);
+        }).toList(),
+      ),
+    );
   }
 
   void addSilentBlock({
@@ -342,16 +349,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required int spanBars,
     int verseCount = 1,
   }) {
-    _replaceLane(sectionId, laneId, (l) => l.copyWith(
-      blocks: [
-        ...l.blocks,
-        makeSilentBlock(
-          startBar: startBar,
-          spanBars: spanBars,
-          verseCount: verseCount,
-        ),
-      ],
-    ));
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) => l.copyWith(
+        blocks: [
+          ...l.blocks,
+          makeSilentBlock(
+            startBar: startBar,
+            spanBars: spanBars,
+            verseCount: verseCount,
+          ),
+        ],
+      ),
+    );
   }
 
   void removeBlock({
@@ -427,14 +438,18 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   void removeDrumPattern(String patternId) {
-    final patterns =
-        state.drumPatterns.where((p) => p.id != patternId).toList();
+    final patterns = state.drumPatterns
+        .where((p) => p.id != patternId)
+        .toList();
     final sections = state.sections.map((s) {
       final lanes = s.lanes.map((l) {
         if (l.kind != SongLaneKind.drum) return l;
         final blocks = l.blocks
-            .map((b) =>
-                b.patternId == patternId ? b.copyWith(clearPatternId: true) : b)
+            .map(
+              (b) => b.patternId == patternId
+                  ? b.copyWith(clearPatternId: true)
+                  : b,
+            )
             .toList();
         return l.copyWith(blocks: blocks);
       }).toList();
@@ -472,6 +487,94 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         }).toList(),
       ),
     );
+  }
+
+  // ── audio clips ──
+  String addAudioClip({required String assetId, required int durationMs}) {
+    final clip = makeAudioClip(assetId: assetId, durationMs: durationMs);
+    _set(state.copyWith(audioClips: [...state.audioClips, clip]));
+    return clip.id;
+  }
+
+  void updateAudioClip(AudioClip updated) {
+    _set(
+      state.copyWith(
+        audioClips: state.audioClips
+            .map((c) => c.id == updated.id ? updated : c)
+            .toList(),
+      ),
+    );
+  }
+
+  void setClipFitMode({required String clipId, required AudioFitMode fitMode}) {
+    final clip = state.audioClips.where((c) => c.id == clipId).firstOrNull;
+    if (clip == null) return;
+    updateAudioClip(clip.copyWith(fitMode: fitMode));
+  }
+
+  void setClipTrim({
+    required String clipId,
+    required int trimStartMs,
+    required int trimEndMs,
+  }) {
+    final clip = state.audioClips.where((c) => c.id == clipId).firstOrNull;
+    if (clip == null) return;
+    updateAudioClip(
+      clip.copyWith(
+        trimStartMs: trimStartMs < 0 ? 0 : trimStartMs,
+        trimEndMs: trimEndMs < trimStartMs ? trimStartMs : trimEndMs,
+      ),
+    );
+  }
+
+  void addAudioBlock({
+    required String sectionId,
+    required String laneId,
+    required String audioClipId,
+    required int startBar,
+    required int spanBars,
+  }) {
+    _replaceLane(sectionId, laneId, (l) {
+      if (l.kind != SongLaneKind.audio) return l;
+      final candidate = makeAudioBlock(
+        audioClipId: audioClipId,
+        startBar: startBar,
+        spanBars: spanBars,
+      );
+      if (blocksOverlap(l.blocks, candidate)) return l;
+      return l.copyWith(blocks: [...l.blocks, candidate]);
+    });
+  }
+
+  /// Removes an audio block and its 1:1 clip. The underlying asset file is
+  /// reclaimed by the load-time orphan reconcile (see SongAudioRepository).
+  void removeAudioBlock({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+  }) {
+    final lane = state.sections
+        .where((s) => s.id == sectionId)
+        .expand((s) => s.lanes)
+        .where((l) => l.id == laneId)
+        .firstOrNull;
+    final clipId = lane?.blocks
+        .where((b) => b.id == blockId)
+        .firstOrNull
+        ?.audioClipId;
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) =>
+          l.copyWith(blocks: l.blocks.where((b) => b.id != blockId).toList()),
+    );
+    if (clipId != null) {
+      _set(
+        state.copyWith(
+          audioClips: state.audioClips.where((c) => c.id != clipId).toList(),
+        ),
+      );
+    }
   }
 
   /// Move/resize a block. Clamps to valid bounds; rejects (no-op) if the new
@@ -602,8 +705,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
     final selId = ref.read(saveSystemProvider).selectedProjectId;
     if (selId == null) return;
-    final selFolder = ref.read(saveSystemProvider).folders
-        .where((f) => f.id == selId).firstOrNull;
+    final selFolder = ref
+        .read(saveSystemProvider)
+        .folders
+        .where((f) => f.id == selId)
+        .firstOrNull;
     if (selFolder == null || selFolder.kind != SaveFolderKind.project) return;
 
     final saves = ref.read(saveSystemProvider.notifier);
@@ -667,8 +773,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
     final selId = ref.read(saveSystemProvider).selectedProjectId;
     if (selId == null) return;
-    final selFolder = ref.read(saveSystemProvider).folders
-        .where((f) => f.id == selId).firstOrNull;
+    final selFolder = ref
+        .read(saveSystemProvider)
+        .folders
+        .where((f) => f.id == selId)
+        .firstOrNull;
     if (selFolder == null || selFolder.kind != SaveFolderKind.project) return;
 
     final saves = ref.read(saveSystemProvider.notifier);
@@ -741,9 +850,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required int startBar,
     int spanBars = 1,
   }) {
-    final section = state.sections
-        .where((s) => s.id == sectionId)
-        .firstOrNull;
+    final section = state.sections.where((s) => s.id == sectionId).firstOrNull;
     if (section == null) return;
     if (!_canPlaceSaveBlockInSection(section, startBar, spanBars)) return;
     final laneId = _findOrCreateSaveLane(sectionId);
