@@ -64,8 +64,8 @@ abstract class SongAudioClipSink {
   Future<void> stopAll();
 }
 
-class _NoopAudioSink implements SongAudioClipSink {
-  const _NoopAudioSink();
+class NoopSongAudioClipSink implements SongAudioClipSink {
+  const NoopSongAudioClipSink();
   @override
   Future<void> prepare(Iterable<AudioAsset> assets) async {}
   @override
@@ -91,7 +91,7 @@ final songMetronomeSinkProvider = Provider<SongMetronomeSink>((ref) {
 });
 
 final songAudioClipSinkProvider = Provider<SongAudioClipSink>(
-  (ref) => const _NoopAudioSink(),
+  (ref) => const NoopSongAudioClipSink(),
 );
 
 class _PendingAudioStop {
