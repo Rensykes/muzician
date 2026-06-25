@@ -104,9 +104,16 @@ class ChordSegment {
 
 /// Content for an audio-lane block: a reference to a recorded/imported
 /// [AudioAsset] plus how it adapts to its bar span.
+///
+/// Songwriter-specific and distinct from `AudioClipPattern` in the Song session
+/// model — this type carries [fitMode] and [ChordSegment] annotations.
 class AudioClip {
   final String id;
   final String assetId;
+
+  /// Used region of the source asset, in ms. `trimEndMs == 0` means "no
+  /// end-trim" (play to the natural end); creators set it to the asset
+  /// duration. Mirrors `AudioClipPattern`'s trim convention.
   final int trimStartMs;
   final int trimEndMs;
   final AudioFitMode fitMode;

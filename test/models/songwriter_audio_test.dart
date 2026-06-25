@@ -52,6 +52,18 @@ void main() {
       );
       expect(ChordSegment.fromJson(seg.toJson()).saveId, 'save9');
     });
+
+    test('copyWith clears romanNumeral and saveId', () {
+      const seg = ChordSegment(
+        id: 's3',
+        startTick: 0,
+        spanTicks: 240,
+        romanNumeral: 'V',
+        saveId: 'z',
+      );
+      expect(seg.copyWith(clearRomanNumeral: true).romanNumeral, isNull);
+      expect(seg.copyWith(clearSaveId: true).saveId, isNull);
+    });
   });
 
   group('AudioClip', () {
@@ -82,6 +94,29 @@ void main() {
       expect(back.fitMode, AudioFitMode.stretch);
       expect(back.stretchedAssetId, 'a2s');
       expect(back.segments.single.saveId, 'x');
+    });
+
+    test('round-trips oneShot fit mode', () {
+      const clip = AudioClip(
+        id: 'c3',
+        assetId: 'a3',
+        trimEndMs: 1000,
+        fitMode: AudioFitMode.oneShot,
+      );
+      expect(AudioClip.fromJson(clip.toJson()).fitMode, AudioFitMode.oneShot);
+    });
+
+    test('copyWith clears stretchedAssetId', () {
+      const clip = AudioClip(
+        id: 'c4',
+        assetId: 'a4',
+        stretchedAssetId: 's',
+        fitMode: AudioFitMode.stretch,
+      );
+      expect(
+        clip.copyWith(clearStretchedAssetId: true).stretchedAssetId,
+        isNull,
+      );
     });
   });
 
