@@ -489,6 +489,18 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  // ── audio assets ──
+  /// Adds (or replaces by id) an [AudioAsset] in the project. Recording/import
+  /// calls this before [addAudioClip] so the clip's asset resolves.
+  void addAudioAsset(AudioAsset asset) {
+    final assets = [
+      for (final a in state.audioAssets)
+        if (a.id != asset.id) a,
+      asset,
+    ];
+    _set(state.copyWith(audioAssets: assets));
+  }
+
   // ── audio clips ──
   String addAudioClip({required String assetId, required int durationMs}) {
     final clip = makeAudioClip(assetId: assetId, durationMs: durationMs);
