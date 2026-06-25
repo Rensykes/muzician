@@ -10,6 +10,7 @@ import '../models/song_project.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
+import '../schema/rules/songwriter_segment_rules.dart';
 import '../schema/rules/songwriter_third_above_rules.dart';
 import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
@@ -562,6 +563,56 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         )
         .toList();
     _set(state.copyWith(audioAssets: assets, audioClips: clips));
+  }
+
+  // ── chord segments ──
+  String addChordSegment({
+    required String clipId,
+    required int startTick,
+    required int spanTicks,
+    String? chordSymbol,
+    String? chordQuality,
+    int? chordRootPc,
+    List<String> chordNotes = const [],
+    String? romanNumeral,
+    String? saveId,
+  }) {
+    final clip = state.audioClips.where((c) => c.id == clipId).firstOrNull;
+    if (clip == null) return '';
+    final seg = ChordSegment(
+      id: generateId(),
+      startTick: startTick,
+      spanTicks: spanTicks,
+      chordSymbol: chordSymbol,
+      chordQuality: chordQuality,
+      chordRootPc: chordRootPc,
+      chordNotes: chordNotes,
+      romanNumeral: romanNumeral,
+      saveId: saveId,
+    );
+    updateAudioClip(clip.copyWith(segments: [...clip.segments, seg]));
+    return seg.id;
+  }
+
+  void removeChordSegment({required String clipId, required String segmentId}) {
+    final clip = state.audioClips.where((c) => c.id == clipId).firstOrNull;
+    if (clip == null) return;
+    updateAudioClip(
+      clip.copyWith(
+        segments: clip.segments.where((s) => s.id != segmentId).toList(),
+      ),
+    );
+  }
+
+  void clampClipSegments({
+    required String clipId,
+    required int spanTotalTicks,
+  }) {
+    final clip = state.audioClips.where((c) => c.id == clipId).firstOrNull;
+    if (clip == null) return;
+    updateAudioClip(
+      clip.copyWith(segments: clampedSegments(clip.segments, spanTotalTicks)),
+    );
   }
 
   void addAudioBlock({
