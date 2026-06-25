@@ -5,6 +5,8 @@ import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import 'songwriter_rules.dart';
 
+/// Ticks → milliseconds at the project tempo. Parallels `audioTickToMs` in
+/// `song_audio_rules.dart` (same formula, different config type).
 int songwriterAudioTickToMs(int tick, SongwriterConfig config) {
   final msPerBeat = 60000.0 / config.tempo;
   return (tick * msPerBeat / config.ticksPerBeat).round();
@@ -27,8 +29,11 @@ class SongwriterScheduledClip {
     this.volume = 1.0,
   });
 
-  /// In-asset position to seek to when the playhead is at [nowMs].
-  int offsetIntoAsset(int nowMs) => trimStartMs + (nowMs - startMs);
+  /// In-asset position to seek to when the playhead is at [nowMs]. Clamped to
+  /// the asset bounds so a future mid-song seek can never pass a negative
+  /// duration to the player.
+  int offsetIntoAsset(int nowMs) =>
+      (trimStartMs + (nowMs - startMs)).clamp(0, asset.durationMs);
 }
 
 /// Flattens placed audio clips across section repeats into absolute-ms records.
@@ -72,7 +77,13 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
         final spanEndTick = (exp.globalStartBar + clippedEnd) * measureTicks;
         final startMs = songwriterAudioTickToMs(startTick, cfg);
         final spanMs = songwriterAudioTickToMs(spanEndTick, cfg) - startMs;
-        final regionMs = (clip.trimEndMs - clip.trimStartMs).clamp(
+        // trimEndMs == 0 is the documented "no end-trim" sentinel (play to the
+        // natural asset end); see AudioClip. Honour it so legacy saves whose
+        // JSON predates the field do not silence one-shot clips.
+        final trimEnd = clip.trimEndMs == 0
+            ? playAsset.durationMs
+            : clip.trimEndMs;
+        final regionMs = (trimEnd - clip.trimStartMs).clamp(
           0,
           playAsset.durationMs,
         );

@@ -63,6 +63,16 @@ void main() {
     expect(clips.single.loop, isFalse);
   });
 
+  test('oneShot with trimEndMs==0 plays to the natural asset end', () {
+    final base = _project(AudioFitMode.oneShot);
+    final clip0 = base.audioClips.single.copyWith(trimEndMs: 0);
+    final clips = songwriterSchedulableAudioClips(
+      base.copyWith(audioClips: [clip0]),
+    );
+    // Sentinel 0 → natural end (asset durationMs 1500), not silenced at 0.
+    expect(clips.single.endMs, 1500);
+  });
+
   test('section repeat x2 yields two placements', () {
     final base = _project(AudioFitMode.loop);
     final repeated = base.copyWith(

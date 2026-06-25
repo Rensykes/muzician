@@ -109,10 +109,14 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     final version = ++_version;
 
     final audioSink = ref.read(songwriterAudioClipSinkProvider);
-    final scheduled = songwriterSchedulableAudioClips(project)
-      ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    // Already sorted by startMs by the rule.
+    final scheduled = songwriterSchedulableAudioClips(project);
     final pendingAudioStops = <(AudioAsset, int)>[];
     await audioSink.prepare(scheduled.map((c) => c.asset));
+    // A Stop issued during the (awaited) prepare must abort before we flip the
+    // transport to "playing" — otherwise the loop exits immediately on the
+    // version check and the UI stays stuck showing "playing".
+    if (_version != version) return;
     var nextClip = 0;
     void fireAudio(int tick) {
       final nowMs = songwriterAudioTickToMs(tick, cfg);
