@@ -215,7 +215,11 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   final notesAt = <int, List<int>>{};
 
   for (final lane in section.lanes) {
-    if (lane.kind == SongLaneKind.drum) continue;
+    // Drum and audio lanes are excluded — the backing bed is the chord voice
+    // only (audio clips are sounded by the transport, not this loop).
+    if (lane.kind == SongLaneKind.drum || lane.kind == SongLaneKind.audio) {
+      continue;
+    }
     final blocks = tileLaneBlocks(lane, sectionLengthBars: section.lengthBars);
     for (final block in blocks) {
       final clippedEnd = block.endBar > section.lengthBars
