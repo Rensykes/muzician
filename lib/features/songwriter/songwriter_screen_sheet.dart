@@ -34,6 +34,7 @@ import 'songwriter_save_panel.dart';
 import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
+import 'songwriter_audio_lane_row.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({super.key});
@@ -323,6 +324,27 @@ class _SectionInstance extends ConsumerWidget {
             instanceIndex: instanceIndex,
           ),
         ],
+        // Audio lanes (one strip per audio lane on this section).
+        for (final lane in section.lanes.where(
+          (l) => l.kind == SongLaneKind.audio,
+        ))
+          Padding(
+            key: Key('sheetAudioLane_${lane.id}_$instanceIndex'),
+            padding: const EdgeInsets.only(top: 8),
+            child: SongwriterAudioLaneRow(
+              section: section,
+              lane: lane,
+              instanceIndex: instanceIndex,
+              clipsById: {
+                for (final c in ref.read(songwriterProvider).audioClips)
+                  c.id: c,
+              },
+              assetsById: {
+                for (final a in ref.read(songwriterProvider).audioAssets)
+                  a.id: a,
+              },
+            ),
+          ),
         // Free-text lyrics for this verse — decoupled from bars.
         const SizedBox(height: 8),
         _SectionLyrics(section: section, instanceIndex: instanceIndex),
