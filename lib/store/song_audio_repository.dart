@@ -70,7 +70,7 @@ class SongAudioRepository {
     await file.writeAsBytes(wavBytes, flush: true);
 
     final header = parseWavHeader(wavBytes);
-    final samples = _extractInt16Samples(wavBytes);
+    final samples = extractInt16Samples(wavBytes);
     final peaks = computePeaksFromInt16(samples);
 
     return AudioAsset(
@@ -117,7 +117,7 @@ class SongAudioRepository {
       durationMs = header.durationMs;
       sampleRate = header.sampleRate;
       channels = header.channels;
-      final samples = _extractInt16Samples(bytes);
+      final samples = extractInt16Samples(bytes);
       peaks = computePeaksFromInt16(samples);
     } else {
       durationMs = explicitDurationMs ?? 0;
@@ -172,7 +172,23 @@ class SongAudioRepository {
     return ReconcileResult(deleted);
   }
 
-  Int16List _extractInt16Samples(Uint8List wav) {
+  Future<Int16List> readInt16Samples(String assetId, String format) async {
+    final file = await resolvePath(assetId, format);
+    if (!file.existsSync()) return Int16List(0);
+    final bytes = await file.readAsBytes();
+    return extractInt16Samples(bytes);
+  }
+
+  Future<AudioAsset> writeStretched({
+    required Int16List samples,
+    required int sampleRate,
+  }) async {
+    final wav = writeWavPcm16Mono(samples, sampleRate: sampleRate);
+    final asset = await writeRecording(wav);
+    return asset.copyWith(sourceLabel: 'Stretched');
+  }
+
+  Int16List extractInt16Samples(Uint8List wav) {
     final bd = ByteData.sublistView(wav);
     var cursor = 12; // after 'RIFF<size>WAVE'
     while (cursor + 8 <= wav.length) {
