@@ -208,6 +208,25 @@ SongBlock makeDrumBlock({
   patternId: patternId,
 );
 
+AudioClip makeAudioClip({required String assetId, required int durationMs}) =>
+    AudioClip(
+      id: generateId(),
+      assetId: assetId,
+      trimStartMs: 0,
+      trimEndMs: durationMs,
+    );
+
+SongBlock makeAudioBlock({
+  required String audioClipId,
+  required int startBar,
+  required int spanBars,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  audioClipId: audioClipId,
+);
+
 // ─── Expanded-Section Mapping ────────────────────────────────────────────────
 
 class ExpandedSection {
