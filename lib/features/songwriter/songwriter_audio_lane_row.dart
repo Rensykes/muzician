@@ -7,6 +7,7 @@ import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../song/song_audio_clip_body.dart';
 import 'songwriter_audio_actions.dart';
+import 'songwriter_audio_clip_sheet.dart';
 
 IconData fitGlyph(AudioFitMode m) => switch (m) {
   AudioFitMode.loop => Icons.repeat,
@@ -55,7 +56,19 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
             child: GestureDetector(
               key: Key('sheetAudioTile_${owner.audioClipId ?? owner.id}'),
               behavior: HitTestBehavior.opaque,
-              onTap: () => _tileMenu(context, ref, owner, clip),
+              onTap: () => showSongwriterAudioClipSheet(
+                context: context,
+                sectionId: section.id,
+                laneId: lane.id,
+                clipId: owner.audioClipId!,
+              ),
+              onLongPress: () => ref
+                  .read(songwriterProvider.notifier)
+                  .removeAudioBlock(
+                    sectionId: section.id,
+                    laneId: lane.id,
+                    blockId: owner.id,
+                  ),
               child: Container(
                 height: 40,
                 margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -137,107 +150,6 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
         ),
         Row(children: cells),
       ],
-    );
-  }
-
-  void _tileMenu(
-    BuildContext context,
-    WidgetRef ref,
-    SongBlock block,
-    AudioClip? clip,
-  ) {
-    if (clip == null) return;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: MuzicianTheme.surface,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final mode in AudioFitMode.values)
-              ListTile(
-                leading: Icon(fitGlyph(mode)),
-                title: Text(mode.name),
-                trailing: clip.fitMode == mode ? const Icon(Icons.check) : null,
-                onTap: () {
-                  ref
-                      .read(songwriterProvider.notifier)
-                      .setClipFitMode(clipId: clip.id, fitMode: mode);
-                  Navigator.of(ctx).pop();
-                },
-              ),
-            Builder(
-              builder: (_) {
-                final maxSpan = section.lengthBars <= 1
-                    ? 1
-                    : section.lengthBars - 1;
-                return ListTile(
-                  leading: const Icon(Icons.unfold_more),
-                  title: Text('Span: ${block.spanBars} bar(s)'),
-                  subtitle: const Text('max section − 1'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        key: const ValueKey('sheetAudioSpanMinus'),
-                        icon: const Icon(Icons.remove),
-                        onPressed: () {
-                          ref
-                              .read(songwriterProvider.notifier)
-                              .setBlockPlacement(
-                                sectionId: section.id,
-                                laneId: lane.id,
-                                blockId: block.id,
-                                startBar: block.startBar,
-                                spanBars: (block.spanBars - 1).clamp(
-                                  1,
-                                  maxSpan,
-                                ),
-                              );
-                          Navigator.of(ctx).pop();
-                        },
-                      ),
-                      IconButton(
-                        key: const ValueKey('sheetAudioSpanPlus'),
-                        icon: const Icon(Icons.add),
-                        onPressed: () {
-                          ref
-                              .read(songwriterProvider.notifier)
-                              .setBlockPlacement(
-                                sectionId: section.id,
-                                laneId: lane.id,
-                                blockId: block.id,
-                                startBar: block.startBar,
-                                spanBars: (block.spanBars + 1).clamp(
-                                  1,
-                                  maxSpan,
-                                ),
-                              );
-                          Navigator.of(ctx).pop();
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
-              onTap: () {
-                ref
-                    .read(songwriterProvider.notifier)
-                    .removeAudioBlock(
-                      sectionId: section.id,
-                      laneId: lane.id,
-                      blockId: block.id,
-                    );
-                Navigator.of(ctx).pop();
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
