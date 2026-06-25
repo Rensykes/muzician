@@ -4,6 +4,7 @@ library;
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/songwriter.dart';
 import '../schema/rules/audio_stretch_rules.dart';
 import '../schema/rules/songwriter_stretch_rules.dart';
 import 'song_audio_repository.dart';
@@ -30,6 +31,10 @@ class SongwriterStretchController {
         .where((a) => a.id == clip.assetId)
         .firstOrNull;
     if (source == null) return;
+    const maxStretchMs = 30000;
+    if (source.durationMs > maxStretchMs) {
+      return; // too long to stretch in-process
+    }
 
     final processing = ref.read(songwriterStretchProcessingProvider.notifier);
     processing.update((s) => {...s, clipId});
@@ -70,3 +75,21 @@ final songwriterStretchControllerProvider =
     Provider<SongwriterStretchController>(
       (ref) => SongwriterStretchController(ref),
     );
+
+/// Watches the project tempo and re-renders every stretch clip when it changes.
+/// Mount once (read it from the songwriter screen) so the listener stays alive
+/// while the tab is open.
+final songwriterStretchTempoWatcherProvider = Provider<void>((ref) {
+  ref.listen<int>(songwriterProvider.select((p) => p.config.tempo), (
+    prev,
+    next,
+  ) {
+    if (prev == null || prev == next) return;
+    final controller = ref.read(songwriterStretchControllerProvider);
+    for (final clip in ref.read(songwriterProvider).audioClips) {
+      if (clip.fitMode == AudioFitMode.stretch) {
+        controller.rerender(clip.id);
+      }
+    }
+  });
+});

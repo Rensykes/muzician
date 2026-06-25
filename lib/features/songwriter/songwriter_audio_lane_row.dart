@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart' show AudioAsset;
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
+import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
 import '../song/song_audio_clip_body.dart';
 import 'songwriter_audio_actions.dart';
@@ -93,6 +94,18 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                           fitGlyph(clip.fitMode),
                           size: 12,
                           color: MuzicianTheme.textPrimary,
+                        ),
+                      ),
+                    if (ref
+                        .watch(songwriterStretchProcessingProvider)
+                        .contains(owner.audioClipId))
+                      const Positioned(
+                        left: 4,
+                        top: 2,
+                        child: SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.6),
                         ),
                       ),
                   ],

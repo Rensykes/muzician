@@ -15,6 +15,7 @@ import '../../store/save_system_store.dart';
 import '../../store/writer_save_binding_store.dart';
 import '../../ui/save_card_label.dart';
 import '../../store/songwriter_playback_store.dart';
+import '../../store/songwriter_stretch_controller.dart';
 import 'writer_save_choice_dialog.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/coach_overlay.dart';
@@ -115,6 +116,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(songwriterStretchTempoWatcherProvider);
     final project = ref.watch(songwriterProvider);
     final notifier = ref.read(songwriterProvider.notifier);
     return Container(
