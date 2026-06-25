@@ -76,8 +76,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
       _overwrite(entry);
       return;
     }
-    final choice =
-        await showWriterSaveChoiceDialog(ctx, saveName: entry.name);
+    final choice = await showWriterSaveChoiceDialog(ctx, saveName: entry.name);
     if (!mounted) return;
     if (choice == null) return;
     if (choice.action == WriterSaveAction.saveAsNew) {
@@ -439,10 +438,7 @@ class _SectionLyricsDialogState extends State<_SectionLyricsDialog> {
         decoration: const InputDecoration(hintText: 'Type the lyrics…'),
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(context),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(context)),
         MuzicianDialogButton(
           'Save',
           buttonKey: const Key('sectionLyricsSave'),
@@ -496,10 +492,7 @@ class _VerseLyricDialogState extends State<_VerseLyricDialog> {
         decoration: const InputDecoration(hintText: 'Words for this verse…'),
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(context),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(context)),
         MuzicianDialogButton(
           'Save',
           buttonKey: const Key('verseLyricSave'),
@@ -626,6 +619,15 @@ class _SectionHeading extends ConsumerWidget {
                         spanBars: section.lengthBars,
                       );
                 }
+                if (value == 'addAudioLane') {
+                  ref
+                      .read(songwriterProvider.notifier)
+                      .addLane(
+                        sectionId: section.id,
+                        kind: SongLaneKind.audio,
+                        label: 'Sample',
+                      );
+                }
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(
@@ -634,6 +636,15 @@ class _SectionHeading extends ConsumerWidget {
                   child: ListTile(
                     leading: Icon(Icons.graphic_eq),
                     title: Text('Add drum lane'),
+                    dense: true,
+                  ),
+                ),
+                PopupMenuItem(
+                  key: Key('addAudioLaneSheetAction'),
+                  value: 'addAudioLane',
+                  child: ListTile(
+                    leading: Icon(Icons.mic),
+                    title: Text('Add audio lane'),
                     dense: true,
                   ),
                 ),
