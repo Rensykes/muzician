@@ -5,7 +5,9 @@ library;
 
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/song_project.dart' show AudioAsset;
 import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
+import '../schema/rules/songwriter_audio_rules.dart';
 import '../schema/rules/songwriter_playback_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
 import '../utils/note_player.dart';
@@ -13,6 +15,7 @@ import '../utils/tick_pacer.dart';
 import 'drum_pattern_playback_store.dart';
 import 'save_system_store.dart';
 import 'settings_store.dart';
+import 'songwriter_audio_sink.dart';
 import 'songwriter_store.dart';
 
 typedef SongwriterMetronomeSink = Future<void> Function({required bool accent});
@@ -104,6 +107,39 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     }
 
     final version = ++_version;
+
+    final audioSink = ref.read(songwriterAudioClipSinkProvider);
+    final scheduled = songwriterSchedulableAudioClips(project)
+      ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    final pendingAudioStops = <(AudioAsset, int)>[];
+    await audioSink.prepare(scheduled.map((c) => c.asset));
+    var nextClip = 0;
+    void fireAudio(int tick) {
+      final nowMs = songwriterAudioTickToMs(tick, cfg);
+      while (nextClip < scheduled.length &&
+          scheduled[nextClip].startMs <= nowMs) {
+        final clip = scheduled[nextClip++];
+        unawaited(
+          audioSink.startClip(
+            asset: clip.asset,
+            offsetMs: clip
+                .offsetIntoAsset(nowMs)
+                .clamp(0, clip.asset.durationMs),
+            volume: clip.volume,
+            loop: clip.loop,
+          ),
+        );
+        pendingAudioStops.add((clip.asset, clip.endMs));
+      }
+      pendingAudioStops.removeWhere((p) {
+        if (p.$2 <= nowMs) {
+          unawaited(audioSink.stopClip(asset: p.$1));
+          return true;
+        }
+        return false;
+      });
+    }
+
     state = SongwriterPlaybackState(
       status: SongwriterPlaybackStatus.playing,
       currentTick: 0,
@@ -132,8 +168,12 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
           unawaited(drumSink(event.drumLanes, 0.8));
         }
       }
+      fireAudio(tick);
     }
     if (_version != version) return;
+    for (final p in pendingAudioStops) {
+      unawaited(audioSink.stopClip(asset: p.$1));
+    }
     state = state.copyWith(
       status: SongwriterPlaybackStatus.completed,
       currentTick: () => endTick,
@@ -142,6 +182,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
 
   void stopPlayback() {
     _version++;
+    unawaited(ref.read(songwriterAudioClipSinkProvider).stopAll());
     state = state.copyWith(
       status: SongwriterPlaybackStatus.idle,
       currentTick: () => null,
