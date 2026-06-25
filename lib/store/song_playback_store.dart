@@ -58,6 +58,7 @@ abstract class SongAudioClipSink {
     required AudioAsset asset,
     required int offsetMs,
     double volume = 1.0,
+    bool loop = false,
   });
   Future<void> stopClip({required AudioAsset asset});
   Future<void> stopAll();
@@ -72,6 +73,7 @@ class _NoopAudioSink implements SongAudioClipSink {
     required AudioAsset asset,
     required int offsetMs,
     double volume = 1.0,
+    bool loop = false,
   }) async {}
   @override
   Future<void> stopClip({required AudioAsset asset}) async {}
