@@ -163,9 +163,11 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             final startTick =
                 (exp.globalStartBar + block.startBar) * measureTicks;
             final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
-            for (var origin = 0;
-                startTick + origin < endTick;
-                origin += pattern.lengthTicks) {
+            for (
+              var origin = 0;
+              startTick + origin < endTick;
+              origin += pattern.lengthTicks
+            ) {
               for (final seq in pattern.lanes) {
                 for (final t in seq.activeTicks) {
                   final tick = startTick + origin + t;
@@ -174,6 +176,10 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                 }
               }
             }
+          case SongLaneKind.audio:
+            // Audio clips are scheduled directly by the transport, not emitted
+            // as tick-indexed note/drum events here.
+            break;
         }
       }
     }

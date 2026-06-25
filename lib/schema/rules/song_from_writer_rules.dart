@@ -136,9 +136,11 @@ SongProject songFromSongwriter(
                     ? section.lengthBars - block.startBar
                     : block.spanBars)
                 .clamp(1, section.lengthBars);
-        final startTick =
-            (exp.globalStartBar + block.startBar) * measureTicks;
+        final startTick = (exp.globalStartBar + block.startBar) * measureTicks;
         switch (lane.kind) {
+          case SongLaneKind.audio:
+            // Audio lanes are not exported to the Song arrangement.
+            break;
           case SongLaneKind.harmony:
             final midiNotes = chordMidiNotes(block);
             if (midiNotes.isEmpty) break;
