@@ -25,29 +25,35 @@ class ReconcileResult {
 
 class SongAudioRepository {
   final Directory? _rootOverride;
+  final String _subdir;
   final Uuid _uuid;
   Directory? _rootCache;
 
-  SongAudioRepository._({Directory? root, Uuid? uuid})
+  SongAudioRepository._({Directory? root, String? subdir, Uuid? uuid})
     : _rootOverride = root,
+      _subdir = subdir ?? 'song_audio',
       _uuid = uuid ?? const Uuid();
 
-  factory SongAudioRepository.production() => SongAudioRepository._();
+  factory SongAudioRepository.production({String? subdir}) =>
+      SongAudioRepository._(subdir: subdir);
 
   /// Test factory: bypasses `path_provider` by pinning the root directory.
-  factory SongAudioRepository.testWith({required Directory rootDirectory}) =>
-      SongAudioRepository._(root: rootDirectory);
+  factory SongAudioRepository.testWith({
+    required Directory rootDirectory,
+    String? subdir,
+  }) => SongAudioRepository._(root: rootDirectory, subdir: subdir);
 
   Future<Directory> _root() async {
     final override = _rootOverride;
     if (override != null) {
-      if (!override.existsSync()) await override.create(recursive: true);
-      return override;
+      final dir = Directory(p.join(override.path, _subdir));
+      if (!dir.existsSync()) await dir.create(recursive: true);
+      return dir;
     }
     final cached = _rootCache;
     if (cached != null) return cached;
     final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'song_audio'));
+    final dir = Directory(p.join(docs.path, _subdir));
     if (!dir.existsSync()) await dir.create(recursive: true);
     _rootCache = dir;
     return dir;
@@ -192,4 +198,10 @@ final songAudioRepositoryProvider = Provider<SongAudioRepository>((ref) {
     return SongAudioRepository.production();
   }
   return SongAudioRepository.production();
+});
+
+/// Repository for Songwriter audio, isolated in its own `songwriter_audio/`
+/// subfolder so its orphan reconcile never touches the Song feature's files.
+final songwriterAudioRepositoryProvider = Provider<SongAudioRepository>((ref) {
+  return SongAudioRepository.production(subdir: 'songwriter_audio');
 });
