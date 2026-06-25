@@ -166,6 +166,61 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                   Navigator.of(ctx).pop();
                 },
               ),
+            Builder(
+              builder: (_) {
+                final maxSpan = section.lengthBars <= 1
+                    ? 1
+                    : section.lengthBars - 1;
+                return ListTile(
+                  leading: const Icon(Icons.unfold_more),
+                  title: Text('Span: ${block.spanBars} bar(s)'),
+                  subtitle: const Text('max section − 1'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        key: const ValueKey('sheetAudioSpanMinus'),
+                        icon: const Icon(Icons.remove),
+                        onPressed: () {
+                          ref
+                              .read(songwriterProvider.notifier)
+                              .setBlockPlacement(
+                                sectionId: section.id,
+                                laneId: lane.id,
+                                blockId: block.id,
+                                startBar: block.startBar,
+                                spanBars: (block.spanBars - 1).clamp(
+                                  1,
+                                  maxSpan,
+                                ),
+                              );
+                          Navigator.of(ctx).pop();
+                        },
+                      ),
+                      IconButton(
+                        key: const ValueKey('sheetAudioSpanPlus'),
+                        icon: const Icon(Icons.add),
+                        onPressed: () {
+                          ref
+                              .read(songwriterProvider.notifier)
+                              .setBlockPlacement(
+                                sectionId: section.id,
+                                laneId: lane.id,
+                                blockId: block.id,
+                                startBar: block.startBar,
+                                spanBars: (block.spanBars + 1).clamp(
+                                  1,
+                                  maxSpan,
+                                ),
+                              );
+                          Navigator.of(ctx).pop();
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
               title: const Text('Delete'),
