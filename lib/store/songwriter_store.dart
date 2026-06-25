@@ -542,6 +542,28 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  void setClipStretchedAsset({
+    required String clipId,
+    required AudioAsset stretchedAsset,
+    String? removeAssetId,
+  }) {
+    final clip = state.audioClips.where((c) => c.id == clipId).firstOrNull;
+    if (clip == null) return;
+    final assets = [
+      for (final a in state.audioAssets)
+        if (a.id != removeAssetId) a,
+      stretchedAsset,
+    ];
+    final clips = state.audioClips
+        .map(
+          (c) => c.id == clipId
+              ? c.copyWith(stretchedAssetId: stretchedAsset.id)
+              : c,
+        )
+        .toList();
+    _set(state.copyWith(audioAssets: assets, audioClips: clips));
+  }
+
   void addAudioBlock({
     required String sectionId,
     required String laneId,
