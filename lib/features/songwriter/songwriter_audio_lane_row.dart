@@ -80,7 +80,11 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                           ? Container(color: const Color(0xFF13314A))
                           : AudioClipBody(
                               name: asset.sourceLabel,
-                              durationMs: clip!.trimEndMs - clip.trimStartMs,
+                              durationMs:
+                                  (clip!.trimEndMs == 0
+                                      ? asset.durationMs
+                                      : clip.trimEndMs) -
+                                  clip.trimStartMs,
                               format: asset.format,
                               peaks: asset.peaks,
                               isBroken: false,

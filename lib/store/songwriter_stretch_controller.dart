@@ -22,6 +22,11 @@ class SongwriterStretchController {
   /// (Re)renders the stretched derived asset for [clipId] sized to its bar span.
   /// No-op for unplaced clips or clips with no source asset.
   Future<void> rerender(String clipId) async {
+    // One in-flight render per clip — prevents orphaned derived files from
+    // concurrent triggers (rapid stepper taps, tempo-watcher overlap).
+    if (ref.read(songwriterStretchProcessingProvider).contains(clipId)) {
+      return;
+    }
     final project = ref.read(songwriterProvider);
     final clip = project.audioClips.where((c) => c.id == clipId).firstOrNull;
     if (clip == null) return;

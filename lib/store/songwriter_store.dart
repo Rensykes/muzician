@@ -597,10 +597,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .firstOrNull;
     final removedBlock = lane?.blocks.where((b) => b.id == blockId).firstOrNull;
     final clipId = removedBlock?.audioClipId;
-    // Capture assetId before any state mutation.
-    final assetId = clipId == null
+    // Capture asset ids before any state mutation.
+    final removedClip = clipId == null
         ? null
-        : state.audioClips.where((c) => c.id == clipId).firstOrNull?.assetId;
+        : state.audioClips.where((c) => c.id == clipId).firstOrNull;
+    final assetId = removedClip?.assetId;
+    final stretchedAssetId = removedClip?.stretchedAssetId;
     _replaceLane(
       sectionId,
       laneId,
@@ -627,6 +629,22 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         );
         unawaited(ref.read(songwriterAudioRepositoryProvider).delete(assetId));
       }
+    }
+    // The derived stretched asset (if any) is unique to the removed clip —
+    // always reclaim it.
+    if (stretchedAssetId != null) {
+      if (state.audioAssets.any((a) => a.id == stretchedAssetId)) {
+        _set(
+          state.copyWith(
+            audioAssets: state.audioAssets
+                .where((a) => a.id != stretchedAssetId)
+                .toList(),
+          ),
+        );
+      }
+      unawaited(
+        ref.read(songwriterAudioRepositoryProvider).delete(stretchedAssetId),
+      );
     }
   }
 

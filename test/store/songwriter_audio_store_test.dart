@@ -204,4 +204,69 @@ void main() {
       expect(container.read(songwriterProvider).audioClips, isEmpty);
     },
   );
+
+  test('removeAudioBlock also reclaims the derived stretched asset', () async {
+    final tmp = await Directory.systemTemp.createTemp('sw_stretch_gc_');
+    addTearDown(() => tmp.delete(recursive: true));
+    final repo = SongAudioRepository.testWith(rootDirectory: tmp);
+    final container = ProviderContainer(
+      overrides: [songwriterAudioRepositoryProvider.overrideWithValue(repo)],
+    );
+    addTearDown(container.dispose);
+    final n = container.read(songwriterProvider.notifier);
+    n.addSection(label: 'A', lengthBars: 4);
+    final sectionId = container.read(songwriterProvider).sections.single.id;
+    n.addLane(sectionId: sectionId, kind: SongLaneKind.audio);
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.audio)
+        .id;
+    const src = AudioAsset(
+      id: 'src1',
+      durationMs: 1000,
+      sampleRate: 44100,
+      channels: 1,
+      format: 'wav',
+      peaks: [],
+      sourceLabel: 'src',
+    );
+    n.addAudioAsset(src);
+    final clipId = n.addAudioClip(assetId: src.id, durationMs: src.durationMs);
+    n.addAudioBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      audioClipId: clipId,
+      startBar: 0,
+      spanBars: 2,
+    );
+    const stretched = AudioAsset(
+      id: 'src1s',
+      durationMs: 4000,
+      sampleRate: 44100,
+      channels: 1,
+      format: 'wav',
+      peaks: [],
+      sourceLabel: 'Stretched',
+    );
+    n.setClipStretchedAsset(clipId: clipId, stretchedAsset: stretched);
+    expect(container.read(songwriterProvider).audioAssets, hasLength(2));
+
+    final blockId = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.kind == SongLaneKind.audio)
+        .blocks
+        .single
+        .id;
+    n.removeAudioBlock(sectionId: sectionId, laneId: laneId, blockId: blockId);
+
+    // Both the source and the derived stretched asset are reclaimed.
+    expect(container.read(songwriterProvider).audioAssets, isEmpty);
+    expect(container.read(songwriterProvider).audioClips, isEmpty);
+  });
 }
