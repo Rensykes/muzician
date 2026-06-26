@@ -314,24 +314,7 @@ class _SegmentRow extends ConsumerWidget {
                   );
                   return;
                 }
-                final picked = await showHarmonyChordSheet(
-                  context,
-                  startBar: 0,
-                  spanBars: 1,
-                  keyRoot: config.keyRoot,
-                  keyScaleName: config.keyScaleName,
-                );
-                if (picked == null || picked.isSilent) return;
-                store.addChordSegment(
-                  clipId: clipId,
-                  startTick: tick,
-                  spanTicks: tpb,
-                  chordSymbol: picked.chordSymbol,
-                  chordQuality: picked.chordQuality,
-                  chordRootPc: picked.chordRootPc,
-                  chordNotes: picked.chordNotes,
-                  romanNumeral: picked.romanNumeral,
-                );
+                await _addAt(context, store, tick);
               },
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 1),
@@ -371,6 +354,115 @@ class _SegmentRow extends ConsumerWidget {
             style: const TextStyle(color: MuzicianTheme.textMuted, fontSize: 9),
           ),
       ],
+    );
+  }
+
+  /// Lets the user mark a beat with a harmony chord OR a save reference.
+  Future<void> _addAt(
+    BuildContext context,
+    SongwriterNotifier store,
+    int tick,
+  ) async {
+    final tpb = config.ticksPerBeat;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MuzicianTheme.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('segAddChord'),
+              leading: const Icon(
+                Icons.piano,
+                color: MuzicianTheme.textPrimary,
+              ),
+              title: const Text(
+                'Chord',
+                style: TextStyle(color: MuzicianTheme.textPrimary),
+              ),
+              onTap: () => Navigator.pop(ctx, 'chord'),
+            ),
+            ListTile(
+              key: const ValueKey('segAddSave'),
+              leading: const Icon(
+                Icons.library_music_outlined,
+                color: MuzicianTheme.textPrimary,
+              ),
+              title: const Text(
+                'From a save',
+                style: TextStyle(color: MuzicianTheme.textPrimary),
+              ),
+              onTap: () => Navigator.pop(ctx, 'save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == 'chord') {
+      if (!context.mounted) return;
+      final picked = await showHarmonyChordSheet(
+        context,
+        startBar: 0,
+        spanBars: 1,
+        keyRoot: config.keyRoot,
+        keyScaleName: config.keyScaleName,
+      );
+      if (picked == null || picked.isSilent) return;
+      store.addChordSegment(
+        clipId: clipId,
+        startTick: tick,
+        spanTicks: tpb,
+        chordSymbol: picked.chordSymbol,
+        chordQuality: picked.chordQuality,
+        chordRootPc: picked.chordRootPc,
+        chordNotes: picked.chordNotes,
+        romanNumeral: picked.romanNumeral,
+      );
+    } else if (choice == 'save') {
+      if (!context.mounted) return;
+      final saveId = await _pickSave(context, store);
+      if (saveId == null) return;
+      store.addChordSegment(
+        clipId: clipId,
+        startTick: tick,
+        spanTicks: tpb,
+        saveId: saveId,
+      );
+    }
+  }
+
+  Future<String?> _pickSave(BuildContext context, SongwriterNotifier store) {
+    final saves = store.searchableSavesForLibraryMatch();
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MuzicianTheme.surface,
+      builder: (ctx) => SafeArea(
+        child: saves.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'No saves in this project',
+                  style: TextStyle(color: MuzicianTheme.textSecondary),
+                ),
+              )
+            : ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final s in saves)
+                    ListTile(
+                      key: Key('segSavePick_${s.id}'),
+                      title: Text(
+                        s.name,
+                        style: const TextStyle(
+                          color: MuzicianTheme.textPrimary,
+                        ),
+                      ),
+                      onTap: () => Navigator.pop(ctx, s.id),
+                    ),
+                ],
+              ),
+      ),
     );
   }
 }

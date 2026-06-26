@@ -112,6 +112,23 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                           child: CircularProgressIndicator(strokeWidth: 1.6),
                         ),
                       ),
+                    if (clip != null && clip.segments.isNotEmpty)
+                      Positioned(
+                        left: 4,
+                        right: 4,
+                        bottom: 2,
+                        child: Text(
+                          clip.segments
+                              .map((s) => s.chordSymbol ?? '◆')
+                              .join('  '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: MuzicianTheme.textPrimary,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
