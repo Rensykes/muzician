@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_segment_rules.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
 import '../song/song_audio_clip_body.dart';
 import '../_mockup_shell.dart' show showWidgetSheet;
+import 'harmony_chord_sheet.dart';
 import 'songwriter_audio_lane_row.dart' show fitGlyph;
 
 Future<void> showSongwriterAudioClipSheet({
@@ -89,6 +91,13 @@ class SongwriterAudioClipBody extends ConsumerWidget {
               },
             ),
           ),
+          const SizedBox(height: 8),
+          _SegmentRow(
+            clipId: clipId,
+            segments: clip.segments,
+            spanBars: block.spanBars,
+            config: project.config,
+          ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -121,12 +130,17 @@ class SongwriterAudioClipBody extends ConsumerWidget {
                 key: const ValueKey('clipSpanMinus'),
                 icon: const Icon(Icons.remove),
                 onPressed: () {
+                  final newSpan = (block.spanBars - 1).clamp(1, maxSpan);
                   store.setBlockPlacement(
                     sectionId: sectionId,
                     laneId: laneId,
                     blockId: block.id,
                     startBar: block.startBar,
-                    spanBars: (block.spanBars - 1).clamp(1, maxSpan),
+                    spanBars: newSpan,
+                  );
+                  store.clampClipSegments(
+                    clipId: clipId,
+                    spanTotalTicks: clipSpanTicks(newSpan, project.config),
                   );
                   rerenderIfStretch();
                 },
@@ -139,12 +153,17 @@ class SongwriterAudioClipBody extends ConsumerWidget {
                 key: const ValueKey('clipSpanPlus'),
                 icon: const Icon(Icons.add),
                 onPressed: () {
+                  final newSpan = (block.spanBars + 1).clamp(1, maxSpan);
                   store.setBlockPlacement(
                     sectionId: sectionId,
                     laneId: laneId,
                     blockId: block.id,
                     startBar: block.startBar,
-                    spanBars: (block.spanBars + 1).clamp(1, maxSpan),
+                    spanBars: newSpan,
+                  );
+                  store.clampClipSegments(
+                    clipId: clipId,
+                    spanTotalTicks: clipSpanTicks(newSpan, project.config),
                   );
                   rerenderIfStretch();
                 },
@@ -253,6 +272,105 @@ class _TrimWaveformState extends State<_TrimWaveform> {
           child: Container(width: 3, color: MuzicianTheme.sky),
         ),
       ),
+    );
+  }
+}
+
+/// A beat grid laid over the clip. Each beat cell shows the covering chord
+/// segment (symbol + Roman numeral) or is empty-and-tappable. Tapping an empty
+/// cell opens the harmony picker and adds a segment; tapping a filled cell
+/// removes it. Silent annotations only — no synth.
+class _SegmentRow extends ConsumerWidget {
+  const _SegmentRow({
+    required this.clipId,
+    required this.segments,
+    required this.spanBars,
+    required this.config,
+  });
+  final String clipId;
+  final List<ChordSegment> segments;
+  final int spanBars;
+  final SongwriterConfig config;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final beats = spanBars * config.beatsPerBar;
+    final tpb = config.ticksPerBeat;
+    final store = ref.read(songwriterProvider.notifier);
+    return Row(
+      children: [
+        for (var beat = 0; beat < beats; beat++)
+          Expanded(
+            child: GestureDetector(
+              key: Key('segBeat_$beat'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () async {
+                final tick = beat * tpb;
+                final existing = segmentAtTick(segments, tick);
+                if (existing != null) {
+                  store.removeChordSegment(
+                    clipId: clipId,
+                    segmentId: existing.id,
+                  );
+                  return;
+                }
+                final picked = await showHarmonyChordSheet(
+                  context,
+                  startBar: 0,
+                  spanBars: 1,
+                  keyRoot: config.keyRoot,
+                  keyScaleName: config.keyScaleName,
+                );
+                if (picked == null || picked.isSilent) return;
+                store.addChordSegment(
+                  clipId: clipId,
+                  startTick: tick,
+                  spanTicks: tpb,
+                  chordSymbol: picked.chordSymbol,
+                  chordQuality: picked.chordQuality,
+                  chordRootPc: picked.chordRootPc,
+                  chordNotes: picked.chordNotes,
+                  romanNumeral: picked.romanNumeral,
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 1),
+                height: 34,
+                decoration: BoxDecoration(
+                  color: segmentAtTick(segments, beat * tpb) != null
+                      ? MuzicianTheme.sky.withValues(alpha: 0.18)
+                      : Colors.white.withValues(alpha: 0.03),
+                  border: Border.all(color: MuzicianTheme.glassBorder),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                alignment: Alignment.center,
+                child: _label(segmentAtTick(segments, beat * tpb)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _label(ChordSegment? seg) {
+    if (seg == null) return const SizedBox.shrink();
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          seg.chordSymbol ?? '◆',
+          style: const TextStyle(
+            color: MuzicianTheme.textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (seg.romanNumeral != null)
+          Text(
+            seg.romanNumeral!,
+            style: const TextStyle(color: MuzicianTheme.textMuted, fontSize: 9),
+          ),
+      ],
     );
   }
 }
