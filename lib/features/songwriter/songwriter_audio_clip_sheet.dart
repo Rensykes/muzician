@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../schema/rules/songwriter_segment_rules.dart';
+import '../../store/save_system_store.dart';
+import '../../store/songwriter_audio_audition_store.dart';
+import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
@@ -27,7 +31,7 @@ Future<void> showSongwriterAudioClipSheet({
   ),
 );
 
-class SongwriterAudioClipBody extends ConsumerWidget {
+class SongwriterAudioClipBody extends ConsumerStatefulWidget {
   const SongwriterAudioClipBody({
     super.key,
     required this.sectionId,
@@ -39,7 +43,31 @@ class SongwriterAudioClipBody extends ConsumerWidget {
   final String clipId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SongwriterAudioClipBody> createState() =>
+      _SongwriterAudioClipBodyState();
+}
+
+class _SongwriterAudioClipBodyState
+    extends ConsumerState<SongwriterAudioClipBody> {
+  @override
+  void dispose() {
+    // Stop the audition loop so it does not keep playing after the sheet pops.
+    // Guarded: in widget tests the enclosing ProviderScope container can be
+    // torn down before this widget unmounts, which makes `ref` unusable.
+    try {
+      ref.read(songwriterAudioAuditionProvider.notifier).stop();
+    } catch (_) {
+      // Provider container already disposed — nothing left to stop.
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sectionId = widget.sectionId;
+    final laneId = widget.laneId;
+    final clipId = widget.clipId;
+
     final project = ref.watch(songwriterProvider);
     final clip = project.audioClips.where((c) => c.id == clipId).firstOrNull;
     if (clip == null) return const SizedBox.shrink();
@@ -169,6 +197,19 @@ class SongwriterAudioClipBody extends ConsumerWidget {
                 },
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          _AuditionRow(
+            asset: asset,
+            trimStartMs: clip.trimStartMs,
+            tempo: project.config.tempo,
+            bed: () => sectionAuditionBed(
+              section,
+              project.config,
+              ref.read(saveSystemProvider).saves,
+              drumPatterns: project.drumPatterns,
+              excludeAudioClipId: clipId,
+            ),
           ),
           if (ref.watch(songwriterStretchProcessingProvider).contains(clipId))
             const Padding(
@@ -463,6 +504,73 @@ class _SegmentRow extends ConsumerWidget {
                 ],
               ),
       ),
+    );
+  }
+}
+
+class _AuditionRow extends ConsumerWidget {
+  const _AuditionRow({
+    required this.asset,
+    required this.trimStartMs,
+    required this.tempo,
+    required this.bed,
+  });
+  final AudioAsset asset;
+  final int trimStartMs;
+  final int tempo;
+  final SongwriterAuditionBed Function() bed;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(songwriterAudioAuditionProvider);
+    final n = ref.read(songwriterAudioAuditionProvider.notifier);
+    final playing = state.status == SongwriterAudioAuditionStatus.playing;
+    final computed = bed();
+    final hasBed =
+        computed.notesByTick.isNotEmpty || computed.drumByTick.isNotEmpty;
+
+    Future<void> startWith(SongwriterAudioAuditionMode mode) async {
+      // One owner of the audio sink: stop the project transport first.
+      ref.read(songwriterPlaybackProvider.notifier).stopPlayback();
+      n.stop();
+      await n.start(
+        asset: asset,
+        trimStartMs: trimStartMs,
+        tempo: tempo,
+        mode: mode,
+        bed: mode == SongwriterAudioAuditionMode.withSection ? computed : null,
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          key: const ValueKey('clipAuditionPlay'),
+          icon: Icon(playing ? Icons.stop : Icons.play_arrow),
+          onPressed: () => playing ? n.stop() : startWith(state.mode),
+        ),
+        const SizedBox(width: 8),
+        ChoiceChip(
+          key: const ValueKey('clipAuditionAlone'),
+          label: const Text('Alone'),
+          selected: state.mode == SongwriterAudioAuditionMode.alone,
+          onSelected: (_) => playing
+              ? startWith(SongwriterAudioAuditionMode.alone)
+              : n.setMode(SongwriterAudioAuditionMode.alone),
+        ),
+        const SizedBox(width: 6),
+        ChoiceChip(
+          key: const ValueKey('clipAuditionWithSection'),
+          label: const Text('With section'),
+          selected: state.mode == SongwriterAudioAuditionMode.withSection,
+          onSelected: hasBed
+              ? (_) => playing
+                  ? startWith(SongwriterAudioAuditionMode.withSection)
+                  : n.setMode(SongwriterAudioAuditionMode.withSection)
+              : null,
+        ),
+      ],
     );
   }
 }
