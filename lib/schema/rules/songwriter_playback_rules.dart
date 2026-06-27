@@ -196,27 +196,17 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   ];
 }
 
-/// One looping backing bed for a single section's harmony, for the drum
-/// editor's "audition with backing" mode.
-///
-/// Returns the section's loop length in ticks and a `tick → midi pitches` map
-/// of per-bar chord stabs, indexed from tick 0. Harmony lanes use
-/// [chordMidiNotes]; save lanes use [snapshotMidiNotes]. Drum lanes are
-/// excluded — the backing is the chord bed only. Blocks tile via
-/// [tileLaneBlocks] and are clipped to the section.
-({int loopTicks, Map<int, List<int>> notesByTick}) sectionHarmonyLoop(
+/// Per-tick harmony + save voicing stabs for one section, indexed from tick 0.
+/// Drum and audio lanes are skipped. Shared by [sectionHarmonyLoop] and
+/// [sectionAuditionBed].
+Map<int, List<int>> _sectionChordBed(
   SongSection section,
   SongwriterConfig config,
   List<SaveEntry> saves,
 ) {
-  final beatTicks = config.ticksPerBeat;
-  final measureTicks = beatTicks * config.beatsPerBar;
-  final loopTicks = section.lengthBars * measureTicks;
+  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
   final notesAt = <int, List<int>>{};
-
   for (final lane in section.lanes) {
-    // Drum and audio lanes are excluded — the backing bed is the chord voice
-    // only (audio clips are sounded by the transport, not this loop).
     if (lane.kind == SongLaneKind.drum || lane.kind == SongLaneKind.audio) {
       continue;
     }
@@ -230,11 +220,82 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
           : snapshotMidiNotes(resolveBlockSnapshot(block, saves));
       if (pitches.isEmpty) continue;
       for (var bar = block.startBar; bar < clippedEnd; bar++) {
-        final tick = bar * measureTicks;
-        (notesAt[tick] ??= <int>[]).addAll(pitches);
+        (notesAt[bar * measureTicks] ??= <int>[]).addAll(pitches);
+      }
+    }
+  }
+  return notesAt;
+}
+
+/// One looping backing bed for a single section's harmony, for the drum
+/// editor's "audition with backing" mode.
+///
+/// Returns the section's loop length in ticks and a `tick → midi pitches` map
+/// of per-bar chord stabs, indexed from tick 0. Harmony lanes use
+/// [chordMidiNotes]; save lanes use [snapshotMidiNotes]. Drum lanes are
+/// excluded — the backing is the chord bed only. Blocks tile via
+/// [tileLaneBlocks] and are clipped to the section.
+({int loopTicks, Map<int, List<int>> notesByTick}) sectionHarmonyLoop(
+  SongSection section,
+  SongwriterConfig config,
+  List<SaveEntry> saves,
+) {
+  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+  return (
+    loopTicks: section.lengthBars * measureTicks,
+    notesByTick: _sectionChordBed(section, config, saves),
+  );
+}
+
+/// Looping bed for the audio-clip audition's "with section" mode: the section's
+/// harmony + save voicings ([notesByTick]) and drum-lane hits ([drumByTick]),
+/// both indexed from tick 0, plus the section [loopTicks]. Audio lanes are
+/// excluded (the audition's recording is the foreground); [excludeAudioClipId]
+/// is reserved for that exclusion and is currently a no-op for the bed.
+({int loopTicks, Map<int, List<int>> notesByTick, Map<int, List<DrumLaneId>> drumByTick})
+sectionAuditionBed(
+  SongSection section,
+  SongwriterConfig config,
+  List<SaveEntry> saves, {
+  List<DrumPattern> drumPatterns = const [],
+  String? excludeAudioClipId,
+}) {
+  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+  final patterns = {for (final p in drumPatterns) p.id: p};
+  final drumsAt = <int, Set<DrumLaneId>>{};
+
+  for (final lane in section.lanes) {
+    if (lane.kind != SongLaneKind.drum) continue;
+    for (final block in tileLaneBlocks(
+      lane,
+      sectionLengthBars: section.lengthBars,
+    )) {
+      final pattern = patterns[block.patternId];
+      if (pattern == null || pattern.lengthTicks <= 0) continue;
+      final clippedEnd = block.endBar > section.lengthBars
+          ? section.lengthBars
+          : block.endBar;
+      final startTick = block.startBar * measureTicks;
+      final endTick = clippedEnd * measureTicks;
+      for (
+        var origin = 0;
+        startTick + origin < endTick;
+        origin += pattern.lengthTicks
+      ) {
+        for (final seq in pattern.lanes) {
+          for (final t in seq.activeTicks) {
+            final tick = startTick + origin + t;
+            if (tick >= endTick) continue;
+            (drumsAt[tick] ??= <DrumLaneId>{}).add(seq.laneId);
+          }
+        }
       }
     }
   }
 
-  return (loopTicks: loopTicks, notesByTick: notesAt);
+  return (
+    loopTicks: section.lengthBars * measureTicks,
+    notesByTick: _sectionChordBed(section, config, saves),
+    drumByTick: {for (final e in drumsAt.entries) e.key: e.value.toList()},
+  );
 }
