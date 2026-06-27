@@ -260,14 +260,12 @@ Map<int, List<int>> _sectionChordBed(
 /// Looping bed for the audio-clip audition's "with section" mode: the section's
 /// harmony + save voicings ([notesByTick]) and drum-lane hits ([drumByTick]),
 /// both indexed from tick 0, plus the section [loopTicks]. Audio lanes are
-/// excluded (the audition's recording is the foreground); [excludeAudioClipId]
-/// is reserved for that exclusion and is currently a no-op for the bed.
+/// excluded — the audition's recording is the foreground.
 SongwriterAuditionBed sectionAuditionBed(
   SongSection section,
   SongwriterConfig config,
   List<SaveEntry> saves, {
   List<DrumPattern> drumPatterns = const [],
-  String? excludeAudioClipId,
 }) {
   final measureTicks = config.ticksPerBeat * config.beatsPerBar;
   final patterns = {for (final p in drumPatterns) p.id: p};

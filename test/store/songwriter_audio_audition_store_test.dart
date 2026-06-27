@@ -78,6 +78,30 @@ void main() {
     );
   });
 
+  test('alone mode with an end-trim loops just the region (loop:false re-arm)',
+      () async {
+    final sink = _FakeSink();
+    final container = ProviderContainer(overrides: [
+      songwriterAudioClipSinkProvider.overrideWithValue(sink),
+    ]);
+    addTearDown(container.dispose);
+    final n = container.read(songwriterAudioAuditionProvider.notifier);
+    await n.start(
+      asset: asset,
+      trimStartMs: 200,
+      trimEndMs: 600, // < durationMs (2000): a real interior region.
+      tempo: 120,
+      mode: SongwriterAudioAuditionMode.alone,
+    );
+    // The region loop arms the clip immediately with loop:false (re-seek model),
+    // not the gapless whole-asset loop:true path.
+    expect(sink.startCount, greaterThanOrEqualTo(1));
+    expect(sink.lastLoop, isFalse);
+
+    n.stop();
+    expect(sink.stopAllCount, 1);
+  });
+
   test('with-section is a no-op when the bed is empty', () async {
     final sink = _FakeSink();
     final container = ProviderContainer(overrides: [

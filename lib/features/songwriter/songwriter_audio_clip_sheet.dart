@@ -202,13 +202,13 @@ class _SongwriterAudioClipBodyState
           _AuditionRow(
             asset: asset,
             trimStartMs: clip.trimStartMs,
+            trimEndMs: clip.trimEndMs,
             tempo: project.config.tempo,
             bed: () => sectionAuditionBed(
               section,
               project.config,
               ref.read(saveSystemProvider).saves,
               drumPatterns: project.drumPatterns,
-              excludeAudioClipId: clipId,
             ),
           ),
           if (ref.watch(songwriterStretchProcessingProvider).contains(clipId))
@@ -512,33 +512,43 @@ class _AuditionRow extends ConsumerWidget {
   const _AuditionRow({
     required this.asset,
     required this.trimStartMs,
+    required this.trimEndMs,
     required this.tempo,
     required this.bed,
   });
   final AudioAsset asset;
   final int trimStartMs;
+  final int trimEndMs;
   final int tempo;
   final SongwriterAuditionBed Function() bed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(songwriterAudioAuditionProvider);
+    // Watch only (status, mode): currentTick changes every tick during
+    // with-section playback, and rebuilding the row per tick would re-run the
+    // bed() flatten needlessly.
+    final (status, mode) = ref.watch(
+      songwriterAudioAuditionProvider.select((s) => (s.status, s.mode)),
+    );
     final n = ref.read(songwriterAudioAuditionProvider.notifier);
-    final playing = state.status == SongwriterAudioAuditionStatus.playing;
+    final playing = status == SongwriterAudioAuditionStatus.playing;
     final computed = bed();
     final hasBed =
         computed.notesByTick.isNotEmpty || computed.drumByTick.isNotEmpty;
 
-    Future<void> startWith(SongwriterAudioAuditionMode mode) async {
+    Future<void> startWith(SongwriterAudioAuditionMode auditionMode) async {
       // One owner of the audio sink: stop the project transport first.
       ref.read(songwriterPlaybackProvider.notifier).stopPlayback();
       n.stop();
       await n.start(
         asset: asset,
         trimStartMs: trimStartMs,
+        trimEndMs: trimEndMs,
         tempo: tempo,
-        mode: mode,
-        bed: mode == SongwriterAudioAuditionMode.withSection ? computed : null,
+        mode: auditionMode,
+        bed: auditionMode == SongwriterAudioAuditionMode.withSection
+            ? computed
+            : null,
       );
     }
 
@@ -548,13 +558,13 @@ class _AuditionRow extends ConsumerWidget {
         IconButton(
           key: const ValueKey('clipAuditionPlay'),
           icon: Icon(playing ? Icons.stop : Icons.play_arrow),
-          onPressed: () => playing ? n.stop() : startWith(state.mode),
+          onPressed: () => playing ? n.stop() : startWith(mode),
         ),
         const SizedBox(width: 8),
         ChoiceChip(
           key: const ValueKey('clipAuditionAlone'),
           label: const Text('Alone'),
-          selected: state.mode == SongwriterAudioAuditionMode.alone,
+          selected: mode == SongwriterAudioAuditionMode.alone,
           onSelected: (_) => playing
               ? startWith(SongwriterAudioAuditionMode.alone)
               : n.setMode(SongwriterAudioAuditionMode.alone),
@@ -563,7 +573,7 @@ class _AuditionRow extends ConsumerWidget {
         ChoiceChip(
           key: const ValueKey('clipAuditionWithSection'),
           label: const Text('With section'),
-          selected: state.mode == SongwriterAudioAuditionMode.withSection,
+          selected: mode == SongwriterAudioAuditionMode.withSection,
           onSelected: hasBed
               ? (_) => playing
                   ? startWith(SongwriterAudioAuditionMode.withSection)
