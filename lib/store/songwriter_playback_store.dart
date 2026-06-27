@@ -15,6 +15,7 @@ import '../utils/tick_pacer.dart';
 import 'drum_pattern_playback_store.dart';
 import 'save_system_store.dart';
 import 'settings_store.dart';
+import 'songwriter_audio_audition_store.dart';
 import 'songwriter_audio_sink.dart';
 import 'songwriter_store.dart';
 
@@ -81,6 +82,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
 
   Future<void> startPlayback({Duration? tickDurationOverride}) async {
     if (state.status == SongwriterPlaybackStatus.playing) return;
+    ref.read(songwriterAudioAuditionProvider.notifier).stop();
 
     final project = ref.read(songwriterProvider);
     final settings = ref.read(settingsProvider);
