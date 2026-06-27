@@ -13,6 +13,16 @@ import '../../utils/note_utils.dart';
 import 'fretboard_rules.dart';
 import 'songwriter_rules.dart';
 
+/// Looping bed shape for the audio-clip audition's "with section" mode: the
+/// section [loopTicks], its harmony/save voicings ([notesByTick]) and drum-lane
+/// hits ([drumByTick]), all indexed from tick 0. Single source of truth shared
+/// by [sectionAuditionBed] and the audition transport.
+typedef SongwriterAuditionBed = ({
+  int loopTicks,
+  Map<int, List<int>> notesByTick,
+  Map<int, List<DrumLaneId>> drumByTick,
+});
+
 /// One audible moment on the flattened songwriter timeline.
 class SongwriterPlaybackEvent {
   const SongwriterPlaybackEvent({
@@ -252,8 +262,7 @@ Map<int, List<int>> _sectionChordBed(
 /// both indexed from tick 0, plus the section [loopTicks]. Audio lanes are
 /// excluded (the audition's recording is the foreground); [excludeAudioClipId]
 /// is reserved for that exclusion and is currently a no-op for the bed.
-({int loopTicks, Map<int, List<int>> notesByTick, Map<int, List<DrumLaneId>> drumByTick})
-sectionAuditionBed(
+SongwriterAuditionBed sectionAuditionBed(
   SongSection section,
   SongwriterConfig config,
   List<SaveEntry> saves, {
