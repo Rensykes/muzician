@@ -110,7 +110,28 @@ SlicePlan slicePlacements({
   required int startBar,
   required int sectionLengthBars,
 }) {
-  final bounds = <int>[0, ...cutSamples, totalSamples];
+  // Drop cuts that would carve a region shorter than ~30 ms so near-coincident
+  // markers can't create a zero/degenerate slice. Walk the sorted boundaries
+  // keeping one only when it sits at least [minRegionSamples] past the last
+  // KEPT boundary; the final [totalSamples] is always kept, and if the last
+  // region would be too short the preceding interior cut is dropped instead.
+  final minRegionSamples = (sampleRate * 0.03).round();
+  final sorted = <int>[0, ...cutSamples, totalSamples]..sort();
+  final bounds = <int>[sorted.first];
+  for (var i = 1; i < sorted.length; i++) {
+    final b = sorted[i];
+    final isLast = i == sorted.length - 1;
+    if (isLast) {
+      // Always keep the end. If it crowds the previous interior cut, drop that
+      // cut so the final region meets the minimum.
+      if (bounds.length > 1 && b - bounds.last < minRegionSamples) {
+        bounds.removeLast();
+      }
+      bounds.add(b);
+    } else if (b - bounds.last >= minRegionSamples) {
+      bounds.add(b);
+    }
+  }
   final regions = bounds.length - 1;
   final available = (sectionLengthBars - startBar).clamp(0, sectionLengthBars);
   final placeable = math.min(regions, available);

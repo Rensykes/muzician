@@ -703,8 +703,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   /// Replace the source audio block+clip with one clip+block per slice on
   /// consecutive bars. Each new clip shares the source assetId with the slice's
   /// trim region; fit defaults to stretch (timing correction). Skips a bar
-  /// already occupied by another block. Returns how many slices were placed.
-  int scatterSlices({
+  /// already occupied by another block. Returns the new clip ids in placement
+  /// order so callers can kick the stretch render for each placed clip.
+  List<String> scatterSlices({
     required String sectionId,
     required String laneId,
     required String sourceBlockId,
@@ -721,7 +722,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     final assetId = clipId == null
         ? null
         : state.audioClips.where((c) => c.id == clipId).firstOrNull?.assetId;
-    if (lane == null || source == null || assetId == null) return 0;
+    if (lane == null || source == null || assetId == null) return const [];
 
     // Bars occupied by OTHER blocks (the source's own bars are free to reuse).
     final occupied = <int>{
@@ -736,7 +737,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (occupied.contains(s.bar)) break; // stop at the first blocked bar
       accepted.add(s);
     }
-    if (accepted.isEmpty) return 0;
+    if (accepted.isEmpty) return const [];
 
     // Phase 1 — add every slice clip FIRST. They reference the shared assetId,
     // so the source removal below cannot reclaim (delete) the asset file.
@@ -773,7 +774,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         spanBars: 1,
       );
     }
-    return accepted.length;
+    return newClipIds;
   }
 
   /// Move/resize a block. Clamps to valid bounds; rejects (no-op) if the new

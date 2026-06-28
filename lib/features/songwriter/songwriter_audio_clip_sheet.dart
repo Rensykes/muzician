@@ -200,7 +200,7 @@ class _SongwriterAudioClipBodyState
             bar: s.bar,
           ),
       ];
-      final placed = ref
+      final placedIds = ref
           .read(songwriterProvider.notifier)
           .scatterSlices(
             sectionId: sectionId,
@@ -208,14 +208,21 @@ class _SongwriterAudioClipBodyState
             sourceBlockId: block.id,
             slices: absoluteSlices,
           );
+      // Each scattered clip is stretch-fit; kick its grid render so bars lock
+      // to tempo immediately. Fire-and-forget — the tiles show a processing
+      // badge while each render runs.
+      final stretch = ref.read(songwriterStretchControllerProvider);
+      for (final id in placedIds) {
+        stretch.rerender(id);
+      }
       ref.read(songwriterSliceControllerProvider.notifier).clear();
       if (!context.mounted) return;
       if (plan.droppedCount > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Placed $placed slices, ${plan.droppedCount} dropped — '
-              'section ran out of bars.',
+              'Placed ${placedIds.length} slices, ${plan.droppedCount} '
+              'dropped — section ran out of bars.',
             ),
           ),
         );
@@ -254,9 +261,22 @@ class _SongwriterAudioClipBodyState
                   Positioned.fill(
                     child: SongwriterSliceMarkers(
                       markers: _markerFracs,
-                      onAdd: (f) => setState(
-                        () => _markerFracs = [..._markerFracs, f]..sort(),
-                      ),
+                      onAdd: (f) {
+                        // Reject a marker dropped on top of an existing one or
+                        // the 0/1 edges — two coincident cuts would carve a
+                        // degenerate (zero/too-short) slice. The minimum gap is
+                        // ~30 ms expressed as a fraction of the trimmed region.
+                        final minFrac = regionSamples > 0
+                            ? (asset.sampleRate * 0.03) / regionSamples
+                            : 0.02;
+                        if (f <= minFrac || f >= 1 - minFrac) return;
+                        for (final m in _markerFracs) {
+                          if ((m - f).abs() < minFrac) return;
+                        }
+                        setState(
+                          () => _markerFracs = [..._markerFracs, f]..sort(),
+                        );
+                      },
                       onMove: (i, f) => setState(() {
                         final next = [..._markerFracs];
                         next[i] = f;

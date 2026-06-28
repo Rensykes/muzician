@@ -84,7 +84,7 @@ void main() {
     // --- Seed: 4-bar section, audio lane, one source clip+block at bar 0. ---
     final ids = seedAudioSourceBlock(store, sectionLengthBars: 4, startBar: 0);
 
-    final placed = store.scatterSlices(
+    final placedIds = store.scatterSlices(
       sectionId: ids.sectionId,
       laneId: ids.laneId,
       sourceBlockId: ids.blockId,
@@ -95,7 +95,7 @@ void main() {
       ],
     );
 
-    expect(placed, 3);
+    expect(placedIds.length, 3);
     final project = container.read(songwriterProvider);
     final lane = project.sections
         .firstWhere((s) => s.id == ids.sectionId)

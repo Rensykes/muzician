@@ -57,4 +57,30 @@ void main() {
     expect(plan.slices[1].trimStartMs, 1000);
     expect(plan.slices[1].trimEndMs, 2000);
   });
+
+  test(
+    'slicePlacements merges near-coincident cuts into one effective cut',
+    () {
+      // Two cuts ~2 ms apart (sr, sr + 100) plus a well-separated cut at 2*sr.
+      // The near-coincident pair must collapse to a single effective cut so the
+      // would-be degenerate region disappears: 3 clean regions, not 4, and no
+      // zero-length slice.
+      final plan = slicePlacements(
+        cutSamples: [sr, sr + 100, 2 * sr],
+        totalSamples: 4 * sr,
+        sampleRate: sr,
+        startBar: 0,
+        sectionLengthBars: 4,
+      );
+      expect(plan.slices.length, 3);
+      expect(plan.droppedCount, 0);
+      for (final slice in plan.slices) {
+        expect(
+          slice.trimEndMs,
+          greaterThan(slice.trimStartMs),
+          reason: 'every region must be non-degenerate',
+        );
+      }
+    },
+  );
 }
