@@ -51,11 +51,14 @@ class _SongwriterAudioClipBodyState
     extends ConsumerState<SongwriterAudioClipBody> {
   @override
   void dispose() {
-    // Stop the audition loop so it does not keep playing after the sheet pops.
-    // Guarded: in widget tests the enclosing ProviderScope container can be
-    // torn down before this widget unmounts, which makes `ref` unusable.
+    // Stop anything still sounding when the sheet pops — both the in-drawer
+    // audition loop and the project transport (the user may have started it to
+    // watch the playhead). Guarded: in widget tests the enclosing ProviderScope
+    // container can be torn down before this widget unmounts, making `ref`
+    // unusable.
     try {
       ref.read(songwriterAudioAuditionProvider.notifier).stop();
+      ref.read(songwriterPlaybackProvider.notifier).stopPlayback();
     } catch (_) {
       // Provider container already disposed — nothing left to stop.
     }
@@ -86,7 +89,14 @@ class _SongwriterAudioClipBodyState
       return const SizedBox.shrink();
     }
     final store = ref.read(songwriterProvider.notifier);
-    final maxSpan = section.lengthBars <= 1 ? 1 : section.lengthBars - 1;
+    // Largest span that still fits the section from this block's start: a block
+    // at startBar S may run to the section end, i.e. span = lengthBars - S.
+    // (Previously `lengthBars - 1`, which capped an 8-bar section at 7 and
+    // ignored startBar entirely.)
+    final maxSpan = (section.lengthBars - block.startBar).clamp(
+      1,
+      section.lengthBars < 1 ? 1 : section.lengthBars,
+    );
 
     void rerenderIfStretch() {
       final cur = ref
@@ -109,6 +119,7 @@ class _SongwriterAudioClipBodyState
             child: _TrimWaveform(
               asset: asset,
               clip: clip,
+              spanBars: block.spanBars,
               onTrim: (startMs, endMs) {
                 store.setClipTrim(
                   clipId: clipId,
@@ -240,10 +251,12 @@ class _TrimWaveform extends StatefulWidget {
   const _TrimWaveform({
     required this.asset,
     required this.clip,
+    required this.spanBars,
     required this.onTrim,
   });
   final AudioAsset asset;
   final AudioClip clip;
+  final int spanBars;
   final void Function(int startMs, int endMs) onTrim;
   @override
   State<_TrimWaveform> createState() => _TrimWaveformState();
@@ -281,6 +294,19 @@ class _TrimWaveformState extends State<_TrimWaveform> {
                 isBroken: false,
               ),
             ),
+            // Bar boundaries across the clip span, so the user can see how the
+            // audio divides into bars (equal split, matching the beat grid
+            // below and the linear bar layout used everywhere else).
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _BarDividerPainter(
+                    bars: widget.spanBars,
+                    color: Colors.white.withValues(alpha: 0.22),
+                  ),
+                ),
+              ),
+            ),
             _handle(w, _start, const Key('clipTrimStart'), (nx) {
               setState(() => _start = nx.clamp(0.0, _end - 0.02));
             }),
@@ -315,6 +341,41 @@ class _TrimWaveformState extends State<_TrimWaveform> {
       ),
     );
   }
+}
+
+/// Vertical bar-boundary lines over the clip waveform, dividing it into
+/// [bars] equal segments with a small 1-based bar number per segment.
+class _BarDividerPainter extends CustomPainter {
+  _BarDividerPainter({required this.bars, required this.color});
+  final int bars;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = bars < 1 ? 1 : bars;
+    final barWidth = size.width / n;
+    final line = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    for (var i = 1; i < n; i++) {
+      final x = i * barWidth;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
+    }
+    for (var i = 0; i < n; i++) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '${i + 1}',
+          style: TextStyle(color: color, fontSize: 9),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(i * barWidth + 2, 1));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BarDividerPainter old) =>
+      old.bars != bars || old.color != color;
 }
 
 /// A beat grid laid over the clip. Each beat cell shows the covering chord
