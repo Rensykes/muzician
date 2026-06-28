@@ -9,6 +9,7 @@ import '../../theme/muzician_theme.dart';
 import '../song/song_audio_clip_body.dart';
 import 'songwriter_audio_actions.dart';
 import 'songwriter_audio_clip_sheet.dart';
+import 'songwriter_playhead.dart';
 
 IconData fitGlyph(AudioFitMode m) => switch (m) {
   AudioFitMode.loop => Icons.repeat,
@@ -182,7 +183,21 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
             ),
           ),
         ),
-        Row(children: cells),
+        Stack(
+          children: [
+            Row(children: cells),
+            // Single flat row across the whole section — playhead spans all bars.
+            Positioned.fill(
+              child: SongwriterRowPlayhead(
+                sectionId: section.id,
+                instanceIndex: instanceIndex,
+                rowStartBar: 0,
+                barsInRow: bars,
+                highlightActiveBar: true,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

@@ -216,3 +216,14 @@ final songwriterActivePositionProvider = Provider<SongwriterActivePosition?>((
   final sections = ref.watch(songwriterProvider.select((p) => p.sections));
   return activePositionForBar(sections, bar);
 });
+
+/// Fractional position within the current bar, in `[0, 1)`, for a smoothly
+/// sweeping playhead. Updates every tick (unlike [currentBar]), so only the
+/// active row's playhead overlay should watch it.
+final songwriterPlayheadFracProvider = Provider<double>((ref) {
+  final (tick, measureTicks) = ref.watch(
+    songwriterPlaybackProvider.select((p) => (p.currentTick, p.measureTicks)),
+  );
+  if (tick == null || measureTicks <= 0) return 0.0;
+  return (tick % measureTicks) / measureTicks;
+});

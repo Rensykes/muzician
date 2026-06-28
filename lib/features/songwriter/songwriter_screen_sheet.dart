@@ -25,6 +25,7 @@ import '../../utils/note_utils.dart';
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_coach_steps.dart';
+import 'songwriter_playhead.dart';
 import 'songwriter_save_lane_filter.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
@@ -944,7 +945,19 @@ class _BarRow extends ConsumerWidget {
             for (var r = 0; r < rows.length; r++)
               Padding(
                 padding: EdgeInsets.only(bottom: r == rows.length - 1 ? 0 : 8),
-                child: Row(children: rows[r]),
+                child: Stack(
+                  children: [
+                    Row(children: rows[r]),
+                    Positioned.fill(
+                      child: SongwriterRowPlayhead(
+                        sectionId: section.id,
+                        instanceIndex: instanceIndex,
+                        rowStartBar: r * perRow,
+                        barsInRow: (bars - r * perRow).clamp(1, perRow),
+                      ),
+                    ),
+                  ],
+                ),
               ),
           ],
         );
