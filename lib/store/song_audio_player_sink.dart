@@ -92,7 +92,10 @@ class AudioPlayersClipSink implements SongAudioClipSink {
 
   @override
   Future<void> stopAll() async {
-    for (final player in _players.values) {
+    // Snapshot before iterating: the awaited `stop()` yields control, and a
+    // concurrent `startClip`/`prepare` may insert into `_players` during the
+    // suspension — iterating the live view would throw ConcurrentModification.
+    for (final player in _players.values.toList()) {
       await player.stop();
     }
   }
