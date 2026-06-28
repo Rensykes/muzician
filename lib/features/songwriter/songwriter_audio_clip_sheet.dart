@@ -5,9 +5,11 @@ import '../../models/song_project.dart' show AudioAsset;
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../schema/rules/songwriter_segment_rules.dart';
+import '../../schema/rules/songwriter_slice_rules.dart';
 import '../../store/save_system_store.dart';
 import '../../store/songwriter_audio_audition_store.dart';
 import '../../store/songwriter_playback_store.dart';
+import '../../store/songwriter_slice_controller.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
@@ -15,6 +17,7 @@ import '../song/song_audio_clip_body.dart';
 import '../_mockup_shell.dart' show showWidgetSheet;
 import 'harmony_chord_sheet.dart';
 import 'songwriter_audio_lane_row.dart' show fitGlyph;
+import 'songwriter_slice_markers.dart';
 
 Future<void> showSongwriterAudioClipSheet({
   required BuildContext context,
@@ -49,6 +52,24 @@ class SongwriterAudioClipBody extends ConsumerStatefulWidget {
 
 class _SongwriterAudioClipBodyState
     extends ConsumerState<SongwriterAudioClipBody> {
+  // ── Slice mode (ephemeral; not persisted) ──
+  bool _sliceMode = false;
+  double _sensitivity = 0.5;
+  // Cut positions as fractions 0..1 across the clip's TRIMMED region. Seeded
+  // from auto-detected onsets, then editable by add/move/delete gestures.
+  List<double> _markerFracs = const [];
+
+  /// Length of the clip's trimmed region, in samples. The slice controller's
+  /// onsets and the marker fractions both live in this region space (region
+  /// origin = `clip.trimStartMs`), so onset/total conversions use this.
+  int _regionSamples(AudioAsset asset, AudioClip clip) {
+    final sr = asset.sampleRate <= 0 ? 44100 : asset.sampleRate;
+    final regionMs =
+        (clip.trimEndMs == 0 ? asset.durationMs : clip.trimEndMs) -
+        clip.trimStartMs;
+    return (regionMs * sr / 1000).round();
+  }
+
   @override
   void dispose() {
     // Stop anything still sounding when the sheet pops — both the in-drawer
@@ -109,6 +130,99 @@ class _SongwriterAudioClipBodyState
       }
     }
 
+    final regionSamples = _regionSamples(asset, clip);
+    // Slicing needs decoded PCM. `peaks` is only populated for recorded WAVs
+    // (mp3/m4a/web imports carry empty peaks), so it's our WAV proxy + gate.
+    final canSlice = asset.peaks.isNotEmpty;
+
+    // New detection results refresh the auto markers. Simplest honest policy:
+    // replace the marker set with the latest detection; the user's add/move/
+    // delete edits then apply on top until the next detect() lands.
+    ref.listen<SliceDetectionState>(songwriterSliceControllerProvider, (
+      prev,
+      next,
+    ) {
+      if (!_sliceMode || next.processing) return;
+      if (regionSamples <= 0) return;
+      setState(() {
+        _markerFracs = [
+          for (final o in next.onsets) (o / regionSamples).clamp(0.0, 1.0),
+        ];
+      });
+    });
+
+    void enterSliceMode() {
+      setState(() {
+        _sliceMode = true;
+        // Seed immediately from any onsets already in the controller so the
+        // markers show even before the debounced detect() pass returns.
+        final existing = ref.read(songwriterSliceControllerProvider).onsets;
+        _markerFracs = regionSamples <= 0
+            ? const []
+            : [for (final o in existing) (o / regionSamples).clamp(0.0, 1.0)];
+      });
+      ref
+          .read(songwriterSliceControllerProvider.notifier)
+          .detect(clipId: clipId, sensitivity: _sensitivity);
+    }
+
+    void exitSliceMode() {
+      ref.read(songwriterSliceControllerProvider.notifier).clear();
+      setState(() {
+        _sliceMode = false;
+        _markerFracs = const [];
+      });
+    }
+
+    Future<void> scatter() async {
+      if (_markerFracs.isEmpty) return;
+      final totalSamples = regionSamples;
+      final cutSamples = (_markerFracs.toList()..sort())
+          .map((f) => (f * totalSamples).round())
+          .toList();
+      final plan = slicePlacements(
+        cutSamples: cutSamples,
+        totalSamples: totalSamples,
+        sampleRate: asset.sampleRate <= 0 ? 44100 : asset.sampleRate,
+        startBar: block.startBar,
+        sectionLengthBars: section.lengthBars,
+      );
+      // CRITICAL: plan.slices trims are region-local (0-based within the
+      // trimmed region). `scatterSlices` -> `setClipTrim` stores
+      // ASSET-ABSOLUTE ms, so shift every slice by the region origin
+      // (clip.trimStartMs) before placing. Without this, slices would play
+      // audio from the wrong offset in the asset.
+      final absoluteSlices = [
+        for (final s in plan.slices)
+          PlacedSlice(
+            trimStartMs: s.trimStartMs + clip.trimStartMs,
+            trimEndMs: s.trimEndMs + clip.trimStartMs,
+            bar: s.bar,
+          ),
+      ];
+      final placed = ref
+          .read(songwriterProvider.notifier)
+          .scatterSlices(
+            sectionId: sectionId,
+            laneId: laneId,
+            sourceBlockId: block.id,
+            slices: absoluteSlices,
+          );
+      ref.read(songwriterSliceControllerProvider.notifier).clear();
+      if (!context.mounted) return;
+      if (plan.droppedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Placed $placed slices, ${plan.droppedCount} dropped — '
+              'section ran out of bars.',
+            ),
+          ),
+        );
+      }
+      await Navigator.of(context).maybePop();
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -116,19 +230,61 @@ class _SongwriterAudioClipBodyState
         children: [
           SizedBox(
             height: 80,
-            child: _TrimWaveform(
-              asset: asset,
-              clip: clip,
-              spanBars: block.spanBars,
-              onTrim: (startMs, endMs) {
-                store.setClipTrim(
-                  clipId: clipId,
-                  trimStartMs: startMs,
-                  trimEndMs: endMs,
-                );
-                rerenderIfStretch();
-              },
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: _TrimWaveform(
+                    asset: asset,
+                    clip: clip,
+                    spanBars: block.spanBars,
+                    onTrim: (startMs, endMs) {
+                      store.setClipTrim(
+                        clipId: clipId,
+                        trimStartMs: startMs,
+                        trimEndMs: endMs,
+                      );
+                      rerenderIfStretch();
+                    },
+                  ),
+                ),
+                // Slice cut markers live on top of the waveform in the same
+                // box, so a marker fraction maps to the same x as the trim
+                // handles. Shown only while slicing.
+                if (_sliceMode)
+                  Positioned.fill(
+                    child: SongwriterSliceMarkers(
+                      markers: _markerFracs,
+                      onAdd: (f) => setState(
+                        () => _markerFracs = [..._markerFracs, f]..sort(),
+                      ),
+                      onMove: (i, f) => setState(() {
+                        final next = [..._markerFracs];
+                        next[i] = f;
+                        _markerFracs = next;
+                      }),
+                      onDelete: (i) => setState(() {
+                        final next = [..._markerFracs]..removeAt(i);
+                        _markerFracs = next;
+                      }),
+                    ),
+                  ),
+              ],
             ),
+          ),
+          const SizedBox(height: 8),
+          _SliceControls(
+            sliceMode: _sliceMode,
+            canSlice: canSlice,
+            sensitivity: _sensitivity,
+            cutCount: _markerFracs.length,
+            onToggle: () => _sliceMode ? exitSliceMode() : enterSliceMode(),
+            onSensitivity: (v) {
+              setState(() => _sensitivity = v);
+              ref
+                  .read(songwriterSliceControllerProvider.notifier)
+                  .detect(clipId: clipId, sensitivity: v);
+            },
+            onScatter: _markerFracs.isEmpty ? null : scatter,
           ),
           const SizedBox(height: 8),
           _SegmentRow(
@@ -243,6 +399,97 @@ class _SongwriterAudioClipBodyState
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Slice-mode controls: a toggle to enter/leave slice mode, and (while in
+/// slice mode) a sensitivity slider, a cut-count label, and a "Scatter to
+/// bars" action. The toggle is disabled for non-WAV clips (no decoded PCM to
+/// detect onsets from).
+class _SliceControls extends StatelessWidget {
+  const _SliceControls({
+    required this.sliceMode,
+    required this.canSlice,
+    required this.sensitivity,
+    required this.cutCount,
+    required this.onToggle,
+    required this.onSensitivity,
+    required this.onScatter,
+  });
+  final bool sliceMode;
+  final bool canSlice;
+  final double sensitivity;
+  final int cutCount;
+  final VoidCallback onToggle;
+  final ValueChanged<double> onSensitivity;
+  final VoidCallback? onScatter;
+
+  @override
+  Widget build(BuildContext context) {
+    // cutCount markers => cutCount + 1 regions (when there is at least 1 cut).
+    final regions = cutCount == 0 ? 0 : cutCount + 1;
+    final toggle = OutlinedButton.icon(
+      key: const ValueKey('clipSliceToggle'),
+      onPressed: canSlice ? onToggle : null,
+      icon: const Icon(Icons.content_cut, size: 16),
+      label: Text(sliceMode ? 'Slicing' : 'Slice'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: sliceMode
+            ? MuzicianTheme.sky
+            : MuzicianTheme.textPrimary,
+      ),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (canSlice)
+              toggle
+            else
+              Tooltip(
+                message: 'Slicing needs a recorded (WAV) clip.',
+                child: toggle,
+              ),
+          ],
+        ),
+        if (sliceMode) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.graphic_eq,
+                size: 16,
+                color: MuzicianTheme.textSecondary,
+              ),
+              Expanded(
+                child: Slider(
+                  key: const ValueKey('clipSensitivity'),
+                  value: sensitivity,
+                  onChanged: onSensitivity,
+                ),
+              ),
+              Text(
+                '$cutCount cut(s)',
+                style: const TextStyle(color: MuzicianTheme.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            key: const ValueKey('clipScatter'),
+            onPressed: onScatter,
+            icon: const Icon(Icons.grid_view, size: 16),
+            label: Text(
+              regions <= 1
+                  ? 'Scatter to bars'
+                  : 'Scatter $regions slices to bars',
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -637,8 +884,8 @@ class _AuditionRow extends ConsumerWidget {
           selected: mode == SongwriterAudioAuditionMode.withSection,
           onSelected: hasBed
               ? (_) => playing
-                  ? startWith(SongwriterAudioAuditionMode.withSection)
-                  : n.setMode(SongwriterAudioAuditionMode.withSection)
+                    ? startWith(SongwriterAudioAuditionMode.withSection)
+                    : n.setMode(SongwriterAudioAuditionMode.withSection)
               : null,
         ),
       ],
