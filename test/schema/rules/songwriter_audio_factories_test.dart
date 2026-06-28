@@ -22,8 +22,8 @@ void main() {
   });
 
   group('audioBlockDefaultSpan', () {
-    test('4-bar section at startBar 0 → span 3', () {
-      expect(audioBlockDefaultSpan(sectionLengthBars: 4, startBar: 0), 3);
+    test('4-bar section at startBar 0 → span 4 (fills to section end)', () {
+      expect(audioBlockDefaultSpan(sectionLengthBars: 4, startBar: 0), 4);
     });
 
     test('4-bar section at startBar 2 → span 2', () {

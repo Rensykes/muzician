@@ -217,17 +217,14 @@ AudioClip makeAudioClip({required String assetId, required int durationMs}) =>
     );
 
 /// Default bar span for a new audio block placed at [startBar] in a section of
-/// [sectionLengthBars]: fills toward the section end but never past it, and is
-/// capped at section length − 1 (with a floor of 1 for a 1-bar section).
+/// [sectionLengthBars]: fills all the way to the section end (floor of 1).
 int audioBlockDefaultSpan({
   required int sectionLengthBars,
   required int startBar,
 }) {
   if (sectionLengthBars <= 1) return 1;
-  final cap = sectionLengthBars - 1;
   final remaining = sectionLengthBars - startBar;
-  final span = remaining < cap ? remaining : cap;
-  return span < 1 ? 1 : span;
+  return remaining < 1 ? 1 : remaining;
 }
 
 SongBlock makeAudioBlock({
