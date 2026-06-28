@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
+import '../../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/song_audio_repository.dart';
 import '../../store/songwriter_store.dart';
@@ -29,13 +30,29 @@ Future<void> showSongwriterAudioPicker(
       startTick: 0,
       onRecord: () async {
         Navigator.of(sheetCtx).pop();
+        // Bars available from this clip's start to the section end, and the
+        // wall-clock duration of one bar at the project tempo — together they
+        // drive the recorder's bar-progress indicator.
+        final cfg = ref.read(songwriterProvider).config;
+        final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
+        final msPerBar =
+            (pr_rules.tickDuration(cfg.tempo) * measureTicks).inMicroseconds /
+            1000.0;
+        final targetBars = audioBlockDefaultSpan(
+          sectionLengthBars: sectionLengthBars,
+          startBar: startBar,
+        );
         final asset = await showModalBottomSheet<AudioAsset?>(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           isDismissible: false,
           enableDrag: false,
-          builder: (_) => const SongwriterAudioRecorderSheet(countInMs: 0),
+          builder: (_) => SongwriterAudioRecorderSheet(
+            countInMs: 0,
+            targetBars: targetBars,
+            msPerBar: msPerBar,
+          ),
         );
         if (asset != null) {
           _commit(ref, sectionId, laneId, startBar, sectionLengthBars, asset);
