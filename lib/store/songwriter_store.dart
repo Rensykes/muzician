@@ -11,6 +11,7 @@ import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
 import '../schema/rules/songwriter_segment_rules.dart';
+import '../schema/rules/songwriter_slice_rules.dart';
 import '../schema/rules/songwriter_third_above_rules.dart';
 import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
@@ -697,6 +698,82 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         ref.read(songwriterAudioRepositoryProvider).delete(stretchedAssetId),
       );
     }
+  }
+
+  /// Replace the source audio block+clip with one clip+block per slice on
+  /// consecutive bars. Each new clip shares the source assetId with the slice's
+  /// trim region; fit defaults to stretch (timing correction). Skips a bar
+  /// already occupied by another block. Returns how many slices were placed.
+  int scatterSlices({
+    required String sectionId,
+    required String laneId,
+    required String sourceBlockId,
+    required List<PlacedSlice> slices,
+    AudioFitMode fitMode = AudioFitMode.stretch,
+  }) {
+    final lane = state.sections
+        .where((s) => s.id == sectionId)
+        .expand((s) => s.lanes)
+        .where((l) => l.id == laneId)
+        .firstOrNull;
+    final source = lane?.blocks.where((b) => b.id == sourceBlockId).firstOrNull;
+    final clipId = source?.audioClipId;
+    final assetId = clipId == null
+        ? null
+        : state.audioClips.where((c) => c.id == clipId).firstOrNull?.assetId;
+    if (lane == null || source == null || assetId == null) return 0;
+
+    // Bars occupied by OTHER blocks (the source's own bars are free to reuse).
+    final occupied = <int>{
+      for (final b in lane.blocks)
+        if (b.id != sourceBlockId)
+          for (var i = b.startBar; i < b.endBar; i++) i,
+    };
+
+    // Slices that fit (stop at the first bar blocked by another block).
+    final accepted = <PlacedSlice>[];
+    for (final s in slices) {
+      if (occupied.contains(s.bar)) break; // stop at the first blocked bar
+      accepted.add(s);
+    }
+    if (accepted.isEmpty) return 0;
+
+    // Phase 1 — add every slice clip FIRST. They reference the shared assetId,
+    // so the source removal below cannot reclaim (delete) the asset file.
+    final newClipIds = <String>[];
+    for (final s in accepted) {
+      final newClipId = addAudioClip(
+        assetId: assetId,
+        durationMs: s.trimEndMs - s.trimStartMs,
+      );
+      setClipTrim(
+        clipId: newClipId,
+        trimStartMs: s.trimStartMs,
+        trimEndMs: s.trimEndMs,
+      );
+      setClipFitMode(clipId: newClipId, fitMode: fitMode);
+      newClipIds.add(newClipId);
+    }
+
+    // Phase 2 — remove the source block now that its asset is safe. This frees
+    // the source's bars so a slice can reuse them without an overlap rejection.
+    removeAudioBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: sourceBlockId,
+    );
+
+    // Phase 3 — place one 1-bar block per accepted slice.
+    for (var i = 0; i < accepted.length; i++) {
+      addAudioBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        audioClipId: newClipIds[i],
+        startBar: accepted[i].bar,
+        spanBars: 1,
+      );
+    }
+    return accepted.length;
   }
 
   /// Move/resize a block. Clamps to valid bounds; rejects (no-op) if the new
