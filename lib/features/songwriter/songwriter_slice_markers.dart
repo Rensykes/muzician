@@ -43,6 +43,8 @@ class SongwriterSliceMarkers extends StatelessWidget {
                   bottom: 0,
                   child: GestureDetector(
                     key: Key('sliceMarker_$i'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {},
                     onHorizontalDragUpdate: (d) => onMove(
                       i,
                       ((markers[i] * w) + d.delta.dx).clamp(0.0, w) / w,
