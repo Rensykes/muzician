@@ -22,6 +22,7 @@ import 'store/project_config_sync.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'ui/project_chip.dart';
+import 'store/record_audio_session.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
@@ -49,6 +50,9 @@ void main() {
         ),
         songwriterAudioClipSinkProvider.overrideWith(
           (ref) => ref.watch(productionSongwriterAudioClipSinkProvider),
+        ),
+        recordAudioSessionProvider.overrideWithValue(
+          const AudioPlayersRecordAudioSession(),
         ),
       ],
       child: const MuzicianApp(),

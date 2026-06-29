@@ -17,6 +17,7 @@ import '../utils/tick_pacer.dart';
 import 'drum_pattern_playback_store.dart';
 import 'song_audio_recorder_store.dart'
     show SongAudioRecorderStatus, songAudioRecorderDriverProvider;
+import 'record_audio_session.dart';
 import 'song_audio_repository.dart';
 import 'songwriter_audio_sink.dart';
 import 'songwriter_playback_store.dart';
@@ -85,6 +86,7 @@ class SongwriterAudioRecorderNotifier
     extends Notifier<SongwriterAudioRecorderState> {
   bool _cancelled = false;
   int _monitorGen = 0;
+  bool _recordSessionActive = false;
 
   @override
   SongwriterAudioRecorderState build() => const SongwriterAudioRecorderState();
@@ -121,8 +123,17 @@ class SongwriterAudioRecorderNotifier
     }
     if (state.status != SongAudioRecorderStatus.countIn) return;
     state = state.copyWith(status: SongAudioRecorderStatus.recording);
+    final monitoring =
+        monitor != null && (monitor.backing || monitor.metronome);
+    if (monitoring) {
+      // iOS shares one AVAudioSession: switch it to playAndRecord BEFORE the
+      // mic arms so the monitor's audioplayers playback can't re-assert the
+      // capture-incompatible `playback` category and silence the take.
+      await ref.read(recordAudioSessionProvider).enterRecording();
+      _recordSessionActive = true;
+    }
     await driver.start();
-    if (monitor != null && (monitor.backing || monitor.metronome)) {
+    if (monitoring) {
       unawaited(_runMonitor(++_monitorGen, monitor));
     }
   }
@@ -207,6 +218,14 @@ class SongwriterAudioRecorderNotifier
     unawaited(ref.read(songwriterAudioClipSinkProvider).stopAll());
   }
 
+  /// Restores the playback-only audio session if monitored recording switched
+  /// it to playAndRecord. No-op when no switch happened.
+  void _restoreRecordSession() {
+    if (!_recordSessionActive) return;
+    _recordSessionActive = false;
+    unawaited(ref.read(recordAudioSessionProvider).restore());
+  }
+
   Future<void> stop() async {
     if (state.status != SongAudioRecorderStatus.recording) return;
     state = state.copyWith(status: SongAudioRecorderStatus.finalising);
@@ -233,12 +252,17 @@ class SongwriterAudioRecorderNotifier
         status: SongAudioRecorderStatus.error,
         errorMessage: () => 'Recording failed: $e',
       );
+    } finally {
+      // Restore after the recorder has finalised the file, so flipping the
+      // session category can't disturb the in-flight capture.
+      _restoreRecordSession();
     }
   }
 
   Future<void> cancel() async {
     _cancelled = true;
     _stopMonitor();
+    _restoreRecordSession();
     if (state.status == SongAudioRecorderStatus.idle) return;
     if (state.status == SongAudioRecorderStatus.recording) {
       try {

@@ -6,6 +6,7 @@ import 'package:muzician/models/song_project.dart' show AudioAsset, DrumLaneId;
 import 'package:muzician/schema/rules/songwriter_audio_rules.dart'
     show SongwriterScheduledClip;
 import 'package:muzician/store/drum_pattern_playback_store.dart';
+import 'package:muzician/store/record_audio_session.dart';
 import 'package:muzician/store/song_audio_recorder_store.dart'
     show
         SongAudioRecorderDriver,
@@ -49,6 +50,15 @@ class _FakeClipSink implements SongAudioClipSink {
   Future<void> stopClip({required AudioAsset asset}) async {}
   @override
   Future<void> stopAll() async => stopAllCount++;
+}
+
+class _FakeRecordSession implements RecordAudioSession {
+  int enterCount = 0;
+  int restoreCount = 0;
+  @override
+  Future<void> enterRecording() async => enterCount++;
+  @override
+  Future<void> restore() async => restoreCount++;
 }
 
 void main() {
@@ -289,5 +299,61 @@ void main() {
     );
     expect(clip.startCount, 0);
     await n.cancel();
+  });
+
+  test(
+    'monitored recording enters playAndRecord session, restores on stop',
+    () async {
+      final session = _FakeRecordSession();
+      final c = ProviderContainer(
+        overrides: [
+          songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+          songwriterAudioRepositoryProvider.overrideWithValue(
+            SongAudioRepository.testWith(
+              rootDirectory: tmp,
+              subdir: 'songwriter_audio',
+            ),
+          ),
+          songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
+          songwriterNoteSinkProvider.overrideWithValue((_) {}),
+          drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+          recordAudioSessionProvider.overrideWithValue(session),
+        ],
+      );
+      addTearDown(c.dispose);
+
+      final n = c.read(songwriterAudioRecorderProvider.notifier);
+      await n.start(monitor: monitor(backing: true, metronome: false));
+      expect(session.enterCount, 1);
+      expect(session.restoreCount, 0);
+      await n.stop();
+      expect(session.restoreCount, 1);
+    },
+  );
+
+  test('non-monitored recording does not switch the audio session', () async {
+    final session = _FakeRecordSession();
+    final c = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        songwriterAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(
+            rootDirectory: tmp,
+            subdir: 'songwriter_audio',
+          ),
+        ),
+        recordAudioSessionProvider.overrideWithValue(session),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    final n = c.read(songwriterAudioRecorderProvider.notifier);
+    await n.start();
+    await n.stop();
+    expect(session.enterCount, 0);
+    expect(session.restoreCount, 0);
   });
 }
