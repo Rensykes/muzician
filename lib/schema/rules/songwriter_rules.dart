@@ -208,13 +208,17 @@ SongBlock makeDrumBlock({
   patternId: patternId,
 );
 
-AudioClip makeAudioClip({required String assetId, required int durationMs}) =>
-    AudioClip(
-      id: generateId(),
-      assetId: assetId,
-      trimStartMs: 0,
-      trimEndMs: durationMs,
-    );
+AudioClip makeAudioClip({
+  required String assetId,
+  required int durationMs,
+  AudioFitMode fitMode = AudioFitMode.loop,
+}) => AudioClip(
+  id: generateId(),
+  assetId: assetId,
+  trimStartMs: 0,
+  trimEndMs: durationMs,
+  fitMode: fitMode,
+);
 
 /// Default bar span for a new audio block placed at [startBar] in a section of
 /// [sectionLengthBars]: fills all the way to the section end (floor of 1).

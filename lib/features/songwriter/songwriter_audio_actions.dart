@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
+import '../../models/songwriter.dart' show AudioFitMode;
 import '../../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../../schema/rules/songwriter_audio_rules.dart';
 import '../../schema/rules/songwriter_playback_rules.dart'
@@ -93,7 +94,16 @@ Future<void> showSongwriterAudioPicker(
           ),
         );
         if (asset != null) {
-          _commit(ref, sectionId, laneId, startBar, sectionLengthBars, asset);
+          // A mic take plays once, not as a loop filling the section.
+          _commit(
+            ref,
+            sectionId,
+            laneId,
+            startBar,
+            sectionLengthBars,
+            asset,
+            fitMode: AudioFitMode.oneShot,
+          );
         }
       },
       onImport: () async {
@@ -139,13 +149,15 @@ void _commit(
   String laneId,
   int startBar,
   int sectionLengthBars,
-  AudioAsset asset,
-) {
+  AudioAsset asset, {
+  AudioFitMode fitMode = AudioFitMode.loop,
+}) {
   final store = ref.read(songwriterProvider.notifier);
   store.addAudioAsset(asset);
   final clipId = store.addAudioClip(
     assetId: asset.id,
     durationMs: asset.durationMs,
+    fitMode: fitMode,
   );
   final span = audioBlockDefaultSpan(
     sectionLengthBars: sectionLengthBars,

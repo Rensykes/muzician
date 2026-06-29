@@ -507,8 +507,16 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   // ── audio clips ──
-  String addAudioClip({required String assetId, required int durationMs}) {
-    final clip = makeAudioClip(assetId: assetId, durationMs: durationMs);
+  String addAudioClip({
+    required String assetId,
+    required int durationMs,
+    AudioFitMode fitMode = AudioFitMode.loop,
+  }) {
+    final clip = makeAudioClip(
+      assetId: assetId,
+      durationMs: durationMs,
+      fitMode: fitMode,
+    );
     _set(state.copyWith(audioClips: [...state.audioClips, clip]));
     return clip.id;
   }
