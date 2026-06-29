@@ -1,12 +1,15 @@
 /// Notation-Sheet (lead-sheet inspired) — the sole Writer layout.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_library_match_rules.dart';
+import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
@@ -965,11 +968,31 @@ class _BarRow extends ConsumerWidget {
     );
   }
 
+  void _playFromBar(WidgetRef ref, int bar) {
+    final project = ref.read(songwriterProvider);
+    final tick = sectionBarGlobalTick(
+      project.sections,
+      project.config,
+      section.id,
+      bar,
+      instanceIndex: instanceIndex,
+    );
+    final pb = ref.read(songwriterPlaybackProvider.notifier);
+    pb.stopPlayback();
+    unawaited(pb.startPlayback(startTick: tick));
+  }
+
   void _onTapEmpty(BuildContext context, WidgetRef ref, int bar) {
     showBarActionSheet(
       context: context,
       title: 'Bar ${bar + 1}',
       actions: [
+        BarAction(
+          key: const Key('barActionPlayFromHere'),
+          label: 'Play from here',
+          icon: Icons.play_arrow,
+          onTap: () => _playFromBar(ref, bar),
+        ),
         BarAction(
           key: const Key('barActionAddChord'),
           label: 'Add chord',
@@ -1076,6 +1099,12 @@ class _BarRow extends ConsumerWidget {
       context: context,
       title: isChord ? (block.chordSymbol ?? 'Chord') : 'Bar',
       actions: [
+        BarAction(
+          key: const Key('barActionPlayFromHere'),
+          label: 'Play from here',
+          icon: Icons.play_arrow,
+          onTap: () => _playFromBar(ref, block.startBar),
+        ),
         if (isChord)
           BarAction(
             key: const Key('barActionChangeChord'),
