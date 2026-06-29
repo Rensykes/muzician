@@ -6,8 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
 import '../../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
+import '../../schema/rules/songwriter_audio_rules.dart';
+import '../../schema/rules/songwriter_playback_rules.dart'
+    show sectionAuditionBed;
 import '../../schema/rules/songwriter_rules.dart';
+import '../../store/save_system_store.dart';
 import '../../store/song_audio_repository.dart';
+import '../../store/songwriter_audio_recorder_store.dart'
+    show SongwriterRecordMonitor;
 import '../../store/songwriter_store.dart';
 import '../song/song_audio_picker_sheet.dart';
 import 'songwriter_audio_recorder_sheet.dart';
@@ -30,11 +36,12 @@ Future<void> showSongwriterAudioPicker(
       startTick: 0,
       onRecord: () async {
         Navigator.of(sheetCtx).pop();
+        final project = ref.read(songwriterProvider);
+        final cfg = project.config;
+        final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
         // Bars available from this clip's start to the section end, and the
         // wall-clock duration of one bar at the project tempo — together they
         // drive the recorder's bar-progress indicator.
-        final cfg = ref.read(songwriterProvider).config;
-        final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
         final msPerBar =
             (pr_rules.tickDuration(cfg.tempo) * measureTicks).inMicroseconds /
             1000.0;
@@ -42,6 +49,35 @@ Future<void> showSongwriterAudioPicker(
           sectionLengthBars: sectionLengthBars,
           startBar: startBar,
         );
+        // Record-time monitor template (backing + metronome both enabled; the
+        // sheet's toggles flip them via copyWith). Null when the section can't
+        // be resolved, which disables the backing/metronome toggles.
+        final section = project.sections
+            .where((s) => s.id == sectionId)
+            .firstOrNull;
+        SongwriterRecordMonitor? template;
+        if (section != null) {
+          final sectionClips = songwriterSectionSchedulableClips(
+            project,
+            sectionId,
+          );
+          template = SongwriterRecordMonitor(
+            backing: true,
+            metronome: true,
+            tempo: cfg.tempo,
+            beatTicks: cfg.ticksPerBeat,
+            measureTicks: measureTicks,
+            loopTicks: section.lengthBars * measureTicks,
+            loopMs: sectionClips.loopMs,
+            bed: sectionAuditionBed(
+              section,
+              cfg,
+              ref.read(saveSystemProvider).saves,
+              drumPatterns: project.drumPatterns,
+            ),
+            clips: sectionClips.clips,
+          );
+        }
         final asset = await showModalBottomSheet<AudioAsset?>(
           context: context,
           isScrollControlled: true,
@@ -49,7 +85,9 @@ Future<void> showSongwriterAudioPicker(
           isDismissible: false,
           enableDrag: false,
           builder: (_) => SongwriterAudioRecorderSheet(
-            countInMs: 0,
+            monitorTemplate: template,
+            countInBarMs: songwriterAudioTickToMs(measureTicks, cfg),
+            countInBeats: cfg.beatsPerBar,
             targetBars: targetBars,
             msPerBar: msPerBar,
           ),

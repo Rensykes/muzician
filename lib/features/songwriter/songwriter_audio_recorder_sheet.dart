@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
+import '../../store/settings_store.dart';
 import '../../store/song_audio_recorder_store.dart'
     show SongAudioRecorderStatus;
 import '../../store/songwriter_audio_recorder_store.dart';
@@ -11,18 +12,25 @@ import '../../theme/muzician_theme.dart';
 
 /// Recorder sheet. Pops with the recorded [AudioAsset] (or null on cancel).
 ///
-/// During recording it shows a bar-progress indicator. The songwriter recorder
-/// runs no playback clock, so progress is driven by a local [Stopwatch] paced
-/// against [msPerBar] (derived from the project tempo) toward [targetBars] (the
-/// bars available from the clip's start to the section end). Both default to 0,
-/// in which case the indicator is hidden.
+/// Optional record-time monitoring: when [monitorTemplate] is non-null the user
+/// can toggle Backing / Metronome / Count-in (defaults from settings).
+///
+/// During recording it also shows a bar-progress indicator. The songwriter
+/// recorder runs no playback clock, so progress is driven by a local
+/// [Stopwatch] paced against [msPerBar] (derived from the project tempo) toward
+/// [targetBars] (the bars available from the clip's start to the section end).
+/// Both default to 0, in which case the indicator is hidden.
 class SongwriterAudioRecorderSheet extends ConsumerStatefulWidget {
-  final int countInMs;
+  final SongwriterRecordMonitor? monitorTemplate;
+  final int countInBarMs;
+  final int countInBeats;
   final int targetBars;
   final double msPerBar;
   const SongwriterAudioRecorderSheet({
     super.key,
-    this.countInMs = 0,
+    this.monitorTemplate,
+    this.countInBarMs = 0,
+    this.countInBeats = 4,
     this.targetBars = 0,
     this.msPerBar = 0,
   });
@@ -34,10 +42,27 @@ class SongwriterAudioRecorderSheet extends ConsumerStatefulWidget {
 
 class _SongwriterAudioRecorderSheetState
     extends ConsumerState<SongwriterAudioRecorderSheet> {
+  // Monitor toggles, seeded from settings.
+  late bool _backing;
+  late bool _metronome;
+  late bool _countIn;
+
+  // Bar-progress: the recorder runs no clock, so a local stopwatch paces it.
   final Stopwatch _sw = Stopwatch();
   Timer? _timer;
   double _elapsedMs = 0;
   bool _autoStopped = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = ref.read(settingsProvider);
+    _backing = s.recordMonitorBacking;
+    _metronome = s.recordMonitorMetronome;
+    _countIn = s.recordCountIn;
+  }
+
+  bool get _hasProgress => widget.targetBars > 0 && widget.msPerBar > 0;
 
   void _startTimer() {
     _sw
@@ -72,7 +97,19 @@ class _SongwriterAudioRecorderSheetState
     super.dispose();
   }
 
-  bool get _hasProgress => widget.targetBars > 0 && widget.msPerBar > 0;
+  void _onRecord() {
+    final t = widget.monitorTemplate;
+    final useMonitor = t != null && (_backing || _metronome);
+    ref
+        .read(songwriterAudioRecorderProvider.notifier)
+        .start(
+          countInMs: _countIn ? widget.countInBarMs : 0,
+          countInBeats: widget.countInBeats,
+          monitor: useMonitor
+              ? t.copyWith(backing: _backing, metronome: _metronome)
+              : null,
+        );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +144,6 @@ class _SongwriterAudioRecorderSheetState
     final state = ref.watch(songwriterAudioRecorderProvider);
     final n = ref.read(songwriterAudioRecorderProvider.notifier);
 
-    // Handle the already-ready case so a reopened sheet doesn't hang.
     if (state.status == SongAudioRecorderStatus.ready &&
         state.pendingAsset != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -133,6 +169,10 @@ class _SongwriterAudioRecorderSheetState
         state.status == SongAudioRecorderStatus.finalising ||
         state.status == SongAudioRecorderStatus.ready;
     final isCountIn = state.status == SongAudioRecorderStatus.countIn;
+    final preRecord =
+        state.status == SongAudioRecorderStatus.idle ||
+        state.status == SongAudioRecorderStatus.error;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -169,6 +209,57 @@ class _SongwriterAudioRecorderSheetState
                   targetBars: widget.targetBars,
                 ),
               ],
+              if (preRecord) ...[
+                const SizedBox(height: 12),
+                _MonitorToggle(
+                  itemKey: 'sw-rec-toggle-backing',
+                  title: 'Backing',
+                  subtitle: 'Loop the section (chords, drums, audio)',
+                  value: _backing,
+                  enabled: widget.monitorTemplate != null,
+                  onChanged: (v) {
+                    setState(() => _backing = v);
+                    ref
+                        .read(settingsProvider.notifier)
+                        .setRecordMonitorBacking(v);
+                  },
+                ),
+                _MonitorToggle(
+                  itemKey: 'sw-rec-toggle-metronome',
+                  title: 'Metronome',
+                  subtitle: 'Click on every beat',
+                  value: _metronome,
+                  enabled: widget.monitorTemplate != null,
+                  onChanged: (v) {
+                    setState(() => _metronome = v);
+                    ref
+                        .read(settingsProvider.notifier)
+                        .setRecordMonitorMetronome(v);
+                  },
+                ),
+                _MonitorToggle(
+                  itemKey: 'sw-rec-toggle-countin',
+                  title: 'Count-in',
+                  subtitle: 'One bar before recording',
+                  value: _countIn,
+                  enabled: true,
+                  onChanged: (v) {
+                    setState(() => _countIn = v);
+                    ref.read(settingsProvider.notifier).setRecordCountIn(v);
+                  },
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Use headphones — speaker playback bleeds into the mic.',
+                    style: TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               if (busy)
                 const SizedBox(
@@ -197,11 +288,10 @@ class _SongwriterAudioRecorderSheetState
                         icon: const Icon(Icons.stop),
                         label: const Text('Stop'),
                       )
-                    else if (state.status == SongAudioRecorderStatus.idle ||
-                        state.status == SongAudioRecorderStatus.error)
+                    else if (preRecord)
                       FilledButton.icon(
                         key: const ValueKey('sw-audio-rec-start'),
-                        onPressed: () => n.start(countInMs: widget.countInMs),
+                        onPressed: _onRecord,
                         icon: const Icon(Icons.mic),
                         label: const Text('Record'),
                       ),
@@ -256,6 +346,46 @@ class _BarProgress extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MonitorToggle extends StatelessWidget {
+  final String itemKey;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+  const _MonitorToggle({
+    required this.itemKey,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      key: ValueKey(itemKey),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      value: value,
+      onChanged: enabled ? onChanged : null,
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: MuzicianTheme.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: MuzicianTheme.textSecondary, fontSize: 12),
+      ),
     );
   }
 }
