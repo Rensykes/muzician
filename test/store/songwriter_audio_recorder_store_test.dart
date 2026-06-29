@@ -21,10 +21,14 @@ import 'package:muzician/utils/wav_writer.dart';
 
 class _FakeDriver implements SongAudioRecorderDriver {
   bool started = false;
+  bool? lastManageIosAudioSession;
   @override
   Future<bool> ensurePermission() async => true;
   @override
-  Future<void> start() async => started = true;
+  Future<void> start({bool manageIosAudioSession = true}) async {
+    started = true;
+    lastManageIosAudioSession = manageIosAudioSession;
+  }
   @override
   Future<Uint8List> stop() async => writeWavPcm16Mono(
     Int16List.fromList(List<int>.filled(4410, 0)),
@@ -355,5 +359,51 @@ void main() {
     await n.stop();
     expect(session.enterCount, 0);
     expect(session.restoreCount, 0);
+  });
+
+  test('monitored recording tells the driver NOT to manage the iOS session', () async {
+    final driver = _FakeDriver();
+    final c = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(driver),
+        songwriterAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(
+            rootDirectory: tmp,
+            subdir: 'songwriter_audio',
+          ),
+        ),
+        songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
+        songwriterNoteSinkProvider.overrideWithValue((_) {}),
+        drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+        songwriterMetronomeSinkProvider.overrideWithValue(
+          ({required bool accent}) async {},
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+    final n = c.read(songwriterAudioRecorderProvider.notifier);
+    await n.start(monitor: monitor(backing: true, metronome: false));
+    expect(driver.lastManageIosAudioSession, isFalse);
+    await n.cancel();
+  });
+
+  test('non-monitored recording lets the driver manage the iOS session', () async {
+    final driver = _FakeDriver();
+    final c = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(driver),
+        songwriterAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(
+            rootDirectory: tmp,
+            subdir: 'songwriter_audio',
+          ),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+    final n = c.read(songwriterAudioRecorderProvider.notifier);
+    await n.start();
+    expect(driver.lastManageIosAudioSession, isTrue);
+    await n.cancel();
   });
 }

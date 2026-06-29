@@ -132,7 +132,10 @@ class SongwriterAudioRecorderNotifier
       await ref.read(recordAudioSessionProvider).enterRecording();
       _recordSessionActive = true;
     }
-    await driver.start();
+    // When monitoring, `audioplayers` owns the playAndRecord session (above), so
+    // the recorder must not manage it too — otherwise the two fight over the
+    // shared AVAudioSession and the capture comes back silent.
+    await driver.start(manageIosAudioSession: !monitoring);
     if (monitoring) {
       unawaited(_runMonitor(++_monitorGen, monitor));
     }
