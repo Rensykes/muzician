@@ -238,4 +238,66 @@ void main() {
       expect(sectionBarGlobalTick(sections, cfg, 's1', 5), 1 * measureTicks);
     });
   });
+
+  test('startPlayback(startTick:) skips bars before the start', () async {
+    final accents = <bool>[];
+    final container = ProviderContainer(
+      overrides: [
+        songwriterMetronomeSinkProvider.overrideWithValue(
+          ({required bool accent}) async => accents.add(accent),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final sw = container.read(songwriterProvider.notifier);
+    sw.addSection(label: 'A', lengthBars: 1);
+    sw.addSection(label: 'B', lengthBars: 1);
+    final cfg = container.read(songwriterProvider).config;
+    final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
+
+    await container
+        .read(songwriterPlaybackProvider.notifier)
+        .startPlayback(
+          startTick: measureTicks,
+          tickDurationOverride: Duration.zero,
+        );
+
+    // Bar 0's downbeat accent is skipped; only bar 1's fires.
+    expect(accents.where((a) => a).length, 1);
+    expect(
+      container.read(songwriterPlaybackProvider).status,
+      SongwriterPlaybackStatus.completed,
+    );
+  });
+
+  test(
+    'startPlayback(startTick:) past the end completes without firing',
+    () async {
+      final accents = <bool>[];
+      final container = ProviderContainer(
+        overrides: [
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async => accents.add(accent),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .addSection(label: 'A', lengthBars: 1);
+
+      await container
+          .read(songwriterPlaybackProvider.notifier)
+          .startPlayback(
+            startTick: 100000,
+            tickDurationOverride: Duration.zero,
+          );
+
+      expect(accents, isEmpty);
+      expect(
+        container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.completed,
+      );
+    },
+  );
 }

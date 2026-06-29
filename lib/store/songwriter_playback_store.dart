@@ -80,7 +80,10 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
   @override
   SongwriterPlaybackState build() => const SongwriterPlaybackState();
 
-  Future<void> startPlayback({Duration? tickDurationOverride}) async {
+  Future<void> startPlayback({
+    int startTick = 0,
+    Duration? tickDurationOverride,
+  }) async {
     if (state.status == SongwriterPlaybackStatus.playing) return;
     ref.read(songwriterAudioAuditionProvider.notifier).stop();
 
@@ -146,21 +149,36 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       });
     }
 
+    final start = startTick < 0
+        ? 0
+        : (startTick > endTick ? endTick : startTick);
+    if (start >= endTick) {
+      state = state.copyWith(status: SongwriterPlaybackStatus.completed);
+      return;
+    }
+
     state = SongwriterPlaybackState(
       status: SongwriterPlaybackStatus.playing,
-      currentTick: 0,
+      currentTick: start,
       totalTicks: endTick,
       measureTicks: measureTicks,
     );
 
     // [TickPacer] anchors each tick to the wall clock so the body's work
     // (state mutation → rebuilds, sinks, the active-position provider) cannot
-    // accumulate into drift and make playback run progressively late.
+    // accumulate into drift. Pace off a 0-based [elapsedTicks] counter, not the
+    // absolute tick — otherwise a mid-song start would wait tickDuration*start
+    // before the first tick.
     final pacer = TickPacer(tickDuration);
     var eventIndex = 0;
-    for (var tick = 0; tick < endTick; tick++) {
+    // Skip events before the start tick so a mid-song start doesn't replay them.
+    while (eventIndex < events.length && events[eventIndex].tick < start) {
+      eventIndex++;
+    }
+    var elapsedTicks = 0;
+    for (var tick = start; tick < endTick; tick++) {
       if (_version != version) return;
-      if (tick > 0) await pacer.awaitBoundary(tick);
+      if (elapsedTicks > 0) await pacer.awaitBoundary(elapsedTicks);
       if (_version != version) return;
       state = state.copyWith(currentTick: () => tick);
       if (metronomeOn && tick % beatTicks == 0) {
@@ -175,6 +193,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
         }
       }
       fireAudio(tick);
+      elapsedTicks++;
     }
     if (_version != version) return;
     for (final p in pendingAudioStops) {
