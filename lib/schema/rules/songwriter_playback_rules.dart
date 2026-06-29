@@ -306,3 +306,29 @@ SongwriterAuditionBed sectionAuditionBed(
     drumByTick: {for (final e in drumsAt.entries) e.key: e.value.toList()},
   );
 }
+
+/// Global transport tick for [localBar] within the [instanceIndex]-th occurrence
+/// of [sectionId] on the flattened timeline. [localBar] is clamped to the
+/// section's bar range; an out-of-range [instanceIndex] or unknown section falls
+/// back to the first occurrence / tick 0. Used by the "Play from here" action.
+int sectionBarGlobalTick(
+  List<SongSection> sections,
+  SongwriterConfig config,
+  String sectionId,
+  int localBar, {
+  int instanceIndex = 0,
+}) {
+  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+  final occurrences = expandSections(
+    sections,
+  ).where((e) => e.sectionId == sectionId).toList();
+  if (occurrences.isEmpty) return 0;
+  final occ = (instanceIndex >= 0 && instanceIndex < occurrences.length)
+      ? occurrences[instanceIndex]
+      : occurrences.first;
+  final maxLocal = occ.lengthBars - 1;
+  final clamped = localBar < 0
+      ? 0
+      : (localBar > maxLocal ? maxLocal : localBar);
+  return (occ.globalStartBar + clamped) * measureTicks;
+}
