@@ -183,7 +183,7 @@ class SongwriterAudioRecorderNotifier
         if (notes != null && notes.isNotEmpty) noteSink(notes);
         final drums = m.bed.drumByTick[tick];
         if (drums != null && drums.isNotEmpty) unawaited(drumSink(drums, 0.8));
-        if (m.clips.isNotEmpty && loopTicks > 0) {
+        if (m.clips.isNotEmpty) {
           fireClips((tick * m.loopMs / loopTicks).round());
         }
       }

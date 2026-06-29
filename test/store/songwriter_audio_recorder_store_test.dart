@@ -1,11 +1,10 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/song_project.dart' show AudioAsset, DrumLaneId;
-import 'package:muzician/schema/rules/songwriter_playback_rules.dart'
-    show SongwriterAuditionBed;
+import 'package:muzician/schema/rules/songwriter_audio_rules.dart'
+    show SongwriterScheduledClip;
 import 'package:muzician/store/drum_pattern_playback_store.dart';
 import 'package:muzician/store/song_audio_recorder_store.dart'
     show
@@ -146,6 +145,63 @@ void main() {
     expect(notes, isNotEmpty);
     expect(notes.first, containsAll(<int>[60, 64, 67]));
     expect(drums, isNotEmpty);
+    await n.cancel();
+  });
+
+  test('monitor backing fires section clips via the clip sink', () async {
+    final clip = _FakeClipSink();
+    final c = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        songwriterAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(
+            rootDirectory: tmp,
+            subdir: 'songwriter_audio',
+          ),
+        ),
+        songwriterAudioClipSinkProvider.overrideWithValue(clip),
+        songwriterNoteSinkProvider.overrideWithValue((_) {}),
+        drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+        songwriterMetronomeSinkProvider.overrideWithValue(
+          ({required bool accent}) async {},
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    const assetForClip = AudioAsset(
+      id: 'clipasset',
+      durationMs: 4000,
+      sampleRate: 44100,
+      channels: 1,
+      format: 'wav',
+      peaks: [],
+      sourceLabel: 'x',
+    );
+    final mWithClip = SongwriterRecordMonitor(
+      backing: true,
+      metronome: false,
+      tempo: 6000,
+      beatTicks: 4,
+      measureTicks: 16,
+      loopTicks: 16,
+      loopMs: 1000,
+      bed: const (loopTicks: 16, notesByTick: {}, drumByTick: {}),
+      clips: const [
+        SongwriterScheduledClip(
+          asset: assetForClip,
+          startMs: 0,
+          endMs: 4000,
+          trimStartMs: 0,
+          loop: false,
+        ),
+      ],
+    );
+
+    final n = c.read(songwriterAudioRecorderProvider.notifier);
+    await n.start(monitor: mWithClip);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(clip.startCount, greaterThanOrEqualTo(1));
     await n.cancel();
   });
 
