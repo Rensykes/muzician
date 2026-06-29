@@ -116,7 +116,8 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
 /// section length in ms, used to wrap the monitor loop. Stretch/trim/loop
 /// resolution matches the flattened rule. Includes every audio clip in the
 /// section (the in-progress recording's clip does not exist yet).
-({int loopMs, List<SongwriterScheduledClip> clips}) songwriterSectionSchedulableClips(
+({int loopMs, List<SongwriterScheduledClip> clips})
+songwriterSectionSchedulableClips(
   SongwriterProjectSnapshot project,
   String sectionId,
 ) {
@@ -137,8 +138,8 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
     )) {
       final clip = clipsById[block.audioClipId];
       if (clip == null) continue;
-      final usesStretched = clip.fitMode == AudioFitMode.stretch &&
-          clip.stretchedAssetId != null;
+      final usesStretched =
+          clip.fitMode == AudioFitMode.stretch && clip.stretchedAssetId != null;
       final playAsset = usesStretched
           ? assetsById[clip.stretchedAssetId]
           : assetsById[clip.assetId];
@@ -151,23 +152,35 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
       final spanEndTick = clippedEnd * measureTicks;
       final startMs = songwriterAudioTickToMs(startTick, cfg);
       final spanMs = songwriterAudioTickToMs(spanEndTick, cfg) - startMs;
-      final trimEnd =
-          clip.trimEndMs == 0 ? playAsset.durationMs : clip.trimEndMs;
-      final regionMs = (trimEnd - clip.trimStartMs).clamp(0, playAsset.durationMs);
+      // trimEndMs == 0 is the documented "no end-trim" sentinel (play to the
+      // natural asset end); see AudioClip. Honour it so legacy saves whose
+      // JSON predates the field do not silence one-shot clips.
+      final trimEnd = clip.trimEndMs == 0
+          ? playAsset.durationMs
+          : clip.trimEndMs;
+      final regionMs = (trimEnd - clip.trimStartMs).clamp(
+        0,
+        playAsset.durationMs,
+      );
       final loop = clip.fitMode == AudioFitMode.loop;
       final endMs = loop || usesStretched
           ? startMs + spanMs
           : startMs + (regionMs < spanMs ? regionMs : spanMs);
 
-      out.add(SongwriterScheduledClip(
-        asset: playAsset,
-        startMs: startMs,
-        endMs: endMs,
-        trimStartMs: usesStretched ? 0 : clip.trimStartMs,
-        loop: loop,
-      ));
+      out.add(
+        SongwriterScheduledClip(
+          asset: playAsset,
+          startMs: startMs,
+          endMs: endMs,
+          trimStartMs: usesStretched ? 0 : clip.trimStartMs,
+          loop: loop,
+        ),
+      );
     }
   }
   out.sort((a, b) => a.startMs.compareTo(b.startMs));
-  return (loopMs: songwriterAudioTickToMs(section.lengthBars * measureTicks, cfg), clips: out);
+  return (
+    loopMs: songwriterAudioTickToMs(section.lengthBars * measureTicks, cfg),
+    clips: out,
+  );
 }

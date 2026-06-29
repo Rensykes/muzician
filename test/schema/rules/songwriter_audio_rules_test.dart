@@ -84,7 +84,10 @@ void main() {
   });
 
   test('section clips are section-local (no globalStartBar offset)', () {
-    final res = songwriterSectionSchedulableClips(_project(AudioFitMode.loop), 's1');
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.loop),
+      's1',
+    );
     final c = res.clips.single;
     expect(c.startMs, 0);
     expect(c.endMs, 4000); // 2-bar span @120 4/4
@@ -92,23 +95,52 @@ void main() {
   });
 
   test('section loopMs is the section length, not the clip span', () {
-    final res = songwriterSectionSchedulableClips(_project(AudioFitMode.loop), 's1');
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.loop),
+      's1',
+    );
     expect(res.loopMs, 8000); // 4 bars @120 4/4
   });
 
-  test('section repeat does NOT add extra placements (single section view)', () {
-    final base = _project(AudioFitMode.loop);
-    final repeated = base.copyWith(
-      sections: [base.sections.single.copyWith(repeat: 2)],
-    );
-    final res = songwriterSectionSchedulableClips(repeated, 's1');
-    expect(res.clips.length, 1);
-    expect(res.loopMs, 8000);
-  });
+  test(
+    'section repeat does NOT add extra placements (single section view)',
+    () {
+      final base = _project(AudioFitMode.loop);
+      final repeated = base.copyWith(
+        sections: [base.sections.single.copyWith(repeat: 2)],
+      );
+      final res = songwriterSectionSchedulableClips(repeated, 's1');
+      expect(res.clips.length, 1);
+      expect(res.loopMs, 8000);
+    },
+  );
 
   test('unknown section id yields no clips and zero loopMs', () {
-    final res = songwriterSectionSchedulableClips(_project(AudioFitMode.loop), 'nope');
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.loop),
+      'nope',
+    );
     expect(res.clips, isEmpty);
     expect(res.loopMs, 0);
+  });
+
+  test('section one-shot clip stops at natural end', () {
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.oneShot),
+      's1',
+    );
+    final c = res.clips.single;
+    expect(c.endMs, 1500); // asset duration, not the 4000ms span
+    expect(c.loop, isFalse);
+  });
+
+  test('section trimEndMs==0 sentinel plays to natural asset end', () {
+    final base = _project(AudioFitMode.oneShot);
+    final clip0 = base.audioClips.single.copyWith(trimEndMs: 0);
+    final res = songwriterSectionSchedulableClips(
+      base.copyWith(audioClips: [clip0]),
+      's1',
+    );
+    expect(res.clips.single.endMs, 1500);
   });
 }
