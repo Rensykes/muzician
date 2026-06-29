@@ -391,6 +391,7 @@ class _SongwriterAudioClipBodyState
             trimStartMs: clip.trimStartMs,
             trimEndMs: clip.trimEndMs,
             tempo: project.config.tempo,
+            loop: clip.fitMode == AudioFitMode.loop,
             bed: () => sectionAuditionBed(
               section,
               project.config,
@@ -842,12 +843,14 @@ class _AuditionRow extends ConsumerWidget {
     required this.trimStartMs,
     required this.trimEndMs,
     required this.tempo,
+    required this.loop,
     required this.bed,
   });
   final AudioAsset asset;
   final int trimStartMs;
   final int trimEndMs;
   final int tempo;
+  final bool loop;
   final SongwriterAuditionBed Function() bed;
 
   @override
@@ -874,6 +877,7 @@ class _AuditionRow extends ConsumerWidget {
         trimEndMs: trimEndMs,
         tempo: tempo,
         mode: auditionMode,
+        loop: loop,
         bed: auditionMode == SongwriterAudioAuditionMode.withSection
             ? computed
             : null,

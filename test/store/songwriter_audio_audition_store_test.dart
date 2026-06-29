@@ -24,6 +24,7 @@ class _FakeSink implements SongAudioClipSink {
     startCount++;
     lastLoop = loop;
   }
+
   @override
   Future<void> stopClip({required AudioAsset asset}) async {}
   @override
@@ -49,12 +50,15 @@ void main() {
     final sink = _FakeSink();
     final notes = <List<int>>[];
     final drums = <List<DrumLaneId>>[];
-    final container = ProviderContainer(overrides: [
-      songwriterAudioClipSinkProvider.overrideWithValue(sink),
-      songwriterNoteSinkProvider.overrideWithValue((n) => notes.add(n)),
-      drumPatternPlaybackSinkProvider
-          .overrideWithValue((l, v) async => drums.add(l)),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        songwriterAudioClipSinkProvider.overrideWithValue(sink),
+        songwriterNoteSinkProvider.overrideWithValue((n) => notes.add(n)),
+        drumPatternPlaybackSinkProvider.overrideWithValue(
+          (l, v) async => drums.add(l),
+        ),
+      ],
+    );
     addTearDown(container.dispose);
 
     final n = container.read(songwriterAudioAuditionProvider.notifier);
@@ -78,35 +82,56 @@ void main() {
     );
   });
 
-  test('alone mode with an end-trim loops just the region (loop:false re-arm)',
-      () async {
+  test('alone one-shot plays the clip once (loop:false), no looping', () async {
     final sink = _FakeSink();
-    final container = ProviderContainer(overrides: [
-      songwriterAudioClipSinkProvider.overrideWithValue(sink),
-    ]);
+    final container = ProviderContainer(
+      overrides: [songwriterAudioClipSinkProvider.overrideWithValue(sink)],
+    );
     addTearDown(container.dispose);
     final n = container.read(songwriterAudioAuditionProvider.notifier);
     await n.start(
       asset: asset,
-      trimStartMs: 200,
-      trimEndMs: 600, // < durationMs (2000): a real interior region.
+      trimStartMs: 0,
       tempo: 120,
       mode: SongwriterAudioAuditionMode.alone,
+      loop: false,
     );
-    // The region loop arms the clip immediately with loop:false (re-seek model),
-    // not the gapless whole-asset loop:true path.
-    expect(sink.startCount, greaterThanOrEqualTo(1));
+    expect(sink.startCount, 1);
     expect(sink.lastLoop, isFalse);
-
     n.stop();
-    expect(sink.stopAllCount, 1);
   });
+
+  test(
+    'alone mode with an end-trim loops just the region (loop:false re-arm)',
+    () async {
+      final sink = _FakeSink();
+      final container = ProviderContainer(
+        overrides: [songwriterAudioClipSinkProvider.overrideWithValue(sink)],
+      );
+      addTearDown(container.dispose);
+      final n = container.read(songwriterAudioAuditionProvider.notifier);
+      await n.start(
+        asset: asset,
+        trimStartMs: 200,
+        trimEndMs: 600, // < durationMs (2000): a real interior region.
+        tempo: 120,
+        mode: SongwriterAudioAuditionMode.alone,
+      );
+      // The region loop arms the clip immediately with loop:false (re-seek model),
+      // not the gapless whole-asset loop:true path.
+      expect(sink.startCount, greaterThanOrEqualTo(1));
+      expect(sink.lastLoop, isFalse);
+
+      n.stop();
+      expect(sink.stopAllCount, 1);
+    },
+  );
 
   test('with-section is a no-op when the bed is empty', () async {
     final sink = _FakeSink();
-    final container = ProviderContainer(overrides: [
-      songwriterAudioClipSinkProvider.overrideWithValue(sink),
-    ]);
+    final container = ProviderContainer(
+      overrides: [songwriterAudioClipSinkProvider.overrideWithValue(sink)],
+    );
     addTearDown(container.dispose);
     final n = container.read(songwriterAudioAuditionProvider.notifier);
     await n.start(
@@ -123,43 +148,50 @@ void main() {
     );
   });
 
-  test('with-section fires bed note + drum events under the recording',
-      () async {
-    final sink = _FakeSink();
-    final notes = <List<int>>[];
-    final drums = <List<DrumLaneId>>[];
-    final container = ProviderContainer(overrides: [
-      songwriterAudioClipSinkProvider.overrideWithValue(sink),
-      songwriterNoteSinkProvider.overrideWithValue((nn) => notes.add(nn)),
-      drumPatternPlaybackSinkProvider
-          .overrideWithValue((l, v) async => drums.add(l)),
-    ]);
-    addTearDown(container.dispose);
+  test(
+    'with-section fires bed note + drum events under the recording',
+    () async {
+      final sink = _FakeSink();
+      final notes = <List<int>>[];
+      final drums = <List<DrumLaneId>>[];
+      final container = ProviderContainer(
+        overrides: [
+          songwriterAudioClipSinkProvider.overrideWithValue(sink),
+          songwriterNoteSinkProvider.overrideWithValue((nn) => notes.add(nn)),
+          drumPatternPlaybackSinkProvider.overrideWithValue(
+            (l, v) async => drums.add(l),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final n = container.read(songwriterAudioAuditionProvider.notifier);
-    unawaited(n.start(
-      asset: asset,
-      trimStartMs: 0,
-      tempo: 6000, // Fast tempo so many ticks fire within the 200ms window.
-      mode: SongwriterAudioAuditionMode.withSection,
-      bed: (
-        loopTicks: 16,
-        notesByTick: const {
-          0: [60, 64, 67],
-        },
-        drumByTick: const {
-          0: [DrumLaneId.kick],
-        },
-      ),
-    ));
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    n.stop();
+      final n = container.read(songwriterAudioAuditionProvider.notifier);
+      unawaited(
+        n.start(
+          asset: asset,
+          trimStartMs: 0,
+          tempo: 6000, // Fast tempo so many ticks fire within the 200ms window.
+          mode: SongwriterAudioAuditionMode.withSection,
+          bed: (
+            loopTicks: 16,
+            notesByTick: const {
+              0: [60, 64, 67],
+            },
+            drumByTick: const {
+              0: [DrumLaneId.kick],
+            },
+          ),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      n.stop();
 
-    expect(sink.startCount, 1);
-    expect(sink.lastLoop, isTrue);
-    expect(notes, isNotEmpty);
-    expect(notes.first, containsAll(<int>[60, 64, 67]));
-    expect(drums, isNotEmpty);
-    expect(drums.first, contains(DrumLaneId.kick));
-  });
+      expect(sink.startCount, 1);
+      expect(sink.lastLoop, isTrue);
+      expect(notes, isNotEmpty);
+      expect(notes.first, containsAll(<int>[60, 64, 67]));
+      expect(drums, isNotEmpty);
+      expect(drums.first, contains(DrumLaneId.kick));
+    },
+  );
 }

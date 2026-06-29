@@ -13,6 +13,42 @@ void main() {
     expect(clip.segments, isEmpty);
   });
 
+  test('makeAudioClip honours an explicit oneShot fitMode', () {
+    final clip = makeAudioClip(
+      assetId: 'a1',
+      durationMs: 4000,
+      fitMode: AudioFitMode.oneShot,
+    );
+    expect(clip.fitMode, AudioFitMode.oneShot);
+  });
+
+  group('recordedClipSpanBars', () {
+    test('5s take at 120 BPM 4/4 (1 bar = 2000ms) → 3 bars', () {
+      expect(
+        recordedClipSpanBars(durationMs: 5000, msPerBar: 2000, maxBars: 8),
+        3,
+      );
+    });
+    test('clamps to the room left in the section (maxBars)', () {
+      expect(
+        recordedClipSpanBars(durationMs: 60000, msPerBar: 2000, maxBars: 4),
+        4,
+      );
+    });
+    test('floors at 1 bar for a tiny take', () {
+      expect(
+        recordedClipSpanBars(durationMs: 100, msPerBar: 2000, maxBars: 8),
+        1,
+      );
+    });
+    test('non-positive msPerBar falls back to maxBars', () {
+      expect(
+        recordedClipSpanBars(durationMs: 5000, msPerBar: 0, maxBars: 6),
+        6,
+      );
+    });
+  });
+
   test('makeAudioBlock carries the clip id and placement', () {
     final block = makeAudioBlock(audioClipId: 'c1', startBar: 1, spanBars: 2);
     expect(block.id, isNotEmpty);

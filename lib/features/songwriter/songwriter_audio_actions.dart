@@ -94,7 +94,13 @@ Future<void> showSongwriterAudioPicker(
           ),
         );
         if (asset != null) {
-          // A mic take plays once, not as a loop filling the section.
+          // A mic take plays once and spans only the bars it actually fills
+          // (rounded up), not the whole section.
+          final recSpan = recordedClipSpanBars(
+            durationMs: asset.durationMs,
+            msPerBar: msPerBar,
+            maxBars: targetBars,
+          );
           _commit(
             ref,
             sectionId,
@@ -103,6 +109,7 @@ Future<void> showSongwriterAudioPicker(
             sectionLengthBars,
             asset,
             fitMode: AudioFitMode.oneShot,
+            spanBars: recSpan,
           );
         }
       },
@@ -151,6 +158,7 @@ void _commit(
   int sectionLengthBars,
   AudioAsset asset, {
   AudioFitMode fitMode = AudioFitMode.loop,
+  int? spanBars,
 }) {
   final store = ref.read(songwriterProvider.notifier);
   store.addAudioAsset(asset);
@@ -159,10 +167,12 @@ void _commit(
     durationMs: asset.durationMs,
     fitMode: fitMode,
   );
-  final span = audioBlockDefaultSpan(
-    sectionLengthBars: sectionLengthBars,
-    startBar: startBar,
-  );
+  final span =
+      spanBars ??
+      audioBlockDefaultSpan(
+        sectionLengthBars: sectionLengthBars,
+        startBar: startBar,
+      );
   store.addAudioBlock(
     sectionId: sectionId,
     laneId: laneId,

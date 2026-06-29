@@ -64,6 +64,7 @@ class SongwriterAudioAuditionNotifier
     required int tempo,
     required SongwriterAudioAuditionMode mode,
     SongwriterAuditionBed? bed,
+    bool loop = true,
   }) async {
     if (state.status == SongwriterAudioAuditionStatus.playing) return;
     final withSection = mode == SongwriterAudioAuditionMode.withSection;
@@ -85,23 +86,30 @@ class SongwriterAudioAuditionNotifier
     final startOffset = trimStartMs.clamp(0, asset.durationMs);
     final hasEndTrim = trimEndMs > 0 && trimEndMs < asset.durationMs;
     final regionMs = hasEndTrim ? trimEndMs - startOffset : 0;
-    if (hasEndTrim && regionMs > 0) {
+    if (loop && hasEndTrim && regionMs > 0) {
       // Loop just the trimmed region by re-seeking at its boundary.
       unawaited(_loopRegion(version, asset, startOffset, regionMs));
     } else {
-      // No usable end-trim: loop the whole tail from the offset, gaplessly.
-      unawaited(audioSink.startClip(
-        asset: asset,
-        offsetMs: startOffset,
-        loop: true,
-      ));
+      // One-shot clips (e.g. recordings) play once; loop clips loop the whole
+      // tail from the offset, gaplessly via the sink.
+      unawaited(
+        audioSink.startClip(asset: asset, offsetMs: startOffset, loop: loop),
+      );
     }
 
-    if (!withSection) return; // Alone: the recording loops until stop().
+    if (!withSection) {
+      // Alone: a loop clip plays until stop(); a one-shot auto-stops at its end
+      // so the transport resets instead of sitting "playing" in silence.
+      if (!loop) {
+        final playMs = hasEndTrim ? regionMs : asset.durationMs - startOffset;
+        unawaited(_autoStopAfter(version, playMs));
+      }
+      return;
+    }
 
     final noteSink = ref.read(songwriterNoteSinkProvider);
     final drumSink = ref.read(drumPatternPlaybackSinkProvider);
-    final loop = bed!.loopTicks;
+    final loopTicks = bed!.loopTicks;
     final tickDuration = rules.tickDuration(tempo);
     final pacer = TickPacer(tickDuration);
 
@@ -115,7 +123,7 @@ class SongwriterAudioAuditionNotifier
       if (drums != null && drums.isNotEmpty) unawaited(drumSink(drums, 0.8));
       await pacer.awaitBoundary(++elapsedTicks);
       if (_version != version) return;
-      tick = (tick + 1) % loop;
+      tick = (tick + 1) % loopTicks;
     }
   }
 
@@ -132,13 +140,18 @@ class SongwriterAudioAuditionNotifier
   ) async {
     final audioSink = ref.read(songwriterAudioClipSinkProvider);
     while (_version == version) {
-      unawaited(audioSink.startClip(
-        asset: asset,
-        offsetMs: offsetMs,
-        loop: false,
-      ));
+      unawaited(
+        audioSink.startClip(asset: asset, offsetMs: offsetMs, loop: false),
+      );
       await Future<void>.delayed(Duration(milliseconds: regionMs));
     }
+  }
+
+  /// Stops a one-shot alone audition once the clip has played through, so the
+  /// transport returns to idle instead of showing "playing" over silence.
+  Future<void> _autoStopAfter(int version, int ms) async {
+    await Future<void>.delayed(Duration(milliseconds: ms < 0 ? 0 : ms));
+    if (_version == version) stop();
   }
 
   void stop() {
@@ -156,5 +169,7 @@ class SongwriterAudioAuditionNotifier
 }
 
 final songwriterAudioAuditionProvider =
-    NotifierProvider<SongwriterAudioAuditionNotifier,
-        SongwriterAudioAuditionState>(SongwriterAudioAuditionNotifier.new);
+    NotifierProvider<
+      SongwriterAudioAuditionNotifier,
+      SongwriterAudioAuditionState
+    >(SongwriterAudioAuditionNotifier.new);
