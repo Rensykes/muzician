@@ -82,4 +82,33 @@ void main() {
     expect(clips.length, 2);
     expect(clips[1].startMs, 8000); // section length 4 bars = 8000ms
   });
+
+  test('section clips are section-local (no globalStartBar offset)', () {
+    final res = songwriterSectionSchedulableClips(_project(AudioFitMode.loop), 's1');
+    final c = res.clips.single;
+    expect(c.startMs, 0);
+    expect(c.endMs, 4000); // 2-bar span @120 4/4
+    expect(c.loop, isTrue);
+  });
+
+  test('section loopMs is the section length, not the clip span', () {
+    final res = songwriterSectionSchedulableClips(_project(AudioFitMode.loop), 's1');
+    expect(res.loopMs, 8000); // 4 bars @120 4/4
+  });
+
+  test('section repeat does NOT add extra placements (single section view)', () {
+    final base = _project(AudioFitMode.loop);
+    final repeated = base.copyWith(
+      sections: [base.sections.single.copyWith(repeat: 2)],
+    );
+    final res = songwriterSectionSchedulableClips(repeated, 's1');
+    expect(res.clips.length, 1);
+    expect(res.loopMs, 8000);
+  });
+
+  test('unknown section id yields no clips and zero loopMs', () {
+    final res = songwriterSectionSchedulableClips(_project(AudioFitMode.loop), 'nope');
+    expect(res.clips, isEmpty);
+    expect(res.loopMs, 0);
+  });
 }
