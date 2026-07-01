@@ -316,6 +316,9 @@ class SongwriterConfig {
 
   int get ticksPerBeat => ticksPerBeatForUnit(beatUnit);
 
+  /// Ticks in one bar at this time signature.
+  int get measureTicks => ticksPerBeat * beatsPerBar;
+
   SongwriterConfig copyWith({
     int? tempo,
     int? beatsPerBar,

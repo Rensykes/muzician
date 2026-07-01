@@ -44,7 +44,7 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
   SongwriterProjectSnapshot project,
 ) {
   final cfg = project.config;
-  final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
+  final measureTicks = cfg.measureTicks;
   final assetsById = {for (final a in project.audioAssets) a.id: a};
   final clipsById = {for (final c in project.audioClips) c.id: c};
   final out = <SongwriterScheduledClip>[];
@@ -122,7 +122,7 @@ songwriterSectionSchedulableClips(
   String sectionId,
 ) {
   final cfg = project.config;
-  final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
+  final measureTicks = cfg.measureTicks;
   final section = project.sections.where((s) => s.id == sectionId).firstOrNull;
   if (section == null) return (loopMs: 0, clips: const []);
 

@@ -28,7 +28,7 @@ class SongwriterSectionRuler extends ConsumerWidget {
     final config = ref.watch(songwriterProvider.select((p) => p.config));
     final startTick = ref.watch(songwriterStartTickProvider);
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
-    final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+    final measureTicks = config.measureTicks;
 
     int? markerBar;
     final pos = activePositionForBar(sections, startTick ~/ measureTicks);

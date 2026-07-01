@@ -27,7 +27,7 @@ SongProject songFromSongwriter(
 ) {
   final cfg = project.config;
   final beatTicks = cfg.ticksPerBeat;
-  final measureTicks = beatTicks * cfg.beatsPerBar;
+  final measureTicks = cfg.measureTicks;
   final totalBars = flattenedBarCount(project.sections).clamp(1, 32);
 
   final expanded = expandSections(project.sections);

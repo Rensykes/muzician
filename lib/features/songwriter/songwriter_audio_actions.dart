@@ -39,7 +39,7 @@ Future<void> showSongwriterAudioPicker(
         Navigator.of(sheetCtx).pop();
         final project = ref.read(songwriterProvider);
         final cfg = project.config;
-        final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
+        final measureTicks = cfg.measureTicks;
         // Bars available from this clip's start to the section end, and the
         // wall-clock duration of one bar at the project tempo — together they
         // drive the recorder's bar-progress indicator.

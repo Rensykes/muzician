@@ -99,7 +99,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
 
     final cfg = project.config;
     final beatTicks = cfg.ticksPerBeat;
-    final measureTicks = beatTicks * cfg.beatsPerBar;
+    final measureTicks = cfg.measureTicks;
     final totalBars = flattenedBarCount(project.sections);
     final endTick = totalBars * measureTicks;
     final metronomeOn = settings.metronomeEnabled;

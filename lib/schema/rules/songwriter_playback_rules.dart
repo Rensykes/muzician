@@ -6,6 +6,8 @@
 /// resolution.
 library;
 
+import 'dart:math' as math;
+
 import '../../models/save_system.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
@@ -123,6 +125,36 @@ SongwriterActivePosition? activePositionForBar(
   );
 }
 
+/// Pitches for a harmony or save [block]: the chord voicing for harmony lanes,
+/// the resolved snapshot's notes for save lanes.
+List<int> _blockPitches(SongLane lane, SongBlock block, List<SaveEntry> saves) =>
+    lane.kind == SongLaneKind.harmony
+    ? chordMidiNotes(block)
+    : snapshotMidiNotes(resolveBlockSnapshot(block, saves));
+
+/// Tiles [pattern]'s hits across `[startTick, endTick)` into [drumsAt]
+/// (tick → lane-id set), repeating the pattern every [DrumPattern.lengthTicks].
+void _tileDrumHits(
+  DrumPattern pattern,
+  int startTick,
+  int endTick,
+  Map<int, Set<DrumLaneId>> drumsAt,
+) {
+  for (
+    var origin = 0;
+    startTick + origin < endTick;
+    origin += pattern.lengthTicks
+  ) {
+    for (final seq in pattern.lanes) {
+      for (final t in seq.activeTicks) {
+        final tick = startTick + origin + t;
+        if (tick >= endTick) continue;
+        (drumsAt[tick] ??= <DrumLaneId>{}).add(seq.laneId);
+      }
+    }
+  }
+}
+
 /// Flattens [project] into a sorted, tick-indexed event list.
 ///
 /// Sections expand by repeat (via [expandSections]); lane block patterns tile
@@ -136,8 +168,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   List<SaveEntry> saves,
 ) {
   final cfg = project.config;
-  final beatTicks = cfg.ticksPerBeat;
-  final measureTicks = beatTicks * cfg.beatsPerBar;
+  final measureTicks = cfg.measureTicks;
 
   final byId = {for (final s in project.sections) s.id: s};
   final patterns = {for (final p in project.drumPatterns) p.id: p};
@@ -153,15 +184,11 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
         sectionLengthBars: section.lengthBars,
       );
       for (final block in blocks) {
-        final clippedEnd = block.endBar > section.lengthBars
-            ? section.lengthBars
-            : block.endBar;
+        final clippedEnd = math.min(block.endBar, section.lengthBars);
         switch (lane.kind) {
           case SongLaneKind.harmony:
           case SongLaneKind.save:
-            final pitches = lane.kind == SongLaneKind.harmony
-                ? chordMidiNotes(block)
-                : snapshotMidiNotes(resolveBlockSnapshot(block, saves));
+            final pitches = _blockPitches(lane, block, saves);
             if (pitches.isEmpty) break;
             for (var bar = block.startBar; bar < clippedEnd; bar++) {
               final tick = (exp.globalStartBar + bar) * measureTicks;
@@ -173,19 +200,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             final startTick =
                 (exp.globalStartBar + block.startBar) * measureTicks;
             final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
-            for (
-              var origin = 0;
-              startTick + origin < endTick;
-              origin += pattern.lengthTicks
-            ) {
-              for (final seq in pattern.lanes) {
-                for (final t in seq.activeTicks) {
-                  final tick = startTick + origin + t;
-                  if (tick >= endTick) continue;
-                  (drumsAt[tick] ??= {}).add(seq.laneId);
-                }
-              }
-            }
+            _tileDrumHits(pattern, startTick, endTick, drumsAt);
           case SongLaneKind.audio:
             // Audio clips are scheduled directly by the transport, not emitted
             // as tick-indexed note/drum events here.
@@ -214,7 +229,7 @@ Map<int, List<int>> _sectionChordBed(
   SongwriterConfig config,
   List<SaveEntry> saves,
 ) {
-  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+  final measureTicks = config.measureTicks;
   final notesAt = <int, List<int>>{};
   for (final lane in section.lanes) {
     if (lane.kind == SongLaneKind.drum || lane.kind == SongLaneKind.audio) {
@@ -222,12 +237,8 @@ Map<int, List<int>> _sectionChordBed(
     }
     final blocks = tileLaneBlocks(lane, sectionLengthBars: section.lengthBars);
     for (final block in blocks) {
-      final clippedEnd = block.endBar > section.lengthBars
-          ? section.lengthBars
-          : block.endBar;
-      final pitches = lane.kind == SongLaneKind.harmony
-          ? chordMidiNotes(block)
-          : snapshotMidiNotes(resolveBlockSnapshot(block, saves));
+      final clippedEnd = math.min(block.endBar, section.lengthBars);
+      final pitches = _blockPitches(lane, block, saves);
       if (pitches.isEmpty) continue;
       for (var bar = block.startBar; bar < clippedEnd; bar++) {
         (notesAt[bar * measureTicks] ??= <int>[]).addAll(pitches);
@@ -250,7 +261,7 @@ Map<int, List<int>> _sectionChordBed(
   SongwriterConfig config,
   List<SaveEntry> saves,
 ) {
-  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+  final measureTicks = config.measureTicks;
   return (
     loopTicks: section.lengthBars * measureTicks,
     notesByTick: _sectionChordBed(section, config, saves),
@@ -267,7 +278,7 @@ SongwriterAuditionBed sectionAuditionBed(
   List<SaveEntry> saves, {
   List<DrumPattern> drumPatterns = const [],
 }) {
-  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+  final measureTicks = config.measureTicks;
   final patterns = {for (final p in drumPatterns) p.id: p};
   final drumsAt = <int, Set<DrumLaneId>>{};
 
@@ -279,24 +290,10 @@ SongwriterAuditionBed sectionAuditionBed(
     )) {
       final pattern = patterns[block.patternId];
       if (pattern == null || pattern.lengthTicks <= 0) continue;
-      final clippedEnd = block.endBar > section.lengthBars
-          ? section.lengthBars
-          : block.endBar;
+      final clippedEnd = math.min(block.endBar, section.lengthBars);
       final startTick = block.startBar * measureTicks;
       final endTick = clippedEnd * measureTicks;
-      for (
-        var origin = 0;
-        startTick + origin < endTick;
-        origin += pattern.lengthTicks
-      ) {
-        for (final seq in pattern.lanes) {
-          for (final t in seq.activeTicks) {
-            final tick = startTick + origin + t;
-            if (tick >= endTick) continue;
-            (drumsAt[tick] ??= <DrumLaneId>{}).add(seq.laneId);
-          }
-        }
-      }
+      _tileDrumHits(pattern, startTick, endTick, drumsAt);
     }
   }
 
@@ -318,7 +315,7 @@ int sectionBarGlobalTick(
   int localBar, {
   int instanceIndex = 0,
 }) {
-  final measureTicks = config.ticksPerBeat * config.beatsPerBar;
+  final measureTicks = config.measureTicks;
   final occurrences = expandSections(
     sections,
   ).where((e) => e.sectionId == sectionId).toList();
