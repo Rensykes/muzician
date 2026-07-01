@@ -4,6 +4,23 @@ on:
   push:
     branches:
       - '**'
+      - '!main' # main ships to the live channel via production.yml
+    # Only rebuild/redeploy when the web bundle can actually change. A docs-,
+    # test- or native-only commit produces an identical `flutter build web`,
+    # and Firebase rejects re-releasing an identical version to a channel
+    # (FAILED_PRECONDITION: "version is the current active version").
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/preview.yml'
+
+# Supersede an in-flight preview for the same branch instead of racing it.
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build_and_preview:
