@@ -537,15 +537,17 @@ class SaveFolder {
     ProjectConfig? projectConfig,
     bool clearProjectConfig = false,
   }) => SaveFolder(
-        id: id,
-        name: name ?? this.name,
-        parentId: parentId,
-        createdAt: createdAt,
-        order: order ?? this.order,
-        progressionMeta: progressionMeta,
-        kind: kind ?? this.kind,
-        projectConfig: clearProjectConfig ? null : (projectConfig ?? this.projectConfig),
-      );
+    id: id,
+    name: name ?? this.name,
+    parentId: parentId,
+    createdAt: createdAt,
+    order: order ?? this.order,
+    progressionMeta: progressionMeta,
+    kind: kind ?? this.kind,
+    projectConfig: clearProjectConfig
+        ? null
+        : (projectConfig ?? this.projectConfig),
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -679,8 +681,9 @@ class SaveSystemState {
     saves: saves ?? this.saves,
     activeSession: activeSession != null ? activeSession() : this.activeSession,
     hydrated: hydrated ?? this.hydrated,
-    selectedProjectId:
-        selectedProjectId != null ? selectedProjectId() : this.selectedProjectId,
+    selectedProjectId: selectedProjectId != null
+        ? selectedProjectId()
+        : this.selectedProjectId,
   );
 }
 
@@ -709,6 +712,12 @@ class AppSettings {
   /// When true the save browser renders saves as a grid; false shows a list.
   final bool saveBrowserGrid;
 
+  /// Record-time monitoring (Songwriter audio lane). All default OFF — playback
+  /// bleeds into the mic on speakers; intended for headphones.
+  final bool recordMonitorBacking; // loop the section bed + other audio clips
+  final bool recordMonitorMetronome; // click per beat while recording
+  final bool recordCountIn; // one bar of clicks before the mic arms
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
@@ -716,6 +725,9 @@ class AppSettings {
     this.humSensitivity = HumSensitivity.balanced,
     this.metronomeEnabled = true,
     this.saveBrowserGrid = false,
+    this.recordMonitorBacking = false,
+    this.recordMonitorMetronome = false,
+    this.recordCountIn = false,
   });
 
   AppSettings copyWith({
@@ -725,6 +737,9 @@ class AppSettings {
     HumSensitivity? humSensitivity,
     bool? metronomeEnabled,
     bool? saveBrowserGrid,
+    bool? recordMonitorBacking,
+    bool? recordMonitorMetronome,
+    bool? recordCountIn,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
@@ -732,6 +747,10 @@ class AppSettings {
     humSensitivity: humSensitivity ?? this.humSensitivity,
     metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
     saveBrowserGrid: saveBrowserGrid ?? this.saveBrowserGrid,
+    recordMonitorBacking: recordMonitorBacking ?? this.recordMonitorBacking,
+    recordMonitorMetronome:
+        recordMonitorMetronome ?? this.recordMonitorMetronome,
+    recordCountIn: recordCountIn ?? this.recordCountIn,
   );
 
   Map<String, dynamic> toJson() => {
@@ -741,6 +760,9 @@ class AppSettings {
     'humSensitivity': humSensitivity.name,
     'metronomeEnabled': metronomeEnabled,
     'saveBrowserGrid': saveBrowserGrid,
+    'recordMonitorBacking': recordMonitorBacking,
+    'recordMonitorMetronome': recordMonitorMetronome,
+    'recordCountIn': recordCountIn,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -750,6 +772,9 @@ class AppSettings {
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
     metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,
     saveBrowserGrid: json['saveBrowserGrid'] as bool? ?? false,
+    recordMonitorBacking: json['recordMonitorBacking'] as bool? ?? false,
+    recordMonitorMetronome: json['recordMonitorMetronome'] as bool? ?? false,
+    recordCountIn: json['recordCountIn'] as bool? ?? false,
   );
 }
 

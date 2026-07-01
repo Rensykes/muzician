@@ -231,4 +231,29 @@ void main() {
       expect(peaks, isNotEmpty);
     });
   });
+
+  group('downmixToMono', () {
+    test('averages stereo channel pairs into mono frames', () {
+      // Interleaved L,R per frame: (100,200) -> 150, (-100,-300) -> -200.
+      final stereo = Int16List.fromList([100, 200, -100, -300]);
+      final mono = downmixToMono(stereo, 2);
+      expect(mono, orderedEquals(<int>[150, -200]));
+    });
+
+    test('returns the buffer unchanged for mono input', () {
+      final samples = Int16List.fromList([1, 2, 3]);
+      expect(downmixToMono(samples, 1), same(samples));
+    });
+
+    test('drops a trailing partial frame (length not a channel multiple)', () {
+      // 5 samples across 2 channels -> 2 full frames; the lone sample is cut.
+      final stereo = Int16List.fromList([10, 20, 30, 40, 50]);
+      final mono = downmixToMono(stereo, 2);
+      expect(mono, orderedEquals(<int>[15, 35]));
+    });
+
+    test('empty input stays empty', () {
+      expect(downmixToMono(Int16List(0), 2), isEmpty);
+    });
+  });
 }

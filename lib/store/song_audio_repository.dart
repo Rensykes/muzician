@@ -25,29 +25,35 @@ class ReconcileResult {
 
 class SongAudioRepository {
   final Directory? _rootOverride;
+  final String _subdir;
   final Uuid _uuid;
   Directory? _rootCache;
 
-  SongAudioRepository._({Directory? root, Uuid? uuid})
+  SongAudioRepository._({Directory? root, String? subdir, Uuid? uuid})
     : _rootOverride = root,
+      _subdir = subdir ?? 'song_audio',
       _uuid = uuid ?? const Uuid();
 
-  factory SongAudioRepository.production() => SongAudioRepository._();
+  factory SongAudioRepository.production({String? subdir}) =>
+      SongAudioRepository._(subdir: subdir);
 
   /// Test factory: bypasses `path_provider` by pinning the root directory.
-  factory SongAudioRepository.testWith({required Directory rootDirectory}) =>
-      SongAudioRepository._(root: rootDirectory);
+  factory SongAudioRepository.testWith({
+    required Directory rootDirectory,
+    String? subdir,
+  }) => SongAudioRepository._(root: rootDirectory, subdir: subdir);
 
   Future<Directory> _root() async {
     final override = _rootOverride;
     if (override != null) {
-      if (!override.existsSync()) await override.create(recursive: true);
-      return override;
+      final dir = Directory(p.join(override.path, _subdir));
+      if (!dir.existsSync()) await dir.create(recursive: true);
+      return dir;
     }
     final cached = _rootCache;
     if (cached != null) return cached;
     final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'song_audio'));
+    final dir = Directory(p.join(docs.path, _subdir));
     if (!dir.existsSync()) await dir.create(recursive: true);
     _rootCache = dir;
     return dir;
@@ -64,7 +70,7 @@ class SongAudioRepository {
     await file.writeAsBytes(wavBytes, flush: true);
 
     final header = parseWavHeader(wavBytes);
-    final samples = _extractInt16Samples(wavBytes);
+    final samples = extractInt16Samples(wavBytes);
     final peaks = computePeaksFromInt16(samples);
 
     return AudioAsset(
@@ -111,7 +117,7 @@ class SongAudioRepository {
       durationMs = header.durationMs;
       sampleRate = header.sampleRate;
       channels = header.channels;
-      final samples = _extractInt16Samples(bytes);
+      final samples = extractInt16Samples(bytes);
       peaks = computePeaksFromInt16(samples);
     } else {
       durationMs = explicitDurationMs ?? 0;
@@ -166,7 +172,23 @@ class SongAudioRepository {
     return ReconcileResult(deleted);
   }
 
-  Int16List _extractInt16Samples(Uint8List wav) {
+  Future<Int16List> readInt16Samples(String assetId, String format) async {
+    final file = await resolvePath(assetId, format);
+    if (!file.existsSync()) return Int16List(0);
+    final bytes = await file.readAsBytes();
+    return extractInt16Samples(bytes);
+  }
+
+  Future<AudioAsset> writeStretched({
+    required Int16List samples,
+    required int sampleRate,
+  }) async {
+    final wav = writeWavPcm16Mono(samples, sampleRate: sampleRate);
+    final asset = await writeRecording(wav);
+    return asset.copyWith(sourceLabel: 'Stretched');
+  }
+
+  Int16List extractInt16Samples(Uint8List wav) {
     final bd = ByteData.sublistView(wav);
     var cursor = 12; // after 'RIFF<size>WAVE'
     while (cursor + 8 <= wav.length) {
@@ -192,4 +214,10 @@ final songAudioRepositoryProvider = Provider<SongAudioRepository>((ref) {
     return SongAudioRepository.production();
   }
   return SongAudioRepository.production();
+});
+
+/// Repository for Songwriter audio, isolated in its own `songwriter_audio/`
+/// subfolder so its orphan reconcile never touches the Song feature's files.
+final songwriterAudioRepositoryProvider = Provider<SongAudioRepository>((ref) {
+  return SongAudioRepository.production(subdir: 'songwriter_audio');
 });

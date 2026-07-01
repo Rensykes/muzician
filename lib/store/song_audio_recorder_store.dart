@@ -61,7 +61,12 @@ class SongAudioRecorderState {
 /// Abstraction over the real `record` package so tests can inject a fake.
 abstract class SongAudioRecorderDriver {
   Future<bool> ensurePermission();
-  Future<void> start();
+
+  /// Starts capture. [manageIosAudioSession] forwards to the `record` package's
+  /// `IosRecordConfig.manageAudioSession`: pass `false` when another plugin
+  /// (here, `audioplayers` for record-time monitoring) already owns the shared
+  /// AVAudioSession, so the two don't fight over it and silence the capture.
+  Future<void> start({bool manageIosAudioSession = true});
   Future<Uint8List> stop();
   Future<void> dispose();
 }

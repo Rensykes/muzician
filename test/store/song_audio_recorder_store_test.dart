@@ -18,7 +18,7 @@ class _FakeRecorderDriver implements SongAudioRecorderDriver {
   Future<bool> ensurePermission() async => true;
 
   @override
-  Future<void> start() async {
+  Future<void> start({bool manageIosAudioSession = true}) async {
     started = true;
   }
 

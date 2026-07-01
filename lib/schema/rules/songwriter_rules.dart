@@ -208,6 +208,55 @@ SongBlock makeDrumBlock({
   patternId: patternId,
 );
 
+AudioClip makeAudioClip({
+  required String assetId,
+  required int durationMs,
+  AudioFitMode fitMode = AudioFitMode.loop,
+}) => AudioClip(
+  id: generateId(),
+  assetId: assetId,
+  trimStartMs: 0,
+  trimEndMs: durationMs,
+  fitMode: fitMode,
+);
+
+/// Whole bars a freshly recorded clip should occupy: enough bars to contain a
+/// [durationMs] take at [msPerBar] (rounded up), clamped to `[1, maxBars]`. A
+/// 5s take at 120 BPM 4/4 (1 bar = 2000 ms) spans 3 bars, not the whole section.
+int recordedClipSpanBars({
+  required int durationMs,
+  required double msPerBar,
+  required int maxBars,
+}) {
+  final cap = maxBars < 1 ? 1 : maxBars;
+  if (msPerBar <= 0) return cap;
+  final bars = (durationMs / msPerBar).ceil();
+  if (bars < 1) return 1;
+  return bars > cap ? cap : bars;
+}
+
+/// Default bar span for a new audio block placed at [startBar] in a section of
+/// [sectionLengthBars]: fills all the way to the section end (floor of 1).
+int audioBlockDefaultSpan({
+  required int sectionLengthBars,
+  required int startBar,
+}) {
+  if (sectionLengthBars <= 1) return 1;
+  final remaining = sectionLengthBars - startBar;
+  return remaining < 1 ? 1 : remaining;
+}
+
+SongBlock makeAudioBlock({
+  required String audioClipId,
+  required int startBar,
+  required int spanBars,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  audioClipId: audioClipId,
+);
+
 // ─── Expanded-Section Mapping ────────────────────────────────────────────────
 
 class ExpandedSection {

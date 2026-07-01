@@ -1,12 +1,15 @@
 /// Notation-Sheet (lead-sheet inspired) — the sole Writer layout.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_library_match_rules.dart';
+import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
@@ -15,6 +18,7 @@ import '../../store/save_system_store.dart';
 import '../../store/writer_save_binding_store.dart';
 import '../../ui/save_card_label.dart';
 import '../../store/songwriter_playback_store.dart';
+import '../../store/songwriter_stretch_controller.dart';
 import 'writer_save_choice_dialog.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/coach_overlay.dart';
@@ -24,6 +28,7 @@ import '../../utils/note_utils.dart';
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_coach_steps.dart';
+import 'songwriter_playhead.dart';
 import 'songwriter_save_lane_filter.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
@@ -34,6 +39,8 @@ import 'songwriter_save_panel.dart';
 import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
+import 'songwriter_audio_lane_row.dart';
+import 'songwriter_section_ruler.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({super.key});
@@ -76,8 +83,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
       _overwrite(entry);
       return;
     }
-    final choice =
-        await showWriterSaveChoiceDialog(ctx, saveName: entry.name);
+    final choice = await showWriterSaveChoiceDialog(ctx, saveName: entry.name);
     if (!mounted) return;
     if (choice == null) return;
     if (choice.action == WriterSaveAction.saveAsNew) {
@@ -115,6 +121,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(songwriterStretchTempoWatcherProvider);
     final project = ref.watch(songwriterProvider);
     final notifier = ref.read(songwriterProvider.notifier);
     return Container(
@@ -304,6 +311,8 @@ class _SectionInstance extends ConsumerWidget {
               ),
             ),
           ),
+        SongwriterSectionRuler(section: section, instanceIndex: instanceIndex),
+        const SizedBox(height: 6),
         _BarRow(
           section: section,
           lane: harmonyLane,
@@ -324,6 +333,31 @@ class _SectionInstance extends ConsumerWidget {
             instanceIndex: instanceIndex,
           ),
         ],
+        // Audio lanes (one strip per audio lane on this section).
+        for (final lane in section.lanes.where(
+          (l) => l.kind == SongLaneKind.audio,
+        ))
+          Padding(
+            key: Key('sheetAudioLane_${lane.id}_$instanceIndex'),
+            padding: const EdgeInsets.only(top: 8),
+            child: SongwriterAudioLaneRow(
+              section: section,
+              lane: lane,
+              instanceIndex: instanceIndex,
+              clipsById: {
+                for (final c in ref.watch(
+                  songwriterProvider.select((p) => p.audioClips),
+                ))
+                  c.id: c,
+              },
+              assetsById: {
+                for (final a in ref.watch(
+                  songwriterProvider.select((p) => p.audioAssets),
+                ))
+                  a.id: a,
+              },
+            ),
+          ),
         // Free-text lyrics for this verse — decoupled from bars.
         const SizedBox(height: 8),
         _SectionLyrics(section: section, instanceIndex: instanceIndex),
@@ -439,10 +473,7 @@ class _SectionLyricsDialogState extends State<_SectionLyricsDialog> {
         decoration: const InputDecoration(hintText: 'Type the lyrics…'),
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(context),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(context)),
         MuzicianDialogButton(
           'Save',
           buttonKey: const Key('sectionLyricsSave'),
@@ -496,10 +527,7 @@ class _VerseLyricDialogState extends State<_VerseLyricDialog> {
         decoration: const InputDecoration(hintText: 'Words for this verse…'),
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(context),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(context)),
         MuzicianDialogButton(
           'Save',
           buttonKey: const Key('verseLyricSave'),
@@ -626,6 +654,15 @@ class _SectionHeading extends ConsumerWidget {
                         spanBars: section.lengthBars,
                       );
                 }
+                if (value == 'addAudioLane') {
+                  ref
+                      .read(songwriterProvider.notifier)
+                      .addLane(
+                        sectionId: section.id,
+                        kind: SongLaneKind.audio,
+                        label: 'Sample',
+                      );
+                }
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(
@@ -634,6 +671,15 @@ class _SectionHeading extends ConsumerWidget {
                   child: ListTile(
                     leading: Icon(Icons.graphic_eq),
                     title: Text('Add drum lane'),
+                    dense: true,
+                  ),
+                ),
+                PopupMenuItem(
+                  key: Key('addAudioLaneSheetAction'),
+                  value: 'addAudioLane',
+                  child: ListTile(
+                    leading: Icon(Icons.mic),
+                    title: Text('Add audio lane'),
                     dense: true,
                   ),
                 ),
@@ -905,7 +951,19 @@ class _BarRow extends ConsumerWidget {
             for (var r = 0; r < rows.length; r++)
               Padding(
                 padding: EdgeInsets.only(bottom: r == rows.length - 1 ? 0 : 8),
-                child: Row(children: rows[r]),
+                child: Stack(
+                  children: [
+                    Row(children: rows[r]),
+                    Positioned.fill(
+                      child: SongwriterRowPlayhead(
+                        sectionId: section.id,
+                        instanceIndex: instanceIndex,
+                        rowStartBar: r * perRow,
+                        barsInRow: (bars - r * perRow).clamp(1, perRow),
+                      ),
+                    ),
+                  ],
+                ),
               ),
           ],
         );
@@ -913,11 +971,31 @@ class _BarRow extends ConsumerWidget {
     );
   }
 
+  void _playFromBar(WidgetRef ref, int bar) {
+    final project = ref.read(songwriterProvider);
+    final tick = sectionBarGlobalTick(
+      project.sections,
+      project.config,
+      section.id,
+      bar,
+      instanceIndex: instanceIndex,
+    );
+    final pb = ref.read(songwriterPlaybackProvider.notifier);
+    pb.stopPlayback();
+    unawaited(pb.startPlayback(startTick: tick));
+  }
+
   void _onTapEmpty(BuildContext context, WidgetRef ref, int bar) {
     showBarActionSheet(
       context: context,
       title: 'Bar ${bar + 1}',
       actions: [
+        BarAction(
+          key: const Key('barActionPlayFromHere'),
+          label: 'Play from here',
+          icon: Icons.play_arrow,
+          onTap: () => _playFromBar(ref, bar),
+        ),
         BarAction(
           key: const Key('barActionAddChord'),
           label: 'Add chord',
@@ -1024,6 +1102,12 @@ class _BarRow extends ConsumerWidget {
       context: context,
       title: isChord ? (block.chordSymbol ?? 'Chord') : 'Bar',
       actions: [
+        BarAction(
+          key: const Key('barActionPlayFromHere'),
+          label: 'Play from here',
+          icon: Icons.play_arrow,
+          onTap: () => _playFromBar(ref, block.startBar),
+        ),
         if (isChord)
           BarAction(
             key: const Key('barActionChangeChord'),

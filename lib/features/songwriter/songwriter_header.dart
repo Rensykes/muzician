@@ -85,8 +85,11 @@ class SongwriterHeader extends ConsumerWidget {
                         key: const Key('writerUnsavedBadge'),
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.circle, size: 8,
-                              color: MuzicianTheme.orange),
+                          Icon(
+                            Icons.circle,
+                            size: 8,
+                            color: MuzicianTheme.orange,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'Unsaved',
@@ -175,7 +178,6 @@ class SongwriterHeader extends ConsumerWidget {
               _editProjectName(context, ref, ref.read(songwriterProvider).name);
             },
           ),
-
         ],
       ),
     );
@@ -289,7 +291,13 @@ class _WriterConfigStrip extends ConsumerWidget {
               icon: playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
               onTap: () {
                 final t = ref.read(songwriterPlaybackProvider.notifier);
-                playing ? t.stopPlayback() : t.startPlayback();
+                if (playing) {
+                  t.stopPlayback();
+                } else {
+                  t.startPlayback(
+                    startTick: ref.read(songwriterStartTickProvider),
+                  );
+                }
               },
             ),
             IconBtn(
@@ -545,8 +553,6 @@ class _GlassTextButton extends StatelessWidget {
     );
   }
 }
-
-
 
 class _MenuTile extends StatelessWidget {
   const _MenuTile({

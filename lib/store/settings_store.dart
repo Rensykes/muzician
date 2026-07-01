@@ -58,6 +58,20 @@ class SettingsNotifier extends Notifier<AppSettings> {
     await _persist();
   }
 
+  Future<void> setRecordMonitorBacking(bool on) async {
+    state = state.copyWith(recordMonitorBacking: on);
+    await _persist();
+  }
+
+  Future<void> setRecordMonitorMetronome(bool on) async {
+    state = state.copyWith(recordMonitorMetronome: on);
+    await _persist();
+  }
+
+  Future<void> setRecordCountIn(bool on) async {
+    state = state.copyWith(recordCountIn: on);
+    await _persist();
+  }
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(

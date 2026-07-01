@@ -20,7 +20,7 @@ class RecordPackageDriver implements SongAudioRecorderDriver {
   Future<bool> ensurePermission() => _recorder.hasPermission();
 
   @override
-  Future<void> start() async {
+  Future<void> start({bool manageIosAudioSession = true}) async {
     final docs = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(docs.path, 'song_audio_tmp'));
     if (!dir.existsSync()) dir.createSync(recursive: true);
@@ -28,6 +28,12 @@ class RecordPackageDriver implements SongAudioRecorderDriver {
       p.join(dir.path, 'rec_${DateTime.now().millisecondsSinceEpoch}.wav'),
     );
     _currentFile = file;
+    // When monitoring, `audioplayers` owns the playAndRecord session, so the
+    // recorder must NOT manage it too — otherwise the two fight over the shared
+    // AVAudioSession and the capture comes back silent. No-op off iOS (`ios` is
+    // null). Runtime API; the IosRecordConfig.manageAudioSession flag is
+    // deprecated.
+    await _recorder.ios?.manageAudioSession(manageIosAudioSession);
     await _recorder.start(
       const RecordConfig(
         encoder: AudioEncoder.wav,

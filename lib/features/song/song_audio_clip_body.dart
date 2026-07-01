@@ -47,45 +47,56 @@ class AudioClipBody extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
-                      fontWeight: FontWeight.w600,
+            // Narrow tiles (e.g. 1-bar sliced clips) have no room for the
+            // fixed duration + format badge, which would overflow the Row.
+            // Drop that meta cluster below a width threshold; the Expanded
+            // name always fits (it ellipsizes).
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final showMeta = constraints.maxWidth >= 80;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MuzicianTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                Text(
-                  _durationLabel(),
-                  style: const TextStyle(
-                    color: MuzicianTheme.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    format.toUpperCase(),
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+                    if (showMeta) ...[
+                      Text(
+                        _durationLabel(),
+                        style: const TextStyle(
+                          color: MuzicianTheme.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          format.toUpperCase(),
+                          style: const TextStyle(
+                            color: MuzicianTheme.textPrimary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
         ],
