@@ -22,10 +22,12 @@ import 'store/project_config_sync.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'ui/project_chip.dart';
+import 'store/record_audio_session.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
 import 'store/song_playback_store.dart';
+import 'store/songwriter_audio_sink.dart';
 import 'theme/muzician_theme.dart';
 import 'utils/note_player.dart';
 
@@ -45,6 +47,12 @@ void main() {
         ),
         songAudioClipSinkProvider.overrideWith(
           (ref) => ref.watch(productionSongAudioClipSinkProvider),
+        ),
+        songwriterAudioClipSinkProvider.overrideWith(
+          (ref) => ref.watch(productionSongwriterAudioClipSinkProvider),
+        ),
+        recordAudioSessionProvider.overrideWithValue(
+          const AudioPlayersRecordAudioSession(),
         ),
       ],
       child: const MuzicianApp(),
@@ -331,10 +339,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       title: 'Fretboard',
       appBarChipLabel: null,
       appBarActions: [
-        const Padding(
-          padding: EdgeInsets.only(right: 4),
-          child: ProjectChip(),
-        ),
+        const Padding(padding: EdgeInsets.only(right: 4), child: ProjectChip()),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 0),
@@ -507,10 +512,7 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
       title: 'Piano',
       appBarChipLabel: null,
       appBarActions: [
-        const Padding(
-          padding: EdgeInsets.only(right: 4),
-          child: ProjectChip(),
-        ),
+        const Padding(padding: EdgeInsets.only(right: 4), child: ProjectChip()),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 1),

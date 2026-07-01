@@ -119,12 +119,10 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         songNotePlaybackSinkProvider.overrideWith(
-          (_) => (notes, vol) async =>
-              noteCalls.add((notes: notes, volume: vol)),
+          (_) =>
+              (notes, vol) async => noteCalls.add((notes: notes, volume: vol)),
         ),
-        songDrumPlaybackSinkProvider.overrideWith(
-          (_) => (lanes, vol) async {},
-        ),
+        songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
         songMetronomeSinkProvider.overrideWith(
           (_) => ({required bool accent}) async {},
         ),
@@ -145,8 +143,12 @@ void main() {
       pattern.id,
       pattern.copyWith(
         notes: const [
-          NotePatternNote(id: 'n1', midiNote: 60, startTick: 0,
-              durationTicks: 4),
+          NotePatternNote(
+            id: 'n1',
+            midiNote: 60,
+            startTick: 0,
+            durationTicks: 4,
+          ),
         ],
       ),
     );
@@ -166,11 +168,10 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         songNotePlaybackSinkProvider.overrideWith(
-          (_) => (notes, vol) async => fires.add(notes.first),
+          (_) =>
+              (notes, vol) async => fires.add(notes.first),
         ),
-        songDrumPlaybackSinkProvider.overrideWith(
-          (_) => (lanes, vol) async {},
-        ),
+        songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
         songMetronomeSinkProvider.overrideWith(
           (_) => ({required bool accent}) async {},
         ),
@@ -187,8 +188,12 @@ void main() {
       pattern.id,
       pattern.copyWith(
         notes: const [
-          NotePatternNote(id: 'n1', midiNote: 60, startTick: 0,
-              durationTicks: 4),
+          NotePatternNote(
+            id: 'n1',
+            midiNote: 60,
+            startTick: 0,
+            durationTicks: 4,
+          ),
         ],
       ),
     );
@@ -206,24 +211,26 @@ void main() {
     playback.stopPlayback();
     await run;
 
-    expect(fires.length, greaterThanOrEqualTo(3),
-        reason: 'event at tick 0 re-fires on each loop pass');
+    expect(
+      fires.length,
+      greaterThanOrEqualTo(3),
+      reason: 'event at tick 0 re-fires on each loop pass',
+    );
   });
 
-  test('count-in fires beatsPerMeasure clicks before the first tick',
-      () async {
+  test('count-in fires beatsPerMeasure clicks before the first tick', () async {
     final clicks = <bool>[];
     final fires = <int>[];
     final container = ProviderContainer(
       overrides: [
         songNotePlaybackSinkProvider.overrideWith(
-          (_) => (notes, vol) async => fires.add(notes.first),
+          (_) =>
+              (notes, vol) async => fires.add(notes.first),
         ),
-        songDrumPlaybackSinkProvider.overrideWith(
-          (_) => (lanes, vol) async {},
-        ),
+        songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
         songMetronomeSinkProvider.overrideWith(
-          (_) => ({required bool accent}) async => clicks.add(accent),
+          (_) =>
+              ({required bool accent}) async => clicks.add(accent),
         ),
       ],
     );
@@ -241,8 +248,12 @@ void main() {
       pattern.id,
       pattern.copyWith(
         notes: const [
-          NotePatternNote(id: 'n1', midiNote: 60, startTick: 0,
-              durationTicks: 4),
+          NotePatternNote(
+            id: 'n1',
+            midiNote: 60,
+            startTick: 0,
+            durationTicks: 4,
+          ),
         ],
       ),
     );
@@ -285,66 +296,59 @@ void main() {
     expect(container.read(songPlaybackProvider).hasLoop, isFalse);
   });
 
-  test(
-    'tick clock is wall-anchored: per-beat body cost does not accumulate '
-    'as drift',
-    () async {
-      // A heavy synchronous cost on every metronome beat. Without wall-clock
-      // anchoring the loop adds this on top of every tick's delay, so reaching
-      // the final beat takes far longer than the ideal span. Anchored, it is
-      // absorbed into the per-tick budget.
-      final lastBeat = Completer<void>();
-      var beats = 0;
-      final container = ProviderContainer(
-        overrides: [
-          songNotePlaybackSinkProvider.overrideWith(
-            (_) => (notes, vol) async {},
-          ),
-          songDrumPlaybackSinkProvider.overrideWith(
-            (_) => (lanes, vol) async {},
-          ),
-          songMetronomeSinkProvider.overrideWith(
-            (_) => ({required bool accent}) async {
-              beats++;
-              if (beats >= 8) {
-                if (!lastBeat.isCompleted) lastBeat.complete();
-                return; // Exclude the final beat's cost from the measurement.
-              }
-              final spin = Stopwatch()..start();
-              while (spin.elapsedMilliseconds < 12) {
-                // Busy-wait simulating per-beat UI/audio work on the loop.
-              }
-            },
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      container.read(settingsProvider.notifier).setMetronomeEnabled(true);
-      container.read(songProjectProvider.notifier).setTotalMeasures(2);
-
-      final playback = container.read(songPlaybackProvider.notifier);
-      final clock = Stopwatch()..start();
-      // 2 bars 4/4 → 8 beats at ticks 0,4,…,28; override 4ms/tick puts the
-      // 8th beat at 112ms ideal. Seven intervening beats inject 7 × 12 = 84ms
-      // of cost; anchored that fits within the 112ms span. Unanchored total ≈
-      // 112 + 84 = 196ms.
-      unawaited(
-        playback.startPlayback(
-          tickDurationOverride: const Duration(milliseconds: 4),
+  test('tick clock is wall-anchored: per-beat body cost does not accumulate '
+      'as drift', () async {
+    // A heavy synchronous cost on every metronome beat. Without wall-clock
+    // anchoring the loop adds this on top of every tick's delay, so reaching
+    // the final beat takes far longer than the ideal span. Anchored, it is
+    // absorbed into the per-tick budget.
+    final lastBeat = Completer<void>();
+    var beats = 0;
+    final container = ProviderContainer(
+      overrides: [
+        songNotePlaybackSinkProvider.overrideWith((_) => (notes, vol) async {}),
+        songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
+        songMetronomeSinkProvider.overrideWith(
+          (_) => ({required bool accent}) async {
+            beats++;
+            if (beats >= 8) {
+              if (!lastBeat.isCompleted) lastBeat.complete();
+              return; // Exclude the final beat's cost from the measurement.
+            }
+            final spin = Stopwatch()..start();
+            while (spin.elapsedMilliseconds < 12) {
+              // Busy-wait simulating per-beat UI/audio work on the loop.
+            }
+          },
         ),
-      );
-      await lastBeat.future;
-      final elapsedMs = clock.elapsedMilliseconds;
-      playback.stopPlayback();
+      ],
+    );
+    addTearDown(container.dispose);
 
-      expect(
-        elapsedMs,
-        lessThan(150),
-        reason: 'drift not absorbed; reached final beat in ${elapsedMs}ms',
-      );
-    },
-  );
+    container.read(settingsProvider.notifier).setMetronomeEnabled(true);
+    container.read(songProjectProvider.notifier).setTotalMeasures(2);
+
+    final playback = container.read(songPlaybackProvider.notifier);
+    final clock = Stopwatch()..start();
+    // 2 bars 4/4 → 8 beats at ticks 0,4,…,28; override 4ms/tick puts the
+    // 8th beat at 112ms ideal. Seven intervening beats inject 7 × 12 = 84ms
+    // of cost; anchored that fits within the 112ms span. Unanchored total ≈
+    // 112 + 84 = 196ms.
+    unawaited(
+      playback.startPlayback(
+        tickDurationOverride: const Duration(milliseconds: 4),
+      ),
+    );
+    await lastBeat.future;
+    final elapsedMs = clock.elapsedMilliseconds;
+    playback.stopPlayback();
+
+    expect(
+      elapsedMs,
+      lessThan(150),
+      reason: 'drift not absorbed; reached final beat in ${elapsedMs}ms',
+    );
+  });
 }
 
 class _AudioCall {
@@ -367,6 +371,7 @@ class _RecordingAudioSink implements SongAudioClipSink {
     required AudioAsset asset,
     required int offsetMs,
     double volume = 1.0,
+    bool loop = false,
   }) async {
     startCalls.add(_AudioCall(asset.id));
   }

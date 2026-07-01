@@ -15,4 +15,30 @@ void main() {
     final back = AppSettings.fromJson(<String, dynamic>{});
     expect(back.saveBrowserGrid, false);
   });
+
+  test('record-monitor fields default OFF', () {
+    const s = AppSettings();
+    expect(s.recordMonitorBacking, isFalse);
+    expect(s.recordMonitorMetronome, isFalse);
+    expect(s.recordCountIn, isFalse);
+  });
+
+  test('record-monitor fields survive json round-trip', () {
+    const s = AppSettings(
+      recordMonitorBacking: true,
+      recordMonitorMetronome: true,
+      recordCountIn: true,
+    );
+    final back = AppSettings.fromJson(s.toJson());
+    expect(back.recordMonitorBacking, isTrue);
+    expect(back.recordMonitorMetronome, isTrue);
+    expect(back.recordCountIn, isTrue);
+  });
+
+  test('legacy json without the fields defaults them OFF', () {
+    final back = AppSettings.fromJson(const {'metronomeEnabled': true});
+    expect(back.recordMonitorBacking, isFalse);
+    expect(back.recordMonitorMetronome, isFalse);
+    expect(back.recordCountIn, isFalse);
+  });
 }

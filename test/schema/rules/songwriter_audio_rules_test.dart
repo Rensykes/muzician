@@ -1,0 +1,146 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/schema/rules/songwriter_audio_rules.dart';
+
+const _asset = AudioAsset(
+  id: 'a1',
+  durationMs: 1500,
+  sampleRate: 44100,
+  channels: 1,
+  format: 'wav',
+  peaks: [1],
+  sourceLabel: 'Recording',
+);
+
+SongwriterProjectSnapshot _project(AudioFitMode mode) {
+  const clip = AudioClip(id: 'c1', assetId: 'a1', trimEndMs: 1500);
+  return SongwriterProjectSnapshot(
+    config: const SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+    audioAssets: const [_asset],
+    audioClips: [clip.copyWith(fitMode: mode)],
+    sections: const [
+      SongSection(
+        id: 's1',
+        lengthBars: 4,
+        order: 0,
+        lanes: [
+          SongLane(
+            id: 'l1',
+            kind: SongLaneKind.audio,
+            order: 0,
+            blocks: [
+              SongBlock(id: 'b1', startBar: 0, spanBars: 2, audioClipId: 'c1'),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+void main() {
+  test('tick->ms at 120 BPM, 4/4: 1 bar = 2000ms', () {
+    const cfg = SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4);
+    final measureTicks = cfg.ticksPerBeat * cfg.beatsPerBar;
+    expect(songwriterAudioTickToMs(measureTicks, cfg), 2000);
+  });
+
+  test('loop clip fills the whole 2-bar span (4000ms)', () {
+    final clips = songwriterSchedulableAudioClips(_project(AudioFitMode.loop));
+    final c = clips.single;
+    expect(c.startMs, 0);
+    expect(c.endMs, 4000);
+    expect(c.loop, isTrue);
+    expect(c.offsetIntoAsset(0), 0);
+  });
+
+  test('one-shot clip stops at natural end (1500ms), not span end', () {
+    final clips = songwriterSchedulableAudioClips(
+      _project(AudioFitMode.oneShot),
+    );
+    expect(clips.single.endMs, 1500);
+    expect(clips.single.loop, isFalse);
+  });
+
+  test('oneShot with trimEndMs==0 plays to the natural asset end', () {
+    final base = _project(AudioFitMode.oneShot);
+    final clip0 = base.audioClips.single.copyWith(trimEndMs: 0);
+    final clips = songwriterSchedulableAudioClips(
+      base.copyWith(audioClips: [clip0]),
+    );
+    // Sentinel 0 → natural end (asset durationMs 1500), not silenced at 0.
+    expect(clips.single.endMs, 1500);
+  });
+
+  test('section repeat x2 yields two placements', () {
+    final base = _project(AudioFitMode.loop);
+    final repeated = base.copyWith(
+      sections: [base.sections.single.copyWith(repeat: 2)],
+    );
+    final clips = songwriterSchedulableAudioClips(repeated);
+    expect(clips.length, 2);
+    expect(clips[1].startMs, 8000); // section length 4 bars = 8000ms
+  });
+
+  test('section clips are section-local (no globalStartBar offset)', () {
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.loop),
+      's1',
+    );
+    final c = res.clips.single;
+    expect(c.startMs, 0);
+    expect(c.endMs, 4000); // 2-bar span @120 4/4
+    expect(c.loop, isTrue);
+  });
+
+  test('section loopMs is the section length, not the clip span', () {
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.loop),
+      's1',
+    );
+    expect(res.loopMs, 8000); // 4 bars @120 4/4
+  });
+
+  test(
+    'section repeat does NOT add extra placements (single section view)',
+    () {
+      final base = _project(AudioFitMode.loop);
+      final repeated = base.copyWith(
+        sections: [base.sections.single.copyWith(repeat: 2)],
+      );
+      final res = songwriterSectionSchedulableClips(repeated, 's1');
+      expect(res.clips.length, 1);
+      expect(res.loopMs, 8000);
+    },
+  );
+
+  test('unknown section id yields no clips and zero loopMs', () {
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.loop),
+      'nope',
+    );
+    expect(res.clips, isEmpty);
+    expect(res.loopMs, 0);
+  });
+
+  test('section one-shot clip stops at natural end', () {
+    final res = songwriterSectionSchedulableClips(
+      _project(AudioFitMode.oneShot),
+      's1',
+    );
+    final c = res.clips.single;
+    expect(c.endMs, 1500); // asset duration, not the 4000ms span
+    expect(c.loop, isFalse);
+  });
+
+  test('section trimEndMs==0 sentinel plays to natural asset end', () {
+    final base = _project(AudioFitMode.oneShot);
+    final clip0 = base.audioClips.single.copyWith(trimEndMs: 0);
+    final res = songwriterSectionSchedulableClips(
+      base.copyWith(audioClips: [clip0]),
+      's1',
+    );
+    expect(res.clips.single.endMs, 1500);
+  });
+}
