@@ -40,6 +40,7 @@ import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
 import 'songwriter_audio_lane_row.dart';
+import 'songwriter_section_ruler.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({super.key});
@@ -310,6 +311,8 @@ class _SectionInstance extends ConsumerWidget {
               ),
             ),
           ),
+        SongwriterSectionRuler(section: section, instanceIndex: instanceIndex),
+        const SizedBox(height: 6),
         _BarRow(
           section: section,
           lane: harmonyLane,
