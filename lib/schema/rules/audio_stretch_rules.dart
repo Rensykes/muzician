@@ -102,7 +102,9 @@ Float64List _hann(int n) {
 
 Int16List _linearResample(Int16List input, int targetLen) {
   final out = Int16List(targetLen);
-  if (input.length == 1) {
+  // Guard the degenerate ends: a single source sample, or a single-sample
+  // target (which would divide by `targetLen - 1 == 0` below and yield NaN).
+  if (input.length == 1 || targetLen == 1) {
     for (var i = 0; i < targetLen; i++) {
       out[i] = input[0];
     }

@@ -58,12 +58,17 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
             child: GestureDetector(
               key: Key('sheetAudioTile_${owner.audioClipId ?? owner.id}'),
               behavior: HitTestBehavior.opaque,
-              onTap: () => showSongwriterAudioClipSheet(
-                context: context,
-                sectionId: section.id,
-                laneId: lane.id,
-                clipId: owner.audioClipId!,
-              ),
+              // A block with a null audioClipId (legacy/corrupt save) still
+              // renders a placeholder tile; leave it un-tappable rather than
+              // force-unwrapping into a crash — every other read here guards it.
+              onTap: owner.audioClipId == null
+                  ? null
+                  : () => showSongwriterAudioClipSheet(
+                      context: context,
+                      sectionId: section.id,
+                      laneId: lane.id,
+                      clipId: owner.audioClipId!,
+                    ),
               onLongPress: () => ref
                   .read(songwriterProvider.notifier)
                   .removeAudioBlock(

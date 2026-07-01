@@ -128,6 +128,10 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       while (nextClip < scheduled.length &&
           scheduled[nextClip].startMs <= nowMs) {
         final clip = scheduled[nextClip++];
+        // A mid-song start (startTick > 0) can skip past clips that both start
+        // and end before it; don't briefly start-then-stop such a clip (the
+        // fire-and-forget start/stop race can blip audio).
+        if (clip.endMs <= nowMs) continue;
         unawaited(
           audioSink.startClip(
             asset: clip.asset,
@@ -252,7 +256,20 @@ final songwriterPlayheadFracProvider = Provider<double>((ref) {
 /// 0 means "top of the song".
 class SongwriterStartTickNotifier extends Notifier<int> {
   @override
-  int build() => 0;
+  int build() {
+    // The parked tick is an absolute position on the flattened timeline, so it
+    // is meaningless once a different project loads. Clear it on project switch
+    // — otherwise the header Play button resumes the new song from the previous
+    // song's bar (or jumps straight to its end).
+    ref.listen<String?>(
+      saveSystemProvider.select((s) => s.selectedProjectId),
+      (prev, next) {
+        if (prev != next) state = 0;
+      },
+    );
+    return 0;
+  }
+
   void setTick(int tick) => state = tick < 0 ? 0 : tick;
   void reset() => state = 0;
 }

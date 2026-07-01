@@ -45,4 +45,12 @@ void main() {
     final out = stretchInt16(input, sr, (1000 * 1000 / sr).round());
     expect(out.length, closeTo(1000, 4));
   });
+
+  test('single-sample target does not divide by zero', () {
+    // sr 1000, 1 ms -> targetLen 1; sub-frame input routes to the linear
+    // resample, whose (targetLen - 1) denominator must be guarded.
+    final out = stretchInt16(Int16List.fromList([100, 200]), 1000, 1);
+    expect(out.length, 1);
+    expect(out[0], 100);
+  });
 }

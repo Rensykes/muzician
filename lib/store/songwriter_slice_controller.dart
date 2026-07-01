@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../schema/rules/song_audio_rules.dart' show downmixToMono;
 import '../schema/rules/songwriter_slice_rules.dart';
 import 'song_audio_repository.dart';
 import 'songwriter_store.dart';
@@ -27,6 +28,10 @@ class SliceDetectionState {
 /// debounced ~200ms so only the latest request runs.
 class SongwriterSliceController extends Notifier<SliceDetectionState> {
   Timer? _debounce;
+
+  /// Bumped on every [_run]; a pass whose generation is stale by the time an
+  /// await resolves drops its result instead of clobbering a newer pass.
+  int _gen = 0;
 
   @override
   SliceDetectionState build() {
@@ -50,6 +55,7 @@ class SongwriterSliceController extends Notifier<SliceDetectionState> {
   }
 
   Future<void> _run(String clipId, double sensitivity) async {
+    final gen = ++_gen;
     final project = ref.read(songwriterProvider);
     final clip = project.audioClips.where((c) => c.id == clipId).firstOrNull;
     if (clip == null) return;
@@ -60,7 +66,11 @@ class SongwriterSliceController extends Notifier<SliceDetectionState> {
 
     state = const SliceDetectionState(processing: true);
     final repo = ref.read(songwriterAudioRepositoryProvider);
-    final full = await repo.readInt16Samples(asset.id, asset.format);
+    final raw = await repo.readInt16Samples(asset.id, asset.format);
+    if (gen != _gen) return; // superseded by a newer detect()
+    // Onset detection is a mono algorithm; collapse interleaved stereo first so
+    // sample-position math (ms * sampleRate == frames) and the signal are right.
+    final full = downmixToMono(raw, asset.channels);
     if (full.isEmpty) {
       state = const SliceDetectionState();
       return;
@@ -77,6 +87,7 @@ class SongwriterSliceController extends Notifier<SliceDetectionState> {
       runDetectOnsets,
       DetectOnsetsRequest(region, sr, sensitivity),
     );
+    if (gen != _gen) return; // a newer pass started while compute() ran
     state = SliceDetectionState(onsets: onsets, processing: false);
   }
 }

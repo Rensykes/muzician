@@ -552,13 +552,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
-  void setClipStretchedAsset({
+  /// Attaches [stretchedAsset] to [clipId] as its derived stretch, dropping
+  /// [removeAssetId] from the asset list. Returns false without changing state
+  /// when the clip no longer exists (removed while the render was in flight) —
+  /// the caller then owns cleaning up the now-orphaned [stretchedAsset] file.
+  bool setClipStretchedAsset({
     required String clipId,
     required AudioAsset stretchedAsset,
     String? removeAssetId,
   }) {
     final clip = state.audioClips.where((c) => c.id == clipId).firstOrNull;
-    if (clip == null) return;
+    if (clip == null) return false;
     final assets = [
       for (final a in state.audioAssets)
         if (a.id != removeAssetId) a,
@@ -572,6 +576,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         )
         .toList();
     _set(state.copyWith(audioAssets: assets, audioClips: clips));
+    return true;
   }
 
   // ── chord segments ──

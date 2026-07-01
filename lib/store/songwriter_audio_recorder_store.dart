@@ -125,17 +125,29 @@ class SongwriterAudioRecorderNotifier
     state = state.copyWith(status: SongAudioRecorderStatus.recording);
     final monitoring =
         monitor != null && (monitor.backing || monitor.metronome);
-    if (monitoring) {
-      // iOS shares one AVAudioSession: switch it to playAndRecord BEFORE the
-      // mic arms so the monitor's audioplayers playback can't re-assert the
-      // capture-incompatible `playback` category and silence the take.
-      await ref.read(recordAudioSessionProvider).enterRecording();
-      _recordSessionActive = true;
+    try {
+      if (monitoring) {
+        // iOS shares one AVAudioSession: switch it to playAndRecord BEFORE the
+        // mic arms so the monitor's audioplayers playback can't re-assert the
+        // capture-incompatible `playback` category and silence the take.
+        await ref.read(recordAudioSessionProvider).enterRecording();
+        _recordSessionActive = true;
+      }
+      // When monitoring, `audioplayers` owns the playAndRecord session (above),
+      // so the recorder must not manage it too — otherwise the two fight over
+      // the shared AVAudioSession and the capture comes back silent.
+      await driver.start(manageIosAudioSession: !monitoring);
+    } catch (e) {
+      // Arming failed (mic busy, platform error, session activation). Undo the
+      // session flip and surface the error instead of hanging in `recording`
+      // with the shared iOS session stuck in playAndRecord.
+      _restoreRecordSession();
+      state = state.copyWith(
+        status: SongAudioRecorderStatus.error,
+        errorMessage: () => 'Recording failed: $e',
+      );
+      return;
     }
-    // When monitoring, `audioplayers` owns the playAndRecord session (above), so
-    // the recorder must not manage it too — otherwise the two fight over the
-    // shared AVAudioSession and the capture comes back silent.
-    await driver.start(manageIosAudioSession: !monitoring);
     if (monitoring) {
       unawaited(_runMonitor(++_monitorGen, monitor));
     }
@@ -265,13 +277,19 @@ class SongwriterAudioRecorderNotifier
   Future<void> cancel() async {
     _cancelled = true;
     _stopMonitor();
-    _restoreRecordSession();
-    if (state.status == SongAudioRecorderStatus.idle) return;
+    if (state.status == SongAudioRecorderStatus.idle) {
+      _restoreRecordSession();
+      return;
+    }
     if (state.status == SongAudioRecorderStatus.recording) {
       try {
         await ref.read(songAudioRecorderDriverProvider).stop();
       } catch (_) {}
     }
+    // Restore the playback-only session only after the recorder has released
+    // the mic — matches stop()'s ordering so the category flip can't disturb an
+    // in-flight capture.
+    _restoreRecordSession();
     final asset = state.pendingAsset;
     if (asset != null) {
       try {
