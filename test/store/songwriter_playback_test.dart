@@ -300,4 +300,18 @@ void main() {
       );
     },
   );
+
+  group('songwriterStartTickProvider', () {
+    test('defaults to 0; setTick clamps negatives; reset returns to 0', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      expect(c.read(songwriterStartTickProvider), 0);
+      c.read(songwriterStartTickProvider.notifier).setTick(48);
+      expect(c.read(songwriterStartTickProvider), 48);
+      c.read(songwriterStartTickProvider.notifier).setTick(-5);
+      expect(c.read(songwriterStartTickProvider), 0);
+      c.read(songwriterStartTickProvider.notifier).reset();
+      expect(c.read(songwriterStartTickProvider), 0);
+    });
+  });
 }

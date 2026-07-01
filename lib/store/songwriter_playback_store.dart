@@ -246,3 +246,18 @@ final songwriterPlayheadFracProvider = Provider<double>((ref) {
   if (tick == null || measureTicks <= 0) return 0.0;
   return (tick % measureTicks) / measureTicks;
 });
+
+/// The parked playback start tick, set by the per-section ruler and read by the
+/// header Play button. Persists while idle (the transport state resets on stop).
+/// 0 means "top of the song".
+class SongwriterStartTickNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  void setTick(int tick) => state = tick < 0 ? 0 : tick;
+  void reset() => state = 0;
+}
+
+final songwriterStartTickProvider =
+    NotifierProvider<SongwriterStartTickNotifier, int>(
+      SongwriterStartTickNotifier.new,
+    );
