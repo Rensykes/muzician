@@ -4,17 +4,17 @@ on:
   push:
     branches:
       - 'main'
-    # Skip when the web bundle can't have changed — otherwise a docs-/test-only
-    # commit rebuilds an identical version and Firebase rejects re-releasing it
-    # to the live channel (FAILED_PRECONDITION: "version is the current active
-    # version").
+    # Only deploy live when the web bundle can actually change. A docs-, test-
+    # or CI-only commit rebuilds an identical version, and the tolerant deploy
+    # below already handles the "current active version" case; this just avoids
+    # pointless live rebuilds. (The workflow file itself is intentionally NOT
+    # here — editing CI must not trigger a production deploy of unchanged web.)
     paths:
       - 'lib/**'
       - 'web/**'
       - 'assets/**'
       - 'pubspec.yaml'
       - 'pubspec.lock'
-      - '.github/workflows/production.yml'
 
 concurrency:
   group: production-live
@@ -44,10 +44,29 @@ jobs:
       - run: flutter pub get
       - run: flutter build web --release
 
+      # Scripted deploy instead of FirebaseExtended/action-hosting-deploy: a
+      # transient "premature close" (or an unchanged bundle) makes firebase-tools
+      # retry a release that already landed, and the retry 400s with
+      # FAILED_PRECONDITION "supplied version is the current active version" on
+      # channels/live. That means live already serves this version, so we treat
+      # it as success. Mirrors the preview workflow.
       - name: Deploy to Firebase live channel
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MUZICIAN_B0953 }}
-          projectId: muzician-b0953
-          channelId: live
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MUZICIAN_B0953 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          set +e
+          out=$(npx -y firebase-tools@latest deploy --only hosting \
+            --project muzician-b0953 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          if [ "$code" -ne 0 ]; then
+            if echo "$out" | grep -q "is the current active version"; then
+              echo "::notice::Live channel already at this version (benign firebase-tools retry) — treating as success."
+            else
+              exit "$code"
+            fi
+          fi
