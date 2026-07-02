@@ -4,6 +4,21 @@ on:
   push:
     branches:
       - 'main'
+    # Skip when the web bundle can't have changed — otherwise a docs-/test-only
+    # commit rebuilds an identical version and Firebase rejects re-releasing it
+    # to the live channel (FAILED_PRECONDITION: "version is the current active
+    # version").
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/production.yml'
+
+concurrency:
+  group: production-live
+  cancel-in-progress: true
 
 jobs:
   build_and_deploy:
