@@ -46,10 +46,31 @@ jobs:
       - run: flutter pub get
       - run: flutter build web --release
 
+      # Scripted deploy instead of FirebaseExtended/action-hosting-deploy: a
+      # transient "premature close" on the release POST makes firebase-tools
+      # retry a request that already succeeded, and the retry 400s with
+      # FAILED_PRECONDITION "supplied version is the current active version".
+      # That error means the release IS live, so we treat it as success.
       - name: Deploy to Firebase preview channel
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MUZICIAN_B0953 }}
-          projectId: muzician-b0953
-          channelId: ${{ github.ref_name }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MUZICIAN_B0953 }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          # Channel id must match [a-zA-Z0-9_-]; mirror the action's slash->dash.
+          channel="${REF_NAME//\//-}"
+          set +e
+          out=$(npx -y firebase-tools@latest hosting:channel:deploy "$channel" \
+            --project muzician-b0953 --expires 7d 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          if [ "$code" -ne 0 ]; then
+            if echo "$out" | grep -q "is the current active version"; then
+              echo "::notice::Channel '$channel' already at this version (benign firebase-tools retry) — treating as success."
+            else
+              exit "$code"
+            fi
+          fi
