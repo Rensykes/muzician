@@ -143,4 +143,40 @@ void main() {
     );
     expect(res.clips.single.endMs, 1500);
   });
+
+  SongwriterProjectSnapshot _withLane(SongLane Function(SongLane) f) {
+    final base = _project(AudioFitMode.loop);
+    final section = base.sections.single;
+    return base.copyWith(
+      sections: [section.copyWith(lanes: [f(section.lanes.single)])],
+    );
+  }
+
+  test('lane volume and pan carry onto scheduled clips', () {
+    final clips = songwriterSchedulableAudioClips(
+      _withLane((l) => l.copyWith(volume: 0.5, pan: -0.4)),
+    );
+    expect(clips.single.volume, 0.5);
+    expect(clips.single.pan, -0.4);
+    final section = songwriterSectionSchedulableClips(
+      _withLane((l) => l.copyWith(volume: 0.5, pan: -0.4)),
+      's1',
+    );
+    expect(section.clips.single.volume, 0.5);
+    expect(section.clips.single.pan, -0.4);
+  });
+
+  test('muted audio lanes schedule nothing', () {
+    expect(
+      songwriterSchedulableAudioClips(_withLane((l) => l.copyWith(muted: true))),
+      isEmpty,
+    );
+    expect(
+      songwriterSectionSchedulableClips(
+        _withLane((l) => l.copyWith(muted: true)),
+        's1',
+      ).clips,
+      isEmpty,
+    );
+  });
 }

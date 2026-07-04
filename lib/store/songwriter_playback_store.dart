@@ -147,6 +147,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                 .offsetIntoAsset(nowMs)
                 .clamp(0, clip.asset.durationMs),
             volume: clip.volume,
+            balance: clip.pan,
             loop: clip.loop,
           ),
         );

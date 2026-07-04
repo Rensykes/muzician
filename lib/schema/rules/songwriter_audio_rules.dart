@@ -20,6 +20,7 @@ class SongwriterScheduledClip {
   final int trimStartMs;
   final bool loop;
   final double volume;
+  final double pan; // -1.0 (left) .. 1.0 (right)
   const SongwriterScheduledClip({
     required this.asset,
     required this.startMs,
@@ -27,6 +28,7 @@ class SongwriterScheduledClip {
     required this.trimStartMs,
     required this.loop,
     this.volume = 1.0,
+    this.pan = 0.0,
   });
 
   /// In-asset position to seek to when the playhead is at [nowMs]. Clamped to
@@ -55,7 +57,7 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
         .firstOrNull;
     if (section == null) continue;
     for (final lane in section.lanes) {
-      if (lane.kind != SongLaneKind.audio) continue;
+      if (lane.kind != SongLaneKind.audio || lane.muted) continue;
       for (final block in tileLaneBlocks(
         lane,
         sectionLengthBars: section.lengthBars,
@@ -100,6 +102,8 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
             endMs: endMs,
             trimStartMs: usesStretched ? 0 : clip.trimStartMs,
             loop: loop,
+            volume: lane.volume,
+            pan: lane.pan,
           ),
         );
       }
@@ -131,7 +135,7 @@ songwriterSectionSchedulableClips(
   final out = <SongwriterScheduledClip>[];
 
   for (final lane in section.lanes) {
-    if (lane.kind != SongLaneKind.audio) continue;
+    if (lane.kind != SongLaneKind.audio || lane.muted) continue;
     for (final block in tileLaneBlocks(
       lane,
       sectionLengthBars: section.lengthBars,
@@ -174,6 +178,8 @@ songwriterSectionSchedulableClips(
           endMs: endMs,
           trimStartMs: usesStretched ? 0 : clip.trimStartMs,
           loop: loop,
+          volume: lane.volume,
+          pan: lane.pan,
         ),
       );
     }
