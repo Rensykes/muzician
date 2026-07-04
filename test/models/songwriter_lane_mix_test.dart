@@ -50,4 +50,15 @@ void main() {
     final c = lane.copyWith(volume: 0.3, pan: 0.4, muted: true);
     expect((c.volume, c.pan, c.muted), (0.3, 0.4, true));
   });
+
+  test('copyWith can clear anchorLaneId', () {
+    const lane = SongLane(
+      id: 'ls',
+      kind: SongLaneKind.save,
+      order: 1,
+      anchorLaneId: 'lh1',
+    );
+
+    expect(lane.copyWith(clearAnchorLaneId: true).anchorLaneId, isNull);
+  });
 }

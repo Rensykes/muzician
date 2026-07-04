@@ -915,6 +915,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     return null;
   }
 
+  String? _explicitSaveAnchorLaneId(SongSection section, String? anchorLaneId) {
+    if (anchorLaneId == null) return null;
+    return primaryHarmonyLane(section)?.id == anchorLaneId
+        ? null
+        : anchorLaneId;
+  }
+
   /// Mirrors [_findOrCreateSaveLane]'s lane-selection rule so callers can
   /// preflight overlaps before persisting a SaveEntry. Only the save lane
   /// anchored to [anchorLaneId] is checked — voicings for different harmony
@@ -925,7 +932,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     int spanBars, {
     String? anchorLaneId,
   }) {
-    final lane = _saveLaneForAnchor(section, anchorLaneId);
+    final lane = _saveLaneForAnchor(
+      section,
+      _explicitSaveAnchorLaneId(section, anchorLaneId),
+    );
     if (lane == null) return true;
     final endBar = startBar + spanBars;
     for (final b in lane.blocks) {
@@ -964,6 +974,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (harmonyBlock != null) break;
     }
     if (harmonyBlock == null) return;
+    final anchorLaneId = _explicitSaveAnchorLaneId(section, harmonyLaneId);
 
     // Preflight: if the candidate block would overlap the destination save
     // lane, abort BEFORE creating the SaveEntry. addSaveBlock silently
@@ -972,7 +983,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       section,
       harmonyBlock.startBar,
       harmonyBlock.spanBars,
-      anchorLaneId: harmonyLaneId,
+      anchorLaneId: anchorLaneId,
     )) {
       return;
     }
@@ -996,10 +1007,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
     if (saveId == null) return;
 
-    final laneId = _findOrCreateSaveLane(
-      sectionId,
-      anchorLaneId: harmonyLaneId,
-    );
+    final laneId = _findOrCreateSaveLane(sectionId, anchorLaneId: anchorLaneId);
     if (laneId == null) return;
 
     addSaveBlock(
@@ -1041,12 +1049,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (harmonyBlock != null) break;
     }
     if (harmonyBlock == null) return;
+    final anchorLaneId = _explicitSaveAnchorLaneId(section, harmonyLaneId);
 
     if (!_canPlaceSaveBlockInSection(
       section,
       harmonyBlock.startBar,
       harmonyBlock.spanBars,
-      anchorLaneId: harmonyLaneId,
+      anchorLaneId: anchorLaneId,
     )) {
       return;
     }
@@ -1071,10 +1080,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
     if (saveId == null) return;
 
-    final laneId = _findOrCreateSaveLane(
-      sectionId,
-      anchorLaneId: harmonyLaneId,
-    );
+    final laneId = _findOrCreateSaveLane(sectionId, anchorLaneId: anchorLaneId);
     if (laneId == null) return;
 
     addSaveBlock(
@@ -1112,11 +1118,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (harmonyBlock != null) break;
     }
     if (harmonyBlock == null) return;
+    final anchorLaneId = _explicitSaveAnchorLaneId(section, harmonyLaneId);
 
-    final laneId = _findOrCreateSaveLane(
-      sectionId,
-      anchorLaneId: harmonyLaneId,
-    );
+    final laneId = _findOrCreateSaveLane(sectionId, anchorLaneId: anchorLaneId);
     if (laneId == null) return;
 
     addSaveBlock(
@@ -1141,15 +1145,22 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }) {
     final section = state.sections.where((s) => s.id == sectionId).firstOrNull;
     if (section == null) return;
+    final explicitAnchorLaneId = _explicitSaveAnchorLaneId(
+      section,
+      anchorLaneId,
+    );
     if (!_canPlaceSaveBlockInSection(
       section,
       startBar,
       spanBars,
-      anchorLaneId: anchorLaneId,
+      anchorLaneId: explicitAnchorLaneId,
     )) {
       return;
     }
-    final laneId = _findOrCreateSaveLane(sectionId, anchorLaneId: anchorLaneId);
+    final laneId = _findOrCreateSaveLane(
+      sectionId,
+      anchorLaneId: explicitAnchorLaneId,
+    );
     if (laneId == null) return;
     addSaveBlock(
       sectionId: sectionId,
@@ -1206,14 +1217,30 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       orElse: () => const SongSection(id: '', lengthBars: 0, order: 0),
     );
     if (section.id.isEmpty) return null;
-    final existing = _saveLaneForAnchor(section, anchorLaneId);
-    if (existing != null) return existing.id;
+    final explicitAnchorLaneId = _explicitSaveAnchorLaneId(
+      section,
+      anchorLaneId,
+    );
+    final existing = _saveLaneForAnchor(section, explicitAnchorLaneId);
+    if (existing != null) {
+      final primaryLaneId = primaryHarmonyLane(section)?.id;
+      if (explicitAnchorLaneId == null &&
+          existing.anchorLaneId != null &&
+          existing.anchorLaneId == primaryLaneId) {
+        _replaceLane(
+          sectionId,
+          existing.id,
+          (l) => l.copyWith(clearAnchorLaneId: true),
+        );
+      }
+      return existing.id;
+    }
     final laneId = addLane(sectionId: sectionId, kind: SongLaneKind.save);
-    if (anchorLaneId != null) {
+    if (explicitAnchorLaneId != null) {
       _replaceLane(
         sectionId,
         laneId,
-        (l) => l.copyWith(anchorLaneId: anchorLaneId),
+        (l) => l.copyWith(anchorLaneId: explicitAnchorLaneId),
       );
     }
     return laneId;

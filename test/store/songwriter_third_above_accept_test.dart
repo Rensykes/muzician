@@ -20,14 +20,16 @@ void main() {
     final c = ProviderContainer();
     addTearDown(c.dispose);
     final saveSystem = c.read(saveSystemProvider.notifier);
-    final projectId =
-        saveSystem.createProject('Untitled song', const ProjectConfig())!;
+    final projectId = saveSystem.createProject(
+      'Untitled song',
+      const ProjectConfig(),
+    )!;
     saveSystem.selectProject(projectId);
     return c;
   }
 
   ({String sectionId, String harmonyLaneId, String harmonyBlockId})
-      seedSongWithHarmonyBlock(ProviderContainer c) {
+  seedSongWithHarmonyBlock(ProviderContainer c) {
     final n = c.read(songwriterProvider.notifier);
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
@@ -37,28 +39,35 @@ void main() {
       sectionId: s,
       laneId: l,
       block: const SongBlock(
-        id: 'hb1', startBar: 0, spanBars: 2,
-        chordSymbol: 'C', chordQuality: '', chordRootPc: 0,
-        chordNotes: ['C', 'E', 'G'], romanNumeral: 'I',
+        id: 'hb1',
+        startBar: 0,
+        spanBars: 2,
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
+        chordNotes: ['C', 'E', 'G'],
+        romanNumeral: 'I',
       ),
     );
     return (sectionId: s, harmonyLaneId: l, harmonyBlockId: 'hb1');
   }
 
   ThirdAboveSuggestion freshSuggestion() => suggestThirdAbove(
-        chordRootPc: 0,
-        chordQuality: '',
-        chordTonePcs: const [0, 4, 7],
-        keyRootPc: 0,
-        keyScaleName: 'major',
-      )!;
+    chordRootPc: 0,
+    chordQuality: '',
+    chordTonePcs: const [0, 4, 7],
+    keyRootPc: 0,
+    keyScaleName: 'major',
+  )!;
 
   test('accept creates SaveEntry in auto-created "Untitled song" '
       'folder + save lane + block', () async {
     final c = freshContainer();
     final ids = seedSongWithHarmonyBlock(c);
 
-    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
+    await c
+        .read(songwriterProvider.notifier)
+        .acceptThirdAboveSuggestion(
           sectionId: ids.sectionId,
           harmonyBlockId: ids.harmonyBlockId,
           suggestion: freshSuggestion(),
@@ -83,6 +92,7 @@ void main() {
     final saveLane = section.lanes.firstWhere(
       (l) => l.kind == SongLaneKind.save,
     );
+    expect(saveLane.anchorLaneId, isNull);
     final block = saveLane.blocks.single;
     expect(block.saveId, newSave.id);
     expect(block.startBar, 0);
@@ -93,7 +103,9 @@ void main() {
     final c = freshContainer();
     final ids = seedSongWithHarmonyBlock(c);
 
-    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
+    await c
+        .read(songwriterProvider.notifier)
+        .acceptThirdAboveSuggestion(
           sectionId: ids.sectionId,
           harmonyBlockId: ids.harmonyBlockId,
           suggestion: freshSuggestion(),
@@ -114,14 +126,18 @@ void main() {
         .lanes
         .firstWhere((l) => l.kind == SongLaneKind.save)
         .id;
-    c.read(songwriterProvider.notifier).setBlockPlacement(
+    c
+        .read(songwriterProvider.notifier)
+        .setBlockPlacement(
           sectionId: ids.sectionId,
           laneId: saveLaneId,
           blockId: firstBlockId,
           startBar: 4,
           spanBars: 2,
         );
-    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
+    await c
+        .read(songwriterProvider.notifier)
+        .acceptThirdAboveSuggestion(
           sectionId: ids.sectionId,
           harmonyBlockId: ids.harmonyBlockId,
           suggestion: freshSuggestion(),
@@ -137,102 +153,124 @@ void main() {
         .read(songwriterProvider)
         .sections
         .firstWhere((s) => s.id == ids.sectionId);
-    final saveLanes =
-        section.lanes.where((l) => l.kind == SongLaneKind.save).toList();
+    final saveLanes = section.lanes
+        .where((l) => l.kind == SongLaneKind.save)
+        .toList();
     expect(saveLanes.length, 1, reason: 'save lane must be reused');
     expect(saveLanes.single.blocks.length, 2);
   });
 
-  test('voicing accept + 3rd-above accept both land in the project folder',
-      () async {
-    final c = freshContainer();
-    final ids = seedSongWithHarmonyBlock(c);
+  test(
+    'voicing accept + 3rd-above accept both land in the project folder',
+    () async {
+      final c = freshContainer();
+      final ids = seedSongWithHarmonyBlock(c);
 
-    await c.read(songwriterProvider.notifier).acceptVoicingSuggestion(
-          sectionId: ids.sectionId,
-          harmonyBlockId: ids.harmonyBlockId,
-          suggestion: firstVoicingForC(),
-        );
-    final saveLaneId = c
-        .read(songwriterProvider)
-        .sections
-        .firstWhere((s) => s.id == ids.sectionId)
-        .lanes
-        .firstWhere((l) => l.kind == SongLaneKind.save)
-        .id;
-    final firstBlockId = c
-        .read(songwriterProvider)
-        .sections
-        .firstWhere((s) => s.id == ids.sectionId)
-        .lanes
-        .firstWhere((l) => l.kind == SongLaneKind.save)
-        .blocks
-        .single
-        .id;
-    c.read(songwriterProvider.notifier).setBlockPlacement(
-          sectionId: ids.sectionId,
-          laneId: saveLaneId,
-          blockId: firstBlockId,
-          startBar: 4,
-          spanBars: 2,
-        );
-    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
-          sectionId: ids.sectionId,
-          harmonyBlockId: ids.harmonyBlockId,
-          suggestion: freshSuggestion(),
-        );
+      await c
+          .read(songwriterProvider.notifier)
+          .acceptVoicingSuggestion(
+            sectionId: ids.sectionId,
+            harmonyBlockId: ids.harmonyBlockId,
+            suggestion: firstVoicingForC(),
+          );
+      final saveLaneId = c
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == ids.sectionId)
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.save)
+          .id;
+      final firstBlockId = c
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == ids.sectionId)
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.save)
+          .blocks
+          .single
+          .id;
+      c
+          .read(songwriterProvider.notifier)
+          .setBlockPlacement(
+            sectionId: ids.sectionId,
+            laneId: saveLaneId,
+            blockId: firstBlockId,
+            startBar: 4,
+            spanBars: 2,
+          );
+      await c
+          .read(songwriterProvider.notifier)
+          .acceptThirdAboveSuggestion(
+            sectionId: ids.sectionId,
+            harmonyBlockId: ids.harmonyBlockId,
+            suggestion: freshSuggestion(),
+          );
 
-    final folders = c
-        .read(saveSystemProvider)
-        .folders
-        .where((f) => f.name == 'Untitled song')
-        .toList();
-    expect(folders.length, 1, reason: 'project folder must be a single folder');
-    final saveCount = c
-        .read(saveSystemProvider)
-        .saves
-        .where((s) => s.folderId == folders.single.id)
-        .length;
-    expect(saveCount, 2, reason: 'one voicing + one 3rd-above in the folder');
-  });
+      final folders = c
+          .read(saveSystemProvider)
+          .folders
+          .where((f) => f.name == 'Untitled song')
+          .toList();
+      expect(
+        folders.length,
+        1,
+        reason: 'project folder must be a single folder',
+      );
+      final saveCount = c
+          .read(saveSystemProvider)
+          .saves
+          .where((s) => s.folderId == folders.single.id)
+          .length;
+      expect(saveCount, 2, reason: 'one voicing + one 3rd-above in the folder');
+    },
+  );
 
-  test('overlap preflight: bailing out does NOT create an orphan SaveEntry',
-      () async {
-    final c = freshContainer();
-    final ids = seedSongWithHarmonyBlock(c);
+  test(
+    'overlap preflight: bailing out does NOT create an orphan SaveEntry',
+    () async {
+      final c = freshContainer();
+      final ids = seedSongWithHarmonyBlock(c);
 
-    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
-          sectionId: ids.sectionId,
-          harmonyBlockId: ids.harmonyBlockId,
-          suggestion: freshSuggestion(),
-        );
+      await c
+          .read(songwriterProvider.notifier)
+          .acceptThirdAboveSuggestion(
+            sectionId: ids.sectionId,
+            harmonyBlockId: ids.harmonyBlockId,
+            suggestion: freshSuggestion(),
+          );
 
-    final savesBefore = c.read(saveSystemProvider).saves.length;
-    final blocksBefore = c
-        .read(songwriterProvider)
-        .sections
-        .firstWhere((s) => s.id == ids.sectionId)
-        .lanes
-        .firstWhere((l) => l.kind == SongLaneKind.save)
-        .blocks
-        .length;
+      final savesBefore = c.read(saveSystemProvider).saves.length;
+      final blocksBefore = c
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == ids.sectionId)
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.save)
+          .blocks
+          .length;
 
-    await c.read(songwriterProvider.notifier).acceptThirdAboveSuggestion(
-          sectionId: ids.sectionId,
-          harmonyBlockId: ids.harmonyBlockId,
-          suggestion: freshSuggestion(),
-        );
+      await c
+          .read(songwriterProvider.notifier)
+          .acceptThirdAboveSuggestion(
+            sectionId: ids.sectionId,
+            harmonyBlockId: ids.harmonyBlockId,
+            suggestion: freshSuggestion(),
+          );
 
-    expect(c.read(saveSystemProvider).saves.length, savesBefore,
-        reason: 'no orphan SaveEntry on overlap');
-    final blocksAfter = c
-        .read(songwriterProvider)
-        .sections
-        .firstWhere((s) => s.id == ids.sectionId)
-        .lanes
-        .firstWhere((l) => l.kind == SongLaneKind.save)
-        .blocks
-        .length;
-    expect(blocksAfter, blocksBefore, reason: 'no new block on overlap');
-  });
+      expect(
+        c.read(saveSystemProvider).saves.length,
+        savesBefore,
+        reason: 'no orphan SaveEntry on overlap',
+      );
+      final blocksAfter = c
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == ids.sectionId)
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.save)
+          .blocks
+          .length;
+      expect(blocksAfter, blocksBefore, reason: 'no new block on overlap');
+    },
+  );
 }
