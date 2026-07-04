@@ -224,11 +224,14 @@ class _SectionSheet extends ConsumerWidget {
     final notifier = ref.read(songwriterProvider.notifier);
     final config = ref.watch(songwriterProvider.select((p) => p.config));
 
-    final harmonyLane = section.lanes.firstWhere(
-      (l) => l.kind == SongLaneKind.harmony,
-      orElse: () =>
-          const SongLane(id: '', kind: SongLaneKind.harmony, order: 0),
-    );
+    var harmonyLanes = section.lanes
+        .where((l) => l.kind == SongLaneKind.harmony)
+        .toList();
+    if (harmonyLanes.isEmpty) {
+      // Placeholder so the empty bar grid still renders; the first chord tap
+      // creates the real lane via onEnsureLane.
+      harmonyLanes = const [SongLane(id: '', kind: SongLaneKind.harmony, order: 0)];
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +244,7 @@ class _SectionSheet extends ConsumerWidget {
             child: _SectionInstance(
               key: Key('sectionInstance_${section.id}_$i'),
               section: section,
-              harmonyLane: harmonyLane,
+              harmonyLanes: harmonyLanes,
               instanceIndex: i,
               keyRoot: config.keyRoot,
               keyScaleName: config.keyScaleName,
@@ -263,7 +266,7 @@ class _SectionInstance extends ConsumerWidget {
   const _SectionInstance({
     super.key,
     required this.section,
-    required this.harmonyLane,
+    required this.harmonyLanes,
     required this.instanceIndex,
     required this.keyRoot,
     required this.keyScaleName,
@@ -271,7 +274,7 @@ class _SectionInstance extends ConsumerWidget {
   });
 
   final SongSection section;
-  final SongLane harmonyLane;
+  final List<SongLane> harmonyLanes;
   final int instanceIndex;
   final int? keyRoot;
   final String? keyScaleName;
@@ -313,14 +316,28 @@ class _SectionInstance extends ConsumerWidget {
           ),
         SongwriterSectionRuler(section: section, instanceIndex: instanceIndex),
         const SizedBox(height: 6),
-        _BarRow(
-          section: section,
-          lane: harmonyLane,
-          instanceIndex: instanceIndex,
-          keyRoot: keyRoot,
-          keyScaleName: keyScaleName,
-          onEnsureLane: onEnsureLane,
-        ),
+        for (var li = 0; li < harmonyLanes.length; li++) ...[
+          if (harmonyLanes.length > 1)
+            _HarmonyLaneHeader(
+              section: section,
+              lane: harmonyLanes[li],
+              laneIndex: li,
+            ),
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: li == harmonyLanes.length - 1 ? 0 : 8,
+            ),
+            child: _BarRow(
+              section: section,
+              lane: harmonyLanes[li],
+              instanceIndex: instanceIndex,
+              keyRoot: keyRoot,
+              keyScaleName: keyScaleName,
+              onEnsureLane: onEnsureLane,
+              isPrimary: li == 0,
+            ),
+          ),
+        ],
         // Drum lanes (one strip per drum lane on this section).
         for (final lane in section.lanes.where(
           (l) => l.kind == SongLaneKind.drum,
@@ -626,6 +643,24 @@ class _SectionHeading extends ConsumerWidget {
                 color: MuzicianTheme.textPrimary,
               ),
               onSelected: (value) async {
+                if (value == 'addHarmonyLane') {
+                  final harmonyCount = ref
+                      .read(songwriterProvider)
+                      .sections
+                      .firstWhere((s) => s.id == section.id)
+                      .lanes
+                      .where((l) => l.kind == SongLaneKind.harmony)
+                      .length;
+                  ref
+                      .read(songwriterProvider.notifier)
+                      .addLane(
+                        sectionId: section.id,
+                        kind: SongLaneKind.harmony,
+                        label: harmonyCount == 0
+                            ? 'Harmony'
+                            : 'Harmony ${harmonyCount + 1}',
+                      );
+                }
                 if (value == 'addDrumLane') {
                   ref
                       .read(songwriterProvider.notifier)
@@ -665,6 +700,15 @@ class _SectionHeading extends ConsumerWidget {
                 }
               },
               itemBuilder: (_) => const [
+                PopupMenuItem(
+                  key: Key('addHarmonyLaneSheetAction'),
+                  value: 'addHarmonyLane',
+                  child: ListTile(
+                    leading: Icon(Icons.piano),
+                    title: Text('Add harmony lane'),
+                    dense: true,
+                  ),
+                ),
                 PopupMenuItem(
                   key: Key('addDrumLaneSheetAction'),
                   value: 'addDrumLane',
@@ -811,6 +855,82 @@ Future<void> showBarActionSheet({
   );
 }
 
+/// Label row above a harmony lane's bar grid, shown only when the section has
+/// more than one harmony lane. Secondary lanes get a delete action.
+class _HarmonyLaneHeader extends ConsumerWidget {
+  const _HarmonyLaneHeader({
+    required this.section,
+    required this.lane,
+    required this.laneIndex,
+  });
+  final SongSection section;
+  final SongLane lane;
+  final int laneIndex;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final label = lane.label ?? 'Harmony ${laneIndex + 1}';
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 2),
+      child: Row(
+        children: [
+          const Icon(Icons.piano, size: 12, color: MuzicianTheme.textMuted),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: MuzicianTheme.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const Spacer(),
+          if (lane.id.isNotEmpty)
+            IconButton(
+              key: Key('deleteHarmonyLane_${lane.id}'),
+              visualDensity: VisualDensity.compact,
+              iconSize: 15,
+              icon: const Icon(
+                Icons.delete_outline,
+                color: MuzicianTheme.textMuted,
+              ),
+              onPressed: () => _confirmDelete(context, ref, label),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref, String label) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: MuzicianTheme.surface,
+        title: Text('Delete $label?'),
+        content: const Text('The chords in this lane are removed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirmDeleteHarmonyLane'),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              HapticFeedback.mediumImpact();
+              ref
+                  .read(songwriterProvider.notifier)
+                  .removeLane(sectionId: section.id, laneId: lane.id);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BarRow extends ConsumerWidget {
   const _BarRow({
     required this.section,
@@ -819,6 +939,7 @@ class _BarRow extends ConsumerWidget {
     required this.keyRoot,
     required this.keyScaleName,
     required this.onEnsureLane,
+    this.isPrimary = true,
   });
   final SongSection section;
   final SongLane lane;
@@ -826,6 +947,11 @@ class _BarRow extends ConsumerWidget {
   final int? keyRoot;
   final String? keyScaleName;
   final VoidCallback onEnsureLane;
+
+  /// True for the section's first harmony lane. Lyric affordances and inline
+  /// save badges render only on the primary lane; extra harmony lanes are
+  /// pure chord layers.
+  final bool isPrimary;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -858,11 +984,14 @@ class _BarRow extends ConsumerWidget {
     }
     // Save-lane blocks are surfaced inline on the bar grid: as a badge over the
     // chord that shares the bar, or as a standalone save cell on an empty bar.
+    // Only on the primary harmony lane — extra lanes would duplicate them.
     final saveBySpan = <int, SongBlock>{};
-    for (final l in section.lanes.where((l) => l.kind == SongLaneKind.save)) {
-      for (final b in l.blocks) {
-        for (var i = b.startBar; i < b.endBar; i++) {
-          saveBySpan[i] = b;
+    if (isPrimary) {
+      for (final l in section.lanes.where((l) => l.kind == SongLaneKind.save)) {
+        for (final b in l.blocks) {
+          for (var i = b.startBar; i < b.endBar; i++) {
+            saveBySpan[i] = b;
+          }
         }
       }
     }
@@ -1024,6 +1153,7 @@ class _BarRow extends ConsumerWidget {
       keyScaleName: keyScaleName,
       instanceIndex: instanceIndex,
       currentLyric: '',
+      showLyrics: isPrimary,
       onPickFromLibrary: () => _pickFromLibrary(context, ref, bar),
     );
     if (block == null) return;
@@ -1056,7 +1186,7 @@ class _BarRow extends ConsumerWidget {
           .blocks
           .lastWhere((b) => b.startBar == bar)
           .id;
-      if (block.lyrics.isNotEmpty) {
+      if (isPrimary && block.lyrics.isNotEmpty) {
         ref
             .read(songwriterProvider.notifier)
             .setBlockLyric(
@@ -1071,7 +1201,7 @@ class _BarRow extends ConsumerWidget {
       ref
           .read(songwriterProvider.notifier)
           .addHarmonyBlock(sectionId: section.id, laneId: laneId, block: block);
-      if (block.lyrics.isNotEmpty) {
+      if (isPrimary && block.lyrics.isNotEmpty) {
         ref
             .read(songwriterProvider.notifier)
             .setBlockLyric(
@@ -1122,12 +1252,13 @@ class _BarRow extends ConsumerWidget {
             icon: Icons.library_music,
             onTap: () => _openHarmonyTools(context, ref, block),
           ),
-        BarAction(
-          key: const Key('barActionLyrics'),
-          label: 'Lyrics — Verse ${instanceIndex + 1}',
-          icon: Icons.lyrics_outlined,
-          onTap: () => _editVerseLyric(context, ref, block),
-        ),
+        if (isPrimary)
+          BarAction(
+            key: const Key('barActionLyrics'),
+            label: 'Lyrics — Verse ${instanceIndex + 1}',
+            icon: Icons.lyrics_outlined,
+            onTap: () => _editVerseLyric(context, ref, block),
+          ),
         if (save != null)
           BarAction(
             key: const Key('barActionRemoveSave'),
@@ -1259,19 +1390,22 @@ class _BarRow extends ConsumerWidget {
       existing: block,
       instanceIndex: instanceIndex,
       currentLyric: currentLyric,
+      showLyrics: isPrimary,
     );
     if (next == null) return;
     HapticFeedback.selectionClick();
-    // Write the lyric for this instance.
-    ref
-        .read(songwriterProvider.notifier)
-        .setBlockLyric(
-          sectionId: section.id,
-          laneId: lane.id,
-          blockId: block.id,
-          verseIndex: instanceIndex,
-          text: next.lyrics.isNotEmpty ? next.lyrics.first : null,
-        );
+    // Write the lyric for this instance (primary lane only).
+    if (isPrimary) {
+      ref
+          .read(songwriterProvider.notifier)
+          .setBlockLyric(
+            sectionId: section.id,
+            laneId: lane.id,
+            blockId: block.id,
+            verseIndex: instanceIndex,
+            text: next.lyrics.isNotEmpty ? next.lyrics.first : null,
+          );
+    }
     // If chord state changed (non-silent), replace the block.
     if (!next.isSilent) {
       final n = ref.read(songwriterProvider.notifier);
