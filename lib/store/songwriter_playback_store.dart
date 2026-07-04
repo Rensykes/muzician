@@ -29,21 +29,16 @@ final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((
   };
 });
 
-/// Sink that sounds chord / voicing stabs, one mix group per lane
-/// (volume, pan) bucket. Override in tests.
+/// Sink that sounds one chord / voicing stab at a lane mix bucket's [volume]
+/// (0.0–1.0 lane gain, applied on top of the sink's own base level) and
+/// [pan]. Mirrors [DrumPatternPlaybackSink]'s shape. Override in tests.
 typedef SongwriterNoteSink =
-    void Function(List<SongwriterNoteGroup> noteGroups);
+    void Function(List<int> midiNotes, double volume, double pan);
 
 final songwriterNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
-  return (noteGroups) {
-    for (final group in noteGroups) {
-      for (final midi in group.midiNotes) {
-        NotePlayer.instance.previewNote(
-          midi,
-          volume: 0.6 * group.volume,
-          pan: group.pan,
-        );
-      }
+  return (midiNotes, volume, pan) {
+    for (final midi in midiNotes) {
+      NotePlayer.instance.previewNote(midi, volume: 0.6 * volume, pan: pan);
     }
   };
 });
@@ -200,7 +195,9 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       while (eventIndex < events.length && events[eventIndex].tick == tick) {
         final event = events[eventIndex];
         eventIndex++;
-        if (event.noteGroups.isNotEmpty) noteSink(event.noteGroups);
+        for (final group in event.noteGroups) {
+          noteSink(group.midiNotes, group.volume, group.pan);
+        }
         for (final group in event.drumGroups) {
           unawaited(
             drumSink(group.drumLanes, 0.8 * group.volume, group.pan),

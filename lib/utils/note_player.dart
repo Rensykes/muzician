@@ -244,6 +244,10 @@ class NotePlayer {
   static final NotePlayer instance = NotePlayer._();
 
   final List<AudioPlayer> _pool = [];
+
+  /// Last balance set on each pool player (see [_applyBalance]). Players
+  /// start centered, so an absent entry means 0.0 has effectively been set.
+  final Map<AudioPlayer, double> _balanceByPlayer = {};
   int _poolIndex = 0;
 
   // Bytes cache — used by BytesSource on all non-iOS platforms.
@@ -318,11 +322,21 @@ class NotePlayer {
     }
   }
 
+  /// Applies [pan] to a pool [player] only when it differs from the last
+  /// value set — skips the platform-channel round trip in the common
+  /// unpanned case (and lets clicks recenter for free).
+  Future<void> _applyBalance(AudioPlayer player, double pan) async {
+    final clamped = pan.clamp(-1.0, 1.0);
+    if ((_balanceByPlayer[player] ?? 0.0) == clamped) return;
+    _balanceByPlayer[player] = clamped;
+    await player.setBalance(clamped);
+  }
+
   Future<void> _playDrum(DrumLaneId lane, double volume, double pan) async {
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
     await player.setVolume(volume.clamp(0.0, 1.0));
-    await player.setBalance(pan.clamp(-1.0, 1.0));
+    await _applyBalance(player, pan);
     final cacheKey = _drumCacheKey(lane);
     if (_needsFile) {
       final path = await _ensureFile(cacheKey, () => _renderDrum(lane));
@@ -368,7 +382,7 @@ class NotePlayer {
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
     await player.setVolume(volume.clamp(0.0, 1.0));
-    await player.setBalance(pan.clamp(-1.0, 1.0));
+    await _applyBalance(player, pan);
     if (_needsFile) {
       final path = await _ensureFile(midi, () => _renderNote(midi));
       await player.play(DeviceFileSource(path));
@@ -383,7 +397,7 @@ class NotePlayer {
     _poolIndex++;
     await player.setVolume(volume.clamp(0.0, 1.0));
     // Pool players are shared with panned notes/drums — recenter for clicks.
-    await player.setBalance(0.0);
+    await _applyBalance(player, 0.0);
     final cacheKey = accent ? -1 : -2;
     if (_needsFile) {
       final path = await _ensureFile(

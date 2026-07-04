@@ -319,20 +319,40 @@ int flattenedBarCount(List<SongSection> sections) {
   return total;
 }
 
-/// Natural pattern length of a lane = the max block end bar (0 if empty).
+/// The section's first harmony lane (the "primary" lane: it carries the
+/// lyrics, the inline save badges, and governs save-lane mixing), or null.
+SongLane? primaryHarmonyLane(SongSection section) {
+  for (final l in section.lanes) {
+    if (l.kind == SongLaneKind.harmony) return l;
+  }
+  return null;
+}
+
 /// The lane whose mix settings (volume / pan / muted) govern [lane] during
-/// playback and export. Save lanes follow the section's first harmony lane —
-/// their blocks render as badges on that lane and sound as part of it — so
+/// playback and export. Save lanes follow the section's primary harmony lane
+/// — their blocks render as badges on that lane and sound as part of it — so
 /// they have no mix of their own. Every other lane governs itself, as does a
 /// save lane in a section with no harmony lane.
 SongLane mixGoverningLane(SongSection section, SongLane lane) {
   if (lane.kind != SongLaneKind.save) return lane;
-  for (final l in section.lanes) {
-    if (l.kind == SongLaneKind.harmony) return l;
-  }
-  return lane;
+  return primaryHarmonyLane(section) ?? lane;
 }
 
+/// Display fallback for the [index]-th harmony lane of a section when it has
+/// no user label: "Harmony", then "Harmony 2", "Harmony 3", … Shared by the
+/// lane headers, the add-lane action, and the Song export.
+String harmonyLaneFallbackLabel(int index) =>
+    index == 0 ? 'Harmony' : 'Harmony ${index + 1}';
+
+/// Display fallback for an unlabeled lane by kind.
+String laneKindFallbackLabel(SongLaneKind kind) => switch (kind) {
+  SongLaneKind.harmony => 'Harmony',
+  SongLaneKind.save => 'Save',
+  SongLaneKind.drum => 'Beat',
+  SongLaneKind.audio => 'Sample',
+};
+
+/// Natural pattern length of a lane = the max block end bar (0 if empty).
 int laneNaturalLength(SongLane lane) {
   var max = 0;
   for (final b in lane.blocks) {
