@@ -92,12 +92,15 @@ SongProject songFromSongwriter(
     );
   }
 
-  // Collect lanes by kind across all sections (a lane belongs to a section,
-  // but musically the harmony lanes form one voice).
-  final harmonyTrackId = nextId('trk');
-  var harmonyUsed = false;
+  // Collect lanes by kind across all sections. A lane belongs to a section,
+  // but musically the N-th harmony lane of every section forms one voice —
+  // one Song track per harmony-lane index. Track name/volume come from the
+  // first section seen with a lane at that index.
+  final harmonyTrackByIndex = <int, SongTrack>{};
   final drumTrackIdByLane = <String, String>{};
   final saveTrackIdByLane = <String, String>{};
+
+  double laneTrackVolume(SongLane lane) => lane.muted ? 0.0 : lane.volume;
 
   void placeClip({
     required String trackId,
@@ -124,6 +127,9 @@ SongProject songFromSongwriter(
   for (final exp in expanded) {
     final section = sectionById[exp.sectionId];
     if (section == null) continue;
+    final harmonyLanes = section.lanes
+        .where((l) => l.kind == SongLaneKind.harmony)
+        .toList();
     for (final lane in section.lanes) {
       final placements = tileLaneBlocks(
         lane,
@@ -144,7 +150,19 @@ SongProject songFromSongwriter(
           case SongLaneKind.harmony:
             final midiNotes = chordMidiNotes(block);
             if (midiNotes.isEmpty) break;
-            harmonyUsed = true;
+            final hIdx = harmonyLanes.indexOf(lane);
+            final track = harmonyTrackByIndex.putIfAbsent(
+              hIdx,
+              () => SongTrack(
+                id: nextId('trk'),
+                name:
+                    lane.label ??
+                    (hIdx == 0 ? 'Harmony' : 'Harmony ${hIdx + 1}'),
+                type: SongTrackType.note,
+                order: 0, // re-numbered below
+                volume: laneTrackVolume(lane),
+              ),
+            );
             final patternId = patternByBlockId.putIfAbsent(block.id, () {
               final id = nextId('np');
               notePatterns.add(
@@ -158,7 +176,7 @@ SongProject songFromSongwriter(
               return id;
             });
             placeClip(
-              trackId: harmonyTrackId,
+              trackId: track.id,
               patternId: patternId,
               type: SongPatternType.note,
               startTick: startTick,
@@ -176,6 +194,7 @@ SongProject songFromSongwriter(
                   name: lane.label ?? 'Save lane',
                   type: SongTrackType.note,
                   order: 0, // re-numbered below
+                  volume: laneTrackVolume(lane),
                 ),
               );
               return id;
@@ -211,6 +230,7 @@ SongProject songFromSongwriter(
                   name: lane.label ?? 'Drums',
                   type: SongTrackType.drum,
                   order: 0,
+                  volume: laneTrackVolume(lane),
                 ),
               );
               return id;
@@ -229,17 +249,10 @@ SongProject songFromSongwriter(
     }
   }
 
-  if (harmonyUsed) {
-    tracks.insert(
-      0,
-      SongTrack(
-        id: harmonyTrackId,
-        name: 'Harmony',
-        type: SongTrackType.note,
-        order: 0,
-      ),
-    );
-  }
+  final harmonyIndexes = harmonyTrackByIndex.keys.toList()..sort();
+  tracks.insertAll(0, [
+    for (final i in harmonyIndexes) harmonyTrackByIndex[i]!,
+  ]);
   final orderedTracks = [
     for (var i = 0; i < tracks.length; i++) tracks[i].copyWith(order: i),
   ];
