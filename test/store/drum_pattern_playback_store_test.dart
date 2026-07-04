@@ -16,6 +16,7 @@ void main() {
           drumPatternPlaybackSinkProvider.overrideWithValue((
             lanes,
             volume,
+            pan,
           ) async {
             events.add((lanes: lanes, volume: volume));
           }),
@@ -94,6 +95,7 @@ void main() {
             drumPatternPlaybackSinkProvider.overrideWithValue((
               lanes,
               volume,
+              pan,
             ) async {
               hits++;
               if (hits >= 5) {
@@ -157,7 +159,7 @@ void main() {
       final backing = <List<int>>[];
       final c = ProviderContainer(
         overrides: [
-          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol) async {}),
+          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol, pan) async {}),
           drumPatternBackingSinkProvider.overrideWithValue((notes) {
             backing.add(notes);
           }),
@@ -195,7 +197,7 @@ void main() {
       final backing = <List<int>>[];
       final c = ProviderContainer(
         overrides: [
-          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol) async {}),
+          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol, pan) async {}),
           drumPatternBackingSinkProvider.overrideWithValue((notes) {
             backing.add(notes);
           }),
