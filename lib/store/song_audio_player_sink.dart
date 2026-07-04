@@ -39,6 +39,10 @@ class AudioPlayersClipSink implements SongAudioClipSink {
   final SongAudioRepository repository;
   final Map<String, AudioPlayer> _players = {};
 
+  /// Last balance set per asset player — players start centered, so skip the
+  /// platform call while the value is unchanged (0.0 for unpanned lanes).
+  final Map<String, double> _balanceByAsset = {};
+
   @override
   Future<void> prepare(Iterable<AudioAsset> assets) async {
     for (final asset in assets) {
@@ -79,7 +83,11 @@ class AudioPlayersClipSink implements SongAudioClipSink {
     }
     await player.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.stop);
     await player.setVolume(volume.clamp(0.0, 1.0));
-    await player.setBalance(balance.clamp(-1.0, 1.0));
+    final clampedBalance = balance.clamp(-1.0, 1.0);
+    if ((_balanceByAsset[asset.id] ?? 0.0) != clampedBalance) {
+      _balanceByAsset[asset.id] = clampedBalance;
+      await player.setBalance(clampedBalance);
+    }
     await player.seek(Duration(milliseconds: offsetMs));
     await player.resume();
   }

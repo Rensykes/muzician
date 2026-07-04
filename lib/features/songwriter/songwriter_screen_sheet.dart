@@ -646,8 +646,11 @@ class _SectionHeading extends ConsumerWidget {
                 size: 18,
                 color: MuzicianTheme.textPrimary,
               ),
-              onPressed: () =>
-                  showSongwriterMixerSheet(context, sectionId: section.id),
+              onPressed: () => showSongwriterMixerSheet(
+                context,
+                sectionId: section.id,
+                title: 'Mixer — ${section.label ?? 'Section'}',
+              ),
             ),
             PopupMenuButton<String>(
               key: Key('sheetSectionMenu_${section.id}'),
@@ -669,9 +672,7 @@ class _SectionHeading extends ConsumerWidget {
                       .addLane(
                         sectionId: section.id,
                         kind: SongLaneKind.harmony,
-                        label: harmonyCount == 0
-                            ? 'Harmony'
-                            : 'Harmony ${harmonyCount + 1}',
+                        label: harmonyLaneFallbackLabel(harmonyCount),
                       );
                 }
                 if (value == 'addDrumLane') {
@@ -882,7 +883,7 @@ class _HarmonyLaneHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final label = lane.label ?? 'Harmony ${laneIndex + 1}';
+    final label = lane.label ?? harmonyLaneFallbackLabel(laneIndex);
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 2),
       child: Row(
@@ -930,17 +931,21 @@ class _HarmonyLaneHeader extends ConsumerWidget {
   void _confirmDelete(BuildContext context, WidgetRef ref, String label) {
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: MuzicianTheme.surface,
-        title: Text('Delete $label?'),
-        content: const Text('The chords in this lane are removed.'),
+      builder: (dialogContext) => MuzicianDialog(
+        title: 'Delete $label?',
+        content: const Text(
+          'The chords in this lane are removed.',
+          style: TextStyle(color: MuzicianTheme.textSecondary),
+        ),
         actions: [
-          TextButton(
+          MuzicianDialogButton(
+            'Cancel',
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
           ),
-          FilledButton(
+          MuzicianDialogButton(
+            'Delete',
             key: const Key('confirmDeleteHarmonyLane'),
+            emphasis: MuzicianDialogEmphasis.destructive,
             onPressed: () {
               Navigator.of(dialogContext).pop();
               HapticFeedback.mediumImpact();
@@ -948,7 +953,6 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                   .read(songwriterProvider.notifier)
                   .removeLane(sectionId: section.id, laneId: lane.id);
             },
-            child: const Text('Delete'),
           ),
         ],
       ),
@@ -1931,7 +1935,7 @@ class _DrumLaneRow extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 4),
               child: Text(
-                lane.label ?? 'Beat',
+                lane.label ?? laneKindFallbackLabel(lane.kind),
                 style: const TextStyle(
                   color: MuzicianTheme.textMuted,
                   fontSize: 11,

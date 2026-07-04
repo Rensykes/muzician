@@ -130,6 +130,9 @@ SongProject songFromSongwriter(
     final harmonyLanes = section.lanes
         .where((l) => l.kind == SongLaneKind.harmony)
         .toList();
+    final harmonyIndexByLaneId = {
+      for (var i = 0; i < harmonyLanes.length; i++) harmonyLanes[i].id: i,
+    };
     for (final lane in section.lanes) {
       final placements = tileLaneBlocks(
         lane,
@@ -150,14 +153,12 @@ SongProject songFromSongwriter(
           case SongLaneKind.harmony:
             final midiNotes = chordMidiNotes(block);
             if (midiNotes.isEmpty) break;
-            final hIdx = harmonyLanes.indexOf(lane);
+            final hIdx = harmonyIndexByLaneId[lane.id]!;
             final track = harmonyTrackByIndex.putIfAbsent(
               hIdx,
               () => SongTrack(
                 id: nextId('trk'),
-                name:
-                    lane.label ??
-                    (hIdx == 0 ? 'Harmony' : 'Harmony ${hIdx + 1}'),
+                name: lane.label ?? harmonyLaneFallbackLabel(hIdx),
                 type: SongTrackType.note,
                 order: 0, // re-numbered below
                 volume: laneTrackVolume(lane),

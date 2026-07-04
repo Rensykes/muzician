@@ -59,13 +59,13 @@ void main() {
   test(
     'startPlayback fires chord and drum sinks with lane volume and pan',
     () async {
-      final chordCalls = <List<SongwriterNoteGroup>>[];
+      final chordCalls = <(List<int>, double, double)>[];
       final drumCalls = <(List<DrumLaneId>, double, double)>[];
 
       final container = ProviderContainer(
         overrides: [
           songwriterNoteSinkProvider.overrideWithValue(
-            (groups) => chordCalls.add(groups),
+            (notes, volume, pan) => chordCalls.add((notes, volume, pan)),
           ),
           drumPatternPlaybackSinkProvider.overrideWithValue(
             (lanes, volume, pan) async => drumCalls.add((lanes, volume, pan)),
@@ -142,10 +142,10 @@ void main() {
           .startPlayback(tickDurationOverride: Duration.zero);
 
       expect(chordCalls, hasLength(1));
-      final group = chordCalls.single.single;
-      expect(group.midiNotes, [60, 64, 67]);
-      expect(group.volume, 0.5);
-      expect(group.pan, -1.0);
+      final (notes, volume, pan) = chordCalls.single;
+      expect(notes, [60, 64, 67]);
+      expect(volume, 0.5);
+      expect(pan, -1.0);
       expect(drumCalls, hasLength(2));
       for (final (lanes, volume, pan) in drumCalls) {
         expect(lanes, [DrumLaneId.kick]);

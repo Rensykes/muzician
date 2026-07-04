@@ -206,9 +206,7 @@ class SongwriterAudioRecorderNotifier
       }
       if (m.backing) {
         final notes = m.bed.notesByTick[tick];
-        if (notes != null && notes.isNotEmpty) {
-        noteSink([(volume: 1.0, pan: 0.0, midiNotes: notes)]);
-      }
+        if (notes != null && notes.isNotEmpty) noteSink(notes, 1.0, 0.0);
         final drums = m.bed.drumByTick[tick];
         if (drums != null && drums.isNotEmpty) unawaited(drumSink(drums, 0.8, 0.0));
         if (m.clips.isNotEmpty) {

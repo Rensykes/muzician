@@ -55,7 +55,7 @@ void main() {
       overrides: [
         songwriterAudioClipSinkProvider.overrideWithValue(sink),
         songwriterNoteSinkProvider.overrideWithValue(
-          (g) => notes.add([for (final x in g) ...x.midiNotes]),
+          (n, v, p) => notes.add(n),
         ),
         drumPatternPlaybackSinkProvider.overrideWithValue(
           (l, v, p) async => drums.add(l),
@@ -161,7 +161,7 @@ void main() {
         overrides: [
           songwriterAudioClipSinkProvider.overrideWithValue(sink),
           songwriterNoteSinkProvider.overrideWithValue(
-            (g) => notes.add([for (final x in g) ...x.midiNotes]),
+            (n, v, p) => notes.add(n),
           ),
           drumPatternPlaybackSinkProvider.overrideWithValue(
             (l, v, p) async => drums.add(l),
