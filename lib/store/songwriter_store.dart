@@ -283,6 +283,32 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     (l) => l.copyWith(repeat: repeat < 1 ? 1 : repeat),
   );
 
+  void setLaneVolume({
+    required String sectionId,
+    required String laneId,
+    required double volume,
+  }) => _replaceLane(
+    sectionId,
+    laneId,
+    (l) => l.copyWith(volume: volume.clamp(0.0, 1.0)),
+  );
+
+  void setLanePan({
+    required String sectionId,
+    required String laneId,
+    required double pan,
+  }) => _replaceLane(
+    sectionId,
+    laneId,
+    (l) => l.copyWith(pan: pan.clamp(-1.0, 1.0)),
+  );
+
+  void setLaneMuted({
+    required String sectionId,
+    required String laneId,
+    required bool muted,
+  }) => _replaceLane(sectionId, laneId, (l) => l.copyWith(muted: muted));
+
   void removeLane({required String sectionId, required String laneId}) =>
       _replaceSection(
         sectionId,
