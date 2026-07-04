@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_playback_rules.dart';
@@ -174,6 +176,95 @@ void main() {
     expect(g.volume, 0.5);
     expect(g.pan, 0.3);
     expect(g.drumLanes, [DrumLaneId.kick]);
+  });
+
+  group('save lanes follow the primary harmony lane mix', () {
+    SongwriterProjectSnapshot project({
+      required List<SongLane> lanes,
+    }) => SongwriterProjectSnapshot(
+      config: cfg,
+      sections: [
+        SongSection(id: 's1', lengthBars: 1, order: 0, lanes: lanes),
+      ],
+    );
+
+    // A save block resolvable without the save system: embedded piano snapshot.
+    SongLane saveLane({double volume = 1.0, double pan = 0.0, bool muted = false}) =>
+        SongLane(
+          id: 'lsave',
+          kind: SongLaneKind.save,
+          order: 1,
+          volume: volume,
+          pan: pan,
+          muted: muted,
+          blocks: [
+            SongBlock(
+              id: 'bs',
+              startBar: 0,
+              spanBars: 1,
+              embedded: PianoSnapshot(
+                currentRange: PianoRangeName.key61,
+                selectedKeys: const [
+                  PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+                ],
+                selectedNotes: const ['C'],
+                viewMode: PianoViewMode.exact,
+              ),
+            ),
+          ],
+        );
+
+    test('save group uses the harmony lane volume/pan, not its own', () {
+      final events = flattenPlaybackEvents(
+        project(
+          lanes: [
+            SongLane(
+              id: 'lh',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              volume: 0.3,
+              pan: -0.6,
+              blocks: [chord('b1')],
+            ),
+            saveLane(volume: 0.9, pan: 0.9),
+          ],
+        ),
+        const [],
+      );
+      // Same mix bucket → one merged group at the harmony lane's settings.
+      final g = events.single.noteGroups.single;
+      expect(g.volume, 0.3);
+      expect(g.pan, -0.6);
+    });
+
+    test('muted harmony lane silences its save blocks too', () {
+      final events = flattenPlaybackEvents(
+        project(
+          lanes: [
+            SongLane(
+              id: 'lh',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              muted: true,
+              blocks: [chord('b1')],
+            ),
+            saveLane(),
+          ],
+        ),
+        const [],
+      );
+      expect(events, isEmpty);
+    });
+
+    test('without a harmony lane the save lane keeps its own mix', () {
+      final events = flattenPlaybackEvents(
+        project(lanes: [saveLane(volume: 0.7, pan: 0.5)]),
+        const [],
+      );
+      final g = events.single.noteGroups.single;
+      expect(g.volume, 0.7);
+      expect(g.pan, 0.5);
+    });
   });
 
   test('sectionHarmonyLoop and sectionAuditionBed skip muted lanes', () {

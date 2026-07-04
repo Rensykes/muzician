@@ -61,6 +61,21 @@ void main() {
     expect(find.text('Beat'), findsOneWidget);
   });
 
+  testWidgets('save lane gets no strip when a harmony lane exists', (
+    tester,
+  ) async {
+    final (container, sectionId, _) = await pumpMixer(tester);
+    // pumpMixer's section already has a harmony lane; add a save lane.
+    container.read(songwriterProvider.notifier).addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.save,
+      label: 'Save lane',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Save lane'), findsNothing);
+    expect(find.text('Harmony'), findsOneWidget);
+  });
+
   testWidgets('volume slider writes lane volume', (tester) async {
     final (container, sectionId, laneIds) = await pumpMixer(tester);
     final slider = find.byKey(Key('mixerVolume_${laneIds.first}'));

@@ -196,8 +196,9 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
     final section = byId[exp.sectionId];
     if (section == null) continue;
     for (final lane in section.lanes) {
-      if (lane.muted) continue;
-      final mixKey = (lane.volume, lane.pan);
+      final mix = mixGoverningLane(section, lane);
+      if (mix.muted) continue;
+      final mixKey = (mix.volume, mix.pan);
       final blocks = tileLaneBlocks(
         lane,
         sectionLengthBars: section.lengthBars,
@@ -265,7 +266,7 @@ Map<int, List<int>> _sectionChordBed(
     if (lane.kind == SongLaneKind.drum || lane.kind == SongLaneKind.audio) {
       continue;
     }
-    if (lane.muted) continue;
+    if (mixGoverningLane(section, lane).muted) continue;
     final blocks = tileLaneBlocks(lane, sectionLengthBars: section.lengthBars);
     for (final block in blocks) {
       final clippedEnd = math.min(block.endBar, section.lengthBars);

@@ -320,6 +320,19 @@ int flattenedBarCount(List<SongSection> sections) {
 }
 
 /// Natural pattern length of a lane = the max block end bar (0 if empty).
+/// The lane whose mix settings (volume / pan / muted) govern [lane] during
+/// playback and export. Save lanes follow the section's first harmony lane —
+/// their blocks render as badges on that lane and sound as part of it — so
+/// they have no mix of their own. Every other lane governs itself, as does a
+/// save lane in a section with no harmony lane.
+SongLane mixGoverningLane(SongSection section, SongLane lane) {
+  if (lane.kind != SongLaneKind.save) return lane;
+  for (final l in section.lanes) {
+    if (l.kind == SongLaneKind.harmony) return l;
+  }
+  return lane;
+}
+
 int laneNaturalLength(SongLane lane) {
   var max = 0;
   for (final b in lane.blocks) {

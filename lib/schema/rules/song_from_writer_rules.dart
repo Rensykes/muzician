@@ -194,7 +194,9 @@ SongProject songFromSongwriter(
                   name: lane.label ?? 'Save lane',
                   type: SongTrackType.note,
                   order: 0, // re-numbered below
-                  volume: laneTrackVolume(lane),
+                  // Save lanes have no mix of their own — they follow the
+                  // section's primary harmony lane (see mixGoverningLane).
+                  volume: laneTrackVolume(mixGoverningLane(section, lane)),
                 ),
               );
               return id;

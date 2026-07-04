@@ -122,8 +122,13 @@ class SongwriterMixerSheet extends ConsumerWidget {
                 ),
               )
             else
+              // Save lanes follow the primary harmony lane's mix (their
+              // blocks render and sound as part of it), so they get no strip
+              // of their own — unless the section has no harmony lane at all.
               for (final lane in section.lanes)
-                _MixerStrip(sectionId: sectionId, lane: lane),
+                if (lane.kind != SongLaneKind.save ||
+                    !section.lanes.any((l) => l.kind == SongLaneKind.harmony))
+                  _MixerStrip(sectionId: sectionId, lane: lane),
           ],
         ),
       ),
