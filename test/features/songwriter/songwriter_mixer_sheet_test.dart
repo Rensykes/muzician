@@ -92,6 +92,29 @@ void main() {
     expect(lane.pan, 0.0);
   });
 
+  testWidgets('tapping the strip label renames the lane', (tester) async {
+    final (container, sectionId, laneIds) = await pumpMixer(tester);
+
+    await tester.tap(find.byKey(Key('mixerRename_${laneIds.first}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('laneRenameField')),
+      'Lead guitar',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final lane = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == laneIds.first);
+    expect(lane.label, 'Lead guitar');
+    // Mixer strip reflects the new name live.
+    expect(find.text('Lead guitar'), findsOneWidget);
+  });
+
   testWidgets('mute toggle flips lane.muted', (tester) async {
     final (container, sectionId, laneIds) = await pumpMixer(tester);
     await tester.tap(find.byKey(Key('mixerMute_${laneIds.last}')));

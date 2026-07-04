@@ -113,6 +113,37 @@ void main() {
     );
   });
 
+  testWidgets('harmony lane header label renames the lane', (tester) async {
+    final container = await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 4);
+        final s = n.state.sections.single.id;
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
+      },
+    );
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .last
+        .id;
+
+    await tester.tap(find.byKey(Key('renameHarmonyLane_$laneId')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('laneRenameField')), 'Double');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      container.read(songwriterProvider).sections.single.lanes.last.label,
+      'Double',
+    );
+    expect(find.text('Double'), findsOneWidget);
+  });
+
   testWidgets('lyric bar action only offered on the primary harmony lane', (
     tester,
   ) async {

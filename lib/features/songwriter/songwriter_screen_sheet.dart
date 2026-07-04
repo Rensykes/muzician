@@ -889,13 +889,25 @@ class _HarmonyLaneHeader extends ConsumerWidget {
         children: [
           const Icon(Icons.piano, size: 12, color: MuzicianTheme.textMuted),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
+          GestureDetector(
+            key: Key('renameHarmonyLane_${lane.id}'),
+            behavior: HitTestBehavior.opaque,
+            onTap: lane.id.isEmpty
+                ? null
+                : () => showLaneRenameDialog(
+                    context,
+                    ref,
+                    sectionId: section.id,
+                    lane: lane,
+                  ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: MuzicianTheme.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
             ),
           ),
           const Spacer(),
