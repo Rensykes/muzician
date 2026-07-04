@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/song_from_writer_rules.dart';
@@ -109,6 +111,117 @@ void main() {
         .toList();
     expect(drumClips, hasLength(2));
     expect(song.drumPatterns, hasLength(1));
+  });
+
+  test('multiple harmony lanes export as per-index tracks with volumes', () {
+    const chord = SongBlock(
+      id: 'b1',
+      startBar: 0,
+      spanBars: 1,
+      chordSymbol: 'C',
+      chordNotes: ['C', 'E', 'G'],
+    );
+    const writer = SongwriterProjectSnapshot(
+      config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+      sections: [
+        SongSection(
+          id: 's1',
+          lengthBars: 1,
+          order: 0,
+          lanes: [
+            SongLane(
+              id: 'l1',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              volume: 0.4,
+              blocks: [chord],
+            ),
+            SongLane(
+              id: 'l2',
+              kind: SongLaneKind.harmony,
+              order: 1,
+              label: 'Double',
+              muted: true,
+              blocks: [
+                SongBlock(
+                  id: 'b2',
+                  startBar: 0,
+                  spanBars: 1,
+                  chordSymbol: 'C',
+                  chordNotes: ['C', 'E', 'G'],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final song = songFromSongwriter(writer, const []);
+    final noteTracks = song.tracks
+        .where((t) => t.type == SongTrackType.note)
+        .toList();
+    expect(noteTracks, hasLength(2));
+    expect(noteTracks[0].volume, 0.4);
+    expect(noteTracks[1].name, 'Double');
+    expect(noteTracks[1].volume, 0.0); // muted → silent track
+    // Each lane's block got its own clip on its own track.
+    for (final t in noteTracks) {
+      expect(song.clips.where((c) => c.trackId == t.id), hasLength(1));
+    }
+  });
+
+  test('save track inherits the primary harmony lane volume', () {
+    final writer = SongwriterProjectSnapshot(
+      config: const SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+      sections: [
+        SongSection(
+          id: 's1',
+          lengthBars: 1,
+          order: 0,
+          lanes: [
+            const SongLane(
+              id: 'lh',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              volume: 0.4,
+              blocks: [
+                SongBlock(
+                  id: 'b1',
+                  startBar: 0,
+                  spanBars: 1,
+                  chordSymbol: 'C',
+                  chordNotes: ['C', 'E', 'G'],
+                ),
+              ],
+            ),
+            SongLane(
+              id: 'ls',
+              kind: SongLaneKind.save,
+              order: 1,
+              volume: 1.0, // ignored — save follows the harmony lane
+              blocks: [
+                SongBlock(
+                  id: 'bs',
+                  startBar: 0,
+                  spanBars: 1,
+                  embedded: PianoSnapshot(
+                    currentRange: PianoRangeName.key61,
+                    selectedKeys: const [
+                      PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+                    ],
+                    selectedNotes: const ['C'],
+                    viewMode: PianoViewMode.exact,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final song = songFromSongwriter(writer, const []);
+    final saveTrack = song.tracks.firstWhere((t) => t.name == 'Save lane');
+    expect(saveTrack.volume, 0.4);
   });
 
   test('empty writer project yields a default-sized song', () {

@@ -18,6 +18,7 @@ class _RecordingSink implements SongAudioClipSink {
     required AudioAsset asset,
     required int offsetMs,
     double volume = 1.0,
+    double balance = 0.0,
     bool loop = false,
   }) async => started.add((asset.id, loop));
   @override

@@ -35,6 +35,7 @@ Future<SongBlock?> showHarmonyChordSheet(
   SongBlock? existing,
   int instanceIndex = 0,
   String currentLyric = '',
+  bool showLyrics = true,
   VoidCallback? onPickFromLibrary,
 }) {
   return showModalBottomSheet<SongBlock>(
@@ -59,6 +60,7 @@ Future<SongBlock?> showHarmonyChordSheet(
           existing: existing,
           instanceIndex: instanceIndex,
           currentLyric: currentLyric,
+          showLyrics: showLyrics,
           onPickFromLibrary: onPickFromLibrary,
         ),
       ),
@@ -75,6 +77,7 @@ class _HarmonySheet extends StatefulWidget {
     this.existing,
     this.instanceIndex = 0,
     this.currentLyric = '',
+    this.showLyrics = true,
     this.onPickFromLibrary,
   });
   final int startBar;
@@ -84,6 +87,7 @@ class _HarmonySheet extends StatefulWidget {
   final SongBlock? existing;
   final int instanceIndex;
   final String currentLyric;
+  final bool showLyrics;
   final VoidCallback? onPickFromLibrary;
 
   @override
@@ -170,12 +174,13 @@ class _HarmonySheetState extends State<_HarmonySheet> {
             ),
             const SizedBox(height: 4),
           ],
-          SwitchListTile(
-            key: const Key('silentToggle'),
-            title: const Text('Silent placeholder (lyric only)'),
-            value: _silentMode,
-            onChanged: (v) => setState(() => _silentMode = v),
-          ),
+          if (widget.showLyrics)
+            SwitchListTile(
+              key: const Key('silentToggle'),
+              title: const Text('Silent placeholder (lyric only)'),
+              value: _silentMode,
+              onChanged: (v) => setState(() => _silentMode = v),
+            ),
           if (!_silentMode) ...[
             if (_hasKey) ...[
               SizedBox(
@@ -207,6 +212,7 @@ class _HarmonySheetState extends State<_HarmonySheet> {
             ],
           ],
           const SizedBox(height: 12),
+          if (widget.showLyrics)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             child: TextField(

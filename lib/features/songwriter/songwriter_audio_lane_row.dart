@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
 import '../../models/songwriter.dart';
+import '../../schema/rules/songwriter_rules.dart' show laneKindFallbackLabel;
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
@@ -180,7 +181,7 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 4),
           child: Text(
-            lane.label ?? 'Sample',
+            lane.label ?? laneKindFallbackLabel(lane.kind),
             style: const TextStyle(
               color: MuzicianTheme.textMuted,
               fontSize: 11,

@@ -19,6 +19,7 @@ class _FakeSink implements SongAudioClipSink {
     required AudioAsset asset,
     required int offsetMs,
     double volume = 1.0,
+    double balance = 0.0,
     bool loop = false,
   }) async {
     startCount++;
@@ -53,9 +54,11 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         songwriterAudioClipSinkProvider.overrideWithValue(sink),
-        songwriterNoteSinkProvider.overrideWithValue((n) => notes.add(n)),
+        songwriterNoteSinkProvider.overrideWithValue(
+          (n, v, p) => notes.add(n),
+        ),
         drumPatternPlaybackSinkProvider.overrideWithValue(
-          (l, v) async => drums.add(l),
+          (l, v, p) async => drums.add(l),
         ),
       ],
     );
@@ -157,9 +160,11 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           songwriterAudioClipSinkProvider.overrideWithValue(sink),
-          songwriterNoteSinkProvider.overrideWithValue((nn) => notes.add(nn)),
+          songwriterNoteSinkProvider.overrideWithValue(
+            (n, v, p) => notes.add(n),
+          ),
           drumPatternPlaybackSinkProvider.overrideWithValue(
-            (l, v) async => drums.add(l),
+            (l, v, p) async => drums.add(l),
           ),
         ],
       );

@@ -244,6 +244,10 @@ class NotePlayer {
   static final NotePlayer instance = NotePlayer._();
 
   final List<AudioPlayer> _pool = [];
+
+  /// Last balance set on each pool player (see [_applyBalance]). Players
+  /// start centered, so an absent entry means 0.0 has effectively been set.
+  final Map<AudioPlayer, double> _balanceByPlayer = {};
   int _poolIndex = 0;
 
   // Bytes cache — used by BytesSource on all non-iOS platforms.
@@ -269,10 +273,11 @@ class NotePlayer {
     _ready = true;
   }
 
-  /// Plays [midiNote] as a short synthesised tone at [volume] (0.0–1.0).
-  void previewNote(int midiNote, {double volume = 0.8}) {
+  /// Plays [midiNote] as a short synthesised tone at [volume] (0.0–1.0),
+  /// panned by [pan] (-1.0 left .. 1.0 right).
+  void previewNote(int midiNote, {double volume = 0.8, double pan = 0.0}) {
     if (!_ready) return;
-    unawaited(_play(midiNote, volume));
+    unawaited(_play(midiNote, volume, pan));
   }
 
   /// Plays a short metronome click at [volume] (0.0–1.0). [accent] picks the
@@ -291,9 +296,9 @@ class NotePlayer {
   /// Drum voices are short synthesised waveforms cached with negative integer
   /// keys (-10 through -17) to avoid collision with MIDI notes (0–127) and
   /// metronome clicks (-1, -2).
-  void playDrumLane(DrumLaneId lane, {double volume = 0.8}) {
+  void playDrumLane(DrumLaneId lane, {double volume = 0.8, double pan = 0.0}) {
     if (!_ready) return;
-    unawaited(_playDrum(lane, volume));
+    unawaited(_playDrum(lane, volume, pan));
   }
 
   static int _drumCacheKey(DrumLaneId lane) {
@@ -317,10 +322,21 @@ class NotePlayer {
     }
   }
 
-  Future<void> _playDrum(DrumLaneId lane, double volume) async {
+  /// Applies [pan] to a pool [player] only when it differs from the last
+  /// value set — skips the platform-channel round trip in the common
+  /// unpanned case (and lets clicks recenter for free).
+  Future<void> _applyBalance(AudioPlayer player, double pan) async {
+    final clamped = pan.clamp(-1.0, 1.0);
+    if ((_balanceByPlayer[player] ?? 0.0) == clamped) return;
+    _balanceByPlayer[player] = clamped;
+    await player.setBalance(clamped);
+  }
+
+  Future<void> _playDrum(DrumLaneId lane, double volume, double pan) async {
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
     await player.setVolume(volume.clamp(0.0, 1.0));
+    await _applyBalance(player, pan);
     final cacheKey = _drumCacheKey(lane);
     if (_needsFile) {
       final path = await _ensureFile(cacheKey, () => _renderDrum(lane));
@@ -362,10 +378,11 @@ class NotePlayer {
     }
   }
 
-  Future<void> _play(int midi, double volume) async {
+  Future<void> _play(int midi, double volume, double pan) async {
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
     await player.setVolume(volume.clamp(0.0, 1.0));
+    await _applyBalance(player, pan);
     if (_needsFile) {
       final path = await _ensureFile(midi, () => _renderNote(midi));
       await player.play(DeviceFileSource(path));
@@ -379,6 +396,8 @@ class NotePlayer {
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
     await player.setVolume(volume.clamp(0.0, 1.0));
+    // Pool players are shared with panned notes/drums — recenter for clicks.
+    await _applyBalance(player, 0.0);
     final cacheKey = accent ? -1 : -2;
     if (_needsFile) {
       final path = await _ensureFile(

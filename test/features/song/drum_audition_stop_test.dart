@@ -22,7 +22,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         drumPatternPlaybackSinkProvider.overrideWithValue(
-          (lanes, volume) async {},
+          (lanes, volume, pan) async {},
         ),
       ],
     );
