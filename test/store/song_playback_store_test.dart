@@ -371,6 +371,7 @@ class _RecordingAudioSink implements SongAudioClipSink {
     required AudioAsset asset,
     required int offsetMs,
     double volume = 1.0,
+    double balance = 0.0,
     bool loop = false,
   }) async {
     startCalls.add(_AudioCall(asset.id));
