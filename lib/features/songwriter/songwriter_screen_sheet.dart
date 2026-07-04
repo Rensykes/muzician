@@ -231,7 +231,9 @@ class _SectionSheet extends ConsumerWidget {
     if (harmonyLanes.isEmpty) {
       // Placeholder so the empty bar grid still renders; the first chord tap
       // creates the real lane via onEnsureLane.
-      harmonyLanes = const [SongLane(id: '', kind: SongLaneKind.harmony, order: 0)];
+      harmonyLanes = const [
+        SongLane(id: '', kind: SongLaneKind.harmony, order: 0),
+      ];
     }
 
     return Column(
@@ -912,7 +914,7 @@ class _HarmonyLaneHeader extends ConsumerWidget {
             ),
           ),
           const Spacer(),
-          if (lane.id.isNotEmpty)
+          if (lane.id.isNotEmpty && laneIndex > 0)
             IconButton(
               key: Key('deleteHarmonyLane_${lane.id}'),
               visualDensity: VisualDensity.compact,
@@ -1013,14 +1015,13 @@ class _BarRow extends ConsumerWidget {
     }
     // Save-lane blocks are surfaced inline on the bar grid: as a badge over the
     // chord that shares the bar, or as a standalone save cell on an empty bar.
-    // Only on the primary harmony lane — extra lanes would duplicate them.
+    // Each save lane renders on its anchor harmony lane's row (legacy
+    // anchor-less save lanes resolve to the primary lane).
     final saveBySpan = <int, SongBlock>{};
-    if (isPrimary) {
-      for (final l in section.lanes.where((l) => l.kind == SongLaneKind.save)) {
-        for (final b in l.blocks) {
-          for (var i = b.startBar; i < b.endBar; i++) {
-            saveBySpan[i] = b;
-          }
+    for (final l in _anchoredSaveLanes()) {
+      for (final b in l.blocks) {
+        for (var i = b.startBar; i < b.endBar; i++) {
+          saveBySpan[i] = b;
         }
       }
     }
@@ -1127,6 +1128,21 @@ class _BarRow extends ConsumerWidget {
         );
       },
     );
+  }
+
+  /// Save lanes whose voicings belong to this row's harmony lane. Legacy
+  /// anchor-less save lanes (and lanes whose anchor is gone) resolve to the
+  /// primary lane; the placeholder empty lane collects saves in sections
+  /// that have no harmony lane at all.
+  List<SongLane> _anchoredSaveLanes() {
+    final out = <SongLane>[];
+    for (final l in section.lanes) {
+      if (l.kind != SongLaneKind.save) continue;
+      final anchorId = saveAnchorLane(section, l)?.id;
+      final belongsHere = anchorId == null ? isPrimary : anchorId == lane.id;
+      if (belongsHere) out.add(l);
+    }
+    return out;
   }
 
   void _playFromBar(WidgetRef ref, int bar) {
@@ -1251,8 +1267,7 @@ class _BarRow extends ConsumerWidget {
         !block.isSilent &&
         block.chordRootPc != null &&
         block.chordQuality != null;
-    final save = section.lanes
-        .where((l) => l.kind == SongLaneKind.save)
+    final save = _anchoredSaveLanes()
         .expand((l) => l.blocks)
         .where((b) => b.startBar < block.endBar && block.startBar < b.endBar)
         .firstOrNull;
@@ -1352,6 +1367,7 @@ class _BarRow extends ConsumerWidget {
         saveId: saveId,
       ),
       onEditChord: () => _editBlock(context, ref, block),
+      editChordLabel: isPrimary ? 'Edit chord & lyrics' : 'Edit chord',
     );
   }
 
@@ -1395,6 +1411,7 @@ class _BarRow extends ConsumerWidget {
                   sectionId: section.id,
                   saveId: entry.id,
                   startBar: bar,
+                  anchorLaneId: lane.id.isEmpty ? null : lane.id,
                 );
           },
         ),

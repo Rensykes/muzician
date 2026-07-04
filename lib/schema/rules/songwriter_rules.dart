@@ -328,14 +328,25 @@ SongLane? primaryHarmonyLane(SongSection section) {
   return null;
 }
 
+/// The harmony lane a save [lane]'s voicings belong to: its
+/// [SongLane.anchorLaneId] when that still names a harmony lane in
+/// [section], otherwise the primary harmony lane (legacy save lanes have no
+/// anchor). Null when the section has no harmony lane at all.
+SongLane? saveAnchorLane(SongSection section, SongLane lane) {
+  for (final l in section.lanes) {
+    if (l.id == lane.anchorLaneId && l.kind == SongLaneKind.harmony) return l;
+  }
+  return primaryHarmonyLane(section);
+}
+
 /// The lane whose mix settings (volume / pan / muted) govern [lane] during
-/// playback and export. Save lanes follow the section's primary harmony lane
-/// — their blocks render as badges on that lane and sound as part of it — so
-/// they have no mix of their own. Every other lane governs itself, as does a
-/// save lane in a section with no harmony lane.
+/// playback and export. Save lanes follow their anchor harmony lane (see
+/// [saveAnchorLane]) — their blocks render as badges on that lane and sound
+/// as part of it — so they have no mix of their own. Every other lane
+/// governs itself, as does a save lane in a section with no harmony lane.
 SongLane mixGoverningLane(SongSection section, SongLane lane) {
   if (lane.kind != SongLaneKind.save) return lane;
-  return primaryHarmonyLane(section) ?? lane;
+  return saveAnchorLane(section, lane) ?? lane;
 }
 
 /// Display fallback for the [index]-th harmony lane of a section when it has

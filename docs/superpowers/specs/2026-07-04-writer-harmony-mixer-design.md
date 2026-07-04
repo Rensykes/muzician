@@ -129,11 +129,17 @@ the drum/audio editors — keeping them flat keeps scope small.
   - mute toggle (icon button; muted strip renders dimmed).
 - Controls call `setLaneVolume` / `setLanePan` / `setLaneMuted` directly;
   state is watched from the provider so the sheet is live.
-- Save lanes are treated as one with the primary harmony lane (follow-up
-  request): `mixGoverningLane` resolves a save lane's mix to the section's
-  first harmony lane for playback, audition beds, and export track volume.
-  The mixer shows no strip for save lanes unless the section has no harmony
-  lane at all (fallback so orphaned save blocks stay controllable).
+- Save lanes are treated as one with a harmony lane (follow-up requests):
+  each save lane carries an `anchorLaneId` naming the harmony lane its
+  voicings belong to (null = primary, covering legacy saves and dangling
+  anchors via `saveAnchorLane`). One save lane exists per anchored harmony
+  lane, so same-bar voicings on different harmony lanes never collide.
+  `mixGoverningLane` resolves a save lane's mix to its anchor for playback,
+  audition beds, and export track volume; badges/save cells render on the
+  anchor lane's row; library and voicing actions are available on every
+  harmony lane (accepts anchor to the triggering block's lane). The mixer
+  shows no strip for save lanes unless the section has no harmony lane at
+  all (fallback so orphaned save blocks stay controllable).
 - Lanes are renameable (follow-up request): `renameLane` store setter
   (empty/whitespace clears back to the kind fallback), rename dialog opened
   by tapping the strip label in the mixer or a harmony lane's header label.

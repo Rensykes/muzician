@@ -189,14 +189,20 @@ void main() {
     );
 
     // A save block resolvable without the save system: embedded piano snapshot.
-    SongLane saveLane({double volume = 1.0, double pan = 0.0, bool muted = false}) =>
+    SongLane saveLane({
+      double volume = 1.0,
+      double pan = 0.0,
+      bool muted = false,
+      String? anchorLaneId,
+    }) =>
         SongLane(
           id: 'lsave',
           kind: SongLaneKind.save,
-          order: 1,
+          order: 2,
           volume: volume,
           pan: pan,
           muted: muted,
+          anchorLaneId: anchorLaneId,
           blocks: [
             SongBlock(
               id: 'bs',
@@ -254,6 +260,51 @@ void main() {
         const [],
       );
       expect(events, isEmpty);
+    });
+
+    test('anchored save lane follows its anchor, not the primary lane', () {
+      final events = flattenPlaybackEvents(
+        project(
+          lanes: [
+            const SongLane(
+              id: 'lh1',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              volume: 0.3,
+            ),
+            const SongLane(
+              id: 'lh2',
+              kind: SongLaneKind.harmony,
+              order: 1,
+              volume: 0.9,
+              pan: 0.5,
+            ),
+            saveLane(anchorLaneId: 'lh2'),
+          ],
+        ),
+        const [],
+      );
+      final g = events.single.noteGroups.single;
+      expect(g.volume, 0.9);
+      expect(g.pan, 0.5);
+    });
+
+    test('save lane with a dangling anchor falls back to the primary lane', () {
+      final events = flattenPlaybackEvents(
+        project(
+          lanes: [
+            const SongLane(
+              id: 'lh1',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              volume: 0.3,
+            ),
+            saveLane(anchorLaneId: 'gone'),
+          ],
+        ),
+        const [],
+      );
+      expect(events.single.noteGroups.single.volume, 0.3);
     });
 
     test('without a harmony lane the save lane keeps its own mix', () {

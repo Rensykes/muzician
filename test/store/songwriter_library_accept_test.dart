@@ -125,4 +125,83 @@ void main() {
     expect(c.read(songwriterProvider), initialSnapshot,
         reason: 'missing block must leave songwriter state untouched');
   });
+
+  group('save-lane anchoring', () {
+    test('accept from a secondary harmony block anchors to that lane; '
+        'same-bar saves for two lanes land in separate save lanes', () {
+      final c = freshContainer();
+      final ids = seedSong(c);
+      final n = c.read(songwriterProvider.notifier);
+      // Second harmony lane with a chord on the same bars.
+      n.addLane(sectionId: ids.sectionId, kind: SongLaneKind.harmony);
+      final lane2 = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .last
+          .id;
+      n.addHarmonyBlock(
+        sectionId: ids.sectionId,
+        laneId: lane2,
+        block: const SongBlock(
+          id: 'hb2', startBar: 0, spanBars: 2,
+          chordSymbol: 'C', chordQuality: '', chordRootPc: 0,
+          chordNotes: ['C', 'E', 'G'],
+        ),
+      );
+      final saveId = seedExistingSave(c);
+
+      // Accept on the primary block, then on the secondary block (same bars).
+      n.acceptLibraryMatch(
+        sectionId: ids.sectionId,
+        harmonyBlockId: ids.harmonyBlockId,
+        saveId: saveId,
+      );
+      n.acceptLibraryMatch(
+        sectionId: ids.sectionId,
+        harmonyBlockId: 'hb2',
+        saveId: saveId,
+      );
+
+      final saveLanes = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .where((l) => l.kind == SongLaneKind.save)
+          .toList();
+      expect(saveLanes, hasLength(2));
+      expect(saveLanes[0].anchorLaneId, ids.harmonyLaneId);
+      expect(saveLanes[1].anchorLaneId, lane2);
+      // Both placements landed despite sharing bars 0-2.
+      expect(saveLanes[0].blocks.single.saveId, saveId);
+      expect(saveLanes[1].blocks.single.saveId, saveId);
+    });
+
+    test('addLibraryBlockAt anchors to the given harmony lane', () {
+      final c = freshContainer();
+      final ids = seedSong(c);
+      final n = c.read(songwriterProvider.notifier);
+      n.addLane(sectionId: ids.sectionId, kind: SongLaneKind.harmony);
+      final lane2 = c.read(songwriterProvider).sections.single.lanes.last.id;
+      final saveId = seedExistingSave(c);
+
+      n.addLibraryBlockAt(
+        sectionId: ids.sectionId,
+        saveId: saveId,
+        startBar: 4,
+        anchorLaneId: lane2,
+      );
+
+      final saveLane = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((l) => l.kind == SongLaneKind.save);
+      expect(saveLane.anchorLaneId, lane2);
+      expect(saveLane.blocks.single.startBar, 4);
+    });
+  });
 }

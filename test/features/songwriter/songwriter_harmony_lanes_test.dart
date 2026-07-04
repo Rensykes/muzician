@@ -113,6 +113,36 @@ void main() {
     );
   });
 
+  testWidgets('primary harmony lane header has no delete action', (
+    tester,
+  ) async {
+    final container = await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 4);
+        final s = n.state.sections.single.id;
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
+      },
+    );
+    final lanes = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .where((l) => l.kind == SongLaneKind.harmony)
+        .toList();
+
+    expect(
+      find.byKey(Key('deleteHarmonyLane_${lanes.first.id}')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(Key('deleteHarmonyLane_${lanes.last.id}')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('harmony lane header label renames the lane', (tester) async {
     final container = await pumpSheet(
       tester,
@@ -193,5 +223,202 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('barActionRemove')), findsOneWidget);
     expect(find.byKey(const Key('barActionLyrics')), findsNothing);
+  });
+
+  testWidgets('secondary empty bar offers library saves too', (
+    tester,
+  ) async {
+    await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 2);
+        final s = n.state.sections.single.id;
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
+      },
+    );
+
+    await tester.tap(find.text('·').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('barActionAddChord')), findsOneWidget);
+    expect(find.byKey(const Key('barActionAddLibrary')), findsOneWidget);
+  });
+
+  testWidgets('secondary add-chord sheet offers library saves too', (
+    tester,
+  ) async {
+    await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 2);
+        final s = n.state.sections.single.id;
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
+      },
+    );
+
+    await tester.tap(find.text('·').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('barActionAddChord')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('fromLibraryButton')), findsOneWidget);
+  });
+
+  testWidgets('secondary chord action does not expose primary save removal', (
+    tester,
+  ) async {
+    await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 2);
+        final s = n.state.sections.single.id;
+        final primary = n.addLane(
+          sectionId: s,
+          kind: SongLaneKind.harmony,
+          label: 'Harmony',
+        );
+        final secondary = n.addLane(
+          sectionId: s,
+          kind: SongLaneKind.harmony,
+          label: 'Harmony 2',
+        );
+        final saveLane = n.addLane(
+          sectionId: s,
+          kind: SongLaneKind.save,
+          label: 'Save',
+        );
+        n.addHarmonyBlock(
+          sectionId: s,
+          laneId: primary,
+          block: const SongBlock(
+            id: 'primary-c',
+            startBar: 0,
+            spanBars: 1,
+            chordSymbol: 'C',
+            chordQuality: 'maj',
+            chordRootPc: 0,
+            chordNotes: ['C', 'E', 'G'],
+          ),
+        );
+        n.addHarmonyBlock(
+          sectionId: s,
+          laneId: secondary,
+          block: const SongBlock(
+            id: 'secondary-g',
+            startBar: 0,
+            spanBars: 1,
+            chordSymbol: 'G',
+            chordQuality: 'maj',
+            chordRootPc: 7,
+            chordNotes: ['G', 'B', 'D'],
+          ),
+        );
+        n.addSaveBlock(
+          sectionId: s,
+          laneId: saveLane,
+          saveId: 'save-xyz',
+          startBar: 0,
+          spanBars: 1,
+        );
+      },
+    );
+
+    await tester.tap(find.text('G'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('barActionRemove')), findsOneWidget);
+    expect(find.byKey(const Key('barActionRemoveSave')), findsNothing);
+  });
+
+  testWidgets('secondary chord tools expose the library too', (
+    tester,
+  ) async {
+    await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 2);
+        final s = n.state.sections.single.id;
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
+        final secondary = n.addLane(
+          sectionId: s,
+          kind: SongLaneKind.harmony,
+          label: 'Harmony 2',
+        );
+        n.addHarmonyBlock(
+          sectionId: s,
+          laneId: secondary,
+          block: const SongBlock(
+            id: 'secondary-g',
+            startBar: 0,
+            spanBars: 1,
+            chordSymbol: 'G',
+            chordQuality: 'maj',
+            chordRootPc: 7,
+            chordNotes: ['G', 'B', 'D'],
+          ),
+        );
+      },
+    );
+
+    await tester.tap(find.text('G'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Voicings & library'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('barActionVoicings')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Voicings'), findsOneWidget);
+    expect(find.text('Harmony'), findsWidgets);
+    expect(find.text('Library'), findsOneWidget);
+    // Lyrics stay primary-only, so the edit label omits them here.
+    expect(find.text('Edit chord'), findsOneWidget);
+    expect(find.text('Edit chord & lyrics'), findsNothing);
+  });
+
+  testWidgets('anchored save renders on its harmony lane row only', (
+    tester,
+  ) async {
+    final container = await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 2);
+        final s = n.state.sections.single.id;
+        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
+        final secondary = n.addLane(
+          sectionId: s,
+          kind: SongLaneKind.harmony,
+          label: 'Harmony 2',
+        );
+        n.addLibraryBlockAt(
+          sectionId: s,
+          saveId: 'save-xyz',
+          startBar: 1,
+          anchorLaneId: secondary,
+        );
+      },
+    );
+
+    final saveLane = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((l) => l.kind == SongLaneKind.save);
+    expect(
+      saveLane.anchorLaneId,
+      container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.label == 'Harmony 2')
+          .id,
+    );
+    final blockId = saveLane.blocks.single.id;
+    // Exactly one standalone save cell across both harmony rows.
+    expect(find.byKey(Key('saveCell_${blockId}_0')), findsOneWidget);
   });
 }
