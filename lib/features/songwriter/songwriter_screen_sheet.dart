@@ -35,6 +35,7 @@ import '../../ui/core/muzician_dialog.dart';
 import 'drum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_header.dart';
+import 'songwriter_mixer_sheet.dart';
 import 'songwriter_save_panel.dart';
 import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
@@ -635,6 +636,18 @@ class _SectionHeading extends ConsumerWidget {
                   ),
                 ),
               ),
+            ),
+            IconButton(
+              key: Key('sectionMixer_${section.id}'),
+              tooltip: 'Mixer',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.tune,
+                size: 18,
+                color: MuzicianTheme.textPrimary,
+              ),
+              onPressed: () =>
+                  showSongwriterMixerSheet(context, sectionId: section.id),
             ),
             PopupMenuButton<String>(
               key: Key('sheetSectionMenu_${section.id}'),
