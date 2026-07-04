@@ -363,6 +363,11 @@ class SongLane {
   final double pan; // -1.0 (left) .. 1.0 (right)
   final bool muted;
 
+  /// Save lanes only: id of the harmony lane this lane's voicings belong to.
+  /// Its badges render on that lane's row and its mix follows that lane.
+  /// Null = the section's primary harmony lane (legacy saves).
+  final String? anchorLaneId;
+
   const SongLane({
     required this.id,
     required this.kind,
@@ -373,6 +378,7 @@ class SongLane {
     this.volume = 1.0,
     this.pan = 0.0,
     this.muted = false,
+    this.anchorLaneId,
   });
 
   SongLane copyWith({
@@ -384,6 +390,7 @@ class SongLane {
     double? volume,
     double? pan,
     bool? muted,
+    String? anchorLaneId,
     bool clearLabel = false,
   }) => SongLane(
     id: id,
@@ -395,6 +402,7 @@ class SongLane {
     volume: volume ?? this.volume,
     pan: pan ?? this.pan,
     muted: muted ?? this.muted,
+    anchorLaneId: anchorLaneId ?? this.anchorLaneId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -407,6 +415,7 @@ class SongLane {
     'volume': volume,
     'pan': pan,
     'muted': muted,
+    'anchorLaneId': anchorLaneId,
   };
 
   factory SongLane.fromJson(Map<String, dynamic> json) => SongLane(
@@ -423,6 +432,7 @@ class SongLane {
     volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
     pan: (json['pan'] as num?)?.toDouble() ?? 0.0,
     muted: json['muted'] as bool? ?? false,
+    anchorLaneId: json['anchorLaneId'] as String?,
   );
 }
 

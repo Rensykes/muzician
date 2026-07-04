@@ -29,6 +29,7 @@ class _FakeDriver implements SongAudioRecorderDriver {
     started = true;
     lastManageIosAudioSession = manageIosAudioSession;
   }
+
   @override
   Future<Uint8List> stop() async => writeWavPcm16Mono(
     Int16List.fromList(List<int>.filled(4410, 0)),
@@ -41,6 +42,8 @@ class _FakeDriver implements SongAudioRecorderDriver {
 class _FakeClipSink implements SongAudioClipSink {
   int startCount = 0;
   int stopAllCount = 0;
+  final startVolumes = <double>[];
+  final startBalances = <double>[];
   @override
   Future<void> prepare(Iterable<AudioAsset> assets) async {}
   @override
@@ -50,7 +53,12 @@ class _FakeClipSink implements SongAudioClipSink {
     double volume = 1.0,
     double balance = 0.0,
     bool loop = false,
-  }) async => startCount++;
+  }) async {
+    startCount++;
+    startVolumes.add(volume);
+    startBalances.add(balance);
+  }
+
   @override
   Future<void> stopClip({required AudioAsset asset}) async {}
   @override
@@ -143,9 +151,7 @@ void main() {
           ),
         ),
         songwriterAudioClipSinkProvider.overrideWithValue(clip),
-        songwriterNoteSinkProvider.overrideWithValue(
-          (n, v, p) => notes.add(n),
-        ),
+        songwriterNoteSinkProvider.overrideWithValue((n, v, p) => notes.add(n)),
         drumPatternPlaybackSinkProvider.overrideWithValue(
           (l, v, p) async => drums.add(l),
         ),
@@ -222,6 +228,66 @@ void main() {
     await n.cancel();
   });
 
+  test('monitor backing passes section clip volume and pan', () async {
+    final clip = _FakeClipSink();
+    final c = ProviderContainer(
+      overrides: [
+        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        songwriterAudioRepositoryProvider.overrideWithValue(
+          SongAudioRepository.testWith(
+            rootDirectory: tmp,
+            subdir: 'songwriter_audio',
+          ),
+        ),
+        songwriterAudioClipSinkProvider.overrideWithValue(clip),
+        songwriterNoteSinkProvider.overrideWithValue((n, v, p) {}),
+        drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
+        songwriterMetronomeSinkProvider.overrideWithValue(
+          ({required bool accent}) async {},
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    const assetForClip = AudioAsset(
+      id: 'clipasset',
+      durationMs: 4000,
+      sampleRate: 44100,
+      channels: 1,
+      format: 'wav',
+      peaks: [],
+      sourceLabel: 'x',
+    );
+    final mWithClip = SongwriterRecordMonitor(
+      backing: true,
+      metronome: false,
+      tempo: 6000,
+      beatTicks: 4,
+      measureTicks: 16,
+      loopTicks: 16,
+      loopMs: 1000,
+      bed: const (loopTicks: 16, notesByTick: {}, drumByTick: {}),
+      clips: const [
+        SongwriterScheduledClip(
+          asset: assetForClip,
+          startMs: 0,
+          endMs: 4000,
+          trimStartMs: 0,
+          loop: false,
+          volume: 0.35,
+          pan: -0.6,
+        ),
+      ],
+    );
+
+    final n = c.read(songwriterAudioRecorderProvider.notifier);
+    await n.start(monitor: mWithClip);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(clip.startVolumes, contains(0.35));
+    expect(clip.startBalances, contains(-0.6));
+    await n.cancel();
+  });
+
   test('monitor metronome-only clicks without bed notes', () async {
     var clicks = 0;
     final notes = <List<int>>[];
@@ -235,9 +301,7 @@ void main() {
           ),
         ),
         songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
-        songwriterNoteSinkProvider.overrideWithValue(
-          (n, v, p) => notes.add(n),
-        ),
+        songwriterNoteSinkProvider.overrideWithValue((n, v, p) => notes.add(n)),
         drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
         songwriterMetronomeSinkProvider.overrideWithValue(
           ({required bool accent}) async => clicks++,
@@ -366,49 +430,55 @@ void main() {
     expect(session.restoreCount, 0);
   });
 
-  test('monitored recording tells the driver NOT to manage the iOS session', () async {
-    final driver = _FakeDriver();
-    final c = ProviderContainer(
-      overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(driver),
-        songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
-            rootDirectory: tmp,
-            subdir: 'songwriter_audio',
+  test(
+    'monitored recording tells the driver NOT to manage the iOS session',
+    () async {
+      final driver = _FakeDriver();
+      final c = ProviderContainer(
+        overrides: [
+          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          songwriterAudioRepositoryProvider.overrideWithValue(
+            SongAudioRepository.testWith(
+              rootDirectory: tmp,
+              subdir: 'songwriter_audio',
+            ),
           ),
-        ),
-        songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
-        songwriterNoteSinkProvider.overrideWithValue((n, v, p) {}),
-        drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
-        songwriterMetronomeSinkProvider.overrideWithValue(
-          ({required bool accent}) async {},
-        ),
-      ],
-    );
-    addTearDown(c.dispose);
-    final n = c.read(songwriterAudioRecorderProvider.notifier);
-    await n.start(monitor: monitor(backing: true, metronome: false));
-    expect(driver.lastManageIosAudioSession, isFalse);
-    await n.cancel();
-  });
+          songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
+          songwriterNoteSinkProvider.overrideWithValue((n, v, p) {}),
+          drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+      final n = c.read(songwriterAudioRecorderProvider.notifier);
+      await n.start(monitor: monitor(backing: true, metronome: false));
+      expect(driver.lastManageIosAudioSession, isFalse);
+      await n.cancel();
+    },
+  );
 
-  test('non-monitored recording lets the driver manage the iOS session', () async {
-    final driver = _FakeDriver();
-    final c = ProviderContainer(
-      overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(driver),
-        songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
-            rootDirectory: tmp,
-            subdir: 'songwriter_audio',
+  test(
+    'non-monitored recording lets the driver manage the iOS session',
+    () async {
+      final driver = _FakeDriver();
+      final c = ProviderContainer(
+        overrides: [
+          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          songwriterAudioRepositoryProvider.overrideWithValue(
+            SongAudioRepository.testWith(
+              rootDirectory: tmp,
+              subdir: 'songwriter_audio',
+            ),
           ),
-        ),
-      ],
-    );
-    addTearDown(c.dispose);
-    final n = c.read(songwriterAudioRecorderProvider.notifier);
-    await n.start();
-    expect(driver.lastManageIosAudioSession, isTrue);
-    await n.cancel();
-  });
+        ],
+      );
+      addTearDown(c.dispose);
+      final n = c.read(songwriterAudioRecorderProvider.notifier);
+      await n.start();
+      expect(driver.lastManageIosAudioSession, isTrue);
+      await n.cancel();
+    },
+  );
 }

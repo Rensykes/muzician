@@ -99,7 +99,9 @@ void showHarmonyBlockSheet(
   required void Function(VoicingSuggestion) onAcceptVoicing,
   required void Function(ThirdAboveSuggestion) onAcceptThirdAbove,
   required void Function(String saveId) onAcceptLibrary,
+  bool showLibrary = true,
   VoidCallback? onEditChord,
+  String editChordLabel = 'Edit chord & lyrics',
 }) {
   final hasChord = block.chordRootPc != null && block.chordQuality != null;
   final title = block.chordSymbol ?? (hasChord ? '?' : 'Harmony');
@@ -109,7 +111,7 @@ void showHarmonyBlockSheet(
     context: context,
     title: '$title ${numeral ?? ""}'.trim(),
     child: DefaultTabController(
-      length: 3,
+      length: showLibrary ? 3 : 2,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,11 +131,11 @@ void showHarmonyBlockSheet(
             ),
             const SizedBox(height: 12),
           ],
-          const TabBar(
+          TabBar(
             tabs: [
-              Tab(text: 'Voicings'),
-              Tab(text: 'Harmony'),
-              Tab(text: 'Library'),
+              const Tab(text: 'Voicings'),
+              const Tab(text: 'Harmony'),
+              if (showLibrary) const Tab(text: 'Library'),
             ],
           ),
           SizedBox(
@@ -156,13 +158,14 @@ void showHarmonyBlockSheet(
                     onAcceptThirdAbove(s);
                   },
                 ),
-                _LibraryTab(
-                  chordMatches: chordMatches,
-                  onAccept: (id) {
-                    Navigator.pop(context);
-                    onAcceptLibrary(id);
-                  },
-                ),
+                if (showLibrary)
+                  _LibraryTab(
+                    chordMatches: chordMatches,
+                    onAccept: (id) {
+                      Navigator.pop(context);
+                      onAcceptLibrary(id);
+                    },
+                  ),
               ],
             ),
           ),
@@ -177,7 +180,7 @@ void showHarmonyBlockSheet(
                   onEditChord();
                 },
                 icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Edit chord & lyrics'),
+                label: Text(editChordLabel),
               ),
             ),
           ],
@@ -361,10 +364,7 @@ class _VoicingCard extends StatelessWidget {
 }
 
 class _LibraryTab extends StatelessWidget {
-  const _LibraryTab({
-    required this.chordMatches,
-    required this.onAccept,
-  });
+  const _LibraryTab({required this.chordMatches, required this.onAccept});
 
   /// Only exact chord-note matches are shown. When there are none, the tab
   /// shows a short hint and no cards — saves that merely fit the key are not

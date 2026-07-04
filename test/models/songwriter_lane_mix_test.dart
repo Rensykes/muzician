@@ -31,6 +31,20 @@ void main() {
     expect(back.muted, false);
   });
 
+  test('anchorLaneId survives JSON round-trip, defaults null', () {
+    const lane = SongLane(
+      id: 'ls',
+      kind: SongLaneKind.save,
+      order: 1,
+      anchorLaneId: 'lh2',
+    );
+    expect(SongLane.fromJson(lane.toJson()).anchorLaneId, 'lh2');
+    expect(
+      SongLane.fromJson({'id': 'l1', 'kind': 'save', 'order': 0}).anchorLaneId,
+      isNull,
+    );
+  });
+
   test('copyWith sets mix fields', () {
     const lane = SongLane(id: 'l1', kind: SongLaneKind.harmony, order: 0);
     final c = lane.copyWith(volume: 0.3, pan: 0.4, muted: true);
