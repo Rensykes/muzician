@@ -57,18 +57,18 @@ void main() {
   });
 
   test(
-    'startPlayback fires chord and drum sinks from flattened events',
+    'startPlayback fires chord and drum sinks with lane volume and pan',
     () async {
-      final chordCalls = <List<int>>[];
-      final drumCalls = <List<DrumLaneId>>[];
+      final chordCalls = <List<SongwriterNoteGroup>>[];
+      final drumCalls = <(List<DrumLaneId>, double, double)>[];
 
       final container = ProviderContainer(
         overrides: [
           songwriterNoteSinkProvider.overrideWithValue(
-            (notes) => chordCalls.add(notes),
+            (groups) => chordCalls.add(groups),
           ),
           drumPatternPlaybackSinkProvider.overrideWithValue(
-            (lanes, volume) async => drumCalls.add(lanes),
+            (lanes, volume, pan) async => drumCalls.add((lanes, volume, pan)),
           ),
           songwriterMetronomeSinkProvider.overrideWithValue(
             ({required bool accent}) async {},
@@ -92,6 +92,8 @@ void main() {
                       id: 'l1',
                       kind: SongLaneKind.harmony,
                       order: 0,
+                      volume: 0.5,
+                      pan: -1.0,
                       blocks: [
                         SongBlock(
                           id: 'b1',
@@ -105,6 +107,8 @@ void main() {
                       id: 'l2',
                       kind: SongLaneKind.drum,
                       order: 1,
+                      volume: 0.5,
+                      pan: 0.25,
                       blocks: [
                         SongBlock(
                           id: 'b2',
@@ -137,13 +141,17 @@ void main() {
           .read(songwriterPlaybackProvider.notifier)
           .startPlayback(tickDurationOverride: Duration.zero);
 
-      expect(chordCalls, [
-        [60, 64, 67],
-      ]);
-      expect(drumCalls, [
-        [DrumLaneId.kick],
-        [DrumLaneId.kick],
-      ]);
+      expect(chordCalls, hasLength(1));
+      final group = chordCalls.single.single;
+      expect(group.midiNotes, [60, 64, 67]);
+      expect(group.volume, 0.5);
+      expect(group.pan, -1.0);
+      expect(drumCalls, hasLength(2));
+      for (final (lanes, volume, pan) in drumCalls) {
+        expect(lanes, [DrumLaneId.kick]);
+        expect(volume, 0.8 * 0.5);
+        expect(pan, 0.25);
+      }
     },
   );
 

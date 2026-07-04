@@ -29,13 +29,21 @@ final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((
   };
 });
 
-/// Sink that sounds a chord / voicing stab. Override in tests.
-typedef SongwriterNoteSink = void Function(List<int> midiNotes);
+/// Sink that sounds chord / voicing stabs, one mix group per lane
+/// (volume, pan) bucket. Override in tests.
+typedef SongwriterNoteSink =
+    void Function(List<SongwriterNoteGroup> noteGroups);
 
 final songwriterNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
-  return (midiNotes) {
-    for (final midi in midiNotes) {
-      NotePlayer.instance.previewNote(midi, volume: 0.6);
+  return (noteGroups) {
+    for (final group in noteGroups) {
+      for (final midi in group.midiNotes) {
+        NotePlayer.instance.previewNote(
+          midi,
+          volume: 0.6 * group.volume,
+          pan: group.pan,
+        );
+      }
     }
   };
 });
@@ -191,9 +199,11 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       while (eventIndex < events.length && events[eventIndex].tick == tick) {
         final event = events[eventIndex];
         eventIndex++;
-        if (event.midiNotes.isNotEmpty) noteSink(event.midiNotes);
-        if (event.drumLanes.isNotEmpty) {
-          unawaited(drumSink(event.drumLanes, 0.8));
+        if (event.noteGroups.isNotEmpty) noteSink(event.noteGroups);
+        for (final group in event.drumGroups) {
+          unawaited(
+            drumSink(group.drumLanes, 0.8 * group.volume, group.pan),
+          );
         }
       }
       fireAudio(tick);

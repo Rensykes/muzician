@@ -53,9 +53,11 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         songwriterAudioClipSinkProvider.overrideWithValue(sink),
-        songwriterNoteSinkProvider.overrideWithValue((n) => notes.add(n)),
+        songwriterNoteSinkProvider.overrideWithValue(
+          (g) => notes.add([for (final x in g) ...x.midiNotes]),
+        ),
         drumPatternPlaybackSinkProvider.overrideWithValue(
-          (l, v) async => drums.add(l),
+          (l, v, p) async => drums.add(l),
         ),
       ],
     );
@@ -157,9 +159,11 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           songwriterAudioClipSinkProvider.overrideWithValue(sink),
-          songwriterNoteSinkProvider.overrideWithValue((nn) => notes.add(nn)),
+          songwriterNoteSinkProvider.overrideWithValue(
+            (g) => notes.add([for (final x in g) ...x.midiNotes]),
+          ),
           drumPatternPlaybackSinkProvider.overrideWithValue(
-            (l, v) async => drums.add(l),
+            (l, v, p) async => drums.add(l),
           ),
         ],
       );

@@ -142,9 +142,11 @@ void main() {
           ),
         ),
         songwriterAudioClipSinkProvider.overrideWithValue(clip),
-        songwriterNoteSinkProvider.overrideWithValue((n) => notes.add(n)),
+        songwriterNoteSinkProvider.overrideWithValue(
+          (g) => notes.add([for (final x in g) ...x.midiNotes]),
+        ),
         drumPatternPlaybackSinkProvider.overrideWithValue(
-          (l, v) async => drums.add(l),
+          (l, v, p) async => drums.add(l),
         ),
         songwriterMetronomeSinkProvider.overrideWithValue(
           ({required bool accent}) async {},
@@ -175,7 +177,7 @@ void main() {
         ),
         songwriterAudioClipSinkProvider.overrideWithValue(clip),
         songwriterNoteSinkProvider.overrideWithValue((_) {}),
-        drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+        drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
         songwriterMetronomeSinkProvider.overrideWithValue(
           ({required bool accent}) async {},
         ),
@@ -232,8 +234,10 @@ void main() {
           ),
         ),
         songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
-        songwriterNoteSinkProvider.overrideWithValue((n) => notes.add(n)),
-        drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+        songwriterNoteSinkProvider.overrideWithValue(
+          (g) => notes.add([for (final x in g) ...x.midiNotes]),
+        ),
+        drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
         songwriterMetronomeSinkProvider.overrideWithValue(
           ({required bool accent}) async => clicks++,
         ),
@@ -262,7 +266,7 @@ void main() {
         ),
         songwriterAudioClipSinkProvider.overrideWithValue(clip),
         songwriterNoteSinkProvider.overrideWithValue((_) {}),
-        drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+        drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
         songwriterMetronomeSinkProvider.overrideWithValue(
           ({required bool accent}) async {},
         ),
@@ -320,7 +324,7 @@ void main() {
           ),
           songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
           songwriterNoteSinkProvider.overrideWithValue((_) {}),
-          drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+          drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
           songwriterMetronomeSinkProvider.overrideWithValue(
             ({required bool accent}) async {},
           ),
@@ -374,7 +378,7 @@ void main() {
         ),
         songwriterAudioClipSinkProvider.overrideWithValue(_FakeClipSink()),
         songwriterNoteSinkProvider.overrideWithValue((_) {}),
-        drumPatternPlaybackSinkProvider.overrideWithValue((l, v) async {}),
+        drumPatternPlaybackSinkProvider.overrideWithValue((l, v, p) async {}),
         songwriterMetronomeSinkProvider.overrideWithValue(
           ({required bool accent}) async {},
         ),
