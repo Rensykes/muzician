@@ -359,6 +359,14 @@ class SongLane {
   final int order;
   final int repeat; // tiles this lane's block pattern N times
   final List<SongBlock> blocks;
+  final double volume; // 0.0–1.0 playback gain
+  final double pan; // -1.0 (left) .. 1.0 (right)
+  final bool muted;
+
+  /// Save lanes only: id of the harmony lane this lane's voicings belong to.
+  /// Its badges render on that lane's row and its mix follows that lane.
+  /// Null = the section's primary harmony lane (legacy saves).
+  final String? anchorLaneId;
 
   const SongLane({
     required this.id,
@@ -367,6 +375,10 @@ class SongLane {
     this.label,
     this.repeat = 1,
     this.blocks = const [],
+    this.volume = 1.0,
+    this.pan = 0.0,
+    this.muted = false,
+    this.anchorLaneId,
   });
 
   SongLane copyWith({
@@ -375,13 +387,25 @@ class SongLane {
     int? order,
     int? repeat,
     List<SongBlock>? blocks,
+    double? volume,
+    double? pan,
+    bool? muted,
+    String? anchorLaneId,
+    bool clearLabel = false,
+    bool clearAnchorLaneId = false,
   }) => SongLane(
     id: id,
     kind: kind ?? this.kind,
-    label: label ?? this.label,
+    label: clearLabel ? null : (label ?? this.label),
     order: order ?? this.order,
     repeat: repeat ?? this.repeat,
     blocks: blocks ?? this.blocks,
+    volume: volume ?? this.volume,
+    pan: pan ?? this.pan,
+    muted: muted ?? this.muted,
+    anchorLaneId: clearAnchorLaneId
+        ? null
+        : (anchorLaneId ?? this.anchorLaneId),
   );
 
   Map<String, dynamic> toJson() => {
@@ -391,6 +415,10 @@ class SongLane {
     'order': order,
     'repeat': repeat,
     'blocks': blocks.map((b) => b.toJson()).toList(),
+    'volume': volume,
+    'pan': pan,
+    'muted': muted,
+    'anchorLaneId': anchorLaneId,
   };
 
   factory SongLane.fromJson(Map<String, dynamic> json) => SongLane(
@@ -404,6 +432,10 @@ class SongLane {
             ?.map((b) => SongBlock.fromJson(b as Map<String, dynamic>))
             .toList() ??
         const [],
+    volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
+    pan: (json['pan'] as num?)?.toDouble() ?? 0.0,
+    muted: json['muted'] as bool? ?? false,
+    anchorLaneId: json['anchorLaneId'] as String?,
   );
 }
 

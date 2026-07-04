@@ -25,17 +25,33 @@ typedef SongwriterAuditionBed = ({
   Map<int, List<DrumLaneId>> drumByTick,
 });
 
+/// Same-tick notes bucketed by their lane's (volume, pan) mix settings.
+typedef SongwriterNoteGroup = ({double volume, double pan, List<int> midiNotes});
+
+/// Same-tick drum hits bucketed by their lane's (volume, pan) mix settings.
+typedef SongwriterDrumGroup = ({
+  double volume,
+  double pan,
+  List<DrumLaneId> drumLanes,
+});
+
 /// One audible moment on the flattened songwriter timeline.
 class SongwriterPlaybackEvent {
   const SongwriterPlaybackEvent({
     required this.tick,
-    this.midiNotes = const [],
-    this.drumLanes = const [],
+    this.noteGroups = const [],
+    this.drumGroups = const [],
   });
 
   final int tick;
-  final List<int> midiNotes;
-  final List<DrumLaneId> drumLanes;
+  final List<SongwriterNoteGroup> noteGroups;
+  final List<SongwriterDrumGroup> drumGroups;
+
+  /// Flat views across all mix groups, for callers that ignore mixing.
+  List<int> get midiNotes => [for (final g in noteGroups) ...g.midiNotes];
+  List<DrumLaneId> get drumLanes => [
+    for (final g in drumGroups) ...g.drumLanes,
+  ];
 }
 
 /// Midi pitches for a harmony block as an ascending stack from octave 4.
@@ -172,13 +188,17 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
 
   final byId = {for (final s in project.sections) s.id: s};
   final patterns = {for (final p in project.drumPatterns) p.id: p};
-  final notesAt = <int, List<int>>{};
-  final drumsAt = <int, Set<DrumLaneId>>{};
+  // tick → (volume, pan) → accumulated notes / drum hits.
+  final notesAt = <int, Map<(double, double), List<int>>>{};
+  final drumsAt = <int, Map<(double, double), Set<DrumLaneId>>>{};
 
   for (final exp in expandSections(project.sections)) {
     final section = byId[exp.sectionId];
     if (section == null) continue;
     for (final lane in section.lanes) {
+      final mix = mixGoverningLane(section, lane);
+      if (mix.muted) continue;
+      final mixKey = (mix.volume, mix.pan);
       final blocks = tileLaneBlocks(
         lane,
         sectionLengthBars: section.lengthBars,
@@ -192,7 +212,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             if (pitches.isEmpty) break;
             for (var bar = block.startBar; bar < clippedEnd; bar++) {
               final tick = (exp.globalStartBar + bar) * measureTicks;
-              (notesAt[tick] ??= []).addAll(pitches);
+              ((notesAt[tick] ??= {})[mixKey] ??= []).addAll(pitches);
             }
           case SongLaneKind.drum:
             final pattern = patterns[block.patternId];
@@ -200,7 +220,12 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             final startTick =
                 (exp.globalStartBar + block.startBar) * measureTicks;
             final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
-            _tileDrumHits(pattern, startTick, endTick, drumsAt);
+            final laneDrums = <int, Set<DrumLaneId>>{};
+            _tileDrumHits(pattern, startTick, endTick, laneDrums);
+            for (final e in laneDrums.entries) {
+              ((drumsAt[e.key] ??= {})[mixKey] ??= <DrumLaneId>{})
+                  .addAll(e.value);
+            }
           case SongLaneKind.audio:
             // Audio clips are scheduled directly by the transport, not emitted
             // as tick-indexed note/drum events here.
@@ -215,8 +240,14 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
     for (final tick in ticks)
       SongwriterPlaybackEvent(
         tick: tick,
-        midiNotes: notesAt[tick] ?? const [],
-        drumLanes: drumsAt[tick]?.toList() ?? const [],
+        noteGroups: [
+          for (final e in (notesAt[tick] ?? const {}).entries)
+            (volume: e.key.$1, pan: e.key.$2, midiNotes: e.value),
+        ],
+        drumGroups: [
+          for (final e in (drumsAt[tick] ?? const {}).entries)
+            (volume: e.key.$1, pan: e.key.$2, drumLanes: e.value.toList()),
+        ],
       ),
   ];
 }
@@ -235,6 +266,7 @@ Map<int, List<int>> _sectionChordBed(
     if (lane.kind == SongLaneKind.drum || lane.kind == SongLaneKind.audio) {
       continue;
     }
+    if (mixGoverningLane(section, lane).muted) continue;
     final blocks = tileLaneBlocks(lane, sectionLengthBars: section.lengthBars);
     for (final block in blocks) {
       final clippedEnd = math.min(block.endBar, section.lengthBars);
@@ -283,7 +315,7 @@ SongwriterAuditionBed sectionAuditionBed(
   final drumsAt = <int, Set<DrumLaneId>>{};
 
   for (final lane in section.lanes) {
-    if (lane.kind != SongLaneKind.drum) continue;
+    if (lane.kind != SongLaneKind.drum || lane.muted) continue;
     for (final block in tileLaneBlocks(
       lane,
       sectionLengthBars: section.lengthBars,

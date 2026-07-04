@@ -29,13 +29,16 @@ final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((
   };
 });
 
-/// Sink that sounds a chord / voicing stab. Override in tests.
-typedef SongwriterNoteSink = void Function(List<int> midiNotes);
+/// Sink that sounds one chord / voicing stab at a lane mix bucket's [volume]
+/// (0.0–1.0 lane gain, applied on top of the sink's own base level) and
+/// [pan]. Mirrors [DrumPatternPlaybackSink]'s shape. Override in tests.
+typedef SongwriterNoteSink =
+    void Function(List<int> midiNotes, double volume, double pan);
 
 final songwriterNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
-  return (midiNotes) {
+  return (midiNotes, volume, pan) {
     for (final midi in midiNotes) {
-      NotePlayer.instance.previewNote(midi, volume: 0.6);
+      NotePlayer.instance.previewNote(midi, volume: 0.6 * volume, pan: pan);
     }
   };
 });
@@ -139,6 +142,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                 .offsetIntoAsset(nowMs)
                 .clamp(0, clip.asset.durationMs),
             volume: clip.volume,
+            balance: clip.pan,
             loop: clip.loop,
           ),
         );
@@ -191,9 +195,13 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       while (eventIndex < events.length && events[eventIndex].tick == tick) {
         final event = events[eventIndex];
         eventIndex++;
-        if (event.midiNotes.isNotEmpty) noteSink(event.midiNotes);
-        if (event.drumLanes.isNotEmpty) {
-          unawaited(drumSink(event.drumLanes, 0.8));
+        for (final group in event.noteGroups) {
+          noteSink(group.midiNotes, group.volume, group.pan);
+        }
+        for (final group in event.drumGroups) {
+          unawaited(
+            drumSink(group.drumLanes, 0.8 * group.volume, group.pan),
+          );
         }
       }
       fireAudio(tick);

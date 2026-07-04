@@ -13,18 +13,19 @@ import '../schema/rules/piano_roll_playback_rules.dart' as rules;
 import '../utils/note_player.dart';
 import '../utils/tick_pacer.dart';
 
-/// Signature for a function that plays [lanes] as drum voices at [volume].
+/// Signature for a function that plays [lanes] as drum voices at [volume],
+/// panned by [pan] (-1.0 left .. 1.0 right).
 typedef DrumPatternPlaybackSink =
-    Future<void> Function(List<DrumLaneId> lanes, double volume);
+    Future<void> Function(List<DrumLaneId> lanes, double volume, double pan);
 
 /// Injected playback sink backed by [NotePlayer].  Override in tests to capture
 /// events without real audio.
 final drumPatternPlaybackSinkProvider = Provider<DrumPatternPlaybackSink>((
   ref,
 ) {
-  return (lanes, volume) async {
+  return (lanes, volume, pan) async {
     for (final lane in lanes) {
-      NotePlayer.instance.playDrumLane(lane, volume: volume);
+      NotePlayer.instance.playDrumLane(lane, volume: volume, pan: pan);
     }
   };
 });
@@ -137,7 +138,7 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
       state = state.copyWith(currentTick: () => drumTick);
       final lanes = lanesByTick[drumTick];
       if (lanes != null && lanes.isNotEmpty) {
-        unawaited(sink(lanes, 0.8));
+        unawaited(sink(lanes, 0.8, 0.0));
       }
       if (backingNotes != null) {
         final notes = backingNotes[tick];

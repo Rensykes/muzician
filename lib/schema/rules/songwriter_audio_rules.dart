@@ -20,6 +20,7 @@ class SongwriterScheduledClip {
   final int trimStartMs;
   final bool loop;
   final double volume;
+  final double pan; // -1.0 (left) .. 1.0 (right)
   const SongwriterScheduledClip({
     required this.asset,
     required this.startMs,
@@ -27,6 +28,7 @@ class SongwriterScheduledClip {
     required this.trimStartMs,
     required this.loop,
     this.volume = 1.0,
+    this.pan = 0.0,
   });
 
   /// In-asset position to seek to when the playhead is at [nowMs]. Clamped to
@@ -36,15 +38,65 @@ class SongwriterScheduledClip {
       (trimStartMs + (nowMs - startMs)).clamp(0, asset.durationMs);
 }
 
-/// Flattens placed audio clips across section repeats into absolute-ms records.
+/// Resolves one placed audio [block] on [lane] to an absolute-ms record, with
+/// the block's bars offset by [globalStartBar] (0 for section-local callers).
+/// Returns null for unresolvable blocks (missing clip or asset).
 ///
 /// Stretch mode resolves to the pre-rendered [AudioClip.stretchedAssetId] when
-/// present (Plan 4); until then it plays the source one-shot.
+/// present (Plan 4); until then it plays the source one-shot. trimEndMs == 0
+/// is the documented "no end-trim" sentinel (play to the natural asset end);
+/// see [AudioClip]. Honour it so legacy saves whose JSON predates the field
+/// do not silence one-shot clips.
+SongwriterScheduledClip? _scheduledClipForBlock({
+  required SongBlock block,
+  required SongLane lane,
+  required SongSection section,
+  required SongwriterConfig cfg,
+  required int globalStartBar,
+  required Map<String, AudioAsset> assetsById,
+  required Map<String, AudioClip> clipsById,
+}) {
+  final clip = clipsById[block.audioClipId];
+  if (clip == null) return null;
+  final usesStretched =
+      clip.fitMode == AudioFitMode.stretch && clip.stretchedAssetId != null;
+  final playAsset = usesStretched
+      ? assetsById[clip.stretchedAssetId]
+      : assetsById[clip.assetId];
+  if (playAsset == null) return null;
+
+  final measureTicks = cfg.measureTicks;
+  final clippedEnd = block.endBar > section.lengthBars
+      ? section.lengthBars
+      : block.endBar;
+  final startTick = (globalStartBar + block.startBar) * measureTicks;
+  final spanEndTick = (globalStartBar + clippedEnd) * measureTicks;
+  final startMs = songwriterAudioTickToMs(startTick, cfg);
+  final spanMs = songwriterAudioTickToMs(spanEndTick, cfg) - startMs;
+  final trimEnd = clip.trimEndMs == 0 ? playAsset.durationMs : clip.trimEndMs;
+  final regionMs = (trimEnd - clip.trimStartMs).clamp(0, playAsset.durationMs);
+
+  final loop = clip.fitMode == AudioFitMode.loop;
+  final endMs = loop || usesStretched
+      ? startMs + spanMs
+      : startMs + (regionMs < spanMs ? regionMs : spanMs);
+
+  return SongwriterScheduledClip(
+    asset: playAsset,
+    startMs: startMs,
+    endMs: endMs,
+    trimStartMs: usesStretched ? 0 : clip.trimStartMs,
+    loop: loop,
+    volume: lane.volume,
+    pan: lane.pan,
+  );
+}
+
+/// Flattens placed audio clips across section repeats into absolute-ms records.
 List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
   SongwriterProjectSnapshot project,
 ) {
   final cfg = project.config;
-  final measureTicks = cfg.measureTicks;
   final assetsById = {for (final a in project.audioAssets) a.id: a};
   final clipsById = {for (final c in project.audioClips) c.id: c};
   final out = <SongwriterScheduledClip>[];
@@ -55,53 +107,21 @@ List<SongwriterScheduledClip> songwriterSchedulableAudioClips(
         .firstOrNull;
     if (section == null) continue;
     for (final lane in section.lanes) {
-      if (lane.kind != SongLaneKind.audio) continue;
+      if (lane.kind != SongLaneKind.audio || lane.muted) continue;
       for (final block in tileLaneBlocks(
         lane,
         sectionLengthBars: section.lengthBars,
       )) {
-        final clip = clipsById[block.audioClipId];
-        if (clip == null) continue;
-        final usesStretched =
-            clip.fitMode == AudioFitMode.stretch &&
-            clip.stretchedAssetId != null;
-        final playAsset = usesStretched
-            ? assetsById[clip.stretchedAssetId]
-            : assetsById[clip.assetId];
-        if (playAsset == null) continue;
-
-        final clippedEnd = block.endBar > section.lengthBars
-            ? section.lengthBars
-            : block.endBar;
-        final startTick = (exp.globalStartBar + block.startBar) * measureTicks;
-        final spanEndTick = (exp.globalStartBar + clippedEnd) * measureTicks;
-        final startMs = songwriterAudioTickToMs(startTick, cfg);
-        final spanMs = songwriterAudioTickToMs(spanEndTick, cfg) - startMs;
-        // trimEndMs == 0 is the documented "no end-trim" sentinel (play to the
-        // natural asset end); see AudioClip. Honour it so legacy saves whose
-        // JSON predates the field do not silence one-shot clips.
-        final trimEnd = clip.trimEndMs == 0
-            ? playAsset.durationMs
-            : clip.trimEndMs;
-        final regionMs = (trimEnd - clip.trimStartMs).clamp(
-          0,
-          playAsset.durationMs,
+        final scheduled = _scheduledClipForBlock(
+          block: block,
+          lane: lane,
+          section: section,
+          cfg: cfg,
+          globalStartBar: exp.globalStartBar,
+          assetsById: assetsById,
+          clipsById: clipsById,
         );
-
-        final loop = clip.fitMode == AudioFitMode.loop;
-        final endMs = loop || usesStretched
-            ? startMs + spanMs
-            : startMs + (regionMs < spanMs ? regionMs : spanMs);
-
-        out.add(
-          SongwriterScheduledClip(
-            asset: playAsset,
-            startMs: startMs,
-            endMs: endMs,
-            trimStartMs: usesStretched ? 0 : clip.trimStartMs,
-            loop: loop,
-          ),
-        );
+        if (scheduled != null) out.add(scheduled);
       }
     }
   }
@@ -131,51 +151,21 @@ songwriterSectionSchedulableClips(
   final out = <SongwriterScheduledClip>[];
 
   for (final lane in section.lanes) {
-    if (lane.kind != SongLaneKind.audio) continue;
+    if (lane.kind != SongLaneKind.audio || lane.muted) continue;
     for (final block in tileLaneBlocks(
       lane,
       sectionLengthBars: section.lengthBars,
     )) {
-      final clip = clipsById[block.audioClipId];
-      if (clip == null) continue;
-      final usesStretched =
-          clip.fitMode == AudioFitMode.stretch && clip.stretchedAssetId != null;
-      final playAsset = usesStretched
-          ? assetsById[clip.stretchedAssetId]
-          : assetsById[clip.assetId];
-      if (playAsset == null) continue;
-
-      final clippedEnd = block.endBar > section.lengthBars
-          ? section.lengthBars
-          : block.endBar;
-      final startTick = block.startBar * measureTicks; // section-local
-      final spanEndTick = clippedEnd * measureTicks;
-      final startMs = songwriterAudioTickToMs(startTick, cfg);
-      final spanMs = songwriterAudioTickToMs(spanEndTick, cfg) - startMs;
-      // trimEndMs == 0 is the documented "no end-trim" sentinel (play to the
-      // natural asset end); see AudioClip. Honour it so legacy saves whose
-      // JSON predates the field do not silence one-shot clips.
-      final trimEnd = clip.trimEndMs == 0
-          ? playAsset.durationMs
-          : clip.trimEndMs;
-      final regionMs = (trimEnd - clip.trimStartMs).clamp(
-        0,
-        playAsset.durationMs,
+      final scheduled = _scheduledClipForBlock(
+        block: block,
+        lane: lane,
+        section: section,
+        cfg: cfg,
+        globalStartBar: 0, // section-local
+        assetsById: assetsById,
+        clipsById: clipsById,
       );
-      final loop = clip.fitMode == AudioFitMode.loop;
-      final endMs = loop || usesStretched
-          ? startMs + spanMs
-          : startMs + (regionMs < spanMs ? regionMs : spanMs);
-
-      out.add(
-        SongwriterScheduledClip(
-          asset: playAsset,
-          startMs: startMs,
-          endMs: endMs,
-          trimStartMs: usesStretched ? 0 : clip.trimStartMs,
-          loop: loop,
-        ),
-      );
+      if (scheduled != null) out.add(scheduled);
     }
   }
   out.sort((a, b) => a.startMs.compareTo(b.startMs));
