@@ -392,6 +392,7 @@ class SongLane {
     bool? muted,
     String? anchorLaneId,
     bool clearLabel = false,
+    bool clearAnchorLaneId = false,
   }) => SongLane(
     id: id,
     kind: kind ?? this.kind,
@@ -402,7 +403,9 @@ class SongLane {
     volume: volume ?? this.volume,
     pan: pan ?? this.pan,
     muted: muted ?? this.muted,
-    anchorLaneId: anchorLaneId ?? this.anchorLaneId,
+    anchorLaneId: clearAnchorLaneId
+        ? null
+        : (anchorLaneId ?? this.anchorLaneId),
   );
 
   Map<String, dynamic> toJson() => {
