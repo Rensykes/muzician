@@ -23,6 +23,26 @@ void main() {
     expect(c.read(songwriterProvider).sections.single.lanes, isEmpty);
   });
 
+  group('renameLane', () {
+    test('sets, replaces and clears the label', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'V', lengthBars: 4);
+      final s = c.read(songwriterProvider).sections.single.id;
+      n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
+      final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+      String? label() =>
+          c.read(songwriterProvider).sections.single.lanes.single.label;
+
+      n.renameLane(sectionId: s, laneId: l, label: 'Guitars');
+      expect(label(), 'Guitars');
+
+      n.renameLane(sectionId: s, laneId: l, label: null);
+      expect(label(), isNull);
+    });
+  });
+
   group('lane mix ops', () {
     test('volume and pan set with clamping, mute toggles', () {
       final c = ProviderContainer();

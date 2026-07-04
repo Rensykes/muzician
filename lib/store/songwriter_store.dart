@@ -283,6 +283,23 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     (l) => l.copyWith(repeat: repeat < 1 ? 1 : repeat),
   );
 
+  /// Sets or clears a lane's display label. Empty / whitespace-only labels
+  /// clear to null so kind fallbacks ("Harmony", "Beat", …) apply again.
+  void renameLane({
+    required String sectionId,
+    required String laneId,
+    required String? label,
+  }) {
+    final trimmed = label?.trim();
+    _replaceLane(
+      sectionId,
+      laneId,
+      (l) => trimmed == null || trimmed.isEmpty
+          ? l.copyWith(clearLabel: true)
+          : l.copyWith(label: trimmed),
+    );
+  }
+
   void setLaneVolume({
     required String sectionId,
     required String laneId,

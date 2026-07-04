@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../ui/core/muzician_dialog.dart';
 
 /// Pan values closer to center than this snap to exactly 0.0.
 const _panSnapThreshold = 0.08;
@@ -34,6 +35,48 @@ Future<void> showSongwriterMixerSheet(
         border: Border.all(color: MuzicianTheme.glassBorder),
       ),
       child: SongwriterMixerSheet(sectionId: sectionId),
+    ),
+  );
+}
+
+/// Rename dialog for a lane. Empty input clears the label back to the kind
+/// fallback ("Harmony", "Beat", …). Shared by the mixer strips and the
+/// harmony lane headers.
+void showLaneRenameDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  required String sectionId,
+  required SongLane lane,
+}) {
+  final controller = TextEditingController(text: lane.label ?? '');
+  showDialog<void>(
+    context: context,
+    builder: (dialogCtx) => MuzicianDialog(
+      title: 'Lane name',
+      content: TextField(
+        key: const Key('laneRenameField'),
+        controller: controller,
+        autofocus: true,
+        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        decoration: const InputDecoration(hintText: 'Lead vocal, Guitars…'),
+      ),
+      actions: [
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(dialogCtx)),
+        MuzicianDialogButton(
+          'Save',
+          emphasis: MuzicianDialogEmphasis.primary,
+          onPressed: () {
+            ref
+                .read(songwriterProvider.notifier)
+                .renameLane(
+                  sectionId: sectionId,
+                  laneId: lane.id,
+                  label: controller.text,
+                );
+            Navigator.pop(dialogCtx);
+          },
+        ),
+      ],
     ),
   );
 }
@@ -130,13 +173,35 @@ class _MixerStrip extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  lane.label ?? _kindFallbackLabel(lane.kind),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                child: GestureDetector(
+                  key: Key('mixerRename_${lane.id}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => showLaneRenameDialog(
+                    context,
+                    ref,
+                    sectionId: sectionId,
+                    lane: lane,
+                  ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          lane.label ?? _kindFallbackLabel(lane.kind),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: MuzicianTheme.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      const Icon(
+                        Icons.edit_outlined,
+                        size: 12,
+                        color: MuzicianTheme.textMuted,
+                      ),
+                    ],
                   ),
                 ),
               ),

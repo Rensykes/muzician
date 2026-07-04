@@ -129,6 +129,10 @@ the drum/audio editors — keeping them flat keeps scope small.
   - mute toggle (icon button; muted strip renders dimmed).
 - Controls call `setLaneVolume` / `setLanePan` / `setLaneMuted` directly;
   state is watched from the provider so the sheet is live.
+- Lanes are renameable (follow-up request): `renameLane` store setter
+  (empty/whitespace clears back to the kind fallback), rename dialog opened
+  by tapping the strip label in the mixer or a harmony lane's header label.
+  All lane displays reflect the label live via the provider.
 
 ## 6. Export (`lib/schema/rules/song_from_writer_rules.dart`)
 

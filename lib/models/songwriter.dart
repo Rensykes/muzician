@@ -384,10 +384,11 @@ class SongLane {
     double? volume,
     double? pan,
     bool? muted,
+    bool clearLabel = false,
   }) => SongLane(
     id: id,
     kind: kind ?? this.kind,
-    label: label ?? this.label,
+    label: clearLabel ? null : (label ?? this.label),
     order: order ?? this.order,
     repeat: repeat ?? this.repeat,
     blocks: blocks ?? this.blocks,
