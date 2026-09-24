@@ -46,6 +46,12 @@ void main() {
     expect(songwriterAudioTickToMs(measureTicks, cfg), 2000);
   });
 
+  test('tick->ms at 120 BPM, 6/8: 1 bar = 1500ms', () {
+    const cfg = SongwriterConfig(tempo: 120, beatsPerBar: 6, beatUnit: 8);
+    expect(cfg.measureTicks, 12);
+    expect(songwriterAudioTickToMs(cfg.measureTicks, cfg), 1500);
+  });
+
   test('loop clip fills the whole 2-bar span (4000ms)', () {
     final clips = songwriterSchedulableAudioClips(_project(AudioFitMode.loop));
     final c = clips.single;
@@ -148,7 +154,9 @@ void main() {
     final base = _project(AudioFitMode.loop);
     final section = base.sections.single;
     return base.copyWith(
-      sections: [section.copyWith(lanes: [f(section.lanes.single)])],
+      sections: [
+        section.copyWith(lanes: [f(section.lanes.single)]),
+      ],
     );
   }
 

@@ -68,5 +68,40 @@ void main() {
       expect(header.sampleRate, 44100);
       expect(header.durationMs, 100);
     });
+
+    test('strict PCM16 parser returns the sample payload location', () {
+      final source = Int16List.fromList([0, 1200, -2300]);
+      final bytes = writeWavPcm16Mono(source, sampleRate: 44100);
+      final data = parsePcm16Wav(bytes);
+
+      expect(data.sampleRate, 44100);
+      expect(data.channels, 1);
+      expect(data.frameCount, 3);
+      expect(decodePcm16Samples(bytes, data), source);
+    });
+
+    test(
+      'strict PCM16 parser rejects invalid format metadata and RIFF sizes',
+      () {
+        final source = Int16List.fromList([0, 1200]);
+        final canonical = writeWavPcm16Mono(source, sampleRate: 44100);
+
+        final compressed = Uint8List.fromList(canonical);
+        ByteData.sublistView(compressed).setUint16(20, 3, Endian.little);
+        expect(() => parsePcm16Wav(compressed), throwsFormatException);
+
+        final invalidRate = Uint8List.fromList(canonical);
+        ByteData.sublistView(invalidRate).setUint32(24, 7999, Endian.little);
+        expect(() => parsePcm16Wav(invalidRate), throwsFormatException);
+
+        final invalidChannels = Uint8List.fromList(canonical);
+        ByteData.sublistView(invalidChannels).setUint16(22, 3, Endian.little);
+        expect(() => parsePcm16Wav(invalidChannels), throwsFormatException);
+
+        final invalidLength = Uint8List.fromList(canonical);
+        ByteData.sublistView(invalidLength).setUint32(4, 0, Endian.little);
+        expect(() => parsePcm16Wav(invalidLength), throwsFormatException);
+      },
+    );
   });
 }

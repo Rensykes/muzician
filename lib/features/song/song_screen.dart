@@ -46,6 +46,8 @@ class _SongScreenState extends ConsumerState<SongScreen> {
   Widget build(BuildContext context) {
     final project = ref.watch(songProjectProvider);
     final playback = ref.watch(songPlaybackProvider);
+    final projectLocked = ref.watch(isProjectLockedProvider);
+    final compactHeader = MediaQuery.sizeOf(context).width < 480;
 
     return Container(
       decoration: const BoxDecoration(
@@ -106,11 +108,8 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                             ],
                           ),
                   ),
-                  Consumer(builder: (context, ref, _) {
-                    final locked = ref.watch(isProjectLockedProvider);
-                    if (locked) return const SizedBox.shrink();
-                    return _SongScaleChip(config: project.config);
-                  }),
+                  if (!compactHeader && !projectLocked)
+                    _SongScaleChip(config: project.config),
                   const Padding(
                     padding: EdgeInsets.only(right: 4),
                     child: ProjectChip(),
@@ -145,30 +144,77 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                   PopupMenuButton<String>(
                     key: _coachKeys.overflow,
                     tooltip: 'More',
-                    icon: const Icon(
-                      Icons.more_vert,
-                      color: MuzicianTheme.sky,
-                    ),
+                    icon: const Icon(Icons.more_vert, color: MuzicianTheme.sky),
                     color: MuzicianTheme.surface,
                     onSelected: (value) {
                       switch (value) {
+                        case 'undo':
+                          ref.read(songProjectProvider.notifier).undo();
+                        case 'redo':
+                          ref.read(songProjectProvider.notifier).redo();
                         case 'new':
                           _confirmNewSong(context);
                         case 'import':
                           _confirmImportFromWriter(context);
                         case 'export':
-                          exportSongToWav(context, ref);
+                          exportSongToWav(
+                            context,
+                            ref,
+                            sharePositionOrigin: _shareOriginForMenu(),
+                          );
+                        case 'bundle':
+                          exportSongBundle(
+                            context,
+                            ref,
+                            sharePositionOrigin: _shareOriginForMenu(),
+                          );
+                        case 'bundleImport':
+                          importSongBundle(context, ref);
+                        case 'help':
+                          _showWorkspaceHelp(context);
+                        case 'scale':
+                          _showSongScalePicker(context, project.config);
                       }
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'new', child: Text('New song')),
+                    itemBuilder: (_) => [
+                      if (compactHeader && !projectLocked)
+                        const PopupMenuItem(
+                          value: 'scale',
+                          child: Text('Song scale'),
+                        ),
+                      const PopupMenuItem(
+                        value: 'help',
+                        child: Text('About Song'),
+                      ),
                       PopupMenuItem(
+                        value: 'undo',
+                        enabled: ref.read(songProjectProvider.notifier).canUndo,
+                        child: const Text('Undo'),
+                      ),
+                      PopupMenuItem(
+                        value: 'redo',
+                        enabled: ref.read(songProjectProvider.notifier).canRedo,
+                        child: const Text('Redo'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'new',
+                        child: Text('New song'),
+                      ),
+                      const PopupMenuItem(
                         value: 'import',
                         child: Text('Import from Writer'),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
                         value: 'export',
                         child: Text('Export WAV'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'bundle',
+                        child: Text('Export Song Bundle'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'bundleImport',
+                        child: Text('Import Song Bundle'),
                       ),
                     ],
                   ),
@@ -187,45 +233,72 @@ class _SongScreenState extends ConsumerState<SongScreen> {
               child: KeyedSubtree(
                 key: _coachKeys.timeline,
                 child: project.tracks.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'No tracks yet',
-                            style: TextStyle(
-                              color: MuzicianTheme.textMuted.withValues(
-                                alpha: 0.6,
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'No tracks yet',
+                              style: TextStyle(
+                                color: MuzicianTheme.textMuted.withValues(
+                                  alpha: 0.6,
+                                ),
+                                fontSize: 16,
                               ),
-                              fontSize: 16,
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton.icon(
-                            onPressed: () => _showAddTrackSheet(context),
-                            icon: const Icon(
-                              Icons.add,
-                              color: MuzicianTheme.sky,
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: () => _showAddTrackSheet(context),
+                              icon: const Icon(
+                                Icons.add,
+                                color: MuzicianTheme.sky,
+                              ),
+                              label: const Text(
+                                'Add Track',
+                                style: TextStyle(color: MuzicianTheme.sky),
+                              ),
                             ),
-                            label: const Text(
-                              'Add Track',
-                              style: TextStyle(color: MuzicianTheme.sky),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      )
+                    : SongArrangerTimeline(
+                        measureTicks: song_rules.songTicksPerMeasure(
+                          project.config.timeSignature,
+                        ),
+                        currentPlaybackTick: playback.currentTick,
                       ),
-                    )
-                  : SongArrangerTimeline(
-                      measureTicks: song_rules.songTicksPerMeasure(
-                        project.config.timeSignature,
-                      ),
-                      currentPlaybackTick: playback.currentTick,
-                    ),
               ),
             ),
             const SongClipActionBar(),
           ],
         ),
+      ),
+    );
+  }
+
+  Rect? _shareOriginForMenu() {
+    final renderObject = _coachKeys.overflow.currentContext?.findRenderObject();
+    if (renderObject is RenderBox && renderObject.hasSize) {
+      return renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    }
+    return null;
+  }
+
+  void _showWorkspaceHelp(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => MuzicianDialog(
+        title: 'Song clip arrangement',
+        content: const Text(
+          'Arrange note, drum, and audio clips on tracks. Use Writer for a section, chord, and lyric sketch, then import that arrangement here.',
+        ),
+        actions: [
+          MuzicianDialogButton(
+            'Got it',
+            emphasis: MuzicianDialogEmphasis.primary,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+        ],
       ),
     );
   }
@@ -358,7 +431,7 @@ class _SongScreenState extends ConsumerState<SongScreen> {
     );
     if (confirmed != true) return;
     ref.read(songPlaybackProvider.notifier).stopPlayback();
-    await ref.read(songProjectProvider.notifier).loadProject(song_rules.getDefaultSongProject());
+    await ref.read(songProjectProvider.notifier).newSong();
   }
 
   Future<void> _confirmImportFromWriter(BuildContext context) async {
@@ -372,7 +445,9 @@ class _SongScreenState extends ConsumerState<SongScreen> {
           content: const Text(
             'This replaces the current song with a skeleton built from the '
             'Writer arrangement (sections become markers, chords become '
-            'note tracks, drum lanes become drum tracks).',
+            'note tracks, melody and guitar-strum lanes become note tracks, '
+            'and drum lanes become drum tracks). Writer audio lanes are not '
+            'transferred.',
           ),
           actions: [
             MuzicianDialogButton(
@@ -451,6 +526,8 @@ class _SongTransportStrip extends ConsumerWidget {
               currentBpm: tempo,
               onChanged: (v) =>
                   sheetRef.read(songProjectProvider.notifier).setTempo(v),
+              onChangeStart: songNotifier.beginHistoryGroup,
+              onChangeEnd: songNotifier.endHistoryGroup,
             );
           },
         ),
@@ -531,8 +608,9 @@ class _SongTransportStrip extends ConsumerWidget {
           active: ref.watch(songSnapToBeatProvider),
           onTap: () {
             HapticFeedback.selectionClick();
-            ref.read(songSnapToBeatProvider.notifier).state =
-                !ref.read(songSnapToBeatProvider);
+            ref.read(songSnapToBeatProvider.notifier).state = !ref.read(
+              songSnapToBeatProvider,
+            );
           },
         ),
         if (playback.hasLoop)
@@ -615,12 +693,7 @@ class _SongScaleChip extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: GestureDetector(
         onTap: () {
-          HapticFeedback.selectionClick();
-          showWidgetSheet(
-            context: context,
-            title: 'Song Scale',
-            child: _SongScalePickerSheet(config: config),
-          );
+          _showSongScalePicker(context, config);
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -659,6 +732,15 @@ class _SongScaleChip extends ConsumerWidget {
       ),
     );
   }
+}
+
+void _showSongScalePicker(BuildContext context, SongProjectConfig config) {
+  HapticFeedback.selectionClick();
+  showWidgetSheet(
+    context: context,
+    title: 'Song Scale',
+    child: _SongScalePickerSheet(config: config),
+  );
 }
 
 String _scaleLabel(String name) => note_utils.scaleGroups.values
@@ -901,10 +983,11 @@ class _SongScalePickerSheetState extends ConsumerState<_SongScalePickerSheet> {
       builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
     );
     if (confirmed != true) return;
-    ref
-        .read(songProjectProvider.notifier)
-        .removeNotesByPitchClassAcrossPatterns(conflicts);
-    _commitScale(root, scaleName);
+    final notifier = ref.read(songProjectProvider.notifier);
+    notifier.runHistoryGroup(() {
+      notifier.removeNotesByPitchClassAcrossPatterns(conflicts);
+      _commitScale(root, scaleName);
+    });
   }
 
   void _commitScale(String root, String scaleName) {

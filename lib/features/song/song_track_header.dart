@@ -233,6 +233,12 @@ class _TrackOverflowMenu extends ConsumerWidget {
                     key: Key('trackVolumeSlider_${track.id}'),
                     value: volume,
                     activeColor: MuzicianTheme.sky,
+                    onChangeStart: (_) => dialogRef
+                        .read(songProjectProvider.notifier)
+                        .beginHistoryGroup(),
+                    onChangeEnd: (_) => dialogRef
+                        .read(songProjectProvider.notifier)
+                        .endHistoryGroup(),
                     onChanged: (v) => dialogRef
                         .read(songProjectProvider.notifier)
                         .setTrackVolume(track.id, v),
@@ -279,10 +285,7 @@ class _TrackOverflowMenu extends ConsumerWidget {
           ),
         ),
         actions: [
-          MuzicianDialogButton(
-            'Cancel',
-            onPressed: () => Navigator.pop(ctx),
-          ),
+          MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(ctx)),
           MuzicianDialogButton(
             'Rename',
             emphasis: MuzicianDialogEmphasis.primary,

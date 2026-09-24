@@ -15,6 +15,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/song_project.dart';
+import '../schema/rules/song_bundle_rules.dart'
+    show songBundleMaxAudioEntryBytes;
 import '../schema/rules/song_audio_rules.dart';
 import '../utils/wav_writer.dart';
 
@@ -65,13 +67,12 @@ class SongAudioRepository {
   }
 
   Future<AudioAsset> writeRecording(Uint8List wavBytes) async {
-    final id = _uuid.v4();
-    final file = await resolvePath(id, 'wav');
-    await file.writeAsBytes(wavBytes, flush: true);
-
     final header = parseWavHeader(wavBytes);
     final samples = extractInt16Samples(wavBytes);
     final peaks = computePeaksFromInt16(samples);
+    final id = _uuid.v4();
+    final file = await resolvePath(id, 'wav');
+    await file.writeAsBytes(wavBytes, flush: true);
 
     return AudioAsset(
       id: id,
@@ -177,6 +178,43 @@ class SongAudioRepository {
     if (!file.existsSync()) return Int16List(0);
     final bytes = await file.readAsBytes();
     return extractInt16Samples(bytes);
+  }
+
+  /// Reads the exact original bytes for mixdown preflight or bundle export.
+  /// Returns null when the referenced source file is missing.
+  Future<Uint8List?> readAssetBytes(String assetId, String format) async {
+    final file = await resolvePath(assetId, format);
+    if (!file.existsSync()) return null;
+    return file.readAsBytes();
+  }
+
+  /// Copies a validated Song Bundle source under a fresh repository ID.
+  /// Partial files are removed if the write fails.
+  Future<AudioAsset> writeImportedBundleAsset({
+    required Uint8List bytes,
+    required AudioAsset sourceAsset,
+  }) async {
+    final format = sourceAsset.format.toLowerCase();
+    if (!const {'wav', 'mp3', 'm4a'}.contains(format)) {
+      throw UnsupportedError('Unsupported Song Bundle audio format: $format');
+    }
+    if (bytes.length > songBundleMaxAudioEntryBytes) {
+      throw RangeError('Song Bundle audio entry exceeds 50 MB.');
+    }
+
+    final id = _uuid.v4();
+    final destination = await resolvePath(id, format);
+    try {
+      await destination.writeAsBytes(bytes, flush: true);
+      return sourceAsset.copyWith(id: id, format: format);
+    } catch (_) {
+      try {
+        if (destination.existsSync()) await destination.delete();
+      } on FileSystemException {
+        // Preserve the original write failure.
+      }
+      rethrow;
+    }
   }
 
   Future<AudioAsset> writeStretched({

@@ -57,7 +57,10 @@ void showLaneRenameDialog(
         decoration: const InputDecoration(hintText: 'Lead vocal, Guitars…'),
       ),
       actions: [
-        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(dialogCtx)),
+        MuzicianDialogButton(
+          'Cancel',
+          onPressed: () => Navigator.pop(dialogCtx),
+        ),
         MuzicianDialogButton(
           'Save',
           emphasis: MuzicianDialogEmphasis.primary,
@@ -143,6 +146,8 @@ class _MixerStripState extends ConsumerState<_MixerStrip> {
     SongLaneKind.save => Icons.bookmark_outline,
     SongLaneKind.drum => Icons.graphic_eq,
     SongLaneKind.audio => Icons.mic,
+    SongLaneKind.melody => Icons.music_note,
+    SongLaneKind.guitarStrum => Icons.music_note_outlined,
   };
 
   static double _snapPan(double v) => v.abs() < _panSnapThreshold ? 0.0 : v;

@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/instrument_shared/instrument_binding.dart';
 import '../models/fretboard.dart';
 import '../models/harmonic_analysis.dart';
-import '../models/save_system.dart' show FretboardSnapshot;
+import '../models/save_system.dart'
+    show FretboardSnapshot, PendingChord, PendingScale;
 import '../schema/rules/fretboard_rules.dart';
 import '../store/project_config_sync.dart';
 import '../utils/note_utils.dart'
@@ -307,5 +308,28 @@ final fretboardBinding = InstrumentBinding(
   activeChord: activeChordProvider,
   manualEdit: fretboardManualEditProvider,
   chordCommitted: fretboardChordCommittedProvider,
+  captureSnapshot: (ref) {
+    final fretboard = ref.read(fretboardProvider);
+    final chord = ref.read(pendingChordProvider);
+    final scale = ref.read(pendingScaleProvider);
+    return FretboardSnapshot(
+      tuning: fretboard.currentTuning,
+      numFrets: fretboard.numFrets,
+      capo: fretboard.capo,
+      selectedCells: List.of(fretboard.selectedCells),
+      selectedNotes: List.of(fretboard.selectedNotes),
+      viewMode: fretboard.viewMode,
+      pendingChord: chord == null
+          ? null
+          : PendingChord(
+              root: chord.root,
+              quality: chord.quality,
+              symbol: '${chord.root}${chord.quality}',
+            ),
+      pendingScale: scale == null
+          ? null
+          : PendingScale(root: scale.root, scaleName: scale.scaleName),
+    );
+  },
   chordOffKey: fretboardChordOffKeyProvider,
 );

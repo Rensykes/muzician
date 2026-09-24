@@ -9,6 +9,8 @@ class PianoRollNote {
   final String noteWithOctave;
   final int startTick;
   final int durationTicks;
+  final int onsetOffsetMs;
+  final int durationOffsetMs;
 
   const PianoRollNote({
     required this.id,
@@ -17,6 +19,8 @@ class PianoRollNote {
     required this.noteWithOctave,
     required this.startTick,
     required this.durationTicks,
+    this.onsetOffsetMs = 0,
+    this.durationOffsetMs = 0,
   });
 
   PianoRollNote copyWith({
@@ -25,6 +29,8 @@ class PianoRollNote {
     String? noteWithOctave,
     int? startTick,
     int? durationTicks,
+    int? onsetOffsetMs,
+    int? durationOffsetMs,
   }) => PianoRollNote(
     id: id,
     midiNote: midiNote ?? this.midiNote,
@@ -32,6 +38,8 @@ class PianoRollNote {
     noteWithOctave: noteWithOctave ?? this.noteWithOctave,
     startTick: startTick ?? this.startTick,
     durationTicks: durationTicks ?? this.durationTicks,
+    onsetOffsetMs: onsetOffsetMs ?? this.onsetOffsetMs,
+    durationOffsetMs: durationOffsetMs ?? this.durationOffsetMs,
   );
 }
 

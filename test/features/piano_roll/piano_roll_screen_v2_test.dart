@@ -83,6 +83,38 @@ Widget _wrapV2(ProviderContainer container, {Size? surfaceSize}) {
 }
 
 void main() {
+  testWidgets('Piano Roll controls fit compact and wide editor viewports', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(
+          () => _FakePianoRollNotifier(_defaultPRState),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    for (final viewport in const [Size(1180, 820), Size(1800, 1000)]) {
+      tester.view.physicalSize = viewport;
+      tester.view.devicePixelRatio = 1.0;
+      await tester.pumpWidget(_wrapV2(container, surfaceSize: viewport));
+      await tester.pump();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'Piano Roll should not overflow at ${viewport.width}×${viewport.height}',
+      );
+    }
+
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
   // ── Landscape layout test ──────────────────────────────────────────────
 
   testWidgets('landscape layout has grid and utility surface visible', (

@@ -7,8 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/song_project.dart';
+import 'persisted_data_recovery_store.dart';
 
-const _kSongSessionsKey = '@muzician/song_sessions/v1';
+const songSessionsStorageKey = '@muzician/song_sessions/v1';
 const _kDebounce = Duration(milliseconds: 500);
 
 class SongSessionsNotifier extends Notifier<Map<String, SongProject>> {
@@ -24,15 +25,20 @@ class SongSessionsNotifier extends Notifier<Map<String, SongProject>> {
   Future<void> hydrate() async {
     if (_hydrated) return;
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_kSongSessionsKey);
+    final raw = prefs.getString(songSessionsStorageKey);
     if (raw != null) {
       try {
         final map = jsonDecode(raw) as Map<String, dynamic>;
-        state = map.map(
-          (k, v) => MapEntry(k, SongProject.fromJson(v as Map<String, dynamic>)),
+        final parsed = map.map(
+          (k, v) =>
+              MapEntry(k, SongProject.fromJson(v as Map<String, dynamic>)),
         );
+        state = parsed;
       } catch (_) {
-        await prefs.remove(_kSongSessionsKey);
+        throw MalformedPersistedPayload(
+          storageKey: songSessionsStorageKey,
+          raw: raw,
+        );
       }
     }
     _hydrated = true;
@@ -55,7 +61,7 @@ class SongSessionsNotifier extends Notifier<Map<String, SongProject>> {
     _debounce?.cancel();
     state = const {};
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kSongSessionsKey);
+    await prefs.remove(songSessionsStorageKey);
   }
 
   /// Cancels any pending debounced write and persists the current state now.
@@ -65,7 +71,7 @@ class SongSessionsNotifier extends Notifier<Map<String, SongProject>> {
     _debounce?.cancel();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _kSongSessionsKey,
+      songSessionsStorageKey,
       jsonEncode(state.map((k, v) => MapEntry(k, v.toJson()))),
     );
   }
@@ -76,7 +82,7 @@ class SongSessionsNotifier extends Notifier<Map<String, SongProject>> {
     _debounce = Timer(_kDebounce, () async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        _kSongSessionsKey,
+        songSessionsStorageKey,
         jsonEncode(snapshot.map((k, v) => MapEntry(k, v.toJson()))),
       );
     });
@@ -85,4 +91,5 @@ class SongSessionsNotifier extends Notifier<Map<String, SongProject>> {
 
 final songSessionsProvider =
     NotifierProvider<SongSessionsNotifier, Map<String, SongProject>>(
-        SongSessionsNotifier.new);
+      SongSessionsNotifier.new,
+    );

@@ -7,10 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/save_system.dart';
+import 'persisted_data_recovery_store.dart';
 import 'save_system_store.dart';
 import 'songwriter_store.dart';
 
-const _kWriterBindingsKey = '@muzician/writer_save_bindings/v1';
+const writerSaveBindingsStorageKey = '@muzician/writer_save_bindings/v1';
 const _kDebounce = Duration(milliseconds: 500);
 
 /// Per-project link between the live Writer project and a named [SaveEntry].
@@ -26,9 +27,9 @@ class WriterSaveBinding {
       );
 
   Map<String, dynamic> toJson() => {
-        'activeSaveId': activeSaveId,
-        'alwaysOverwrite': alwaysOverwrite,
-      };
+    'activeSaveId': activeSaveId,
+    'alwaysOverwrite': alwaysOverwrite,
+  };
 
   factory WriterSaveBinding.fromJson(Map<String, dynamic> json) =>
       WriterSaveBinding(
@@ -51,18 +52,22 @@ class WriterSaveBindingNotifier
   Future<void> hydrate() async {
     if (_hydrated) return;
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_kWriterBindingsKey);
+    final raw = prefs.getString(writerSaveBindingsStorageKey);
     if (raw != null) {
       try {
         final map = jsonDecode(raw) as Map<String, dynamic>;
-        state = map.map(
+        final parsed = map.map(
           (k, v) => MapEntry(
             k,
             WriterSaveBinding.fromJson(v as Map<String, dynamic>),
           ),
         );
+        state = parsed;
       } catch (_) {
-        await prefs.remove(_kWriterBindingsKey);
+        throw MalformedPersistedPayload(
+          storageKey: writerSaveBindingsStorageKey,
+          raw: raw,
+        );
       }
     }
     _hydrated = true;
@@ -93,7 +98,7 @@ class WriterSaveBindingNotifier
     _debounce = Timer(_kDebounce, () async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        _kWriterBindingsKey,
+        writerSaveBindingsStorageKey,
         jsonEncode(snapshot.map((k, v) => MapEntry(k, v.toJson()))),
       );
     });
@@ -102,13 +107,15 @@ class WriterSaveBindingNotifier
 
 final writerSaveBindingProvider =
     NotifierProvider<WriterSaveBindingNotifier, Map<String, WriterSaveBinding>>(
-        WriterSaveBindingNotifier.new);
+      WriterSaveBindingNotifier.new,
+    );
 
 /// True when the live Writer project differs from the named save it is bound
 /// to. When unbound (or the bound save is missing), dirty when it has content.
 final writerDirtyProvider = Provider<bool>((ref) {
-  final projectId =
-      ref.watch(saveSystemProvider.select((s) => s.selectedProjectId));
+  final projectId = ref.watch(
+    saveSystemProvider.select((s) => s.selectedProjectId),
+  );
   if (projectId == null) return false;
   final project = ref.watch(songwriterProvider);
   final binding = ref.watch(writerSaveBindingProvider)[projectId];

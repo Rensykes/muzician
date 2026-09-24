@@ -5,7 +5,7 @@ import 'piano_roll.dart' show ticksPerBeatForUnit;
 import 'save_system.dart';
 import 'song_project.dart';
 
-enum SongLaneKind { harmony, save, drum, audio }
+enum SongLaneKind { harmony, save, drum, audio, melody, guitarStrum }
 
 SongLaneKind _laneKindFromName(String? raw) {
   for (final v in SongLaneKind.values) {
@@ -175,6 +175,82 @@ class AudioClip {
   );
 }
 
+enum GuitarStrumDirection { down, up }
+
+class GuitarStrumEvent {
+  final int tick;
+  final GuitarStrumDirection direction;
+
+  const GuitarStrumEvent({required this.tick, required this.direction});
+
+  GuitarStrumEvent copyWith({int? tick, GuitarStrumDirection? direction}) =>
+      GuitarStrumEvent(
+        tick: tick ?? this.tick,
+        direction: direction ?? this.direction,
+      );
+
+  Map<String, dynamic> toJson() => {'tick': tick, 'direction': direction.name};
+
+  factory GuitarStrumEvent.fromJson(Map<String, dynamic> json) {
+    final rawDirection = json['direction'] as String?;
+    return GuitarStrumEvent(
+      tick: json['tick'] as int? ?? 0,
+      direction: GuitarStrumDirection.values.firstWhere(
+        (direction) => direction.name == rawDirection,
+        orElse: () => GuitarStrumDirection.down,
+      ),
+    );
+  }
+}
+
+class GuitarStrumPattern {
+  final String id;
+  final String name;
+  final int lengthTicks;
+  final List<GuitarStrumEvent> events;
+
+  const GuitarStrumPattern({
+    required this.id,
+    required this.name,
+    required this.lengthTicks,
+    this.events = const [],
+  });
+
+  GuitarStrumPattern copyWith({
+    String? id,
+    String? name,
+    int? lengthTicks,
+    List<GuitarStrumEvent>? events,
+  }) => GuitarStrumPattern(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    lengthTicks: lengthTicks ?? this.lengthTicks,
+    events: events ?? this.events,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'lengthTicks': lengthTicks,
+    'events': events.map((event) => event.toJson()).toList(),
+  };
+
+  factory GuitarStrumPattern.fromJson(Map<String, dynamic> json) =>
+      GuitarStrumPattern(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? 'Strum Pattern',
+        lengthTicks: json['lengthTicks'] as int? ?? 16,
+        events:
+            (json['events'] as List?)
+                ?.map(
+                  (event) =>
+                      GuitarStrumEvent.fromJson(event as Map<String, dynamic>),
+                )
+                .toList() ??
+            const [],
+      );
+}
+
 class SongBlock {
   final String id;
   final int startBar; // 0-based offset within the section
@@ -236,6 +312,7 @@ class SongBlock {
     List<String>? lyrics,
     bool? isSilent,
     bool clearRomanNumeral = false,
+    bool clearChordData = false,
     bool clearSaveId = false,
     bool clearEmbedded = false,
     bool clearPatternId = false,
@@ -246,11 +323,11 @@ class SongBlock {
     spanBars: spanBars ?? this.spanBars,
     saveId: clearSaveId ? null : (saveId ?? this.saveId),
     embedded: clearEmbedded ? null : (embedded ?? this.embedded),
-    chordSymbol: chordSymbol ?? this.chordSymbol,
-    chordQuality: chordQuality ?? this.chordQuality,
-    chordRootPc: chordRootPc ?? this.chordRootPc,
-    chordNotes: chordNotes ?? this.chordNotes,
-    romanNumeral: clearRomanNumeral
+    chordSymbol: clearChordData ? null : (chordSymbol ?? this.chordSymbol),
+    chordQuality: clearChordData ? null : (chordQuality ?? this.chordQuality),
+    chordRootPc: clearChordData ? null : (chordRootPc ?? this.chordRootPc),
+    chordNotes: clearChordData ? const [] : (chordNotes ?? this.chordNotes),
+    romanNumeral: clearRomanNumeral || clearChordData
         ? null
         : (romanNumeral ?? this.romanNumeral),
     patternId: clearPatternId ? null : (patternId ?? this.patternId),
@@ -363,9 +440,8 @@ class SongLane {
   final double pan; // -1.0 (left) .. 1.0 (right)
   final bool muted;
 
-  /// Save lanes only: id of the harmony lane this lane's voicings belong to.
-  /// Its badges render on that lane's row and its mix follows that lane.
-  /// Null = the section's primary harmony lane (legacy saves).
+  /// Save or guitar-strum lane: harmony lane whose chord data drives this
+  /// lane. Null resolves to the section's primary harmony lane.
   final String? anchorLaneId;
 
   const SongLane({
@@ -444,6 +520,8 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
   final SongwriterConfig config;
   final List<SongSection> sections;
   final List<DrumPattern> drumPatterns;
+  final List<NotePattern> melodyPatterns;
+  final List<GuitarStrumPattern> guitarStrumPatterns;
   final List<AudioAsset> audioAssets;
   final List<AudioClip> audioClips;
 
@@ -452,6 +530,8 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     required this.config,
     this.sections = const [],
     this.drumPatterns = const [],
+    this.melodyPatterns = const [],
+    this.guitarStrumPatterns = const [],
     this.audioAssets = const [],
     this.audioClips = const [],
   });
@@ -488,6 +568,8 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     SongwriterConfig? config,
     List<SongSection>? sections,
     List<DrumPattern>? drumPatterns,
+    List<NotePattern>? melodyPatterns,
+    List<GuitarStrumPattern>? guitarStrumPatterns,
     List<AudioAsset>? audioAssets,
     List<AudioClip>? audioClips,
   }) => SongwriterProjectSnapshot(
@@ -495,6 +577,8 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     config: config ?? this.config,
     sections: sections ?? this.sections,
     drumPatterns: drumPatterns ?? this.drumPatterns,
+    melodyPatterns: melodyPatterns ?? this.melodyPatterns,
+    guitarStrumPatterns: guitarStrumPatterns ?? this.guitarStrumPatterns,
     audioAssets: audioAssets ?? this.audioAssets,
     audioClips: audioClips ?? this.audioClips,
   );
@@ -507,6 +591,8 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     'config': config.toJson(),
     'sections': sections.map((s) => s.toJson()).toList(),
     'drumPatterns': drumPatterns.map((p) => p.toJson()).toList(),
+    'melodyPatterns': melodyPatterns.map((p) => p.toJson()).toList(),
+    'guitarStrumPatterns': guitarStrumPatterns.map((p) => p.toJson()).toList(),
     'audioAssets': audioAssets.map((a) => a.toJson()).toList(),
     'audioClips': audioClips.map((c) => c.toJson()).toList(),
   };
@@ -527,6 +613,18 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
         drumPatterns:
             (json['drumPatterns'] as List?)
                 ?.map((p) => DrumPattern.fromJson(p as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        melodyPatterns:
+            (json['melodyPatterns'] as List?)
+                ?.map((p) => NotePattern.fromJson(p as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        guitarStrumPatterns:
+            (json['guitarStrumPatterns'] as List?)
+                ?.map(
+                  (p) => GuitarStrumPattern.fromJson(p as Map<String, dynamic>),
+                )
                 .toList() ??
             const [],
         audioAssets:

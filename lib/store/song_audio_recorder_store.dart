@@ -31,6 +31,7 @@ class SongAudioRecorderState {
   final int elapsedMs;
   final AudioAsset? pendingAsset;
   final String? errorMessage;
+  final bool isPreviewing;
 
   const SongAudioRecorderState({
     this.status = SongAudioRecorderStatus.idle,
@@ -39,6 +40,7 @@ class SongAudioRecorderState {
     this.elapsedMs = 0,
     this.pendingAsset,
     this.errorMessage,
+    this.isPreviewing = false,
   });
 
   SongAudioRecorderState copyWith({
@@ -48,6 +50,7 @@ class SongAudioRecorderState {
     int? elapsedMs,
     AudioAsset? Function()? pendingAsset,
     String? Function()? errorMessage,
+    bool? isPreviewing,
   }) => SongAudioRecorderState(
     status: status ?? this.status,
     targetTrackId: targetTrackId != null ? targetTrackId() : this.targetTrackId,
@@ -55,6 +58,7 @@ class SongAudioRecorderState {
     elapsedMs: elapsedMs ?? this.elapsedMs,
     pendingAsset: pendingAsset != null ? pendingAsset() : this.pendingAsset,
     errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
+    isPreviewing: isPreviewing ?? this.isPreviewing,
   );
 }
 
@@ -81,6 +85,8 @@ final songAudioRecorderDriverProvider = Provider<SongAudioRecorderDriver>((
 
 class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
   bool? _originalMuted;
+  int _recordingGeneration = 0;
+  int _previewGeneration = 0;
 
   @override
   SongAudioRecorderState build() => const SongAudioRecorderState();
@@ -94,8 +100,10 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
         state.status != SongAudioRecorderStatus.error) {
       return;
     }
+    final generation = ++_recordingGeneration;
     final driver = ref.read(songAudioRecorderDriverProvider);
     final permitted = await driver.ensurePermission();
+    if (generation != _recordingGeneration) return;
     if (!permitted) {
       state = state.copyWith(
         status: SongAudioRecorderStatus.error,
@@ -128,20 +136,37 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
       // and we abandon the loop if the state has been cancelled.
       final beatSpacing = Duration(milliseconds: (countInMs / 4).round());
       for (var i = 0; i < 4; i++) {
-        if (state.status != SongAudioRecorderStatus.countIn) return;
+        if (generation != _recordingGeneration ||
+            state.status != SongAudioRecorderStatus.countIn) {
+          return;
+        }
         NotePlayer.instance.playDrumLane(DrumLaneId.closedHiHat);
         await Future<void>.delayed(beatSpacing);
       }
     }
 
-    if (state.status != SongAudioRecorderStatus.countIn) return;
+    if (generation != _recordingGeneration ||
+        state.status != SongAudioRecorderStatus.countIn) {
+      return;
+    }
     state = state.copyWith(status: SongAudioRecorderStatus.recording);
     _startBackgroundPlayback(startTick);
-    await driver.start();
+    try {
+      await driver.start();
+    } catch (e) {
+      if (generation != _recordingGeneration) return;
+      _stopBackgroundPlayback();
+      _restoreTargetTrackMute();
+      state = state.copyWith(
+        status: SongAudioRecorderStatus.error,
+        errorMessage: () => 'Recording failed: $e',
+      );
+    }
   }
 
   Future<void> stop() async {
     if (state.status != SongAudioRecorderStatus.recording) return;
+    final generation = _recordingGeneration;
     state = state.copyWith(status: SongAudioRecorderStatus.finalising);
     _stopBackgroundPlayback();
     final driver = ref.read(songAudioRecorderDriverProvider);
@@ -149,25 +174,33 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
       final bytes = await driver.stop();
       final repo = ref.read(songAudioRepositoryProvider);
       final asset = await repo.writeRecording(bytes);
+      if (generation != _recordingGeneration) {
+        await repo.delete(asset.id);
+        return;
+      }
       state = state.copyWith(
         status: SongAudioRecorderStatus.ready,
         pendingAsset: () => asset,
         elapsedMs: asset.durationMs,
       );
     } catch (e) {
+      if (generation != _recordingGeneration) return;
       state = state.copyWith(
         status: SongAudioRecorderStatus.error,
         errorMessage: () => 'Recording failed: $e',
       );
+    } finally {
+      _restoreTargetTrackMute();
     }
-    _restoreTargetTrackMute();
   }
 
   /// Cancels an active count-in or recording without producing an asset.
   /// Safe to call in any state.
   Future<void> cancel() async {
+    ++_recordingGeneration;
     final st = state.status;
     if (st == SongAudioRecorderStatus.idle) return;
+    await stopPreview();
     _stopBackgroundPlayback();
     if (st == SongAudioRecorderStatus.recording) {
       final driver = ref.read(songAudioRecorderDriverProvider);
@@ -198,10 +231,89 @@ class SongAudioRecorderNotifier extends Notifier<SongAudioRecorderState> {
     return asset;
   }
 
-  Future<void> reset() async {
-    _stopBackgroundPlayback();
-    _restoreTargetTrackMute();
+  /// Stops audition playback and releases the pending take for commitment.
+  Future<AudioAsset?> acceptPendingTake() async {
+    await stopPreview();
+    return consumePendingAsset();
+  }
+
+  /// Replaces the pending take with a fresh recording at the same target.
+  Future<void> rerecord({int countInMs = 0}) async {
+    if (state.status != SongAudioRecorderStatus.ready) return;
+    final trackId = state.targetTrackId;
+    final startTick = state.startTick;
+    if (trackId == null || startTick == null) return;
+    await stopPreview();
+    final pending = state.pendingAsset;
+    if (pending != null) {
+      await ref.read(songAudioRepositoryProvider).delete(pending.id);
+    }
     state = const SongAudioRecorderState();
+    await start(trackId: trackId, startTick: startTick, countInMs: countInMs);
+  }
+
+  /// Plays the pending take once through the same audio sink used by Song.
+  Future<void> previewPendingTake() async {
+    final asset = state.pendingAsset;
+    if (state.status != SongAudioRecorderStatus.ready || asset == null) return;
+    final generation = ++_previewGeneration;
+    final sink = ref.read(songAudioClipSinkProvider);
+    try {
+      await sink.stopClip(asset: asset);
+      await sink.prepare([asset]);
+      if (generation != _previewGeneration) return;
+      await sink.startClip(asset: asset, offsetMs: 0);
+      if (generation != _previewGeneration) {
+        await sink.stopClip(asset: asset);
+        return;
+      }
+      state = state.copyWith(isPreviewing: true, errorMessage: () => null);
+      unawaited(_stopPreviewAfter(asset, generation));
+    } catch (_) {
+      if (generation == _previewGeneration) {
+        state = state.copyWith(
+          isPreviewing: false,
+          errorMessage: () => 'Could not audition this take.',
+        );
+      }
+    }
+  }
+
+  /// Ends any active audition without deleting the pending take.
+  Future<void> stopPreview() async {
+    ++_previewGeneration;
+    final asset = state.pendingAsset;
+    if (asset != null) {
+      try {
+        await ref.read(songAudioClipSinkProvider).stopClip(asset: asset);
+      } catch (_) {
+        // Preview cleanup must not prevent accepting or discarding a take.
+      }
+    }
+    if (state.isPreviewing) {
+      state = state.copyWith(isPreviewing: false);
+    }
+  }
+
+  Future<void> reset() async {
+    await cancel();
+  }
+
+  Future<void> _stopPreviewAfter(AudioAsset asset, int generation) async {
+    await Future<void>.delayed(Duration(milliseconds: asset.durationMs));
+    if (generation != _previewGeneration ||
+        state.pendingAsset?.id != asset.id) {
+      return;
+    }
+    try {
+      await ref.read(songAudioClipSinkProvider).stopClip(asset: asset);
+    } catch (_) {
+      // The player may already have stopped at the end of the take.
+    }
+    if (generation == _previewGeneration &&
+        state.pendingAsset?.id == asset.id) {
+      state = state.copyWith(isPreviewing: false);
+    }
   }
 
   void _startBackgroundPlayback(int startTick) {

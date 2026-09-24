@@ -6,6 +6,7 @@ library;
 
 import '../../models/piano_roll.dart';
 import '../../models/piano_roll_playback.dart';
+import '../../models/song_project.dart';
 import 'piano_roll_rules.dart' as pr;
 
 /// Returns the tick where playback should start.
@@ -32,6 +33,17 @@ double millisecondsPerTick(int tempo) => 60000 / tempo / pr.ticksPerQuarter;
 /// for a span: `tickDuration(tempo) * ticks`.
 Duration tickDuration(int tempo) =>
     Duration(microseconds: (millisecondsPerTick(tempo) * 1000).round());
+
+/// Audible duration for a sequenced note after any event-level boundary trim.
+Duration effectiveSequencedNoteDuration(
+  Duration tickDuration,
+  NotePatternNote note,
+) {
+  final duration =
+      tickDuration * note.durationTicks +
+      Duration(milliseconds: note.durationOffsetMs);
+  return duration <= Duration.zero ? const Duration(milliseconds: 1) : duration;
+}
 
 /// Groups [notes] into a sorted list of [PianoRollPlaybackEvent]s.
 ///

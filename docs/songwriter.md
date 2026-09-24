@@ -1,15 +1,15 @@
 # Songwriter
 
-The Songwriter is a section-based, multi-lane arrangement map. A song is a list of
-**sections** (verse, chorus, … — free, optional labels); each section stacks parallel
-**lanes**; each lane holds **blocks** that reference saved progressions. It gives the
-app's arrangement mission (double-tracking, harmonies, complementary sounds) a spine:
-a harmony lane of chords as foundation, save lanes of voicings/scales/highlights as
-enrichment beneath it.
+Writer is Muzician's section, chord, and lyric sketch. A song is a list of
+**sections** (verse, chorus, … — free, optional labels); each section stacks
+parallel **lanes** for harmony, saved or embedded voicings, drums, melody,
+guitar strum, and audio.
+Use Writer to shape the song's sections, then move to **Song** when you want to
+arrange note, drum, or audio clips on a timeline.
 
-> **Status:** Foundation only (data model, rules, store). The Songwriter tab UI,
-> transport playback, and the chord-wheel picker are tracked in later plans
-> (`docs/superpowers/specs/2026-06-02-songwriter-v1-design.md`).
+Writer is the first workspace on a new install. After startup it restores the
+last content workspace (Fretboard, Piano, Roll, Song, or Writer); opening
+Settings does not change that preference.
 
 ---
 
@@ -20,8 +20,9 @@ enrichment beneath it.
 | `SongwriterProjectSnapshot` | `InstrumentSnapshot` subtype (`type: 'songwriter'`) — `config` + ordered `sections`. |
 | `SongwriterConfig` | `tempo`, `beatsPerBar`, `beatUnit`, optional `keyRoot` (pitch class) + `keyScaleName`. |
 | `SongSection` | `id`, optional `label`, `lengthBars`, `order`, `repeat`, `lanes`. |
-| `SongLane` | `id`, `kind` (`harmony` \| `save`), optional `label`, `order`, `repeat`, `blocks`. |
-| `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter); a `saveId` live reference **or** an `embedded` detached snapshot; harmony extras: `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, `romanNumeral`. |
+| `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; strum lanes may select an `anchorLaneId` harmony lane. |
+| `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter); a `saveId` live reference **or** an `embedded` snapshot; pattern lanes reference their pattern id; harmony extras: `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, `romanNumeral`. |
+| `NotePattern` / `GuitarStrumPattern` | Melody pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. |
 
 All types are immutable (`copyWith` / `toJson` / `fromJson`). A block resolves to a
 snapshot as: `embedded` if set (Made Unique), else the live `SaveEntry` for `saveId`,
@@ -45,6 +46,29 @@ else broken (the referenced save was deleted).
 Playback flattening expands **section** repeats (whole section loops N×) and **lane**
 repeats (the lane's block pattern tiles N× from bar 0, clipped to the section).
 
+### Melody and guitar-strum lanes
+
+Melody blocks open the existing Piano Roll editor. A pattern starts at local tick
+zero at the block's left edge, loops from that origin through the block, and is
+clipped at the block and section edges. Moving a block moves its playback
+origin; resizing changes the playback window and number of pattern loops while
+leaving its notes intact. Guitar-strum blocks use the same placement rules and
+open a 16th-note grid with down, up, and off steps. A strum lane uses its
+selected harmony lane as the chord source; with no explicit selection it
+follows the primary harmony lane. If that lane has no chord at a step, the
+strum is silent. Chord tones start 12 ms apart and each voice is gated for half
+a beat. When a melody or strum voice reaches a pattern, block, or section edge,
+its duration is shortened by its onset delay so its release stays inside the
+clipped window.
+
+All Writer and Song ticks share one tempo conversion: four ticks per quarter
+note, or `60,000 / (tempo × 4)` milliseconds per tick. The time signature sets
+the number of ticks in a bar, not the wall-clock duration of a tick. At 120 BPM
+a 4/4 bar lasts 2 seconds and a 6/8 bar (12 ticks) lasts 1.5 seconds. Live
+playback, Song audio clip placement/seek/length, and WAV note positions use the
+same conversion. Sub-tick onset offsets and boundary duration trims are
+preserved when importing or editing Song note patterns.
+
 ### Playback audio (`lib/schema/rules/songwriter_playback_rules.dart`)
 
 `flattenPlaybackEvents(project, saves)` turns the whole project into a sorted,
@@ -59,6 +83,11 @@ tick-indexed event list the transport walks:
   cells map string+fret through the tuning. Broken blocks are silent.
 - **Drum lane blocks** fire their referenced `DrumPattern` hits at native tick
   resolution, tiled across the block's bar span.
+- **Melody lane blocks** play duration-aware notes, looping their pattern from
+  local tick zero and clipping voices at the block/section boundary.
+- **Guitar-strum blocks** resolve each down/up step against the selected harmony
+  anchor (or primary harmony lane by default) and stay silent when that lane has
+  no chord.
 - The metronome click is unchanged and still gated by `settingsProvider.metronomeEnabled`.
 
 Sinks are injectable providers (`songwriterNoteSinkProvider`,
@@ -98,6 +127,9 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `newProject()` | Reset to empty + clear the session slot for the active project. |
 | `setKey(root, scaleName)` / `setTempo(tempo)` | Config edits; `setKey` recomputes harmony-lane Roman numerals. |
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
+| `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit looped note and strum patterns. |
+| `setBlockPlacement(...)` | Move or resize a block while preserving its pattern link and data; rejects same-lane overlaps. |
+| `insertInstrumentSelectionAtBar(...)` | Adds a detected chord to a harmony lane or embeds an exact Fretboard/Piano snapshot in a save lane; no library save is required. |
 | `makeBlockUnique(...)` | Detach a block from its live save by embedding a snapshot. |
 | `loadProject(project)` | Replace the whole project (named-save load). |
 
@@ -116,6 +148,21 @@ Sessions live in `@muzician/songwriter_sessions/v1` — a per-project map of
 persisted immediately and the incoming session is loaded from the map (or
 seeded via `_defaultFor` when no session exists yet); leaving the project
 clears to empty.
+
+## Undo / Redo
+
+Writer's overflow menu contains **Undo** and **Redo**. Both controls have
+accessible button labels, can be reached with Tab, and activate with Enter or
+Space. The active project keeps up to 50 prior immutable snapshots in memory,
+including melody and strum
+patterns and audio references. Text dialogs apply once when saved, confirmed
+pickers and other dialogs commit once, and canceling discards a text draft;
+drag and slider gestures commit once on release. A new edit after Undo clears
+Redo. Switching projects, choosing
+**New Writer Project**, or loading a named save/snapshot clears both history
+branches. Deleted Writer audio blocks leave their source files in the local
+repository so undo can restore their references. Delete snackbars call the same
+history Undo command and close if a later edit changes the history revision.
 
 ## Scale degrees on bar cells
 
@@ -141,16 +188,38 @@ exposes the current snapshot for widget tests.
 
 ## Project Config
 
-Songwriter uses `SaveSystemState.selectedProjectId` instead of the old
+Writer uses `SaveSystemState.selectedProjectId` instead of the old
 folder-name convention. When a real project is selected (kind `project`),
 tempo and key chips in the header are locked; edit them through the project
-config sheet. Dump is rejected — `ProjectGateModal` blocks the tab until a
-project is selected.
+config sheet. Instrument handoff asks the user to select a real project if
+there is no project selected or Dump is active.
 
 `projectConfigSyncProvider` (`lib/store/project_config_sync.dart`) pushes the
-active project's tempo and key into the songwriter store whenever a project is
-selected or its config changes. When loading a project that has no session yet,
+active project's tempo, meter, and key into the songwriter and Song stores
+whenever a project is selected or its config changes. Changed master config
+clears stale local undo history; an equal sync keeps current history. When
+loading a project that has no session yet,
 `_defaultFor` seeds a new `SongwriterProjectSnapshot` from the project folder's
 `ProjectConfig` (name, tempo, beatsPerBar, beatUnit, keyRoot, keyScaleName).
 
 Library-match scope is `getSavesInSubtree(folders, saves, selectedProjectId)`.
+
+## Fretboard and Piano handoff
+
+In either instrument's detection panel, choose **Add to Writer** and then
+select a detected chord or the exact selected voicing. A chord is added to a
+harmony lane with its symbol, root, quality, and selected pitch names. An exact
+selection is stored as an embedded `InstrumentSnapshot` in a save lane, so the
+transfer does not need a named library save. Choose a section and bar; if the
+active project changes while the picker is open, Writer cancels the transfer
+and explains why. Occupied bars are labeled for assistive technology and offer
+replace-with-confirmation, choose-another-bar, or cancel.
+Occupied bars include expanded lane repeats. Replacing one of those copies
+updates the source block in place, preserving its ID, start, span, and repeat
+offsets so every copy receives the new chord or snapshot together.
+
+If no project is selected, the existing project picker opens before placement;
+dismissing it leaves the instrument selection and Writer unchanged. If the
+project has no Writer section, Writer offers to create its default eight-bar
+section. The blank Writer state also has a visible **Start an 8-bar section**
+action.

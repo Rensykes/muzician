@@ -57,6 +57,262 @@ void main() {
   });
 
   test(
+    'Writer sequenced sink receives shared tick duration and sub-tick onset',
+    () async {
+      final calls = <({int midi, Duration duration, Duration onset})>[];
+      var stopCalls = 0;
+      final container = ProviderContainer(
+        overrides: [
+          songwriterSequencedNoteSinkProvider.overrideWithValue(({
+            required int midiNote,
+            required Duration duration,
+            required Duration onsetDelay,
+            required double volume,
+            required double pan,
+          }) {
+            calls.add((midi: midiNote, duration: duration, onset: onsetDelay));
+          }),
+          songwriterSequencedNoteStopSinkProvider.overrideWithValue(() {
+            stopCalls++;
+          }),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(
+            const SongwriterProjectSnapshot(
+              config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+              sections: [
+                SongSection(
+                  id: 's1',
+                  lengthBars: 1,
+                  order: 0,
+                  lanes: [
+                    SongLane(
+                      id: 'melody',
+                      kind: SongLaneKind.melody,
+                      order: 0,
+                      blocks: [
+                        SongBlock(
+                          id: 'b1',
+                          startBar: 0,
+                          spanBars: 1,
+                          patternId: 'p1',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+              melodyPatterns: [
+                NotePattern(
+                  id: 'p1',
+                  name: 'Lead',
+                  lengthTicks: 16,
+                  notes: [
+                    NotePatternNote(
+                      id: 'n1',
+                      midiNote: 60,
+                      startTick: 0,
+                      durationTicks: 3,
+                      onsetOffsetMs: 12,
+                    ),
+                  ],
+                  pitchRangeStart: 48,
+                  pitchRangeEnd: 84,
+                  snapTicks: 1,
+                  highlightedNotes: [],
+                ),
+              ],
+            ),
+          );
+
+      await container.read(songwriterPlaybackProvider.notifier).startPlayback();
+
+      expect(calls, hasLength(1));
+      expect(calls.single.midi, 60);
+      expect(calls.single.duration, const Duration(milliseconds: 375));
+      expect(calls.single.onset, const Duration(milliseconds: 12));
+      container.read(songwriterPlaybackProvider.notifier).stopPlayback();
+      expect(
+        stopCalls,
+        2,
+      ); // transport start clears old voices; stop releases this run
+    },
+  );
+
+  test(
+    'Writer live sink clips delayed final melody release to its block',
+    () async {
+      final calls = <({Duration duration, Duration onset})>[];
+      final container = ProviderContainer(
+        overrides: [
+          songwriterSequencedNoteSinkProvider.overrideWithValue(({
+            required int midiNote,
+            required Duration duration,
+            required Duration onsetDelay,
+            required double volume,
+            required double pan,
+          }) {
+            calls.add((duration: duration, onset: onsetDelay));
+          }),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(
+            const SongwriterProjectSnapshot(
+              config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+              sections: [
+                SongSection(
+                  id: 's1',
+                  lengthBars: 1,
+                  order: 0,
+                  lanes: [
+                    SongLane(
+                      id: 'melody',
+                      kind: SongLaneKind.melody,
+                      order: 0,
+                      blocks: [
+                        SongBlock(
+                          id: 'b1',
+                          startBar: 0,
+                          spanBars: 1,
+                          patternId: 'p1',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+              melodyPatterns: [
+                NotePattern(
+                  id: 'p1',
+                  name: 'Lead',
+                  lengthTicks: 16,
+                  notes: [
+                    NotePatternNote(
+                      id: 'last-note',
+                      midiNote: 72,
+                      startTick: 15,
+                      durationTicks: 4,
+                      onsetOffsetMs: 36,
+                    ),
+                  ],
+                  pitchRangeStart: 48,
+                  pitchRangeEnd: 84,
+                  snapTicks: 1,
+                  highlightedNotes: [],
+                ),
+              ],
+            ),
+          );
+
+      await container
+          .read(songwriterPlaybackProvider.notifier)
+          .startPlayback(
+            tickDurationOverride: const Duration(milliseconds: 125),
+          );
+
+      expect(calls, hasLength(1));
+      expect(calls.single.onset, const Duration(milliseconds: 36));
+      expect(calls.single.duration, const Duration(milliseconds: 89));
+      expect(
+        calls.single.onset + calls.single.duration,
+        const Duration(milliseconds: 125),
+      );
+    },
+  );
+
+  test(
+    'Writer 6/8 sequenced duration remains tied to quarter-note BPM',
+    () async {
+      final durations = <Duration>[];
+      final container = ProviderContainer(
+        overrides: [
+          songwriterSequencedNoteSinkProvider.overrideWithValue(({
+            required int midiNote,
+            required Duration duration,
+            required Duration onsetDelay,
+            required double volume,
+            required double pan,
+          }) {
+            durations.add(duration);
+          }),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(
+            const SongwriterProjectSnapshot(
+              config: SongwriterConfig(tempo: 120, beatsPerBar: 6, beatUnit: 8),
+              sections: [
+                SongSection(
+                  id: 's1',
+                  lengthBars: 1,
+                  order: 0,
+                  lanes: [
+                    SongLane(
+                      id: 'melody',
+                      kind: SongLaneKind.melody,
+                      order: 0,
+                      blocks: [
+                        SongBlock(
+                          id: 'b1',
+                          startBar: 0,
+                          spanBars: 1,
+                          patternId: 'p1',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+              melodyPatterns: [
+                NotePattern(
+                  id: 'p1',
+                  name: 'Lead',
+                  lengthTicks: 12,
+                  notes: [
+                    NotePatternNote(
+                      id: 'n1',
+                      midiNote: 60,
+                      startTick: 0,
+                      durationTicks: 2,
+                    ),
+                  ],
+                  pitchRangeStart: 48,
+                  pitchRangeEnd: 84,
+                  snapTicks: 1,
+                  highlightedNotes: [],
+                ),
+              ],
+            ),
+          );
+
+      await container.read(songwriterPlaybackProvider.notifier).startPlayback();
+
+      expect(durations, [const Duration(milliseconds: 250)]);
+      expect(
+        container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.completed,
+      );
+    },
+  );
+
+  test(
     'startPlayback fires chord and drum sinks with lane volume and pan',
     () async {
       final chordCalls = <(List<int>, double, double)>[];

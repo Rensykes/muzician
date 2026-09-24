@@ -24,6 +24,16 @@ import 'song_project_store.dart';
 typedef SongNotePlaybackSink =
     Future<void> Function(List<int> midiNotes, double volume);
 
+typedef SongSequencedNotePlaybackSink =
+    void Function({
+      required int midiNote,
+      required Duration duration,
+      required Duration onsetDelay,
+      required double volume,
+    });
+
+typedef SongSequencedNoteStopSink = void Function();
+
 /// Signature for a function that plays [lanes] as drum voices at [volume].
 typedef SongDrumPlaybackSink =
     Future<void> Function(List<DrumLaneId> lanes, double volume);
@@ -36,6 +46,27 @@ final songNotePlaybackSinkProvider = Provider<SongNotePlaybackSink>((ref) {
     }
   };
 });
+
+final songSequencedNotePlaybackSinkProvider =
+    Provider<SongSequencedNotePlaybackSink>((ref) {
+      return ({
+        required int midiNote,
+        required Duration duration,
+        required Duration onsetDelay,
+        required double volume,
+      }) {
+        NotePlayer.instance.playSequencedNote(
+          midiNote,
+          duration: duration,
+          onsetDelay: onsetDelay,
+          volume: 0.8 * volume,
+        );
+      };
+    });
+
+final songSequencedNoteStopSinkProvider = Provider<SongSequencedNoteStopSink>(
+  (ref) => NotePlayer.instance.stopSequencedNotes,
+);
 
 final songDrumPlaybackSinkProvider = Provider<SongDrumPlaybackSink>((ref) {
   return (lanes, volume) async {
@@ -128,6 +159,8 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
     // ── Snapshot project state at start ────────────────────────────────────
     final project = ref.read(songProjectProvider);
     final noteSink = ref.read(songNotePlaybackSinkProvider);
+    final sequencedNoteSink = ref.read(songSequencedNotePlaybackSinkProvider);
+    final sequencedNoteStopSink = ref.read(songSequencedNoteStopSinkProvider);
     final drumSink = ref.read(songDrumPlaybackSinkProvider);
     final audioSink = ref.read(songAudioClipSinkProvider);
     final metronomeSink = ref.read(songMetronomeSinkProvider);
@@ -165,6 +198,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
 
     // ── Cancel any previous playback ───────────────────────────────────────
     final version = ++_playbackVersion;
+    sequencedNoteStopSink();
 
     state = state.copyWith(
       status: SongPlaybackStatus.playing,
@@ -251,6 +285,19 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
           for (final group in event.noteGroups) {
             unawaited(noteSink(group.midiNotes, 0.8 * group.volume));
           }
+          for (final group in event.sequencedNoteGroups) {
+            for (final note in group.notes) {
+              sequencedNoteSink(
+                midiNote: note.midiNote,
+                duration: pr_rules.effectiveSequencedNoteDuration(
+                  tickDuration,
+                  note,
+                ),
+                onsetDelay: Duration(milliseconds: note.onsetOffsetMs),
+                volume: group.volume,
+              );
+            }
+          }
           for (final group in event.drumGroups) {
             unawaited(drumSink(group.drumLanes, 0.8 * group.volume));
           }
@@ -271,6 +318,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
           tick = loopStart;
           eventIndex = eventIndexAtOrAfter(tick);
           unawaited(audioSink.stopAll());
+          sequencedNoteStopSink();
           pendingStops.clear();
           final wrapMs = audioTickToMs(tick, project.config);
           scheduled
@@ -348,6 +396,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
     final clamped = tick.clamp(0, maxTick);
     if (state.status == SongPlaybackStatus.playing) {
       _playbackVersion++;
+      ref.read(songSequencedNoteStopSinkProvider)();
       unawaited(ref.read(songAudioClipSinkProvider).stopAll());
     }
     state = state.copyWith(
@@ -364,6 +413,7 @@ class SongPlaybackNotifier extends Notifier<SongPlaybackState> {
   /// internal version counter.
   void stopPlayback() {
     _playbackVersion++;
+    ref.read(songSequencedNoteStopSinkProvider)();
     unawaited(ref.read(songAudioClipSinkProvider).stopAll());
     state = state.copyWith(
       status: SongPlaybackStatus.idle,

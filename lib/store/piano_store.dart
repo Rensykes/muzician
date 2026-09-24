@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/instrument_shared/instrument_binding.dart';
 import '../models/harmonic_analysis.dart';
 import '../models/piano.dart';
-import '../models/save_system.dart' show PianoSnapshot;
+import '../models/save_system.dart'
+    show PendingChord, PendingScale, PianoSnapshot;
 import '../schema/rules/piano_rules.dart';
 import '../store/project_config_sync.dart';
 import '../utils/note_utils.dart'
@@ -201,5 +202,26 @@ final pianoBinding = InstrumentBinding(
   activeChord: pianoActiveChordProvider,
   manualEdit: pianoManualEditProvider,
   chordCommitted: pianoChordCommittedProvider,
+  captureSnapshot: (ref) {
+    final piano = ref.read(pianoProvider);
+    final chord = ref.read(pianoPendingChordProvider);
+    final scale = ref.read(pianoPendingScaleProvider);
+    return PianoSnapshot(
+      currentRange: piano.currentRange,
+      selectedKeys: List.of(piano.selectedKeys),
+      selectedNotes: List.of(piano.selectedNotes),
+      viewMode: piano.viewMode,
+      pendingChord: chord == null
+          ? null
+          : PendingChord(
+              root: chord.root,
+              quality: chord.quality,
+              symbol: '${chord.root}${chord.quality}',
+            ),
+      pendingScale: scale == null
+          ? null
+          : PendingScale(root: scale.root, scaleName: scale.scaleName),
+    );
+  },
   chordOffKey: pianoChordOffKeyProvider,
 );

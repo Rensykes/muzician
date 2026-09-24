@@ -3,6 +3,7 @@ library;
 
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import '../models/piano_roll.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
@@ -18,62 +19,131 @@ import 'save_system_store.dart';
 import 'song_audio_repository.dart';
 import 'song_sessions_store.dart';
 import 'songwriter_store.dart';
+import 'project_snapshot_history.dart';
 
 class SongProjectNotifier extends Notifier<SongProject> {
   bool _hydrating = false;
+  bool _suppressHistory = false;
+  SongProject? _trackedState;
+  final ProjectSnapshotHistory<SongProject> _history = ProjectSnapshotHistory();
+
+  bool get canUndo => _history.canUndo;
+  bool get canRedo => _history.canRedo;
+  int get undoCount => _history.undoCount;
+  int get redoCount => _history.redoCount;
+  int get historyRevision => _history.revision;
+  ValueListenable<int> get historyRevisionListenable =>
+      _history.revisionListenable;
 
   @override
   SongProject build() {
+    ref.onDispose(_history.dispose);
     // React to project selection changes.
-    ref.listen<String?>(
-      saveSystemProvider.select((s) => s.selectedProjectId),
-      (prev, next) {
-        // Persist outgoing immediately.
-        if (prev != null && prev != next) {
-          ref.read(songSessionsProvider.notifier).put(prev, state);
-        }
-        if (next == null) {
-          _hydrating = true;
-          state = rules.getDefaultSongProject();
-          _hydrating = false;
-          return;
-        }
+    ref.listen<String?>(saveSystemProvider.select((s) => s.selectedProjectId), (
+      prev,
+      next,
+    ) {
+      // Persist outgoing immediately.
+      if (prev != null && prev != next) {
+        ref.read(songSessionsProvider.notifier).put(prev, state);
+      }
+      if (prev != next) _history.clear();
+      if (next == null) {
         _hydrating = true;
-        final session = ref.read(songSessionsProvider.notifier).get(next);
-        if (session != null) {
-          state = session;
-        } else {
-          state = _defaultFor(next);
-        }
+        state = rules.getDefaultSongProject();
         _hydrating = false;
-      },
-    );
+        return;
+      }
+      _hydrating = true;
+      final session = ref.read(songSessionsProvider.notifier).get(next);
+      if (session != null) {
+        state = session;
+      } else {
+        state = _defaultFor(next);
+      }
+      _hydrating = false;
+    });
 
     // Cold start: the listener above only fires on project *changes*. When a
     // project is already selected (restored during hydrate) before this provider
     // is first read, seed directly from its saved working draft — otherwise the
     // Song screen would open blank until the user switched projects.
     final id = ref.read(saveSystemProvider).selectedProjectId;
-    if (id == null) return rules.getDefaultSongProject();
+    if (id == null) {
+      final initial = rules.getDefaultSongProject();
+      _trackedState = initial;
+      return initial;
+    }
     final session = ref.read(songSessionsProvider.notifier).get(id);
-    return session ?? _defaultFor(id);
+    final initial = session ?? _defaultFor(id);
+    _trackedState = initial;
+    return initial;
   }
 
   @override
   set state(SongProject value) {
+    final previous = _trackedState;
+    if (!_hydrating && !_suppressHistory && previous != null) {
+      _history.recordChange(previous, value);
+    }
+    _trackedState = value;
     super.state = value;
     _schedulePersist(value);
   }
 
+  /// Coalesces several state writes into one undo step, for compound commands
+  /// and continuous edit gestures.
+  void beginHistoryGroup() => _history.beginGroup();
+
+  void endHistoryGroup() => _history.endGroup(state);
+
+  T runHistoryGroup<T>(T Function() edit) {
+    beginHistoryGroup();
+    try {
+      return edit();
+    } finally {
+      endHistoryGroup();
+    }
+  }
+
+  bool undo({int? ifRevision}) {
+    if (ifRevision != null && !_history.isCurrentRevision(ifRevision)) {
+      return false;
+    }
+    final previous = _history.takeUndo(state);
+    if (previous == null) return false;
+    _history.restore(() => state = previous);
+    return true;
+  }
+
+  bool redo() {
+    final next = _history.takeRedo(state);
+    if (next == null) return false;
+    _history.restore(() => state = next);
+    return true;
+  }
+
+  /// Replaces the active Song as one undoable user action.
+  void replaceProjectWithUndo(SongProject project) {
+    state = project;
+  }
+
   SongProject _defaultFor(String projectId) {
-    final folder = ref.read(saveSystemProvider).folders.firstWhere((f) => f.id == projectId);
+    final folder = ref
+        .read(saveSystemProvider)
+        .folders
+        .firstWhere((f) => f.id == projectId);
     final cfg = folder.projectConfig ?? const ProjectConfig();
     final base = rules.getDefaultSongProject();
     return base.copyWith(
       config: base.config.copyWith(
         tempo: cfg.tempo,
-        timeSignature: TimeSignature(beatsPerMeasure: cfg.beatsPerBar, beatUnit: cfg.beatUnit),
-        scaleRoot: () => cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
+        timeSignature: TimeSignature(
+          beatsPerMeasure: cfg.beatsPerBar,
+          beatUnit: cfg.beatUnit,
+        ),
+        scaleRoot: () =>
+            cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
         scaleName: () => cfg.keyScaleName,
       ),
     );
@@ -121,6 +191,40 @@ class SongProjectNotifier extends Notifier<SongProject> {
         scaleName: () => scaleName,
       ),
     );
+  }
+
+  /// Synchronizes the project-owned config fields without recording a user
+  /// edit. A changed master config invalidates snapshots from the old config;
+  /// an equal sync leaves the current history intact.
+  void syncProjectConfig({
+    required int tempo,
+    required TimeSignature timeSignature,
+    required String? scaleRoot,
+    required String? scaleName,
+  }) {
+    final current = state.config;
+    final nextConfig = current.copyWith(
+      tempo: tempo,
+      timeSignature: timeSignature,
+      scaleRoot: () => scaleRoot,
+      scaleName: () => scaleName,
+    );
+    if (current.tempo == nextConfig.tempo &&
+        current.timeSignature.beatsPerMeasure ==
+            nextConfig.timeSignature.beatsPerMeasure &&
+        current.timeSignature.beatUnit == nextConfig.timeSignature.beatUnit &&
+        current.scaleRoot == nextConfig.scaleRoot &&
+        current.scaleName == nextConfig.scaleName) {
+      return;
+    }
+
+    _history.clear();
+    _suppressHistory = true;
+    try {
+      state = state.copyWith(config: nextConfig);
+    } finally {
+      _suppressHistory = false;
+    }
   }
 
   /// Drop every note in every note pattern whose pitch class is in
@@ -220,7 +324,10 @@ class SongProjectNotifier extends Notifier<SongProject> {
     );
   }
 
-  void deleteTrack(String trackId) {
+  void deleteTrack(String trackId) =>
+      runHistoryGroup(() => _deleteTrack(trackId));
+
+  void _deleteTrack(String trackId) {
     final removedClips = state.clips
         .where((c) => c.trackId == trackId)
         .toList();
@@ -251,6 +358,20 @@ class SongProjectNotifier extends Notifier<SongProject> {
   // ── Clip Mutations ──────────────────────────────────────────────────────────
 
   String createEmptyNotePatternClip({
+    required String trackId,
+    required int startTick,
+    int? lengthTicks,
+    String? patternName,
+  }) => runHistoryGroup(
+    () => _createEmptyNotePatternClip(
+      trackId: trackId,
+      startTick: startTick,
+      lengthTicks: lengthTicks,
+      patternName: patternName,
+    ),
+  );
+
+  String _createEmptyNotePatternClip({
     required String trackId,
     required int startTick,
     int? lengthTicks,
@@ -290,6 +411,20 @@ class SongProjectNotifier extends Notifier<SongProject> {
   }
 
   String createEmptyDrumPatternClip({
+    required String trackId,
+    required int startTick,
+    int? lengthTicks,
+    String? patternName,
+  }) => runHistoryGroup(
+    () => _createEmptyDrumPatternClip(
+      trackId: trackId,
+      startTick: startTick,
+      lengthTicks: lengthTicks,
+      patternName: patternName,
+    ),
+  );
+
+  String _createEmptyDrumPatternClip({
     required String trackId,
     required int startTick,
     int? lengthTicks,
@@ -367,7 +502,10 @@ class SongProjectNotifier extends Notifier<SongProject> {
     return clip.id;
   }
 
-  void moveClip(String clipId, int newStartTick) {
+  void moveClip(String clipId, int newStartTick) =>
+      runHistoryGroup(() => _moveClip(clipId, newStartTick));
+
+  void _moveClip(String clipId, int newStartTick) {
     final clip = state.clips.firstWhere((c) => c.id == clipId);
     final patternLen = rules.patternLengthForClip(state, clip);
     if (patternLen == null) return;
@@ -398,7 +536,10 @@ class SongProjectNotifier extends Notifier<SongProject> {
     state = rules.ensureProjectCoversEndTick(state, clampedTick + patternLen);
   }
 
-  String duplicateClip(String clipId) {
+  String duplicateClip(String clipId) =>
+      runHistoryGroup(() => _duplicateClip(clipId));
+
+  String _duplicateClip(String clipId) {
     final source = state.clips.firstWhere((c) => c.id == clipId);
     final patternLen = rules.patternLengthForClip(state, source);
     if (patternLen == null) {
@@ -498,7 +639,10 @@ class SongProjectNotifier extends Notifier<SongProject> {
   /// patterns (Make-Unique semantics — shared siblings keep the original
   /// pattern). Audio clips split via trim windows on two patterns sharing
   /// the asset. Returns false when [tick] is not strictly inside the clip.
-  bool splitClipAtTick(String clipId, int tick) {
+  bool splitClipAtTick(String clipId, int tick) =>
+      runHistoryGroup(() => _splitClipAtTick(clipId, tick));
+
+  bool _splitClipAtTick(String clipId, int tick) {
     final clip = state.clips.firstWhere((c) => c.id == clipId);
     final patternLen = rules.patternLengthForClip(state, clip);
     if (patternLen == null) return false;
@@ -645,6 +789,20 @@ class SongProjectNotifier extends Notifier<SongProject> {
     required SongPatternType patternType,
     required String trackId,
     required int startTick,
+  }) => runHistoryGroup(
+    () => _addClipReference(
+      patternId: patternId,
+      patternType: patternType,
+      trackId: trackId,
+      startTick: startTick,
+    ),
+  );
+
+  String? _addClipReference({
+    required String patternId,
+    required SongPatternType patternType,
+    required String trackId,
+    required int startTick,
   }) {
     final track = state.tracks.where((t) => t.id == trackId).firstOrNull;
     if (track == null) return null;
@@ -685,9 +843,11 @@ class SongProjectNotifier extends Notifier<SongProject> {
   /// arrangement (sections → measures + markers, harmony → chord stabs,
   /// drum lanes → drum tracks, save lanes → voicing tracks).
   void importFromSongwriter() {
-    final writer = ref.read(songwriterProvider);
-    final saves = ref.read(saveSystemProvider).saves;
-    state = songFromSongwriter(writer, saves);
+    runHistoryGroup(() {
+      final writer = ref.read(songwriterProvider);
+      final saves = ref.read(saveSystemProvider).saves;
+      state = songFromSongwriter(writer, saves);
+    });
   }
 
   // ── Markers ─────────────────────────────────────────────────────────────────
@@ -732,13 +892,14 @@ class SongProjectNotifier extends Notifier<SongProject> {
     ordered.insert(to, track);
     state = state.copyWith(
       tracks: [
-        for (var i = 0; i < ordered.length; i++)
-          ordered[i].copyWith(order: i),
+        for (var i = 0; i < ordered.length; i++) ordered[i].copyWith(order: i),
       ],
     );
   }
 
-  void deleteClip(String clipId) {
+  void deleteClip(String clipId) => runHistoryGroup(() => _deleteClip(clipId));
+
+  void _deleteClip(String clipId) {
     final clip = state.clips.firstWhere((c) => c.id == clipId);
 
     state = state.copyWith(
@@ -882,6 +1043,20 @@ class SongProjectNotifier extends Notifier<SongProject> {
     required int startTick,
     required AudioAsset asset,
     String? clipName,
+  }) => runHistoryGroup(
+    () => _addAudioClip(
+      trackId: trackId,
+      startTick: startTick,
+      asset: asset,
+      clipName: clipName,
+    ),
+  );
+
+  String _addAudioClip({
+    required String trackId,
+    required int startTick,
+    required AudioAsset asset,
+    String? clipName,
   }) {
     final patternId = _id('ap');
     final effectiveName =
@@ -945,11 +1120,18 @@ class SongProjectNotifier extends Notifier<SongProject> {
   // ── Project Load ────────────────────────────────────────────────────────────
 
   Future<void> loadProject(SongProject project) async {
+    _history.clear();
+    _hydrating = true;
     state = project;
+    _hydrating = false;
+    _schedulePersist(project);
     final repo = ref.read(songAudioRepositoryProvider);
     final referenced = {for (final a in state.audioAssets) a.id};
     await repo.reconcileOrphans(referencedAssetIds: referenced);
   }
+
+  /// Starts a confirmed new Song and clears the old history before cleanup.
+  Future<void> newSong() => loadProject(rules.getDefaultSongProject());
 
   // ── Orphan Cleanup ──────────────────────────────────────────────────────────
 

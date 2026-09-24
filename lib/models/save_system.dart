@@ -718,6 +718,9 @@ class AppSettings {
   final bool recordMonitorMetronome; // click per beat while recording
   final bool recordCountIn; // one bar of clicks before the mic arms
 
+  /// Last content workspace; Settings is deliberately not persisted here.
+  final String? lastContentWorkspace;
+
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
@@ -728,6 +731,7 @@ class AppSettings {
     this.recordMonitorBacking = false,
     this.recordMonitorMetronome = false,
     this.recordCountIn = false,
+    this.lastContentWorkspace,
   });
 
   AppSettings copyWith({
@@ -740,6 +744,7 @@ class AppSettings {
     bool? recordMonitorBacking,
     bool? recordMonitorMetronome,
     bool? recordCountIn,
+    String? Function()? lastContentWorkspace,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
@@ -751,6 +756,9 @@ class AppSettings {
     recordMonitorMetronome:
         recordMonitorMetronome ?? this.recordMonitorMetronome,
     recordCountIn: recordCountIn ?? this.recordCountIn,
+    lastContentWorkspace: lastContentWorkspace != null
+        ? lastContentWorkspace()
+        : this.lastContentWorkspace,
   );
 
   Map<String, dynamic> toJson() => {
@@ -763,6 +771,7 @@ class AppSettings {
     'recordMonitorBacking': recordMonitorBacking,
     'recordMonitorMetronome': recordMonitorMetronome,
     'recordCountIn': recordCountIn,
+    'lastContentWorkspace': lastContentWorkspace,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -775,6 +784,7 @@ class AppSettings {
     recordMonitorBacking: json['recordMonitorBacking'] as bool? ?? false,
     recordMonitorMetronome: json['recordMonitorMetronome'] as bool? ?? false,
     recordCountIn: json['recordCountIn'] as bool? ?? false,
+    lastContentWorkspace: json['lastContentWorkspace'] as String?,
   );
 }
 

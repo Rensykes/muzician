@@ -11,6 +11,22 @@ work in portrait and landscape.*
 
 ---
 
+## Workspace roles and entry
+
+**Writer** is the section, chord, and lyric sketch. **Song** is the clip
+arrangement workspace for note, drum, and audio tracks. Song's overflow menu
+has **About Song** help explaining the distinction and linking the two
+workspaces through **Import from Writer**.
+
+A new install opens Writer. On later starts the app restores the last content
+workspace among Fretboard, Piano, Roll, Song, and Writer; visiting Settings
+does not replace that choice. If saved workspace data cannot be read, the app
+keeps workspaces closed and offers Retry or Start fresh. Start fresh first
+preserves the original stored strings in **Settings → Data Recovery**, where
+each backup can be read, copied, exported, or deleted after confirmation.
+
+---
+
 ## 1. Writer playback
 
 The Writer used to be silent — blocks were visual guides and only the metronome
@@ -27,7 +43,22 @@ clicked. It now plays the whole arrangement.
   saved item was deleted stays silent.
 - **Drum lanes** play their pattern hits at native (16th-note) resolution, tiled
   across the bars the block covers.
+- **Melody lanes** play duration-aware notes from the existing Piano Roll
+  editor. A block loops its pattern from local tick zero; notes and voices stop
+  at the block or section edge.
+- **Guitar-strum lanes** play down/up steps from a 16th-note grid. Choose the
+  harmony lane that supplies the chord, or leave the lane on its primary
+  harmony anchor. An anchor with no chord stays silent. Chord tones are
+  staggered by 12 ms and gated for half a beat; delayed voices shorten at a
+  block edge so they release inside it. Each 44×44 step shows down, up, or off
+  and supports keyboard focus and Enter/Space activation.
 - The **metronome** is unchanged and still follows the Settings toggle.
+
+**Tempo timing** — Writer and Song use four ticks per quarter note, so a tick
+lasts `60,000 / (tempo × 4)` ms in every meter. At 120 BPM, a 4/4 bar lasts
+2 seconds and a 6/8 bar lasts 1.5 seconds. Live Writer/Song playback, Song audio
+clip timing, and WAV note positions use this same tick duration; the time
+signature changes ticks per bar, not tick duration.
 
 **Playhead**
 
@@ -39,7 +70,10 @@ keep the current section in view. Press play/stop from the Writer header.
 1. Open **Writer**, add a section, tap a bar, pick a chord from the wheel.
 2. Optionally add a drum lane (section menu → *Add drum lane*) and tap in some
    hits.
-3. Press play — chords stab, drums groove, the playhead sweeps.
+3. Add a melody lane to edit notes in Piano Roll, or a guitar-strum lane to
+   program down/up steps and choose its harmony anchor.
+4. Press play — chords stab, melody sustains for its note lengths, strums voice
+   the anchored chords, drums groove, and the playhead sweeps.
 
 **Code:** `lib/schema/rules/songwriter_playback_rules.dart`
 (`flattenPlaybackEvents`, `chordMidiNotes`, `snapshotMidiNotes`,
@@ -150,14 +184,72 @@ Writer* rebuilds the song from the current Writer arrangement:
   block, reused across repeats);
 - **drum lanes** → drum tracks carrying the same patterns;
 - **save lanes** → note tracks of stacked-chord voicings from the resolved saves;
+- **melody and guitar-strum lanes** → duration-aware Song note tracks, including
+  the strum's 12 ms tone offsets;
 - tempo, time signature, and key are copied over.
 
 It asks for confirmation before replacing a non-empty song.
+Writer audio lanes are not included in this conversion. Imported note offsets
+and durations are also used by Song live playback and WAV rendering.
 
-**Export WAV** — the overflow menu → *Export WAV* renders the note and drum
-tracks to a mono PCM16 WAV (sine voices for notes, a small synth kit for drums,
-per-track volume applied) and writes it through the system save dialog. **Audio
-clips are not included yet** — a dialog says so when the song has any.
+**Fretboard/Piano handoff** — in the instrument detection panel, choose
+*Add to Writer*, select a detected chord or the exact instrument voicing, then
+choose a Writer section and bar. Chords keep their symbol, root, quality, and
+selected pitch names. Exact voicings embed the full instrument snapshot in a
+Writer save lane, without creating a library save. If there is no selected
+project, the project picker opens; canceling it leaves the selection and
+Writer untouched. An empty Writer project can create its default eight-bar
+section before placement. Occupied bars are identified in text and offer
+replace-with-confirmation, choose-another-bar, or cancel. If the project changes
+while choosing a bar, Writer cancels the handoff and explains that the
+destination changed. Occupancy includes expanded lane repeats. Replacing a
+repeated placement updates its stored source block in place, so every copy gets
+the new chord or voicing at the same offsets; the confirmation explains that
+all copies change together.
+
+**Record an audio take** — in Song, tap an empty audio lane and choose *Record
+audio*. After count-in, stop to open the take review. **Audition** plays the
+pending take once; **Re-record** replaces it at the same track and tick;
+**Keep take** adds it to the arrangement; **Discard** deletes it without
+changing the Song. Dismissing the review also discards the pending take.
+
+**Export WAV** — the overflow menu → *Export WAV* renders all audible note,
+drum, and supported audio tracks to mono PCM16 at 44.1 kHz. Audio sources must
+be valid little-endian PCM16 WAV files with one or two channels at 8,000–96,000
+Hz. Stereo is downmixed and other supported rates are resampled. Trim values
+use source samples; source speed, track gain, mute/solo, and tick-based clip
+starts are preserved. A missing, compressed, malformed, or unsupported source
+blocks export with the clip name and a convert/re-import instruction.
+
+Android/iOS share the generated file; macOS/Windows/Linux save it to a selected
+path. Web supports note/drum-only WAVs through browser sharing or download; a
+Song with any audio clip is blocked with guidance to export from a native
+platform.
+
+**Export Song Bundle** — Song's overflow menu packages the clip arrangement as
+a versioned `.mzbundle` ZIP with `manifest.json`, `song.json`, and the original
+referenced audio sources (WAV/MP3/M4A). Individual audio entries are limited to
+50 MB; the archive and its declared contents are limited to 100 MB. Native
+platforms share or save the bundle.
+
+**Import Song Bundle** — on Android, iOS, macOS, Windows, and Linux, choose
+*Import Song Bundle* from the Song overflow menu and select a `.mzbundle` with
+the system picker. If the current Song has content, confirm replacement before
+the picker opens. Import checks the bundle version, Song schema, safe archive
+paths, referenced assets, declared and extracted byte lengths, and size caps
+before changing the repository. Audio sources receive fresh local IDs; project
+references are remapped and the Song is replaced only after all files copy.
+Failure leaves the current Song and files intact. Success creates one undoable
+replacement and retains previous media for Undo/Redo. Canceling confirmation
+leaves both Song and files unchanged. Web explains that bundle import/export
+are unsupported because its audio repository is filesystem-backed.
+
+**Undo and redo** — each workspace's overflow menu exposes project-scoped
+history, capped at 50 prior snapshots in memory. Song replacement through
+Import from Writer or Song Bundle takes one undo step. New project, project
+switch, and named save/snapshot load clear history; a new edit clears Redo.
+Writer delete snackbars share the normal Writer undo history and dismiss when a
+later edit makes the original snackbar action stale.
 
 **Code:** `songFromSongwriter` (`lib/schema/rules/song_from_writer_rules.dart`),
 `renderSongPcm` (`lib/schema/rules/song_render_rules.dart`),
@@ -173,7 +265,9 @@ sizes in either orientation.
 
 - **Song** — on height-starved (landscape) viewports the header collapses to a
   slim single row so the timeline keeps the vertical space. The New / Import /
-  Export actions live in the header overflow menu (⋮) to keep the row compact.
+  Export WAV / Export Song Bundle / Import Song Bundle actions live in the
+  header overflow menu (⋮)
+  to keep the row compact.
 - **Writer** — in landscape the title row is dropped and the overflow button
   moves into the config strip; when the viewport is wide enough the section
   cards flow in **two columns**.
@@ -201,6 +295,5 @@ and gracefully skips any step whose target isn't on screen.
 
 - The **Fretboard** (and possibly **Piano**) tab still overflows in landscape —
   pre-existing, tracked separately, not part of this work.
-- WAV export excludes audio clips (v1). Note/drum-only for now.
 - Audio trim is numeric-slider only; waveform-drag handles and fade in/out are
   future polish.

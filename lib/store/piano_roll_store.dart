@@ -229,6 +229,8 @@ class PianoRollNotifier extends Notifier<PianoRollState>
       noteWithOctave: target.noteWithOctave,
       startTick: splitTick,
       durationTicks: dur2,
+      onsetOffsetMs: target.onsetOffsetMs,
+      durationOffsetMs: target.durationOffsetMs,
     );
     state = state.copyWith(
       notes: [...state.notes.where((n) => n.id != noteId), left, right],
@@ -302,6 +304,8 @@ class PianoRollNotifier extends Notifier<PianoRollState>
         noteWithOctave: note.noteWithOctave,
         startTick: splitTick,
         durationTicks: rightDuration,
+        onsetOffsetMs: note.onsetOffsetMs,
+        durationOffsetMs: note.durationOffsetMs,
       );
       splitNotes.add(note.copyWith(durationTicks: leftDuration));
       splitNotes.add(right);

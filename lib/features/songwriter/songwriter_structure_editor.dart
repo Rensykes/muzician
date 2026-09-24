@@ -47,13 +47,15 @@ class SongwriterStructureEditor extends ConsumerWidget {
                         final all = ref.read(songwriterProvider).sections;
                         final index = all.indexWhere((x) => x.id == s.id);
                         if (index < 0) return;
-                        final removed = all[index];
                         HapticFeedback.mediumImpact();
                         notifier.removeSection(s.id);
+                        final revision = notifier.historyRevision;
                         showUndoSnack(
                           context,
                           'Section deleted',
-                          () => notifier.insertSection(removed, index),
+                          historyRevision: notifier.historyRevisionListenable,
+                          expectedRevision: revision,
+                          onUndo: () => notifier.undo(ifRevision: revision),
                         );
                       },
                     ),

@@ -1,15 +1,25 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/muzician_theme.dart';
 
 OverlayEntry? _activeEntry;
 Timer? _activeTimer;
+ValueListenable<int>? _activeRevision;
+VoidCallback? _activeRevisionListener;
 
 void _dismiss() {
   _activeTimer?.cancel();
   _activeTimer = null;
+  final revision = _activeRevision;
+  final listener = _activeRevisionListener;
+  if (revision != null && listener != null) {
+    revision.removeListener(listener);
+  }
+  _activeRevision = null;
+  _activeRevisionListener = null;
   _activeEntry?.remove();
   _activeEntry = null;
 }
@@ -20,10 +30,23 @@ void _dismiss() {
 /// so the auto-dismiss honors [Duration] even when
 /// [MediaQueryData.accessibleNavigation] is on (which makes SnackBar wait
 /// indefinitely for manual dismissal).
-void showUndoSnack(BuildContext context, String message, VoidCallback onUndo) {
+void showUndoSnack(
+  BuildContext context,
+  String message, {
+  required ValueListenable<int> historyRevision,
+  required int expectedRevision,
+  required VoidCallback onUndo,
+}) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
-  if (overlay == null) return;
+  if (overlay == null || historyRevision.value != expectedRevision) return;
   _dismiss();
+  void dismissWhenStale() {
+    if (historyRevision.value != expectedRevision) _dismiss();
+  }
+
+  _activeRevision = historyRevision;
+  _activeRevisionListener = dismissWhenStale;
+  historyRevision.addListener(dismissWhenStale);
 
   final entry = OverlayEntry(
     builder: (ctx) {
@@ -35,6 +58,10 @@ void showUndoSnack(BuildContext context, String message, VoidCallback onUndo) {
         child: _UndoToast(
           message: message,
           onUndo: () {
+            if (historyRevision.value != expectedRevision) {
+              _dismiss();
+              return;
+            }
             _dismiss();
             onUndo();
           },

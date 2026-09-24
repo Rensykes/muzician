@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
@@ -16,9 +17,9 @@ import '../schema/rules/songwriter_third_above_rules.dart';
 import '../schema/rules/songwriter_voicing_rules.dart';
 import '../utils/note_utils.dart';
 import 'save_system_store.dart';
-import 'song_audio_repository.dart';
 import 'songwriter_sessions_store.dart';
 import 'writer_save_binding_store.dart';
+import 'project_snapshot_history.dart';
 
 SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
   config: SongwriterConfig(
@@ -33,9 +34,22 @@ SongwriterProjectSnapshot _emptyProject() => const SongwriterProjectSnapshot(
 
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   bool _hydrating = false;
+  bool _suppressHistory = false;
+  SongwriterProjectSnapshot? _trackedState;
+  final ProjectSnapshotHistory<SongwriterProjectSnapshot> _history =
+      ProjectSnapshotHistory();
+
+  bool get canUndo => _history.canUndo;
+  bool get canRedo => _history.canRedo;
+  int get undoCount => _history.undoCount;
+  int get redoCount => _history.redoCount;
+  int get historyRevision => _history.revision;
+  ValueListenable<int> get historyRevisionListenable =>
+      _history.revisionListenable;
 
   @override
   SongwriterProjectSnapshot build() {
+    ref.onDispose(_history.dispose);
     // React to project selection changes.
     ref.listen<String?>(saveSystemProvider.select((s) => s.selectedProjectId), (
       prev,
@@ -45,6 +59,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (prev != null && prev != next) {
         ref.read(songwriterSessionsProvider.notifier).put(prev, state);
       }
+      if (prev != next) _history.clear();
       if (next == null) {
         _hydrating = true;
         state = _emptyProject();
@@ -66,13 +81,24 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     // is first read, seed directly from its saved working draft — otherwise the
     // Writer would open blank until the user switched projects.
     final id = ref.read(saveSystemProvider).selectedProjectId;
-    if (id == null) return _emptyProject();
+    if (id == null) {
+      final empty = _emptyProject();
+      _trackedState = empty;
+      return empty;
+    }
     final session = ref.read(songwriterSessionsProvider.notifier).get(id);
-    return session ?? _defaultFor(id);
+    final initial = session ?? _defaultFor(id);
+    _trackedState = initial;
+    return initial;
   }
 
   @override
   set state(SongwriterProjectSnapshot value) {
+    final previous = _trackedState;
+    if (!_hydrating && !_suppressHistory && previous != null) {
+      _history.recordChange(previous, value);
+    }
+    _trackedState = value;
     super.state = value;
     _schedulePersist(value);
   }
@@ -107,8 +133,43 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     state = next;
   }
 
+  /// Groups several project mutations into one undo step. Pair this with
+  /// [endHistoryGroup] at the end of a drag, slider gesture, or compound edit.
+  void beginHistoryGroup() => _history.beginGroup();
+
+  void endHistoryGroup() => _history.endGroup(state);
+
+  T runHistoryGroup<T>(T Function() edit) {
+    beginHistoryGroup();
+    try {
+      return edit();
+    } finally {
+      endHistoryGroup();
+    }
+  }
+
+  bool undo({int? ifRevision}) {
+    if (ifRevision != null && !_history.isCurrentRevision(ifRevision)) {
+      return false;
+    }
+    final previous = _history.takeUndo(state);
+    if (previous == null) return false;
+    _history.restore(() => state = previous);
+    return true;
+  }
+
+  bool redo() {
+    final next = _history.takeRedo(state);
+    if (next == null) return false;
+    _history.restore(() => state = next);
+    return true;
+  }
+
   Future<void> newProject() async {
+    _history.clear();
+    _hydrating = true;
     state = _emptyProject();
+    _hydrating = false;
     final id = ref.read(saveSystemProvider).selectedProjectId;
     if (id != null) {
       ref.read(songwriterSessionsProvider.notifier).remove(id);
@@ -121,12 +182,58 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     final cfg = (root == null)
         ? state.config.copyWith(clearKey: true)
         : state.config.copyWith(keyRoot: root, keyScaleName: scaleName);
-    _set(state.copyWith(config: cfg));
-    _recomputeNumerals();
+    runHistoryGroup(() {
+      _set(state.copyWith(config: cfg));
+      _recomputeNumerals();
+    });
   }
 
   void setTempo(int tempo) =>
       _set(state.copyWith(config: state.config.copyWith(tempo: tempo)));
+
+  void setMeter({required int beatsPerBar, required int beatUnit}) => _set(
+    state.copyWith(
+      config: state.config.copyWith(
+        beatsPerBar: beatsPerBar,
+        beatUnit: beatUnit,
+      ),
+    ),
+  );
+
+  /// Synchronizes the project-owned config fields without recording a user
+  /// edit. A changed master config invalidates snapshots from the old config;
+  /// an equal sync leaves the current history intact.
+  void syncProjectConfig({
+    required int tempo,
+    required int beatsPerBar,
+    required int beatUnit,
+    required int? keyRoot,
+    required String? keyScaleName,
+  }) {
+    final current = state.config;
+    final nextConfig = SongwriterConfig(
+      tempo: tempo,
+      beatsPerBar: beatsPerBar,
+      beatUnit: beatUnit,
+      keyRoot: keyRoot,
+      keyScaleName: keyRoot == null ? null : keyScaleName,
+    );
+    if (current.tempo == nextConfig.tempo &&
+        current.beatsPerBar == nextConfig.beatsPerBar &&
+        current.beatUnit == nextConfig.beatUnit &&
+        current.keyRoot == nextConfig.keyRoot &&
+        current.keyScaleName == nextConfig.keyScaleName) {
+      return;
+    }
+
+    _history.clear();
+    _suppressHistory = true;
+    try {
+      state = state.copyWith(config: nextConfig);
+    } finally {
+      _suppressHistory = false;
+    }
+  }
 
   // ── sections ──
   void addSection({String? label, required int lengthBars}) {
@@ -326,6 +433,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required bool muted,
   }) => _replaceLane(sectionId, laneId, (l) => l.copyWith(muted: muted));
 
+  /// Selects the harmony lane used by save voicings or guitar strums.
+  /// A null selection follows the section's primary harmony lane.
+  void setLaneAnchorLane({
+    required String sectionId,
+    required String laneId,
+    required String? harmonyLaneId,
+  }) => _replaceLane(
+    sectionId,
+    laneId,
+    (lane) => harmonyLaneId == null
+        ? lane.copyWith(clearAnchorLaneId: true)
+        : lane.copyWith(anchorLaneId: harmonyLaneId),
+  );
+
   void removeLane({required String sectionId, required String laneId}) =>
       _replaceSection(
         sectionId,
@@ -360,6 +481,93 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (blocksOverlap(l.blocks, block)) return l;
       return l.copyWith(blocks: [...l.blocks, block]);
     });
+  }
+
+  /// Inserts an instrument selection without creating a library save.
+  /// Passing [snapshot] creates an embedded save-lane block; otherwise the
+  /// chord fields create a harmony-lane block. When [replaceBlockId] is set,
+  /// the stored source block is replaced in place so repeated placements keep
+  /// their source ID, start, span, and lane repeat pattern.
+  bool insertInstrumentSelectionAtBar({
+    required String sectionId,
+    required int startBar,
+    InstrumentSnapshot? snapshot,
+    String? chordSymbol,
+    String? chordQuality,
+    int? chordRootPc,
+    List<String> chordNotes = const [],
+    String? replaceBlockId,
+  }) {
+    final sectionIndex = state.sections.indexWhere((s) => s.id == sectionId);
+    if (sectionIndex < 0 || startBar < 0) return false;
+    final isHarmony = snapshot == null;
+    if (isHarmony &&
+        (chordSymbol == null || chordQuality == null || chordRootPc == null)) {
+      return false;
+    }
+    final section = state.sections[sectionIndex];
+    final laneKind = isHarmony ? SongLaneKind.harmony : SongLaneKind.save;
+    final laneIndex = section.lanes.indexWhere((lane) => lane.kind == laneKind);
+    final existingLane = laneIndex < 0 ? null : section.lanes[laneIndex];
+    final existingBlocks = existingLane?.blocks ?? const <SongBlock>[];
+    final sourceIndex = replaceBlockId == null
+        ? -1
+        : existingBlocks.indexWhere((block) => block.id == replaceBlockId);
+    if (replaceBlockId != null && sourceIndex < 0) return false;
+
+    final source = sourceIndex < 0 ? null : existingBlocks[sourceIndex];
+    final candidate = source == null
+        ? isHarmony
+              ? makeHarmonyBlock(
+                  startBar: startBar,
+                  spanBars: 1,
+                  chordSymbol: chordSymbol!,
+                  chordQuality: chordQuality!,
+                  chordRootPc: chordRootPc!,
+                  chordNotes: chordNotes,
+                )
+              : makeEmbeddedSaveBlock(
+                  snapshot: snapshot,
+                  startBar: startBar,
+                  spanBars: 1,
+                )
+        : source.copyWith(
+            embedded: snapshot,
+            chordSymbol: chordSymbol,
+            chordQuality: chordQuality,
+            chordRootPc: chordRootPc,
+            chordNotes: chordNotes,
+            clearSaveId: true,
+            clearEmbedded: isHarmony,
+            clearRomanNumeral: true,
+            clearChordData: !isHarmony,
+            isSilent: false,
+          );
+    final retainedBlocks = [
+      for (var index = 0; index < existingBlocks.length; index++)
+        if (index != sourceIndex) existingBlocks[index],
+    ];
+    if (blocksOverlap(retainedBlocks, candidate)) return false;
+
+    final lane =
+        existingLane ?? makeLane(kind: laneKind, order: section.lanes.length);
+    final updatedBlocks = source == null
+        ? [...existingBlocks, candidate]
+        : [
+            for (var index = 0; index < existingBlocks.length; index++)
+              index == sourceIndex ? candidate : existingBlocks[index],
+          ];
+    final updatedLane = lane.copyWith(blocks: updatedBlocks);
+    final lanes = [...section.lanes];
+    if (laneIndex < 0) {
+      lanes.add(updatedLane);
+    } else {
+      lanes[laneIndex] = updatedLane;
+    }
+    final sections = [...state.sections];
+    sections[sectionIndex] = section.copyWith(lanes: lanes);
+    _set(state.copyWith(sections: sections));
+    return true;
   }
 
   void setBlockLyric({
@@ -537,6 +745,151 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
+  String addMelodyPattern({String name = 'Melody', int? lengthTicks}) {
+    final pattern = makeMelodyPattern(
+      name: name,
+      lengthTicks: lengthTicks ?? state.config.measureTicks,
+    );
+    _set(state.copyWith(melodyPatterns: [...state.melodyPatterns, pattern]));
+    return pattern.id;
+  }
+
+  void updateMelodyPattern(NotePattern updated) {
+    _set(
+      state.copyWith(
+        melodyPatterns: state.melodyPatterns
+            .map((pattern) => pattern.id == updated.id ? updated : pattern)
+            .toList(),
+      ),
+    );
+  }
+
+  void removeMelodyPattern(String patternId) {
+    final sections = state.sections.map((section) {
+      final lanes = section.lanes.map((lane) {
+        if (lane.kind != SongLaneKind.melody) return lane;
+        return lane.copyWith(
+          blocks: lane.blocks
+              .map(
+                (block) => block.patternId == patternId
+                    ? block.copyWith(clearPatternId: true)
+                    : block,
+              )
+              .toList(),
+        );
+      }).toList();
+      return section.copyWith(lanes: lanes);
+    }).toList();
+    _set(
+      state.copyWith(
+        melodyPatterns: state.melodyPatterns
+            .where((pattern) => pattern.id != patternId)
+            .toList(),
+        sections: sections,
+      ),
+    );
+  }
+
+  void addMelodyBlock({
+    required String sectionId,
+    required String laneId,
+    required String patternId,
+    required int startBar,
+    required int spanBars,
+  }) => _addPatternBlock(
+    kind: SongLaneKind.melody,
+    sectionId: sectionId,
+    laneId: laneId,
+    patternId: patternId,
+    startBar: startBar,
+    spanBars: spanBars,
+  );
+
+  String addGuitarStrumPattern({String name = 'Strum', int? lengthTicks}) {
+    final pattern = makeGuitarStrumPattern(
+      name: name,
+      lengthTicks: lengthTicks ?? state.config.measureTicks,
+      beatTicks: state.config.ticksPerBeat,
+    );
+    _set(
+      state.copyWith(
+        guitarStrumPatterns: [...state.guitarStrumPatterns, pattern],
+      ),
+    );
+    return pattern.id;
+  }
+
+  void updateGuitarStrumPattern(GuitarStrumPattern updated) {
+    _set(
+      state.copyWith(
+        guitarStrumPatterns: state.guitarStrumPatterns
+            .map((pattern) => pattern.id == updated.id ? updated : pattern)
+            .toList(),
+      ),
+    );
+  }
+
+  void removeGuitarStrumPattern(String patternId) {
+    final sections = state.sections.map((section) {
+      final lanes = section.lanes.map((lane) {
+        if (lane.kind != SongLaneKind.guitarStrum) return lane;
+        return lane.copyWith(
+          blocks: lane.blocks
+              .map(
+                (block) => block.patternId == patternId
+                    ? block.copyWith(clearPatternId: true)
+                    : block,
+              )
+              .toList(),
+        );
+      }).toList();
+      return section.copyWith(lanes: lanes);
+    }).toList();
+    _set(
+      state.copyWith(
+        guitarStrumPatterns: state.guitarStrumPatterns
+            .where((pattern) => pattern.id != patternId)
+            .toList(),
+        sections: sections,
+      ),
+    );
+  }
+
+  void addGuitarStrumBlock({
+    required String sectionId,
+    required String laneId,
+    required String patternId,
+    required int startBar,
+    required int spanBars,
+  }) => _addPatternBlock(
+    kind: SongLaneKind.guitarStrum,
+    sectionId: sectionId,
+    laneId: laneId,
+    patternId: patternId,
+    startBar: startBar,
+    spanBars: spanBars,
+  );
+
+  void _addPatternBlock({
+    required SongLaneKind kind,
+    required String sectionId,
+    required String laneId,
+    required String patternId,
+    required int startBar,
+    required int spanBars,
+  }) {
+    _replaceLane(sectionId, laneId, (lane) {
+      if (lane.kind != kind) return lane;
+      final block = makePatternBlock(
+        patternId: patternId,
+        startBar: startBar,
+        spanBars: spanBars,
+      );
+      if (blocksOverlap(lane.blocks, block)) return lane;
+      return lane.copyWith(blocks: [...lane.blocks, block]);
+    });
+  }
+
   // ── audio assets ──
   /// Adds (or replaces by id) an [AudioAsset] in the project. Recording/import
   /// calls this before [addAudioClip] so the clip's asset resolves.
@@ -618,7 +971,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
               : c,
         )
         .toList();
-    _set(state.copyWith(audioAssets: assets, audioClips: clips));
+    // Stretch output is derived from the user's trim/placement/tempo edit.
+    // Publishing the completed render must not create a second undo step or
+    // clear a redo branch after the user edit has already been recorded.
+    _history.restore(() {
+      _set(state.copyWith(audioAssets: assets, audioClips: clips));
+    });
     return true;
   }
 
@@ -691,9 +1049,23 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     });
   }
 
-  /// Removes an audio block, its 1:1 clip, and the underlying asset file when
-  /// no other clip references the same asset.
+  /// Removes an audio block and its 1:1 clip. Source files stay in the
+  /// repository because retained undo snapshots can still reference them.
   void removeAudioBlock({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+  }) {
+    runHistoryGroup(
+      () => _removeAudioBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: blockId,
+      ),
+    );
+  }
+
+  void _removeAudioBlock({
     required String sectionId,
     required String laneId,
     required String blockId,
@@ -735,7 +1107,6 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                 .toList(),
           ),
         );
-        unawaited(ref.read(songwriterAudioRepositoryProvider).delete(assetId));
       }
     }
     // The derived stretched asset (if any) is unique to the removed clip —
@@ -750,9 +1121,6 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           ),
         );
       }
-      unawaited(
-        ref.read(songwriterAudioRepositoryProvider).delete(stretchedAssetId),
-      );
     }
   }
 
@@ -767,6 +1135,22 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String sourceBlockId,
     required List<PlacedSlice> slices,
     AudioFitMode fitMode = AudioFitMode.stretch,
+  }) => runHistoryGroup(
+    () => _scatterSlices(
+      sectionId: sectionId,
+      laneId: laneId,
+      sourceBlockId: sourceBlockId,
+      slices: slices,
+      fitMode: fitMode,
+    ),
+  );
+
+  List<String> _scatterSlices({
+    required String sectionId,
+    required String laneId,
+    required String sourceBlockId,
+    required List<PlacedSlice> slices,
+    required AudioFitMode fitMode,
   }) {
     final lane = state.sections
         .where((s) => s.id == sectionId)
@@ -973,7 +1357,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       }
       if (harmonyBlock != null) break;
     }
-    if (harmonyBlock == null) return;
+    final selectedBlock = harmonyBlock;
+    if (selectedBlock == null) return;
     final anchorLaneId = _explicitSaveAnchorLaneId(section, harmonyLaneId);
 
     // Preflight: if the candidate block would overlap the destination save
@@ -981,8 +1366,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     // rejects overlaps, which would otherwise leave behind an orphan save.
     if (!_canPlaceSaveBlockInSection(
       section,
-      harmonyBlock.startBar,
-      harmonyBlock.spanBars,
+      selectedBlock.startBar,
+      selectedBlock.spanBars,
       anchorLaneId: anchorLaneId,
     )) {
       return;
@@ -1007,16 +1392,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
     if (saveId == null) return;
 
-    final laneId = _findOrCreateSaveLane(sectionId, anchorLaneId: anchorLaneId);
-    if (laneId == null) return;
-
-    addSaveBlock(
-      sectionId: sectionId,
-      laneId: laneId,
-      saveId: saveId,
-      startBar: harmonyBlock.startBar,
-      spanBars: harmonyBlock.spanBars,
-    );
+    runHistoryGroup(() {
+      final laneId = _findOrCreateSaveLane(
+        sectionId,
+        anchorLaneId: anchorLaneId,
+      );
+      if (laneId == null) return;
+      addSaveBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        saveId: saveId,
+        startBar: selectedBlock.startBar,
+        spanBars: selectedBlock.spanBars,
+      );
+    });
   }
 
   /// Persists a 3rd-above harmony suggestion as a SaveEntry in the project's
@@ -1048,13 +1437,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       }
       if (harmonyBlock != null) break;
     }
-    if (harmonyBlock == null) return;
+    final selectedBlock = harmonyBlock;
+    if (selectedBlock == null) return;
     final anchorLaneId = _explicitSaveAnchorLaneId(section, harmonyLaneId);
 
     if (!_canPlaceSaveBlockInSection(
       section,
-      harmonyBlock.startBar,
-      harmonyBlock.spanBars,
+      selectedBlock.startBar,
+      selectedBlock.spanBars,
       anchorLaneId: anchorLaneId,
     )) {
       return;
@@ -1080,16 +1470,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
     if (saveId == null) return;
 
-    final laneId = _findOrCreateSaveLane(sectionId, anchorLaneId: anchorLaneId);
-    if (laneId == null) return;
-
-    addSaveBlock(
-      sectionId: sectionId,
-      laneId: laneId,
-      saveId: saveId,
-      startBar: harmonyBlock.startBar,
-      spanBars: harmonyBlock.spanBars,
-    );
+    runHistoryGroup(() {
+      final laneId = _findOrCreateSaveLane(
+        sectionId,
+        anchorLaneId: anchorLaneId,
+      );
+      if (laneId == null) return;
+      addSaveBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        saveId: saveId,
+        startBar: selectedBlock.startBar,
+        spanBars: selectedBlock.spanBars,
+      );
+    });
   }
 
   /// Inserts a save-lane block in [sectionId] aligned to the harmony block's
@@ -1117,19 +1511,24 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       }
       if (harmonyBlock != null) break;
     }
-    if (harmonyBlock == null) return;
+    final selectedBlock = harmonyBlock;
+    if (selectedBlock == null) return;
     final anchorLaneId = _explicitSaveAnchorLaneId(section, harmonyLaneId);
 
-    final laneId = _findOrCreateSaveLane(sectionId, anchorLaneId: anchorLaneId);
-    if (laneId == null) return;
-
-    addSaveBlock(
-      sectionId: sectionId,
-      laneId: laneId,
-      saveId: saveId,
-      startBar: harmonyBlock.startBar,
-      spanBars: harmonyBlock.spanBars,
-    );
+    runHistoryGroup(() {
+      final laneId = _findOrCreateSaveLane(
+        sectionId,
+        anchorLaneId: anchorLaneId,
+      );
+      if (laneId == null) return;
+      addSaveBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        saveId: saveId,
+        startBar: selectedBlock.startBar,
+        spanBars: selectedBlock.spanBars,
+      );
+    });
   }
 
   /// Inserts a save-lane block at [startBar] referencing an existing [saveId],
@@ -1157,18 +1556,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     )) {
       return;
     }
-    final laneId = _findOrCreateSaveLane(
-      sectionId,
-      anchorLaneId: explicitAnchorLaneId,
-    );
-    if (laneId == null) return;
-    addSaveBlock(
-      sectionId: sectionId,
-      laneId: laneId,
-      saveId: saveId,
-      startBar: startBar,
-      spanBars: spanBars,
-    );
+    runHistoryGroup(() {
+      final laneId = _findOrCreateSaveLane(
+        sectionId,
+        anchorLaneId: explicitAnchorLaneId,
+      );
+      if (laneId == null) return;
+      addSaveBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        saveId: saveId,
+        startBar: startBar,
+        spanBars: spanBars,
+      );
+    });
   }
 
   /// Updates the project's display name and renames its linked top-level
@@ -1284,8 +1685,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
   }
 
-  /// Replace the whole project (used when loading a named save).
-  void loadProject(SongwriterProjectSnapshot project) => _set(project);
+  /// Replaces the whole project from a named save and starts a fresh history.
+  void loadProject(SongwriterProjectSnapshot project) {
+    _history.clear();
+    _hydrating = true;
+    state = project;
+    _hydrating = false;
+    _schedulePersist(project);
+  }
 }
 
 final songwriterProvider =

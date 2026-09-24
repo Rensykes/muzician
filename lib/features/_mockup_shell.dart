@@ -397,14 +397,14 @@ class DockTab extends StatelessWidget {
             color: warning
                 ? MuzicianTheme.orange.withValues(alpha: 0.10)
                 : hasValue
-                    ? color.withValues(alpha: 0.10)
-                    : Colors.white.withValues(alpha: 0.04),
+                ? color.withValues(alpha: 0.10)
+                : Colors.white.withValues(alpha: 0.04),
             border: Border.all(
               color: warning
                   ? MuzicianTheme.orange.withValues(alpha: 0.55)
                   : hasValue
-                      ? color.withValues(alpha: 0.40)
-                      : MuzicianTheme.glassBorder,
+                  ? color.withValues(alpha: 0.40)
+                  : MuzicianTheme.glassBorder,
               width: warning ? 1.0 : 0.5,
             ),
             borderRadius: BorderRadius.circular(10),
@@ -870,15 +870,18 @@ class _WidgetSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: MuzicianTheme.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MuzicianTheme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     IconBtn(
                       icon: Icons.close_rounded,
                       onTap: () => Navigator.of(context).maybePop(),

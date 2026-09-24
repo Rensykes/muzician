@@ -45,6 +45,25 @@ void main() {
       expect(audioClipLengthTicks(asset, cfg), 8);
     });
 
+    test('6/8 uses the same quarter-note BPM grid for clip length', () {
+      const cfg = SongProjectConfig(
+        tempo: 120,
+        timeSignature: TimeSignature(beatsPerMeasure: 6, beatUnit: 8),
+        totalMeasures: 4,
+      );
+      const asset = AudioAsset(
+        id: 'six-eight',
+        durationMs: 1500,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [],
+        sourceLabel: '',
+      );
+      expect(audioClipLengthTicks(asset, cfg), 12);
+      expect(audioTickToMs(12, cfg), 1500);
+    });
+
     test('clamps to minimum of 1 tick for very short audio', () {
       const cfg = SongProjectConfig(
         tempo: 120,
@@ -76,6 +95,53 @@ void main() {
   });
 
   group('schedulableAudioClips', () {
+    test('6/8 clip start, seek offset, and natural stop share tick timing', () {
+      const project = SongProject(
+        config: SongProjectConfig(
+          tempo: 120,
+          timeSignature: TimeSignature(beatsPerMeasure: 6, beatUnit: 8),
+          totalMeasures: 4,
+        ),
+        tracks: [
+          SongTrack(
+            id: 'audio',
+            name: 'Audio',
+            type: SongTrackType.audio,
+            order: 0,
+          ),
+        ],
+        clips: [
+          SongClipInstance(
+            id: 'clip',
+            trackId: 'audio',
+            patternId: 'pattern',
+            patternType: SongPatternType.audio,
+            startTick: 12,
+          ),
+        ],
+        notePatterns: [],
+        drumPatterns: [],
+        audioAssets: [
+          AudioAsset(
+            id: 'asset',
+            durationMs: 1500,
+            sampleRate: 44100,
+            channels: 1,
+            format: 'wav',
+            peaks: [],
+            sourceLabel: '',
+          ),
+        ],
+        audioPatterns: [
+          AudioClipPattern(id: 'pattern', name: '', assetId: 'asset'),
+        ],
+      );
+      final clip = schedulableAudioClips(project).single;
+      expect(clip.startMs, 1500);
+      expect(clip.endMs, 3000);
+      expect(clip.offsetIntoAsset(2000), 500);
+    });
+
     test('returns only audio-track clips on non-muted tracks', () {
       const project = SongProject(
         config: SongProjectConfig(

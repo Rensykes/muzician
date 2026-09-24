@@ -77,7 +77,6 @@ class SongwriterStretchController {
         sampleRate: sr,
       );
       final prev = clip.stretchedAssetId;
-      if (prev != null) await repo.delete(prev);
       final applied = ref
           .read(songwriterProvider.notifier)
           .setClipStretchedAsset(

@@ -793,14 +793,15 @@ class _EditPitchControls extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Row(
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
           children: [
             _ToolPill(
               label: '✏ Draw',
               active: tool == PianoRollTool.draw,
               onTap: () => notifier.setActiveTool(PianoRollTool.draw),
             ),
-            const SizedBox(width: 6),
             _ToolPill(
               label: '▭ Select',
               active: tool == PianoRollTool.select,
@@ -809,7 +810,6 @@ class _EditPitchControls extends ConsumerWidget {
                 notifier.setActiveTool(PianoRollTool.select);
               },
             ),
-            const SizedBox(width: 6),
             _ToolPill(
               label: '✂ Scissors',
               active: tool == PianoRollTool.scissors,
@@ -843,18 +843,18 @@ class _EditPitchControls extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Row(
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
           children: [
             _PitchShiftBtn(
               label: '−1 Oct',
               onTap: () => notifier.shiftPitchRange(-12),
             ),
-            const SizedBox(width: 6),
             _PitchShiftBtn(
               label: '+1 Oct',
               onTap: () => notifier.shiftPitchRange(12),
             ),
-            const SizedBox(width: 8),
             _PitchShiftBtn(
               label: 'Clear',
               onTap: () => notifier.setPitchRange(48, 84),
@@ -1124,21 +1124,27 @@ class _QuickButton extends ConsumerWidget {
             color: MuzicianTheme.emerald.withValues(alpha: 0.35),
           ),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.content_paste_rounded,
               size: 14,
               color: MuzicianTheme.emerald,
             ),
-            SizedBox(width: 6),
-            Text(
-              'Quick — paste selected or repeat last stack',
-              style: TextStyle(
-                color: MuzicianTheme.emerald,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'Quick — paste selected or repeat last stack',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                softWrap: true,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: MuzicianTheme.emerald,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],

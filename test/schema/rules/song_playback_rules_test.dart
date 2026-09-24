@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/song_playback.dart';
 import 'package:muzician/schema/rules/song_playback_rules.dart' as rules;
 import 'package:muzician/schema/rules/song_rules.dart' as song_rules;
 
@@ -50,15 +51,33 @@ void main() {
     expect(events.single.midiNotes, [60]);
   });
 
+  test('legacy midiNotes view includes stabs and sequenced notes together', () {
+    const event = SongPlaybackEvent(
+      tick: 8,
+      noteGroups: [
+        (volume: 0.8, midiNotes: [48, 52]),
+      ],
+      sequencedNoteGroups: [
+        (
+          volume: 1.0,
+          notes: [
+            NotePatternNote(
+              id: 'melody',
+              midiNote: 72,
+              startTick: 8,
+              durationTicks: 2,
+            ),
+          ],
+        ),
+      ],
+    );
+    expect(event.midiNotes, [48, 52, 72]);
+  });
+
   test('buildPlaybackEvents groups same-tick notes by track volume', () {
     final project = song_rules.getDefaultSongProject().copyWith(
       tracks: const [
-        SongTrack(
-          id: 'loud',
-          name: 'Loud',
-          type: SongTrackType.note,
-          order: 0,
-        ),
+        SongTrack(id: 'loud', name: 'Loud', type: SongTrackType.note, order: 0),
         SongTrack(
           id: 'soft',
           name: 'Soft',
@@ -127,11 +146,11 @@ void main() {
     // Flattened view still exposes everything.
     expect(event.midiNotes, [60, 64]);
     // Grouped view separates the volumes.
-    expect(event.noteGroups, hasLength(2));
-    final loud = event.noteGroups.firstWhere((g) => g.volume == 1.0);
-    final soft = event.noteGroups.firstWhere((g) => g.volume == 0.5);
-    expect(loud.midiNotes, [60]);
-    expect(soft.midiNotes, [64]);
+    expect(event.sequencedNoteGroups, hasLength(2));
+    final loud = event.sequencedNoteGroups.firstWhere((g) => g.volume == 1.0);
+    final soft = event.sequencedNoteGroups.firstWhere((g) => g.volume == 0.5);
+    expect(loud.notes.map((note) => note.midiNote), [60]);
+    expect(soft.notes.map((note) => note.midiNote), [64]);
   });
 
   test('mute and solo are applied before event expansion', () {

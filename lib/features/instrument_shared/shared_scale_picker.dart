@@ -163,7 +163,7 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                   letterSpacing: 0.8,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               if (isActive)
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -243,9 +243,20 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                   ),
                 )
               else
-                const Text(
-                  'Pick root + scale to highlight',
-                  style: TextStyle(color: Color(0xFF334155), fontSize: 11),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Pick root + scale to highlight',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0xFF334155),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -505,10 +516,7 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
     );
     if (!confirmed) return;
     final current = folder.projectConfig ?? const ProjectConfig();
-    final next = current.copyWith(
-      keyRootPc: rootPc,
-      keyScaleName: scaleName,
-    );
+    final next = current.copyWith(keyRootPc: rootPc, keyScaleName: scaleName);
     await ref
         .read(saveSystemProvider.notifier)
         .applyProjectConfig(folder.id, next, retrofit: true);

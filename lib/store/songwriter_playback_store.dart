@@ -43,6 +43,41 @@ final songwriterNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
   };
 });
 
+typedef SongwriterSequencedNoteSink =
+    void Function({
+      required int midiNote,
+      required Duration duration,
+      required Duration onsetDelay,
+      required double volume,
+      required double pan,
+    });
+
+typedef SongwriterSequencedNoteStopSink = void Function();
+
+final songwriterSequencedNoteSinkProvider =
+    Provider<SongwriterSequencedNoteSink>((ref) {
+      return ({
+        required int midiNote,
+        required Duration duration,
+        required Duration onsetDelay,
+        required double volume,
+        required double pan,
+      }) {
+        NotePlayer.instance.playSequencedNote(
+          midiNote,
+          duration: duration,
+          onsetDelay: onsetDelay,
+          volume: 0.6 * volume,
+          pan: pan,
+        );
+      };
+    });
+
+final songwriterSequencedNoteStopSinkProvider =
+    Provider<SongwriterSequencedNoteStopSink>(
+      (ref) => NotePlayer.instance.stopSequencedNotes,
+    );
+
 // ─── Transport State ─────────────────────────────────────────────────────────
 
 enum SongwriterPlaybackStatus { idle, playing, completed }
@@ -94,6 +129,11 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     final settings = ref.read(settingsProvider);
     final metronomeSink = ref.read(songwriterMetronomeSinkProvider);
     final noteSink = ref.read(songwriterNoteSinkProvider);
+    final sequencedNoteSink = ref.read(songwriterSequencedNoteSinkProvider);
+    final sequencedNoteStopSink = ref.read(
+      songwriterSequencedNoteStopSinkProvider,
+    );
+    sequencedNoteStopSink();
     final drumSink = ref.read(drumPatternPlaybackSinkProvider);
     final events = flattenPlaybackEvents(
       project,
@@ -198,10 +238,22 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
         for (final group in event.noteGroups) {
           noteSink(group.midiNotes, group.volume, group.pan);
         }
+        for (final group in event.sequencedNoteGroups) {
+          for (final note in group.notes) {
+            sequencedNoteSink(
+              midiNote: note.midiNote,
+              duration: pr_rules.effectiveSequencedNoteDuration(
+                tickDuration,
+                note,
+              ),
+              onsetDelay: Duration(milliseconds: note.onsetOffsetMs),
+              volume: group.volume,
+              pan: group.pan,
+            );
+          }
+        }
         for (final group in event.drumGroups) {
-          unawaited(
-            drumSink(group.drumLanes, 0.8 * group.volume, group.pan),
-          );
+          unawaited(drumSink(group.drumLanes, 0.8 * group.volume, group.pan));
         }
       }
       fireAudio(tick);
@@ -219,6 +271,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
 
   void stopPlayback() {
     _version++;
+    ref.read(songwriterSequencedNoteStopSinkProvider)();
     unawaited(ref.read(songwriterAudioClipSinkProvider).stopAll());
     state = state.copyWith(
       status: SongwriterPlaybackStatus.idle,
@@ -269,12 +322,12 @@ class SongwriterStartTickNotifier extends Notifier<int> {
     // is meaningless once a different project loads. Clear it on project switch
     // — otherwise the header Play button resumes the new song from the previous
     // song's bar (or jumps straight to its end).
-    ref.listen<String?>(
-      saveSystemProvider.select((s) => s.selectedProjectId),
-      (prev, next) {
-        if (prev != next) state = 0;
-      },
-    );
+    ref.listen<String?>(saveSystemProvider.select((s) => s.selectedProjectId), (
+      prev,
+      next,
+    ) {
+      if (prev != next) state = 0;
+    });
     return 0;
   }
 

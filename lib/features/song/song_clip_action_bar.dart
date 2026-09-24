@@ -154,196 +154,190 @@ class SongClipActionBar extends ConsumerWidget {
     }
 
     return [
-            _ActionBtn(
-              icon: Icons.edit_outlined,
-              tooltip: 'Edit pattern',
-              onTap: () {
-                HapticFeedback.selectionClick();
-                openClipEditor(context, ref, clip);
-              },
+      _ActionBtn(
+        icon: Icons.edit_outlined,
+        tooltip: 'Edit pattern',
+        onTap: () {
+          HapticFeedback.selectionClick();
+          openClipEditor(context, ref, clip);
+        },
+      ),
+      _ActionBtn(
+        icon: Icons.copy_outlined,
+        tooltip: 'Duplicate',
+        onTap: () {
+          HapticFeedback.selectionClick();
+          final newId = ref
+              .read(songProjectProvider.notifier)
+              .duplicateClip(clip.id);
+          ref.read(songSelectedClipIdProvider.notifier).state = newId;
+        },
+      ),
+      _ActionBtn(
+        icon: Icons.content_cut,
+        tooltip: 'Split at playhead',
+        onTap: () {
+          HapticFeedback.selectionClick();
+          final tick = ref.read(songPlaybackProvider).currentTick;
+          if (tick == null ||
+              !ref
+                  .read(songProjectProvider.notifier)
+                  .splitClipAtTick(clip.id, tick)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Park the playhead inside the clip to split it'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        },
+      ),
+      if (track.type == SongTrackType.audio)
+        _ActionBtn(
+          icon: Icons.tune,
+          tooltip: 'Trim audio',
+          onTap: () {
+            HapticFeedback.selectionClick();
+            _showTrimDialog(context, ref, clip);
+          },
+        ),
+      _ActionBtn(
+        icon: Icons.content_paste_go,
+        tooltip: 'Copy for paste',
+        onTap: () {
+          HapticFeedback.selectionClick();
+          ref.read(songClipClipboardProvider.notifier).state = (
+            patternId: clip.patternId,
+            patternType: clip.patternType,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Clip copied — long-press a lane to paste'),
+              duration: Duration(seconds: 2),
             ),
-            _ActionBtn(
-              icon: Icons.copy_outlined,
-              tooltip: 'Duplicate',
-              onTap: () {
-                HapticFeedback.selectionClick();
-                final newId = ref
-                    .read(songProjectProvider.notifier)
-                    .duplicateClip(clip.id);
-                ref.read(songSelectedClipIdProvider.notifier).state = newId;
-              },
-            ),
-            _ActionBtn(
-              icon: Icons.content_cut,
-              tooltip: 'Split at playhead',
-              onTap: () {
-                HapticFeedback.selectionClick();
-                final tick = ref.read(songPlaybackProvider).currentTick;
-                if (tick == null ||
-                    !ref
-                        .read(songProjectProvider.notifier)
-                        .splitClipAtTick(clip.id, tick)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Park the playhead inside the clip to split it',
+          );
+        },
+      ),
+      if (track.type == SongTrackType.note) ...[
+        _ActionBtn(
+          icon: Icons.arrow_downward,
+          tooltip: 'Transpose down (long-press: octave)',
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ref
+                .read(songProjectProvider.notifier)
+                .transposeClipPattern(clip.id, -1);
+          },
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            ref
+                .read(songProjectProvider.notifier)
+                .transposeClipPattern(clip.id, -12);
+          },
+        ),
+        _ActionBtn(
+          icon: Icons.arrow_upward,
+          tooltip: 'Transpose up (long-press: octave)',
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ref
+                .read(songProjectProvider.notifier)
+                .transposeClipPattern(clip.id, 1);
+          },
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            ref
+                .read(songProjectProvider.notifier)
+                .transposeClipPattern(clip.id, 12);
+          },
+        ),
+      ],
+      if (project.tracks.any((t) => t.id != track.id && t.type == track.type))
+        _ActionBtn(
+          icon: Icons.swap_vert,
+          tooltip: 'Move to track',
+          onTap: () async {
+            HapticFeedback.selectionClick();
+            final targets = project.tracks
+                .where((t) => t.id != track.id && t.type == track.type)
+                .toList();
+            final picked = await showModalBottomSheet<String>(
+              context: context,
+              backgroundColor: MuzicianTheme.surface,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (ctx) => SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Move to track',
+                        style: TextStyle(
+                          color: MuzicianTheme.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      duration: Duration(seconds: 2),
                     ),
-                  );
-                }
-              },
-            ),
-            if (track.type == SongTrackType.audio)
-              _ActionBtn(
-                icon: Icons.tune,
-                tooltip: 'Trim audio',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  _showTrimDialog(context, ref, clip);
-                },
-              ),
-            _ActionBtn(
-              icon: Icons.content_paste_go,
-              tooltip: 'Copy for paste',
-              onTap: () {
-                HapticFeedback.selectionClick();
-                ref.read(songClipClipboardProvider.notifier).state = (
-                  patternId: clip.patternId,
-                  patternType: clip.patternType,
-                );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Clip copied — long-press a lane to paste'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-            ),
-            if (track.type == SongTrackType.note) ...[
-              _ActionBtn(
-                icon: Icons.arrow_downward,
-                tooltip: 'Transpose down (long-press: octave)',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  ref
-                      .read(songProjectProvider.notifier)
-                      .transposeClipPattern(clip.id, -1);
-                },
-                onLongPress: () {
-                  HapticFeedback.mediumImpact();
-                  ref
-                      .read(songProjectProvider.notifier)
-                      .transposeClipPattern(clip.id, -12);
-                },
-              ),
-              _ActionBtn(
-                icon: Icons.arrow_upward,
-                tooltip: 'Transpose up (long-press: octave)',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  ref
-                      .read(songProjectProvider.notifier)
-                      .transposeClipPattern(clip.id, 1);
-                },
-                onLongPress: () {
-                  HapticFeedback.mediumImpact();
-                  ref
-                      .read(songProjectProvider.notifier)
-                      .transposeClipPattern(clip.id, 12);
-                },
-              ),
-            ],
-            if (project.tracks.any(
-              (t) => t.id != track.id && t.type == track.type,
-            ))
-              _ActionBtn(
-                icon: Icons.swap_vert,
-                tooltip: 'Move to track',
-                onTap: () async {
-                  HapticFeedback.selectionClick();
-                  final targets = project.tracks
-                      .where((t) => t.id != track.id && t.type == track.type)
-                      .toList();
-                  final picked = await showModalBottomSheet<String>(
-                    context: context,
-                    backgroundColor: MuzicianTheme.surface,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
-                    ),
-                    builder: (ctx) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text(
-                              'Move to track',
-                              style: TextStyle(
-                                color: MuzicianTheme.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                    for (final t in targets)
+                      ListTile(
+                        title: Text(
+                          t.name,
+                          style: const TextStyle(
+                            color: MuzicianTheme.textPrimary,
                           ),
-                          for (final t in targets)
-                            ListTile(
-                              title: Text(
-                                t.name,
-                                style: const TextStyle(
-                                  color: MuzicianTheme.textPrimary,
-                                ),
-                              ),
-                              onTap: () => Navigator.pop(ctx, t.id),
-                            ),
-                        ],
+                        ),
+                        onTap: () => Navigator.pop(ctx, t.id),
                       ),
-                    ),
-                  );
-                  if (picked == null || !context.mounted) return;
-                  final ok = ref
-                      .read(songProjectProvider.notifier)
-                      .moveClipToTrack(clip.id, picked);
-                  if (!ok) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Target slot is occupied'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                },
+                  ],
+                ),
               ),
-            if (isShared)
-              _ActionBtn(
-                icon: Icons.call_split,
-                tooltip: 'Make unique',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  ref
-                      .read(songProjectProvider.notifier)
-                      .makeClipPatternUnique(clip.id);
-                },
-              ),
-            _ActionBtn(
-              icon: Icons.delete_outline,
-              tooltip: 'Delete',
-              color: MuzicianTheme.red,
-              onTap: () {
-                HapticFeedback.mediumImpact();
-                ref.read(songProjectProvider.notifier).deleteClip(clip.id);
-                deselect();
-              },
-            ),
-            _ActionBtn(
-              icon: Icons.close,
-              tooltip: 'Close',
-              onTap: () {
-                HapticFeedback.selectionClick();
-                deselect();
-              },
-            ),
+            );
+            if (picked == null || !context.mounted) return;
+            final ok = ref
+                .read(songProjectProvider.notifier)
+                .moveClipToTrack(clip.id, picked);
+            if (!ok) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Target slot is occupied'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          },
+        ),
+      if (isShared)
+        _ActionBtn(
+          icon: Icons.call_split,
+          tooltip: 'Make unique',
+          onTap: () {
+            HapticFeedback.selectionClick();
+            ref
+                .read(songProjectProvider.notifier)
+                .makeClipPatternUnique(clip.id);
+          },
+        ),
+      _ActionBtn(
+        icon: Icons.delete_outline,
+        tooltip: 'Delete',
+        color: MuzicianTheme.red,
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          ref.read(songProjectProvider.notifier).deleteClip(clip.id);
+          deselect();
+        },
+      ),
+      _ActionBtn(
+        icon: Icons.close,
+        tooltip: 'Close',
+        onTap: () {
+          HapticFeedback.selectionClick();
+          deselect();
+        },
+      ),
     ];
   }
 
@@ -374,6 +368,7 @@ class SongClipActionBar extends ConsumerWidget {
               );
             }
             final maxMs = asset.durationMs.toDouble();
+            final notifier = dialogRef.read(songProjectProvider.notifier);
             Widget trimRow(String label, int value, void Function(int) write) {
               return Row(
                 children: [
@@ -392,6 +387,8 @@ class SongClipActionBar extends ConsumerWidget {
                       value: value.toDouble().clamp(0, maxMs),
                       max: maxMs,
                       activeColor: MuzicianTheme.teal,
+                      onChangeStart: (_) => notifier.beginHistoryGroup(),
+                      onChangeEnd: (_) => notifier.endHistoryGroup(),
                       onChanged: (v) => write(v.round()),
                     ),
                   ),
@@ -408,8 +405,6 @@ class SongClipActionBar extends ConsumerWidget {
                 ],
               );
             }
-
-            final notifier = dialogRef.read(songProjectProvider.notifier);
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -473,7 +468,11 @@ class _ActionBtn extends StatelessWidget {
           onTap: onTap,
           onLongPress: onLongPress,
           customBorder: const CircleBorder(),
-          child: Icon(icon, size: 20, color: color ?? MuzicianTheme.textSecondary),
+          child: Icon(
+            icon,
+            size: 20,
+            color: color ?? MuzicianTheme.textSecondary,
+          ),
         ),
       ),
     );

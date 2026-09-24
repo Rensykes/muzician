@@ -28,6 +28,41 @@ void main() {
     expect(find.text('No tracks yet'), findsOneWidget);
   });
 
+  testWidgets('compact Song header moves the scale control into More', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = ProviderContainer(
+      overrides: [
+        songNotePlaybackSinkProvider.overrideWith((_) => (notes, vol) async {}),
+        songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: SongScreen()),
+      ),
+    );
+
+    expect(find.text('Set scale'), findsNothing);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Song scale'), findsOneWidget);
+    expect(find.text('Export WAV'), findsOneWidget);
+    expect(find.text('Export Song Bundle'), findsOneWidget);
+
+    await tester.tap(find.text('Song scale'));
+    await tester.pumpAndSettle();
+    expect(find.text('Song Scale'), findsOneWidget);
+  });
+
   testWidgets('creating a note track renders a track header', (tester) async {
     final container = ProviderContainer(
       overrides: [

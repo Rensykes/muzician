@@ -11,6 +11,16 @@ void main() {
     expect(back.saveBrowserGrid, true);
   });
 
+  test('last content workspace defaults to Writer and round-trips', () {
+    const defaults = AppSettings();
+    expect(defaults.lastContentWorkspace, isNull);
+
+    final restored = AppSettings.fromJson(
+      defaults.copyWith(lastContentWorkspace: () => 'piano').toJson(),
+    );
+    expect(restored.lastContentWorkspace, 'piano');
+  });
+
   test('missing saveBrowserGrid in stored json falls back to false', () {
     final back = AppSettings.fromJson(<String, dynamic>{});
     expect(back.saveBrowserGrid, false);

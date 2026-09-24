@@ -5,24 +5,21 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../models/song_project.dart';
+import 'piano_roll_playback_rules.dart' as playback;
 import 'song_rules.dart' show songTicksPerMeasure;
 
 /// Returns the grid length, in ticks, that the given asset should occupy at
 /// the project's current tempo.  Audio always plays at native rate, so the
 /// real duration is the source of truth and this is a derived view.
 int audioClipLengthTicks(AudioAsset asset, SongProjectConfig config) {
-  final beatsPerSecond = config.tempo / 60.0;
-  final perBeat = config.timeSignature.ticksPerBeat;
-  final ticks = (asset.durationMs / 1000.0) * beatsPerSecond * perBeat;
+  final ticks = asset.durationMs / playback.millisecondsPerTick(config.tempo);
   return math.max(1, ticks.round());
 }
 
 /// Returns the wall-clock time, in milliseconds since transport start, of the
 /// given absolute tick at the project's current tempo.
 int audioTickToMs(int tick, SongProjectConfig config) {
-  final beatsPerSecond = config.tempo / 60.0;
-  final beats = tick / config.timeSignature.ticksPerBeat;
-  return (beats / beatsPerSecond * 1000.0).round();
+  return (tick * playback.millisecondsPerTick(config.tempo)).round();
 }
 
 /// Ensures the project's total measure count covers the given end tick — same
@@ -76,8 +73,11 @@ List<ScheduledAudioClip> schedulableAudioClips(SongProject project) {
     final asset = assetById[pattern.assetId];
     if (asset == null) continue;
     final startMs = audioTickToMs(clip.startTick, project.config);
-    final playableMs = (asset.durationMs - pattern.trimStartMs - pattern.trimEndMs)
-        .clamp(0, asset.durationMs);
+    final playableMs =
+        (asset.durationMs - pattern.trimStartMs - pattern.trimEndMs).clamp(
+          0,
+          asset.durationMs,
+        );
     if (playableMs <= 0) continue;
     out.add(
       ScheduledAudioClip(

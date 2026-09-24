@@ -33,6 +33,7 @@ import 'songwriter_save_lane_filter.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import 'drum_pattern_sheet.dart';
+import 'guitar_strum_pattern_sheet.dart';
 import 'harmony_chord_sheet.dart';
 import 'songwriter_header.dart';
 import 'songwriter_mixer_sheet.dart';
@@ -42,6 +43,7 @@ import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
 import 'songwriter_audio_lane_row.dart';
 import 'songwriter_section_ruler.dart';
+import 'songwriter_melody_pattern_editor.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({super.key});
@@ -161,7 +163,11 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                       padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
                       children: [
                         if (project.sections.isEmpty)
-                          const _EmptyState(key: Key('songwriterEmptyHint')),
+                          _EmptyState(
+                            key: const Key('songwriterEmptyHint'),
+                            onAddSection: () =>
+                                notifier.addSection(label: null, lengthBars: 8),
+                          ),
                         if (twoColumns)
                           // Wide layout: sections flow in two columns.
                           Wrap(
@@ -351,6 +357,30 @@ class _SectionInstance extends ConsumerWidget {
             section: section,
             lane: lane,
             instanceIndex: instanceIndex,
+          ),
+        ],
+        for (final lane in section.lanes.where(
+          (l) => l.kind == SongLaneKind.melody,
+        )) ...[
+          const SizedBox(height: 8),
+          _PatternLaneRow(
+            key: Key('sheetMelodyLane_${lane.id}_$instanceIndex'),
+            section: section,
+            lane: lane,
+            instanceIndex: instanceIndex,
+            isMelody: true,
+          ),
+        ],
+        for (final lane in section.lanes.where(
+          (l) => l.kind == SongLaneKind.guitarStrum,
+        )) ...[
+          const SizedBox(height: 8),
+          _PatternLaneRow(
+            key: Key('sheetGuitarStrumLane_${lane.id}_$instanceIndex'),
+            section: section,
+            lane: lane,
+            instanceIndex: instanceIndex,
+            isMelody: false,
           ),
         ],
         // Audio lanes (one strip per audio lane on this section).
@@ -678,32 +708,29 @@ class _SectionHeading extends ConsumerWidget {
                       );
                 }
                 if (value == 'addDrumLane') {
-                  ref
-                      .read(songwriterProvider.notifier)
-                      .addLane(
-                        sectionId: section.id,
-                        kind: SongLaneKind.drum,
-                        label: 'Beat',
-                      );
-                  final laneId = ref
-                      .read(songwriterProvider)
-                      .sections
-                      .firstWhere((s) => s.id == section.id)
-                      .lanes
-                      .lastWhere((l) => l.kind == SongLaneKind.drum)
-                      .id;
-                  final patternId = ref
-                      .read(songwriterProvider.notifier)
-                      .addDrumPattern(name: 'Pattern');
-                  ref
-                      .read(songwriterProvider.notifier)
-                      .addDrumBlock(
-                        sectionId: section.id,
-                        laneId: laneId,
-                        patternId: patternId,
-                        startBar: 0,
-                        spanBars: section.lengthBars,
-                      );
+                  final notifier = ref.read(songwriterProvider.notifier);
+                  notifier.runHistoryGroup(() {
+                    notifier.addLane(
+                      sectionId: section.id,
+                      kind: SongLaneKind.drum,
+                      label: 'Beat',
+                    );
+                    final laneId = ref
+                        .read(songwriterProvider)
+                        .sections
+                        .firstWhere((s) => s.id == section.id)
+                        .lanes
+                        .lastWhere((l) => l.kind == SongLaneKind.drum)
+                        .id;
+                    final patternId = notifier.addDrumPattern(name: 'Pattern');
+                    notifier.addDrumBlock(
+                      sectionId: section.id,
+                      laneId: laneId,
+                      patternId: patternId,
+                      startBar: 0,
+                      spanBars: section.lengthBars,
+                    );
+                  });
                 }
                 if (value == 'addAudioLane') {
                   ref
@@ -713,6 +740,54 @@ class _SectionHeading extends ConsumerWidget {
                         kind: SongLaneKind.audio,
                         label: 'Sample',
                       );
+                }
+                if (value == 'addMelodyLane') {
+                  final notifier = ref.read(songwriterProvider.notifier);
+                  notifier.runHistoryGroup(() {
+                    final laneId = notifier.addLane(
+                      sectionId: section.id,
+                      kind: SongLaneKind.melody,
+                      label: 'Melody',
+                    );
+                    final patternId = notifier.addMelodyPattern(
+                      name: 'Melody',
+                      lengthTicks: ref
+                          .read(songwriterProvider)
+                          .config
+                          .measureTicks,
+                    );
+                    notifier.addMelodyBlock(
+                      sectionId: section.id,
+                      laneId: laneId,
+                      patternId: patternId,
+                      startBar: 0,
+                      spanBars: section.lengthBars,
+                    );
+                  });
+                }
+                if (value == 'addGuitarStrumLane') {
+                  final notifier = ref.read(songwriterProvider.notifier);
+                  notifier.runHistoryGroup(() {
+                    final laneId = notifier.addLane(
+                      sectionId: section.id,
+                      kind: SongLaneKind.guitarStrum,
+                      label: 'Guitar Strum',
+                    );
+                    final patternId = notifier.addGuitarStrumPattern(
+                      name: 'Strum',
+                      lengthTicks: ref
+                          .read(songwriterProvider)
+                          .config
+                          .measureTicks,
+                    );
+                    notifier.addGuitarStrumBlock(
+                      sectionId: section.id,
+                      laneId: laneId,
+                      patternId: patternId,
+                      startBar: 0,
+                      spanBars: section.lengthBars,
+                    );
+                  });
                 }
               },
               itemBuilder: (_) => const [
@@ -743,6 +818,24 @@ class _SectionHeading extends ConsumerWidget {
                     dense: true,
                   ),
                 ),
+                PopupMenuItem(
+                  key: Key('addMelodyLaneSheetAction'),
+                  value: 'addMelodyLane',
+                  child: ListTile(
+                    leading: Icon(Icons.music_note),
+                    title: Text('Add melody lane'),
+                    dense: true,
+                  ),
+                ),
+                PopupMenuItem(
+                  key: Key('addGuitarStrumLaneSheetAction'),
+                  value: 'addGuitarStrumLane',
+                  child: ListTile(
+                    leading: Icon(Icons.music_note_outlined),
+                    title: Text('Add guitar strum lane'),
+                    dense: true,
+                  ),
+                ),
               ],
             ),
             const SizedBox(width: 4),
@@ -752,13 +845,15 @@ class _SectionHeading extends ConsumerWidget {
                 final sections = ref.read(songwriterProvider).sections;
                 final idx = sections.indexWhere((s) => s.id == section.id);
                 if (idx < 0) return;
-                final removed = sections[idx];
                 HapticFeedback.mediumImpact();
                 notifier.removeSection(section.id);
+                final revision = notifier.historyRevision;
                 showUndoSnack(
                   context,
                   'Section deleted',
-                  () => notifier.insertSection(removed, idx),
+                  historyRevision: notifier.historyRevisionListenable,
+                  expectedRevision: revision,
+                  onUndo: () => notifier.undo(ifRevision: revision),
                 );
               },
               icon: const Icon(
@@ -1187,9 +1282,6 @@ class _BarRow extends ConsumerWidget {
   }
 
   Future<void> _addAt(BuildContext context, WidgetRef ref, int bar) async {
-    if (lane.id.isEmpty) {
-      onEnsureLane();
-    }
     final block = await showHarmonyChordSheet(
       context,
       startBar: bar,
@@ -1202,62 +1294,66 @@ class _BarRow extends ConsumerWidget {
       onPickFromLibrary: () => _pickFromLibrary(context, ref, bar),
     );
     if (block == null) return;
-    final laneId = lane.id.isEmpty
-        ? ref
-              .read(songwriterProvider)
-              .sections
-              .firstWhere((s) => s.id == section.id)
-              .lanes
-              .firstWhere((l) => l.kind == SongLaneKind.harmony)
-              .id
-        : lane.id;
     HapticFeedback.selectionClick();
-    if (block.isSilent) {
-      ref
-          .read(songwriterProvider.notifier)
-          .addSilentBlock(
+    final notifier = ref.read(songwriterProvider.notifier);
+    notifier.runHistoryGroup(() {
+      if (lane.id.isEmpty) onEnsureLane();
+      final laneId = lane.id.isNotEmpty
+          ? lane.id
+          : ref
+                .read(songwriterProvider)
+                .sections
+                .where((s) => s.id == section.id)
+                .expand((s) => s.lanes)
+                .where((l) => l.kind == SongLaneKind.harmony)
+                .firstOrNull
+                ?.id;
+      if (laneId == null || laneId.isEmpty) return;
+
+      if (block.isSilent) {
+        notifier.addSilentBlock(
+          sectionId: section.id,
+          laneId: laneId,
+          startBar: bar,
+          spanBars: 1,
+          verseCount: section.repeat.clamp(1, 16),
+        );
+        final newBlockId = ref
+            .read(songwriterProvider)
+            .sections
+            .where((s) => s.id == section.id)
+            .expand((s) => s.lanes)
+            .where((l) => l.id == laneId)
+            .expand((l) => l.blocks)
+            .where((b) => b.startBar == bar)
+            .lastOrNull
+            ?.id;
+        if (isPrimary && block.lyrics.isNotEmpty && newBlockId != null) {
+          notifier.setBlockLyric(
             sectionId: section.id,
             laneId: laneId,
-            startBar: bar,
-            spanBars: 1,
-            verseCount: section.repeat.clamp(1, 16),
+            blockId: newBlockId,
+            verseIndex: instanceIndex,
+            text: block.lyrics.first,
           );
-      final newBlockId = ref
-          .read(songwriterProvider)
-          .sections
-          .firstWhere((s) => s.id == section.id)
-          .lanes
-          .firstWhere((l) => l.id == laneId)
-          .blocks
-          .lastWhere((b) => b.startBar == bar)
-          .id;
-      if (isPrimary && block.lyrics.isNotEmpty) {
-        ref
-            .read(songwriterProvider.notifier)
-            .setBlockLyric(
-              sectionId: section.id,
-              laneId: laneId,
-              blockId: newBlockId,
-              verseIndex: instanceIndex,
-              text: block.lyrics.first,
-            );
+        }
+      } else {
+        notifier.addHarmonyBlock(
+          sectionId: section.id,
+          laneId: laneId,
+          block: block,
+        );
+        if (isPrimary && block.lyrics.isNotEmpty) {
+          notifier.setBlockLyric(
+            sectionId: section.id,
+            laneId: laneId,
+            blockId: block.id,
+            verseIndex: instanceIndex,
+            text: block.lyrics.first,
+          );
+        }
       }
-    } else {
-      ref
-          .read(songwriterProvider.notifier)
-          .addHarmonyBlock(sectionId: section.id, laneId: laneId, block: block);
-      if (isPrimary && block.lyrics.isNotEmpty) {
-        ref
-            .read(songwriterProvider.notifier)
-            .setBlockLyric(
-              sectionId: section.id,
-              laneId: laneId,
-              blockId: block.id,
-              verseIndex: instanceIndex,
-              text: block.lyrics.first,
-            );
-      }
-    }
+    });
   }
 
   /// Tap on a placed block → unified, non-destructive action sheet.
@@ -1393,7 +1489,6 @@ class _BarRow extends ConsumerWidget {
       );
       return;
     }
-    if (lane.id.isEmpty) onEnsureLane();
     showWidgetSheet(
       context: context,
       title: 'From library',
@@ -1440,24 +1535,32 @@ class _BarRow extends ConsumerWidget {
     );
     if (next == null) return;
     HapticFeedback.selectionClick();
-    // Write the lyric for this instance (primary lane only).
-    if (isPrimary) {
-      ref
-          .read(songwriterProvider.notifier)
-          .setBlockLyric(
-            sectionId: section.id,
-            laneId: lane.id,
-            blockId: block.id,
-            verseIndex: instanceIndex,
-            text: next.lyrics.isNotEmpty ? next.lyrics.first : null,
-          );
-    }
-    // If chord state changed (non-silent), replace the block.
-    if (!next.isSilent) {
-      final n = ref.read(songwriterProvider.notifier);
-      n.removeBlock(sectionId: section.id, laneId: lane.id, blockId: block.id);
-      n.addHarmonyBlock(sectionId: section.id, laneId: lane.id, block: next);
-    }
+    final notifier = ref.read(songwriterProvider.notifier);
+    notifier.runHistoryGroup(() {
+      // Write the lyric for this instance (primary lane only).
+      if (isPrimary) {
+        notifier.setBlockLyric(
+          sectionId: section.id,
+          laneId: lane.id,
+          blockId: block.id,
+          verseIndex: instanceIndex,
+          text: next.lyrics.isNotEmpty ? next.lyrics.first : null,
+        );
+      }
+      // If chord state changed (non-silent), replace the block.
+      if (!next.isSilent) {
+        notifier.removeBlock(
+          sectionId: section.id,
+          laneId: lane.id,
+          blockId: block.id,
+        );
+        notifier.addHarmonyBlock(
+          sectionId: section.id,
+          laneId: lane.id,
+          block: next,
+        );
+      }
+    });
   }
 
   /// Edits the per-verse lyric of [block]. [laneId] defaults to this row's
@@ -1511,14 +1614,13 @@ class _BarRow extends ConsumerWidget {
       laneId: lane.id,
       blockId: block.id,
     );
+    final revision = notifier.historyRevision;
     showUndoSnack(
       context,
       'Block removed',
-      () => notifier.insertBlock(
-        sectionId: section.id,
-        laneId: lane.id,
-        block: block,
-      ),
+      historyRevision: notifier.historyRevisionListenable,
+      expectedRevision: revision,
+      onUndo: () => notifier.undo(ifRevision: revision),
     );
   }
 
@@ -1597,14 +1699,13 @@ class _BarRow extends ConsumerWidget {
       laneId: saveLaneId,
       blockId: save.id,
     );
+    final revision = notifier.historyRevision;
     showUndoSnack(
       context,
       'Save removed',
-      () => notifier.insertBlock(
-        sectionId: section.id,
-        laneId: saveLaneId,
-        block: save,
-      ),
+      historyRevision: notifier.historyRevisionListenable,
+      expectedRevision: revision,
+      onUndo: () => notifier.undo(ifRevision: revision),
     );
   }
 }
@@ -1972,6 +2073,292 @@ class _DrumLaneRow extends ConsumerWidget {
   }
 }
 
+class _PatternLaneRow extends ConsumerWidget {
+  const _PatternLaneRow({
+    super.key,
+    required this.section,
+    required this.lane,
+    required this.instanceIndex,
+    required this.isMelody,
+  });
+
+  final SongSection section;
+  final SongLane lane;
+  final int instanceIndex;
+  final bool isMelody;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final project = ref.watch(songwriterProvider);
+    final patternNames = isMelody
+        ? {
+            for (final pattern in project.melodyPatterns)
+              pattern.id: pattern.name,
+          }
+        : {
+            for (final pattern in project.guitarStrumPatterns)
+              pattern.id: pattern.name,
+          };
+    final harmonyLanes = section.lanes
+        .where((candidate) => candidate.kind == SongLaneKind.harmony)
+        .toList();
+    final primaryHarmonyId = harmonyLanes.firstOrNull?.id;
+    final resolvedAnchor =
+        lane.anchorLaneId != null &&
+            harmonyLanes.any((candidate) => candidate.id == lane.anchorLaneId)
+        ? lane.anchorLaneId
+        : primaryHarmonyId;
+    final ownerByBar = <int, SongBlock>{};
+    for (final block in lane.blocks) {
+      for (var bar = block.startBar; bar < block.endBar; bar++) {
+        ownerByBar[bar] = block;
+      }
+    }
+
+    void openPattern(SongBlock block) {
+      final patternId = block.patternId;
+      if (patternId == null || !patternNames.containsKey(patternId)) return;
+      if (isMelody) {
+        showSongwriterMelodyPatternEditor(
+          context: context,
+          patternId: patternId,
+        );
+      } else {
+        showGuitarStrumPatternSheet(context: context, patternId: patternId);
+      }
+    }
+
+    void createPatternAt(int bar) {
+      final notifier = ref.read(songwriterProvider.notifier);
+      final length = project.config.measureTicks;
+      if (isMelody) {
+        final patternId = notifier.addMelodyPattern(lengthTicks: length);
+        notifier.addMelodyBlock(
+          sectionId: section.id,
+          laneId: lane.id,
+          patternId: patternId,
+          startBar: bar,
+          spanBars: 1,
+        );
+        showSongwriterMelodyPatternEditor(
+          context: context,
+          patternId: patternId,
+        );
+      } else {
+        final patternId = notifier.addGuitarStrumPattern(lengthTicks: length);
+        notifier.addGuitarStrumBlock(
+          sectionId: section.id,
+          laneId: lane.id,
+          patternId: patternId,
+          startBar: bar,
+          spanBars: 1,
+        );
+        showGuitarStrumPatternSheet(context: context, patternId: patternId);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 4),
+          child: Row(
+            children: [
+              Icon(
+                isMelody ? Icons.music_note : Icons.music_note_outlined,
+                size: 13,
+                color: isMelody ? MuzicianTheme.sky : MuzicianTheme.emerald,
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  lane.label ?? laneKindFallbackLabel(lane.kind),
+                  style: const TextStyle(
+                    color: MuzicianTheme.textMuted,
+                    fontSize: 11,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              if (!isMelody && harmonyLanes.isNotEmpty)
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: Key('strumAnchor_${lane.id}_$instanceIndex'),
+                    value: resolvedAnchor,
+                    isDense: true,
+                    iconSize: 16,
+                    dropdownColor: MuzicianTheme.surface,
+                    style: const TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 10,
+                    ),
+                    items: [
+                      for (var index = 0; index < harmonyLanes.length; index++)
+                        DropdownMenuItem(
+                          value: harmonyLanes[index].id,
+                          child: Text(
+                            harmonyLanes[index].label ??
+                                (index == 0
+                                    ? 'Primary harmony'
+                                    : 'Harmony ${index + 1}'),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      ref
+                          .read(songwriterProvider.notifier)
+                          .setLaneAnchorLane(
+                            sectionId: section.id,
+                            laneId: lane.id,
+                            harmonyLaneId: value == primaryHarmonyId
+                                ? null
+                                : value,
+                          );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const perRow = 4;
+            final rows = <List<Widget>>[];
+            final bars = section.lengthBars.clamp(1, 64);
+            for (var start = 0; start < bars; start += perRow) {
+              final end = (start + perRow).clamp(0, bars);
+              final cells = <Widget>[];
+              var bar = start;
+              while (bar < end) {
+                final owner = ownerByBar[bar];
+                if (owner != null && owner.startBar == bar) {
+                  final span = owner.spanBars.clamp(1, end - bar);
+                  final patternName = owner.patternId == null
+                      ? null
+                      : patternNames[owner.patternId];
+                  cells.add(
+                    Expanded(
+                      flex: span,
+                      child: Semantics(
+                        button: true,
+                        label:
+                            'Edit ${isMelody ? 'melody' : 'guitar strum'} pattern ${patternName ?? ''}',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            key: Key(
+                              '${isMelody ? 'sheetMelodyTile' : 'sheetGuitarStrumTile'}_${owner.patternId ?? owner.id}_$instanceIndex',
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () => openPattern(owner),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    (isMelody
+                                            ? MuzicianTheme.sky
+                                            : MuzicianTheme.emerald)
+                                        .withValues(alpha: .14),
+                                border: Border.all(
+                                  color:
+                                      (isMelody
+                                              ? MuzicianTheme.sky
+                                              : MuzicianTheme.emerald)
+                                          .withValues(alpha: .45),
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isMelody
+                                        ? Icons.edit_note
+                                        : Icons.music_note_outlined,
+                                    size: 14,
+                                    color: MuzicianTheme.textPrimary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      patternName ?? 'pattern?',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: MuzicianTheme.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                  bar += span;
+                } else if (owner != null) {
+                  bar++;
+                } else {
+                  final emptyBar = bar++;
+                  cells.add(
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        label:
+                            'Create ${isMelody ? 'melody' : 'guitar strum'} pattern at bar ${emptyBar + 1}',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            key: Key(
+                              'empty${isMelody ? 'Melody' : 'GuitarStrum'}Bar_${lane.id}_${instanceIndex}_$emptyBar',
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () => createPatternAt(emptyBar),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              height: 44,
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: MuzicianTheme.glassBorder,
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+              }
+              rows.add(cells);
+            }
+            return Column(
+              children: [
+                for (var row = 0; row < rows.length; row++)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: row == rows.length - 1 ? 0 : 6,
+                    ),
+                    child: Row(children: rows[row]),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
 class _AddSectionRule extends StatelessWidget {
   const _AddSectionRule({super.key, required this.onTap});
   final VoidCallback onTap;
@@ -2021,7 +2408,9 @@ class _AddSectionRule extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({super.key});
+  const _EmptyState({super.key, required this.onAddSection});
+
+  final VoidCallback onAddSection;
 
   @override
   Widget build(BuildContext context) {
@@ -2048,6 +2437,13 @@ class _EmptyState extends StatelessWidget {
             'Add a section, then tap a bar to drop a chord.',
             style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 13),
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            key: const Key('writerEmptyAddSection'),
+            onPressed: onAddSection,
+            icon: const Icon(Icons.add),
+            label: const Text('Start an 8-bar section'),
           ),
         ],
       ),
@@ -2093,7 +2489,6 @@ class _StepperDialogState extends State<_StepperDialog> {
   void _set(int next) {
     if (next < widget.min) return;
     setState(() => _v = next);
-    widget.onChanged(_v);
   }
 
   @override
@@ -2130,7 +2525,10 @@ class _StepperDialogState extends State<_StepperDialog> {
         MuzicianDialogButton(
           'Done',
           emphasis: MuzicianDialogEmphasis.primary,
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            widget.onChanged(_v);
+            Navigator.pop(context);
+          },
         ),
       ],
     );

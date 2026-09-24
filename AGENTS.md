@@ -24,8 +24,16 @@ These rules are for coding agents working in this repository. Prefer small, veri
 - Run `dart format <changed paths>`, `flutter analyze`, and the narrowest relevant `flutter test` target before finishing.
 - For visible UI changes, verify layout on at least one compact and one wide viewport or device.
 
+### Product and Design Documentation
+- Treat root `PRODUCT.md` and `DESIGN.md` as the working product and visual-system references. Review them before user-facing work and update them when product direction, interaction principles, or visual tokens change.
+- Every user-visible feature or behavior change must update its relevant feature guide and keep `README.md`'s feature overview accurate. Reconcile conflicting docs instead of adding another competing description.
+- Review this `AGENTS.md` after each implementation phase. Update it when persistent repository rules, architecture, or verification steps change; keep the guidance concise and actionable.
+- A phase is not complete until its tests, feature documentation, and any required agent guidance describe the shipped behavior.
+
 ## Project Structure & Module Organization
 `lib/` contains the app code. Use `lib/features/` for instrument-specific UI (`fretboard`, `piano`, `piano_roll`, `save_system`), `lib/models/` for immutable data types, `lib/store/` for Riverpod state, and `lib/schema/rules/` for music logic, validation, and default factories. Shared UI belongs in `lib/ui/` or `lib/ui/core/`; cross-platform helpers such as note playback live in `lib/utils/`. Static assets are in `assets/images/`, feature notes in `docs/`, and platform runners in `android/`, `ios/`, `web/`, `macos/`, `linux/`, and `windows/`.
+
+Writer and Song histories are in-memory and project-scoped, capped at 50 prior snapshots. Group continuous gestures and compound commands with the store history APIs; clear history on project switch, New, and named snapshot load. Keep repository audio files while retained snapshots can reference them.
 
 ## Build, Test, and Development Commands
 Run `flutter pub get` after dependency changes. Use `flutter run` for the default attached device, or `flutter run -d <device-id>` after checking `flutter devices`. Keep code clean with `dart format lib` and `flutter analyze`. Run `flutter test` for Dart and widget tests once they exist under `test/`. CI currently builds with `flutter build web --release` for Firebase preview/production and `flutter build appbundle --release` for Play Store delivery.
