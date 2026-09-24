@@ -92,6 +92,35 @@ Uint8List _renderNote(int midi) {
   return _encodeWav(samples);
 }
 
+Uint8List _renderSequencedNote(int midi, int durationMs) {
+  final freq = _midiToFreq(midi);
+  final safeDuration = durationMs < 1 ? 1 : durationMs;
+  final numSamples = _sampleRate * safeDuration ~/ 1000;
+  final samples = Int16List(numSamples);
+  final releaseSamples = math.min(numSamples ~/ 3, _sampleRate * 35 ~/ 1000);
+  final attackSamples = math.min(numSamples ~/ 4, _sampleRate * 5 ~/ 1000);
+  for (var i = 0; i < numSamples; i++) {
+    final attack = attackSamples == 0
+        ? 1.0
+        : (i / attackSamples).clamp(0.0, 1.0);
+    final remaining = numSamples - i;
+    final release = releaseSamples == 0 || remaining > releaseSamples
+        ? 1.0
+        : (remaining / releaseSamples).clamp(0.0, 1.0);
+    final t = i / _sampleRate;
+    var value = math.sin(2 * math.pi * freq * t) * 0.60;
+    value += math.sin(2 * math.pi * freq * 2 * t) * 0.22;
+    value += math.sin(2 * math.pi * freq * 3 * t) * 0.10;
+    value += math.sin(2 * math.pi * freq * 4 * t) * 0.05;
+    value += math.sin(2 * math.pi * freq * 6 * t) * 0.03;
+    samples[i] = (value * attack * release * 22000).round().clamp(
+      -32767,
+      32767,
+    );
+  }
+  return _encodeWav(samples);
+}
+
 Uint8List _renderClick(double freq) {
   const numSamples = _sampleRate * _clickDurationMs ~/ 1000;
   final samples = Int16List(numSamples);
@@ -244,6 +273,12 @@ class NotePlayer {
   static final NotePlayer instance = NotePlayer._();
 
   final List<AudioPlayer> _pool = [];
+  final List<AudioPlayer> _sequencedPool = [];
+  final Map<AudioPlayer, int> _activeSequencedVoices = {};
+  final Map<AudioPlayer, int> _pendingSequencedVoices = {};
+  final Map<AudioPlayer, Future<void>> _sequencedStops = {};
+  int _sequencedVoiceId = 0;
+  int _sequencedGeneration = 0;
 
   /// Last balance set on each pool player (see [_applyBalance]). Players
   /// start centered, so an absent entry means 0.0 has effectively been set.
@@ -278,6 +313,38 @@ class NotePlayer {
   void previewNote(int midiNote, {double volume = 0.8, double pan = 0.0}) {
     if (!_ready) return;
     unawaited(_play(midiNote, volume, pan));
+  }
+
+  /// Starts one duration-aware voice for a sequenced note. Each voice releases
+  /// after [duration] and is also stopped immediately by
+  /// [stopSequencedNotes]. [onsetDelay] preserves sub-tick offsets such as a
+  /// guitar strum's string stagger.
+  void playSequencedNote(
+    int midiNote, {
+    required Duration duration,
+    Duration onsetDelay = Duration.zero,
+    double volume = 0.8,
+    double pan = 0.0,
+  }) {
+    if (!_ready) return;
+    unawaited(
+      _playSequencedNote(
+        midiNote,
+        duration: duration,
+        onsetDelay: onsetDelay,
+        volume: volume,
+        pan: pan,
+        generation: _sequencedGeneration,
+      ),
+    );
+  }
+
+  /// Releases every voice started through [playSequencedNote].
+  void stopSequencedNotes() {
+    _sequencedGeneration++;
+    for (final entry in _activeSequencedVoices.entries.toList()) {
+      unawaited(_stopSequencedVoice(entry.key, entry.value));
+    }
   }
 
   /// Plays a short metronome click at [volume] (0.0–1.0). [accent] picks the
@@ -389,6 +456,127 @@ class NotePlayer {
     } else {
       final bytes = _bytesCache.putIfAbsent(midi, () => _renderNote(midi));
       await player.play(BytesSource(bytes));
+    }
+  }
+
+  Future<void> _playSequencedNote(
+    int midi, {
+    required Duration duration,
+    required Duration onsetDelay,
+    required double volume,
+    required double pan,
+    required int generation,
+  }) async {
+    if (onsetDelay > Duration.zero) await Future<void>.delayed(onsetDelay);
+    if (generation != _sequencedGeneration) return;
+
+    AudioPlayer? availablePlayer;
+    for (final candidate in _sequencedPool) {
+      if (!_activeSequencedVoices.containsKey(candidate)) {
+        availablePlayer = candidate;
+        break;
+      }
+    }
+    final AudioPlayer player;
+    if (availablePlayer == null) {
+      player = AudioPlayer();
+      await player.setReleaseMode(ReleaseMode.stop);
+      _sequencedPool.add(player);
+      if (generation != _sequencedGeneration) {
+        unawaited(player.dispose());
+        _sequencedPool.remove(player);
+        return;
+      }
+    } else {
+      player = availablePlayer;
+    }
+
+    final voiceId = ++_sequencedVoiceId;
+    _activeSequencedVoices[player] = voiceId;
+    _pendingSequencedVoices[player] = voiceId;
+    final durationMs = duration.inMilliseconds < 1
+        ? 1
+        : duration.inMilliseconds;
+    var started = false;
+    try {
+      await player.setVolume(volume.clamp(0.0, 1.0));
+      await _applyBalance(player, pan);
+      if (generation != _sequencedGeneration ||
+          _activeSequencedVoices[player] != voiceId) {
+        return;
+      }
+
+      final cacheKey = 1000000 + midi * 10000000000 + durationMs;
+      if (_needsFile) {
+        final path = await _ensureFile(
+          cacheKey,
+          () => _renderSequencedNote(midi, durationMs),
+        );
+        if (generation != _sequencedGeneration ||
+            _activeSequencedVoices[player] != voiceId) {
+          return;
+        }
+        await player.play(DeviceFileSource(path));
+      } else {
+        final bytes = _bytesCache.putIfAbsent(
+          cacheKey,
+          () => _renderSequencedNote(midi, durationMs),
+        );
+        if (generation != _sequencedGeneration ||
+            _activeSequencedVoices[player] != voiceId) {
+          return;
+        }
+        await player.play(BytesSource(bytes));
+      }
+      started = true;
+    } catch (_) {
+      // A platform playback failure should not leave this voice reserved.
+    } finally {
+      if (_pendingSequencedVoices[player] == voiceId) {
+        _pendingSequencedVoices.remove(player);
+      }
+      if (!started ||
+          generation != _sequencedGeneration ||
+          _activeSequencedVoices[player] != voiceId) {
+        await _stopSequencedVoice(player, voiceId);
+      }
+    }
+
+    if (!started ||
+        generation != _sequencedGeneration ||
+        _activeSequencedVoices[player] != voiceId) {
+      return;
+    }
+    unawaited(
+      Future<void>.delayed(Duration(milliseconds: durationMs), () async {
+        await _stopSequencedVoice(player, voiceId);
+      }),
+    );
+  }
+
+  Future<void> _stopSequencedVoice(AudioPlayer player, int voiceId) async {
+    if (_activeSequencedVoices[player] != voiceId) return;
+    final existingStop = _sequencedStops[player];
+    if (existingStop != null) {
+      await existingStop;
+      return;
+    }
+    final stopping = _stopSequencedVoiceInternal(player, voiceId);
+    _sequencedStops[player] = stopping;
+    await stopping;
+    if (identical(_sequencedStops[player], stopping)) {
+      _sequencedStops.remove(player);
+    }
+  }
+
+  Future<void> _stopSequencedVoiceInternal(
+    AudioPlayer player,
+    int voiceId,
+  ) async {
+    await player.stop();
+    if (_activeSequencedVoices[player] == voiceId &&
+        _pendingSequencedVoices[player] != voiceId) {
+      _activeSequencedVoices.remove(player);
     }
   }
 

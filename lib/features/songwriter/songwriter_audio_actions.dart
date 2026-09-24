@@ -161,23 +161,25 @@ void _commit(
   int? spanBars,
 }) {
   final store = ref.read(songwriterProvider.notifier);
-  store.addAudioAsset(asset);
-  final clipId = store.addAudioClip(
-    assetId: asset.id,
-    durationMs: asset.durationMs,
-    fitMode: fitMode,
-  );
-  final span =
-      spanBars ??
-      audioBlockDefaultSpan(
-        sectionLengthBars: sectionLengthBars,
-        startBar: startBar,
-      );
-  store.addAudioBlock(
-    sectionId: sectionId,
-    laneId: laneId,
-    audioClipId: clipId,
-    startBar: startBar,
-    spanBars: span,
-  );
+  store.runHistoryGroup(() {
+    store.addAudioAsset(asset);
+    final clipId = store.addAudioClip(
+      assetId: asset.id,
+      durationMs: asset.durationMs,
+      fitMode: fitMode,
+    );
+    final span =
+        spanBars ??
+        audioBlockDefaultSpan(
+          sectionLengthBars: sectionLengthBars,
+          startBar: startBar,
+        );
+    store.addAudioBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      audioClipId: clipId,
+      startBar: startBar,
+      spanBars: span,
+    );
+  });
 }

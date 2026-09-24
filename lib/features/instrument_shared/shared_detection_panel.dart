@@ -14,15 +14,18 @@ import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../utils/note_utils.dart';
 import 'instrument_binding.dart';
+import 'writer_handoff.dart';
 
 class SharedDetectionPanel extends ConsumerStatefulWidget {
   final InstrumentBinding binding;
   final VoidCallback? onChordPanelRequested;
+  final VoidCallback? onHandoffCompleted;
 
   const SharedDetectionPanel({
     super.key,
     required this.binding,
     this.onChordPanelRequested,
+    this.onHandoffCompleted,
   });
 
   @override
@@ -363,6 +366,35 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                         fontStyle: FontStyle.italic,
                       ),
                     ),
+                  if (exactNotes.isNotEmpty &&
+                      widget.onHandoffCompleted != null) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        key: const Key('addInstrumentSelectionToWriter'),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          startWriterHandoff(
+                            context: context,
+                            ref: ref,
+                            binding: widget.binding,
+                            chordResults: chordResults,
+                            onTransferComplete: widget.onHandoffCompleted!,
+                          );
+                        },
+                        icon: const Icon(Icons.drive_file_move_outline),
+                        label: const Text('Add to Writer'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          foregroundColor: MuzicianTheme.sky,
+                          side: BorderSide(
+                            color: MuzicianTheme.sky.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             )

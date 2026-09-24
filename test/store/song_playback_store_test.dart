@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/song_playback.dart';
+import 'package:muzician/models/piano_roll.dart' show TimeSignature;
 import 'package:muzician/schema/rules/song_rules.dart' as song_rules;
 import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/song_playback_store.dart';
 import 'package:muzician/store/song_project_store.dart';
+import 'package:muzician/store/song_audio_repository.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +17,14 @@ ProviderContainer _container({SongAudioClipSink? audioSink}) {
   final container = ProviderContainer(
     overrides: [
       songNotePlaybackSinkProvider.overrideWith((_) => (notes, vol) async {}),
+      songSequencedNotePlaybackSinkProvider.overrideWithValue(
+        ({
+          required int midiNote,
+          required Duration duration,
+          required Duration onsetDelay,
+          required double volume,
+        }) {},
+      ),
       songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
       if (audioSink != null)
         songAudioClipSinkProvider.overrideWithValue(audioSink),
@@ -55,6 +66,107 @@ void main() {
       SongPlaybackStatus.completed,
     );
   });
+
+  test(
+    'Song live sink applies the serialized boundary duration trim',
+    () async {
+      final audioRoot = await Directory.systemTemp.createTemp(
+        'song-live-boundary-',
+      );
+      addTearDown(() => audioRoot.delete(recursive: true));
+      final calls = <({Duration duration, Duration onset})>[];
+      final container = ProviderContainer(
+        overrides: [
+          songAudioRepositoryProvider.overrideWithValue(
+            SongAudioRepository.testWith(rootDirectory: audioRoot),
+          ),
+          songNotePlaybackSinkProvider.overrideWith(
+            (_) => (notes, volume) async {},
+          ),
+          songSequencedNotePlaybackSinkProvider.overrideWithValue(({
+            required int midiNote,
+            required Duration duration,
+            required Duration onsetDelay,
+            required double volume,
+          }) {
+            calls.add((duration: duration, onset: onsetDelay));
+          }),
+          songSequencedNoteStopSinkProvider.overrideWithValue(() {}),
+          songDrumPlaybackSinkProvider.overrideWith(
+            (_) => (lanes, volume) async {},
+          ),
+          songMetronomeSinkProvider.overrideWith(
+            (_) => ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container
+          .read(songProjectProvider.notifier)
+          .loadProject(
+            const SongProject(
+              config: SongProjectConfig(
+                tempo: 120,
+                timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+                totalMeasures: 1,
+              ),
+              tracks: [
+                SongTrack(
+                  id: 't1',
+                  name: 'Lead',
+                  type: SongTrackType.note,
+                  order: 0,
+                ),
+              ],
+              clips: [
+                SongClipInstance(
+                  id: 'c1',
+                  trackId: 't1',
+                  patternId: 'p1',
+                  patternType: SongPatternType.note,
+                  startTick: 0,
+                ),
+              ],
+              notePatterns: [
+                NotePattern(
+                  id: 'p1',
+                  name: 'Lead',
+                  lengthTicks: 16,
+                  notes: [
+                    NotePatternNote(
+                      id: 'last-note',
+                      midiNote: 72,
+                      startTick: 15,
+                      durationTicks: 1,
+                      onsetOffsetMs: 24,
+                      durationOffsetMs: -24,
+                    ),
+                  ],
+                  pitchRangeStart: 48,
+                  pitchRangeEnd: 84,
+                  snapTicks: 1,
+                  highlightedNotes: [],
+                ),
+              ],
+              drumPatterns: [],
+            ),
+          );
+
+      await container
+          .read(songPlaybackProvider.notifier)
+          .startPlayback(
+            tickDurationOverride: const Duration(milliseconds: 125),
+          );
+
+      expect(calls, hasLength(1));
+      expect(calls.single.onset, const Duration(milliseconds: 24));
+      expect(calls.single.duration, const Duration(milliseconds: 101));
+      expect(
+        calls.single.onset + calls.single.duration,
+        const Duration(milliseconds: 125),
+      );
+    },
+  );
 
   group('seek', () {
     test('parks the cursor at the given tick while idle', () {
@@ -122,6 +234,14 @@ void main() {
           (_) =>
               (notes, vol) async => noteCalls.add((notes: notes, volume: vol)),
         ),
+        songSequencedNotePlaybackSinkProvider.overrideWithValue(
+          ({
+            required int midiNote,
+            required Duration duration,
+            required Duration onsetDelay,
+            required double volume,
+          }) => noteCalls.add((notes: [midiNote], volume: volume * 0.8)),
+        ),
         songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
         songMetronomeSinkProvider.overrideWith(
           (_) => ({required bool accent}) async {},
@@ -163,6 +283,172 @@ void main() {
     expect(noteCalls.first.volume, closeTo(0.4, 1e-9)); // 0.8 * 0.5
   });
 
+  test(
+    'Song sequenced sink receives duration and stagger with 6/8 timing',
+    () async {
+      final audioRoot = await Directory.systemTemp.createTemp(
+        'song-playback-timing-',
+      );
+      addTearDown(() => audioRoot.delete(recursive: true));
+      final calls = <({int midi, Duration duration, Duration onset})>[];
+      var stopCalls = 0;
+      final container = ProviderContainer(
+        overrides: [
+          songAudioRepositoryProvider.overrideWithValue(
+            SongAudioRepository.testWith(rootDirectory: audioRoot),
+          ),
+          songSequencedNotePlaybackSinkProvider.overrideWithValue(({
+            required int midiNote,
+            required Duration duration,
+            required Duration onsetDelay,
+            required double volume,
+          }) {
+            calls.add((midi: midiNote, duration: duration, onset: onsetDelay));
+          }),
+          songSequencedNoteStopSinkProvider.overrideWithValue(() {
+            stopCalls++;
+          }),
+          songNotePlaybackSinkProvider.overrideWith(
+            (_) => (notes, vol) async {},
+          ),
+          songDrumPlaybackSinkProvider.overrideWith(
+            (_) => (lanes, vol) async {},
+          ),
+          songMetronomeSinkProvider.overrideWith(
+            (_) => ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songProjectProvider.notifier)
+          .loadProject(
+            const SongProject(
+              config: SongProjectConfig(
+                tempo: 120,
+                timeSignature: TimeSignature(beatsPerMeasure: 6, beatUnit: 8),
+                totalMeasures: 1,
+              ),
+              tracks: [
+                SongTrack(
+                  id: 'lead',
+                  name: 'Lead',
+                  type: SongTrackType.note,
+                  order: 0,
+                ),
+              ],
+              clips: [
+                SongClipInstance(
+                  id: 'c1',
+                  trackId: 'lead',
+                  patternId: 'p1',
+                  patternType: SongPatternType.note,
+                  startTick: 0,
+                ),
+              ],
+              notePatterns: [
+                NotePattern(
+                  id: 'p1',
+                  name: 'Lead',
+                  lengthTicks: 12,
+                  notes: [
+                    NotePatternNote(
+                      id: 'n1',
+                      midiNote: 67,
+                      startTick: 0,
+                      durationTicks: 2,
+                      onsetOffsetMs: 12,
+                    ),
+                  ],
+                  pitchRangeStart: 48,
+                  pitchRangeEnd: 84,
+                  snapTicks: 1,
+                  highlightedNotes: [],
+                ),
+              ],
+              drumPatterns: [],
+              audioAssets: [],
+              audioPatterns: [],
+              markers: [],
+            ),
+          );
+
+      await container
+          .read(songPlaybackProvider.notifier)
+          .startPlayback(endTickExclusive: 1);
+
+      expect(calls, hasLength(1));
+      expect(calls.single.midi, 67);
+      expect(calls.single.duration, const Duration(milliseconds: 250));
+      expect(calls.single.onset, const Duration(milliseconds: 12));
+      container.read(songPlaybackProvider.notifier).stopPlayback();
+      expect(
+        stopCalls,
+        2,
+      ); // transport start clears old voices; stop releases this run
+    },
+  );
+
+  test('Song 4/4 sequenced duration uses quarter-note BPM timing', () async {
+    final calls = <({Duration duration, Duration onset})>[];
+    var stopCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        songNotePlaybackSinkProvider.overrideWith((_) => (notes, vol) async {}),
+        songSequencedNotePlaybackSinkProvider.overrideWithValue(({
+          required int midiNote,
+          required Duration duration,
+          required Duration onsetDelay,
+          required double volume,
+        }) {
+          calls.add((duration: duration, onset: onsetDelay));
+        }),
+        songSequencedNoteStopSinkProvider.overrideWithValue(() {
+          stopCalls++;
+        }),
+        songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
+        songMetronomeSinkProvider.overrideWith(
+          (_) => ({required bool accent}) async {},
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final project = container.read(songProjectProvider.notifier);
+    project.setTempo(120);
+    project.setTotalMeasures(1);
+    final trackId = project.addTrack(SongTrackType.note);
+    project.createEmptyNotePatternClip(trackId: trackId, startTick: 0);
+    final pattern = container.read(songProjectProvider).notePatterns.single;
+    project.applyNotePattern(
+      pattern.id,
+      pattern.copyWith(
+        notes: const [
+          NotePatternNote(
+            id: 'four-four-note',
+            midiNote: 67,
+            startTick: 0,
+            durationTicks: 3,
+            onsetOffsetMs: 7,
+          ),
+        ],
+      ),
+    );
+
+    await container
+        .read(songPlaybackProvider.notifier)
+        .startPlayback(endTickExclusive: 1);
+
+    expect(calls, [
+      (
+        duration: const Duration(milliseconds: 375),
+        onset: const Duration(milliseconds: 7),
+      ),
+    ]);
+    container.read(songPlaybackProvider.notifier).stopPlayback();
+    expect(stopCalls, 2);
+  });
+
   test('loop region wraps the tick clock and re-fires events', () async {
     final fires = <int>[];
     final container = ProviderContainer(
@@ -171,6 +457,14 @@ void main() {
           (_) =>
               (notes, vol) async => fires.add(notes.first),
         ),
+        songSequencedNotePlaybackSinkProvider.overrideWithValue(({
+          required int midiNote,
+          required Duration duration,
+          required Duration onsetDelay,
+          required double volume,
+        }) async {
+          fires.add(midiNote);
+        }),
         songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
         songMetronomeSinkProvider.overrideWith(
           (_) => ({required bool accent}) async {},
@@ -227,6 +521,14 @@ void main() {
           (_) =>
               (notes, vol) async => fires.add(notes.first),
         ),
+        songSequencedNotePlaybackSinkProvider.overrideWithValue(({
+          required int midiNote,
+          required Duration duration,
+          required Duration onsetDelay,
+          required double volume,
+        }) async {
+          fires.add(midiNote);
+        }),
         songDrumPlaybackSinkProvider.overrideWith((_) => (lanes, vol) async {}),
         songMetronomeSinkProvider.overrideWith(
           (_) =>

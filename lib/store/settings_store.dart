@@ -7,25 +7,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/save_system.dart';
 import '../schema/rules/mono_pitch_rules.dart';
 
-const _settingsKey = '@muzician/settings/v1';
+const settingsStorageKey = '@muzician/settings/v1';
 
 class SettingsNotifier extends Notifier<AppSettings> {
   @override
   AppSettings build() => const AppSettings();
 
   Future<void> hydrate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_settingsKey);
-    if (raw != null) {
-      try {
-        state = AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-      } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(settingsStorageKey);
+      if (raw != null) {
+        try {
+          state = AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        } catch (_) {
+          state = const AppSettings();
+        }
+      }
+    } catch (_) {
+      state = const AppSettings();
     }
   }
 
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_settingsKey, jsonEncode(state.toJson()));
+    await prefs.setString(settingsStorageKey, jsonEncode(state.toJson()));
   }
 
   Future<void> setSuppressOutOfKeyAlert(bool suppress) async {
@@ -70,6 +76,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setRecordCountIn(bool on) async {
     state = state.copyWith(recordCountIn: on);
+    await _persist();
+  }
+
+  Future<void> setLastContentWorkspace(String? workspace) async {
+    state = state.copyWith(lastContentWorkspace: () => workspace);
     await _persist();
   }
 }

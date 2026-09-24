@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
@@ -25,7 +26,8 @@ class SongwriterHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(songwriterProvider.select((p) => p.config));
+    final project = ref.watch(songwriterProvider);
+    final config = project.config;
     final notifier = ref.read(songwriterProvider.notifier);
     final dirty = ref.watch(writerDirtyProvider);
     final keyLabel = config.keyRoot == null
@@ -67,7 +69,7 @@ class SongwriterHeader extends ConsumerWidget {
                         ref.read(songwriterProvider).name,
                       ),
                       child: Text(
-                        ref.watch(songwriterProvider.select((p) => p.name)),
+                        project.name,
                         style: const TextStyle(
                           color: MuzicianTheme.textMuted,
                           fontSize: 13,
@@ -140,12 +142,53 @@ class SongwriterHeader extends ConsumerWidget {
   }
 
   void _showOverflowMenu(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(songwriterProvider.notifier);
     showWidgetSheet(
       context: context,
       title: 'Writer',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: MuzicianTheme.sky.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: MuzicianTheme.sky.withValues(alpha: 0.2),
+              ),
+            ),
+            child: const Text(
+              'Sketch sections with chords and lyrics. Send a Fretboard or Piano selection to place it in a Writer bar.',
+              style: TextStyle(
+                color: MuzicianTheme.textSecondary,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ),
+          _MenuTile(
+            icon: Icons.undo_rounded,
+            label: 'Undo',
+            enabled: notifier.canUndo,
+            keyboardAccessible: true,
+            onTap: () {
+              Navigator.pop(context);
+              notifier.undo();
+            },
+          ),
+          _MenuTile(
+            icon: Icons.redo_rounded,
+            label: 'Redo',
+            enabled: notifier.canRedo,
+            keyboardAccessible: true,
+            onTap: () {
+              Navigator.pop(context);
+              notifier.redo();
+            },
+          ),
           _MenuTile(
             icon: Icons.save_rounded,
             label: 'Save',
@@ -554,39 +597,100 @@ class _GlassTextButton extends StatelessWidget {
   }
 }
 
-class _MenuTile extends StatelessWidget {
+class _MenuTile extends StatefulWidget {
   const _MenuTile({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.enabled = true,
+    this.keyboardAccessible = false,
   });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool enabled;
+  final bool keyboardAccessible;
+
+  @override
+  State<_MenuTile> createState() => _MenuTileState();
+}
+
+class _MenuTileState extends State<_MenuTile> {
+  bool _showFocusHighlight = false;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    final tile = GestureDetector(
+      onTap: widget.enabled ? widget.onTap : null,
       child: Container(
+        key: widget.keyboardAccessible
+            ? Key('writerMenuTile_${widget.label.toLowerCase()}')
+            : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
+          color: _showFocusHighlight
+              ? MuzicianTheme.sky.withValues(alpha: 0.08)
+              : null,
+          border: _showFocusHighlight
+              ? Border.all(color: MuzicianTheme.sky, width: 1.5)
+              : Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: MuzicianTheme.textSecondary),
+            Icon(
+              widget.icon,
+              size: 20,
+              color: widget.enabled
+                  ? MuzicianTheme.textSecondary
+                  : MuzicianTheme.textDim,
+            ),
             const SizedBox(width: 14),
             Text(
-              label,
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
+              widget.label,
+              style: TextStyle(
+                color: widget.enabled
+                    ? MuzicianTheme.textPrimary
+                    : MuzicianTheme.textDim,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
+      ),
+    );
+
+    if (!widget.keyboardAccessible) return tile;
+
+    return FocusableActionDetector(
+      enabled: widget.enabled,
+      onShowFocusHighlight: (show) {
+        if (_showFocusHighlight != show) {
+          setState(() => _showFocusHighlight = show);
+        }
+      },
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap();
+            return null;
+          },
+        ),
+      },
+      child: Semantics(
+        container: true,
+        excludeSemantics: true,
+        button: true,
+        enabled: widget.enabled,
+        focusable: widget.enabled,
+        focused: _showFocusHighlight,
+        label: widget.label,
+        onTap: widget.enabled ? widget.onTap : null,
+        child: tile,
       ),
     );
   }

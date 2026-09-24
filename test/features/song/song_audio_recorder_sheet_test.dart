@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/song/song_audio_recorder_sheet.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/song_audio_recorder_store.dart';
 
 /// Pushes the recorder state machine into specific statuses without touching
@@ -109,4 +110,52 @@ void main() {
     expect(find.text('Microphone permission denied'), findsOneWidget);
     expect(find.byKey(const ValueKey('audio-rec-start')), findsOneWidget);
   });
+
+  testWidgets(
+    'ready take stays for review with audition, re-record, and keep',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            songAudioRecorderProvider.overrideWith(
+              () => _ScriptedRecorderNotifier(
+                const SongAudioRecorderState(
+                  status: SongAudioRecorderStatus.ready,
+                  targetTrackId: 't1',
+                  startTick: 0,
+                  elapsedMs: 6500,
+                  pendingAsset: AudioAsset(
+                    id: 'take-1',
+                    durationMs: 6500,
+                    sampleRate: 44100,
+                    channels: 1,
+                    format: 'wav',
+                    peaks: [],
+                    sourceLabel: 'Recording',
+                  ),
+                ),
+              ),
+            ),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SongAudioRecorderSheet(trackId: 't1', startTick: 0),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Review take · 0:06'), findsOneWidget);
+      expect(find.byKey(const ValueKey('audio-rec-audition')), findsOneWidget);
+      expect(find.byKey(const ValueKey('audio-rec-rerecord')), findsOneWidget);
+      expect(find.byKey(const ValueKey('audio-rec-discard')), findsOneWidget);
+      expect(find.byKey(const ValueKey('audio-rec-accept')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

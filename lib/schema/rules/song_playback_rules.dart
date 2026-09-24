@@ -27,8 +27,9 @@ List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
     for (final t in audibleTracks(project)) t.id: t.volume,
   };
   // tick → volume → notes / lanes
-  final notesAt = <int, Map<double, Set<int>>>{};
   final drumsAt = <int, Map<double, Set<DrumLaneId>>>{};
+  final sequencedAt =
+      <int, Map<(double, int, int, int), List<NotePatternNote>>>{};
 
   for (final clip in project.clips.where(
     (clip) => volumeByTrack.containsKey(clip.trackId),
@@ -41,7 +42,13 @@ List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
         );
         for (final note in pattern.notes) {
           final tick = clip.startTick + note.startTick;
-          ((notesAt[tick] ??= {})[volume] ??= {}).add(note.midiNote);
+          final key = (
+            volume,
+            note.durationTicks,
+            note.onsetOffsetMs,
+            note.durationOffsetMs,
+          );
+          ((sequencedAt[tick] ??= {})[key] ??= []).add(note);
         }
       case SongPatternType.drum:
         final pattern = project.drumPatterns.firstWhere(
@@ -60,20 +67,19 @@ List<SongPlaybackEvent> buildPlaybackEvents(SongProject project) {
     }
   }
 
-  final sortedTicks = {...notesAt.keys, ...drumsAt.keys}.toList()..sort();
+  final sortedTicks = {...drumsAt.keys, ...sequencedAt.keys}.toList()..sort();
   return [
     for (final tick in sortedTicks)
       SongPlaybackEvent(
         tick: tick,
-        noteGroups: [
-          for (final entry in (notesAt[tick] ?? const <double, Set<int>>{})
-              .entries)
-            (volume: entry.key, midiNotes: entry.value.toList()..sort()),
-        ],
         drumGroups: [
           for (final entry
               in (drumsAt[tick] ?? const <double, Set<DrumLaneId>>{}).entries)
             (volume: entry.key, drumLanes: entry.value.toList()),
+        ],
+        sequencedNoteGroups: [
+          for (final entry in (sequencedAt[tick] ?? const {}).entries)
+            (volume: entry.key.$1, notes: entry.value),
         ],
       ),
   ];

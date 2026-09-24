@@ -13,6 +13,7 @@ import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
 import 'fretboard_rules.dart';
+import 'piano_roll_playback_rules.dart' as timing;
 import 'songwriter_rules.dart';
 
 /// Looping bed shape for the audio-clip audition's "with section" mode: the
@@ -26,7 +27,11 @@ typedef SongwriterAuditionBed = ({
 });
 
 /// Same-tick notes bucketed by their lane's (volume, pan) mix settings.
-typedef SongwriterNoteGroup = ({double volume, double pan, List<int> midiNotes});
+typedef SongwriterNoteGroup = ({
+  double volume,
+  double pan,
+  List<int> midiNotes,
+});
 
 /// Same-tick drum hits bucketed by their lane's (volume, pan) mix settings.
 typedef SongwriterDrumGroup = ({
@@ -35,20 +40,33 @@ typedef SongwriterDrumGroup = ({
   List<DrumLaneId> drumLanes,
 });
 
+/// Sequenced notes that need a duration-aware voice instead of a one-shot stab.
+typedef SongwriterSequencedNoteGroup = ({
+  double volume,
+  double pan,
+  List<NotePatternNote> notes,
+});
+
 /// One audible moment on the flattened songwriter timeline.
 class SongwriterPlaybackEvent {
   const SongwriterPlaybackEvent({
     required this.tick,
     this.noteGroups = const [],
     this.drumGroups = const [],
+    this.sequencedNoteGroups = const [],
   });
 
   final int tick;
   final List<SongwriterNoteGroup> noteGroups;
   final List<SongwriterDrumGroup> drumGroups;
+  final List<SongwriterSequencedNoteGroup> sequencedNoteGroups;
 
   /// Flat views across all mix groups, for callers that ignore mixing.
-  List<int> get midiNotes => [for (final g in noteGroups) ...g.midiNotes];
+  List<int> get midiNotes => [
+    for (final g in noteGroups) ...g.midiNotes,
+    for (final g in sequencedNoteGroups)
+      for (final note in g.notes) note.midiNote,
+  ];
   List<DrumLaneId> get drumLanes => [
     for (final g in drumGroups) ...g.drumLanes,
   ];
@@ -143,10 +161,43 @@ SongwriterActivePosition? activePositionForBar(
 
 /// Pitches for a harmony or save [block]: the chord voicing for harmony lanes,
 /// the resolved snapshot's notes for save lanes.
-List<int> _blockPitches(SongLane lane, SongBlock block, List<SaveEntry> saves) =>
-    lane.kind == SongLaneKind.harmony
+List<int> _blockPitches(
+  SongLane lane,
+  SongBlock block,
+  List<SaveEntry> saves,
+) => lane.kind == SongLaneKind.harmony
     ? chordMidiNotes(block)
     : snapshotMidiNotes(resolveBlockSnapshot(block, saves));
+
+SongLane? _strumHarmonyLane(SongSection section, SongLane lane) {
+  for (final candidate in section.lanes) {
+    if (candidate.id == lane.anchorLaneId &&
+        candidate.kind == SongLaneKind.harmony) {
+      return candidate;
+    }
+  }
+  return primaryHarmonyLane(section);
+}
+
+List<int> _harmonyAtTick(
+  SongLane? harmonyLane,
+  SongSection section,
+  int sectionTick,
+  int measureTicks,
+) {
+  if (harmonyLane == null || sectionTick < 0) return const [];
+  final bar = sectionTick ~/ measureTicks;
+  for (final block in tileLaneBlocks(
+    harmonyLane,
+    sectionLengthBars: section.lengthBars,
+  )) {
+    if (bar >= block.startBar &&
+        bar < math.min(block.endBar, section.lengthBars)) {
+      return chordMidiNotes(block);
+    }
+  }
+  return const [];
+}
 
 /// Tiles [pattern]'s hits across `[startTick, endTick)` into [drumsAt]
 /// (tick → lane-id set), repeating the pattern every [DrumPattern.lengthTicks].
@@ -188,9 +239,52 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
 
   final byId = {for (final s in project.sections) s.id: s};
   final patterns = {for (final p in project.drumPatterns) p.id: p};
+  final melodyPatterns = {for (final p in project.melodyPatterns) p.id: p};
+  final strumPatterns = {for (final p in project.guitarStrumPatterns) p.id: p};
   // tick → (volume, pan) → accumulated notes / drum hits.
   final notesAt = <int, Map<(double, double), List<int>>>{};
   final drumsAt = <int, Map<(double, double), Set<DrumLaneId>>>{};
+  final sequencedAt =
+      <int, Map<(double, double, int, int, int), List<NotePatternNote>>>{};
+
+  void addSequencedNote({
+    required int tick,
+    required int midiNote,
+    required int durationTicks,
+    required int onsetOffsetMs,
+    required int durationOffsetMs,
+    required double volume,
+    required double pan,
+    required String id,
+  }) {
+    if (durationTicks <= 0) return;
+    final key = (volume, pan, durationTicks, onsetOffsetMs, durationOffsetMs);
+    ((sequencedAt[tick] ??= {})[key] ??= []).add(
+      NotePatternNote(
+        id: id,
+        midiNote: midiNote,
+        startTick: tick,
+        durationTicks: durationTicks,
+        onsetOffsetMs: onsetOffsetMs,
+        durationOffsetMs: durationOffsetMs,
+      ),
+    );
+  }
+
+  int clippedDurationOffsetMs({
+    required int durationTicks,
+    required int onsetOffsetMs,
+    required int availableTicks,
+  }) =>
+      (availableTicks * timing.millisecondsPerTick(cfg.tempo) -
+              onsetOffsetMs -
+              durationTicks * timing.millisecondsPerTick(cfg.tempo))
+          .floor()
+          .clamp(
+            -durationTicks * timing.millisecondsPerTick(cfg.tempo).floor() + 1,
+            0,
+          )
+          .toInt();
 
   for (final exp in expandSections(project.sections)) {
     final section = byId[exp.sectionId];
@@ -223,8 +317,117 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             final laneDrums = <int, Set<DrumLaneId>>{};
             _tileDrumHits(pattern, startTick, endTick, laneDrums);
             for (final e in laneDrums.entries) {
-              ((drumsAt[e.key] ??= {})[mixKey] ??= <DrumLaneId>{})
-                  .addAll(e.value);
+              ((drumsAt[e.key] ??= {})[mixKey] ??= <DrumLaneId>{}).addAll(
+                e.value,
+              );
+            }
+          case SongLaneKind.melody:
+            final pattern = melodyPatterns[block.patternId];
+            if (pattern == null || pattern.lengthTicks <= 0) break;
+            final startTick =
+                (exp.globalStartBar + block.startBar) * measureTicks;
+            final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
+            for (
+              var loopOffset = 0;
+              startTick + loopOffset < endTick;
+              loopOffset += pattern.lengthTicks
+            ) {
+              final loopStart = startTick + loopOffset;
+              final loopEnd = math.min(
+                endTick,
+                loopStart + pattern.lengthTicks,
+              );
+              for (final note in pattern.notes) {
+                if (note.startTick < 0 ||
+                    note.startTick >= pattern.lengthTicks) {
+                  continue;
+                }
+                final tick = loopStart + note.startTick;
+                if (tick >= loopEnd) continue;
+                final duration = math.min(
+                  math.max(1, note.durationTicks),
+                  loopEnd - tick,
+                );
+                final onsetOffsetMs = math.max(0, note.onsetOffsetMs);
+                addSequencedNote(
+                  tick: tick,
+                  midiNote: note.midiNote,
+                  durationTicks: duration,
+                  onsetOffsetMs: onsetOffsetMs,
+                  durationOffsetMs: clippedDurationOffsetMs(
+                    durationTicks: duration,
+                    onsetOffsetMs: onsetOffsetMs,
+                    availableTicks: loopEnd - tick,
+                  ),
+                  volume: mix.volume,
+                  pan: mix.pan,
+                  id: note.id,
+                );
+              }
+            }
+          case SongLaneKind.guitarStrum:
+            final pattern = strumPatterns[block.patternId];
+            if (pattern == null || pattern.lengthTicks <= 0) break;
+            final startTick =
+                (exp.globalStartBar + block.startBar) * measureTicks;
+            final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
+            final harmonyLane = _strumHarmonyLane(section, lane);
+            final gateTicks = math.max(1, cfg.ticksPerBeat ~/ 2);
+            for (
+              var loopOffset = 0;
+              startTick + loopOffset < endTick;
+              loopOffset += pattern.lengthTicks
+            ) {
+              final loopStart = startTick + loopOffset;
+              final loopEnd = math.min(
+                endTick,
+                loopStart + pattern.lengthTicks,
+              );
+              for (final strumEvent in pattern.events) {
+                if (strumEvent.tick < 0 ||
+                    strumEvent.tick >= pattern.lengthTicks) {
+                  continue;
+                }
+                final tick = loopStart + strumEvent.tick;
+                if (tick >= loopEnd) continue;
+                final sectionTick =
+                    block.startBar * measureTicks +
+                    loopOffset +
+                    strumEvent.tick;
+                final pitches = _harmonyAtTick(
+                  harmonyLane,
+                  section,
+                  sectionTick,
+                  measureTicks,
+                );
+                if (pitches.isEmpty) continue;
+                final orderedPitches =
+                    strumEvent.direction == GuitarStrumDirection.down
+                    ? pitches
+                    : pitches.reversed.toList();
+                final duration = math.min(
+                  gateTicks,
+                  math.min(loopEnd - tick, endTick - tick),
+                );
+                final availableTicks = math.min(loopEnd - tick, endTick - tick);
+                for (var i = 0; i < orderedPitches.length; i++) {
+                  final onsetOffsetMs = i * 12;
+                  addSequencedNote(
+                    tick: tick,
+                    midiNote: orderedPitches[i],
+                    durationTicks: duration,
+                    onsetOffsetMs: onsetOffsetMs,
+                    durationOffsetMs: clippedDurationOffsetMs(
+                      durationTicks: duration,
+                      onsetOffsetMs: onsetOffsetMs,
+                      availableTicks: availableTicks,
+                    ),
+                    volume: mix.volume,
+                    pan: mix.pan,
+                    id: 'strum_${block.id}_${tick}_$i',
+                  );
+                }
+              }
             }
           case SongLaneKind.audio:
             // Audio clips are scheduled directly by the transport, not emitted
@@ -235,7 +438,8 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
     }
   }
 
-  final ticks = {...notesAt.keys, ...drumsAt.keys}.toList()..sort();
+  final ticks = {...notesAt.keys, ...drumsAt.keys, ...sequencedAt.keys}.toList()
+    ..sort();
   return [
     for (final tick in ticks)
       SongwriterPlaybackEvent(
@@ -247,6 +451,10 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
         drumGroups: [
           for (final e in (drumsAt[tick] ?? const {}).entries)
             (volume: e.key.$1, pan: e.key.$2, drumLanes: e.value.toList()),
+        ],
+        sequencedNoteGroups: [
+          for (final e in (sequencedAt[tick] ?? const {}).entries)
+            (volume: e.key.$1, pan: e.key.$2, notes: e.value),
         ],
       ),
   ];

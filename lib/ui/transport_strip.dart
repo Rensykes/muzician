@@ -247,6 +247,8 @@ class _Readout extends StatelessWidget {
 class BpmSheet extends StatefulWidget {
   final int currentBpm;
   final ValueChanged<int> onChanged;
+  final VoidCallback? onChangeStart;
+  final VoidCallback? onChangeEnd;
   final int minBpm;
   final int maxBpm;
 
@@ -254,6 +256,8 @@ class BpmSheet extends StatefulWidget {
     super.key,
     required this.currentBpm,
     required this.onChanged,
+    this.onChangeStart,
+    this.onChangeEnd,
     this.minBpm = kMinBpm,
     this.maxBpm = kMaxBpm,
   });
@@ -390,6 +394,8 @@ class _BpmSheetState extends State<BpmSheet> {
             min: widget.minBpm.toDouble(),
             max: widget.maxBpm.toDouble(),
             divisions: widget.maxBpm - widget.minBpm,
+            onChangeStart: (_) => widget.onChangeStart?.call(),
+            onChangeEnd: (_) => widget.onChangeEnd?.call(),
             onChanged: (v) {
               HapticFeedback.selectionClick();
               _commit(v.round());

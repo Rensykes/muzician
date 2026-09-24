@@ -741,12 +741,17 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
           children: [
             Icon(Icons.add_rounded, size: 16, color: MuzicianTheme.violet),
             SizedBox(width: 6),
-            Text(
-              'Add Stack',
-              style: TextStyle(
-                color: MuzicianTheme.violet,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+            Flexible(
+              child: Text(
+                'Add Stack',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: MuzicianTheme.violet,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],

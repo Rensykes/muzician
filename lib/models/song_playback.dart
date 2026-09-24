@@ -17,15 +17,23 @@ class SongPlaybackEvent {
   final List<({double volume, List<int> midiNotes})> noteGroups;
   final List<({double volume, List<DrumLaneId> drumLanes})> drumGroups;
 
+  /// Note pattern voices with explicit duration and optional sub-tick onset.
+  final List<({double volume, List<NotePatternNote> notes})>
+  sequencedNoteGroups;
+
   const SongPlaybackEvent({
     required this.tick,
     this.noteGroups = const [],
     this.drumGroups = const [],
+    this.sequencedNoteGroups = const [],
   });
 
   /// Flattened, sorted view across all volume groups.
-  List<int> get midiNotes =>
-      ([for (final g in noteGroups) ...g.midiNotes]..sort());
+  List<int> get midiNotes => [
+    for (final group in noteGroups) ...group.midiNotes,
+    for (final group in sequencedNoteGroups)
+      for (final note in group.notes) note.midiNote,
+  ]..sort();
 
   List<DrumLaneId> get drumLanes => [
     for (final g in drumGroups) ...g.drumLanes,

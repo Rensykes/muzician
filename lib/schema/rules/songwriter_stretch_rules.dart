@@ -2,6 +2,7 @@
 library;
 
 import '../../models/songwriter.dart';
+import 'piano_roll_playback_rules.dart' as playback;
 
 /// Bar span of the audio block that references [clipId], or null if none.
 int? audioClipSpanBars(SongwriterProjectSnapshot project, String clipId) {
@@ -22,6 +23,6 @@ int? stretchTargetMs(SongwriterProjectSnapshot project, String clipId) {
   final span = audioClipSpanBars(project, clipId);
   if (span == null) return null;
   final cfg = project.config;
-  final barMs = cfg.beatsPerBar * 60000.0 / cfg.tempo;
+  final barMs = cfg.measureTicks * playback.millisecondsPerTick(cfg.tempo);
   return (span * barMs).round();
 }

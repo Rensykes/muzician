@@ -191,12 +191,16 @@ class NotePatternNote {
   final int midiNote;
   final int startTick;
   final int durationTicks;
+  final int onsetOffsetMs;
+  final int durationOffsetMs;
 
   const NotePatternNote({
     required this.id,
     required this.midiNote,
     required this.startTick,
     required this.durationTicks,
+    this.onsetOffsetMs = 0,
+    this.durationOffsetMs = 0,
   });
 
   NotePatternNote copyWith({
@@ -204,11 +208,15 @@ class NotePatternNote {
     int? midiNote,
     int? startTick,
     int? durationTicks,
+    int? onsetOffsetMs,
+    int? durationOffsetMs,
   }) => NotePatternNote(
     id: id ?? this.id,
     midiNote: midiNote ?? this.midiNote,
     startTick: startTick ?? this.startTick,
     durationTicks: durationTicks ?? this.durationTicks,
+    onsetOffsetMs: onsetOffsetMs ?? this.onsetOffsetMs,
+    durationOffsetMs: durationOffsetMs ?? this.durationOffsetMs,
   );
 
   Map<String, dynamic> toJson() => {
@@ -216,6 +224,8 @@ class NotePatternNote {
     'midiNote': midiNote,
     'startTick': startTick,
     'durationTicks': durationTicks,
+    if (onsetOffsetMs != 0) 'onsetOffsetMs': onsetOffsetMs,
+    if (durationOffsetMs != 0) 'durationOffsetMs': durationOffsetMs,
   };
 
   factory NotePatternNote.fromJson(Map<String, dynamic> json) =>
@@ -224,6 +234,8 @@ class NotePatternNote {
         midiNote: json['midiNote'] as int,
         startTick: json['startTick'] as int,
         durationTicks: json['durationTicks'] as int,
+        onsetOffsetMs: json['onsetOffsetMs'] as int? ?? 0,
+        durationOffsetMs: json['durationOffsetMs'] as int? ?? 0,
       );
 }
 
@@ -476,7 +488,6 @@ class AudioClipPattern {
       );
 }
 
-
 // ── SongMarker ────────────────────────────────────────────────────────────────
 
 /// A labeled flag on the song ruler (verse, chorus, …).
@@ -503,7 +514,6 @@ class SongMarker {
 }
 
 // ── SongProject ───────────────────────────────────────────────────────────────
-
 
 class SongProject {
   final SongProjectConfig config;

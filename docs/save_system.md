@@ -49,7 +49,13 @@ When a project is selected, tempo / key / time-signature controls on the instrum
 
 ### Migration
 
-Storage key bumped to `@muzician/save-system/v3`. On first launch of the v3 code, the legacy blobs (`@muzician/save-system/v2`, `@muzician/song_session/v1`, `@muzician/songwriter_session/v1`) and `appDocs/song_audio/` are wiped.
+Storage key bumped to `@muzician/save-system/v3`. When no valid v3 state exists,
+startup validates the known legacy save-system keys
+(`@muzician/save-system/v2`, `@muzician/save_system`) and singular session keys
+(`@muzician/song_session/v1`, `@muzician/songwriter_session/v1`) before the
+existing migration clears them and `appDocs/song_audio/`. Valid legacy payloads
+keep that migration policy. A malformed legacy string is kept in place and
+shown in the startup recovery prompt until the user chooses **Start fresh**.
 
 | Type | Description |
 |---|---|
@@ -64,10 +70,35 @@ Storage key bumped to `@muzician/save-system/v3`. On first launch of the v3 code
 | `ProgressionFolderMeta` | Metadata attached to a folder: source type, progression ID, key |
 | `ProgressionChordMeta` | Metadata attached to a save: chord symbol, root, Roman numeral, chord notes |
 | `ActiveSession` | Current navigation context: `saveId` + `folderId` |
-| `AppSettings` | User preferences — `suppressOutOfKeyAlert`, `noteVolume`, `showNoteLabels`, `humSensitivity`, `metronomeEnabled`, `saveBrowserGrid` |
+| `AppSettings` | User preferences — `suppressOutOfKeyAlert`, `noteVolume`, `showNoteLabels`, `humSensitivity`, `metronomeEnabled`, `saveBrowserGrid`, and the last content workspace |
 | `SaveSystemState` | Root state: `folders`, `saves`, `activeSession`, `hydrated`, `selectedProjectId` |
 
 > Snapshots use an `abstract class InstrumentSnapshot` with `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot`, and `DrumLoopSnapshot` subtypes. (It was `sealed` until `SongwriterProjectSnapshot` was added from `lib/models/songwriter.dart`; Dart `sealed` restricts subtypes to the same library, and dispatch is done via `is`-checks + the `fromJson` factory rather than exhaustive `switch`, so the base was relaxed to `abstract`.) All types implement `toJson` / `fromJson` for `SharedPreferences` persistence.
+
+## Startup hydration and Data Recovery
+
+The app keeps the content workspaces unmounted until saved settings, sessions,
+Writer save links, and the save-system state have hydrated. A settings read
+failure falls back to default settings. A session or save-system read failure
+keeps the workspaces closed and offers **Retry**. Malformed persisted JSON is
+shown with **Retry** and **Start fresh**; the original string stays in place
+until the user chooses Start fresh.
+
+Start fresh copies each malformed original string to a separate
+`@muzician/data-recovery/v1/` preference and verifies the copy before removing
+the source key. Settings then exposes preserved entries under **Data Recovery**
+as read-only raw text. Each entry offers **Copy**, **Export**, and confirmed
+**Delete backup**; deletion removes only that entry. Recovery backups remain
+until explicitly deleted.
+
+Export preserves the stored string's UTF-8 bytes without decoding or
+re-encoding JSON. Filenames include a sanitized source key and a unique backup
+ID. Android and iOS use the native share sheet, with the initiating Export
+control anchoring the iPadOS share popover; macOS, Windows, and Linux use a save
+dialog and then write those bytes. Web uses the browser Share API when available
+and `share_plus`'s download fallback otherwise. Web feedback reflects that the
+file was shared or downloaded; dismissing the share UI produces no success
+message.
 
 ---
 

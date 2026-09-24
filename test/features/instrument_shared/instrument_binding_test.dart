@@ -2,7 +2,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muzician/features/instrument_shared/instrument_binding.dart';
+import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/harmonic_analysis.dart';
+import 'package:muzician/models/save_system.dart';
 
 class _FakeActions implements SelectionActions {
   final List<String> highlighted = [];
@@ -57,6 +59,14 @@ void main() {
       activeChord: activeChord,
       manualEdit: manualEdit,
       chordCommitted: committed,
+      captureSnapshot: (_) => FretboardSnapshot(
+        tuning: TuningName.standard,
+        numFrets: 12,
+        capo: 0,
+        selectedCells: const [],
+        selectedNotes: const [],
+        viewMode: FretboardViewMode.exact,
+      ),
       chordOffKey: offKey,
     );
 

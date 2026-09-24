@@ -35,6 +35,8 @@ PianoRollState pianoRollStateFromNotePattern(
       noteWithOctave: pr_rules.midiToNoteWithOctave(n.midiNote),
       startTick: n.startTick,
       durationTicks: n.durationTicks,
+      onsetOffsetMs: n.onsetOffsetMs,
+      durationOffsetMs: n.durationOffsetMs,
     );
   }).toList();
 
@@ -84,6 +86,8 @@ NotePattern notePatternFromPianoRollState(
       midiNote: n.midiNote,
       startTick: n.startTick,
       durationTicks: n.durationTicks,
+      onsetOffsetMs: n.onsetOffsetMs,
+      durationOffsetMs: n.durationOffsetMs,
     );
   }).toList();
 

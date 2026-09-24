@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/song_audio_recorder_store.dart';
 import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/song_playback_store.dart';
 import 'package:muzician/store/song_project_store.dart';
 import 'package:muzician/utils/wav_writer.dart';
 
@@ -32,6 +34,37 @@ class _FakeRecorderDriver implements SongAudioRecorderDriver {
 
   @override
   Future<void> dispose() async {}
+}
+
+class _DeferredStopRecorderDriver extends _FakeRecorderDriver {
+  final stopCompleter = Completer<Uint8List>();
+
+  @override
+  Future<Uint8List> stop() {
+    stopped = true;
+    return stopCompleter.future;
+  }
+}
+
+class _FakeClipSink extends NoopSongAudioClipSink {
+  int starts = 0;
+  int stops = 0;
+
+  @override
+  Future<void> startClip({
+    required AudioAsset asset,
+    required int offsetMs,
+    double volume = 1,
+    double balance = 0,
+    bool loop = false,
+  }) async {
+    starts++;
+  }
+
+  @override
+  Future<void> stopClip({required AudioAsset asset}) async {
+    stops++;
+  }
 }
 
 void main() {
@@ -197,4 +230,134 @@ void main() {
       SongAudioRecorderStatus.idle,
     );
   });
+
+  test(
+    're-record deletes the prior take and keeps the same destination',
+    () async {
+      final driver = _FakeRecorderDriver();
+      final tmp = await Directory.systemTemp.createTemp('rec_rerecord_test_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final repo = SongAudioRepository.testWith(rootDirectory: tmp);
+      final container = ProviderContainer(
+        overrides: [
+          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          songAudioRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+      final trackId = container
+          .read(songProjectProvider.notifier)
+          .addTrack(SongTrackType.audio);
+      final notifier = container.read(songAudioRecorderProvider.notifier);
+
+      await notifier.start(trackId: trackId, startTick: 12);
+      await notifier.stop();
+      final firstTake = container.read(songAudioRecorderProvider).pendingAsset!;
+      final firstFile = await repo.resolvePath(firstTake.id, firstTake.format);
+      expect(firstFile.existsSync(), isTrue);
+
+      await notifier.rerecord();
+      expect(firstFile.existsSync(), isFalse);
+      expect(
+        container.read(songAudioRecorderProvider).status,
+        SongAudioRecorderStatus.recording,
+      );
+      expect(container.read(songAudioRecorderProvider).targetTrackId, trackId);
+      expect(container.read(songAudioRecorderProvider).startTick, 12);
+
+      await notifier.stop();
+      final secondTake = container
+          .read(songAudioRecorderProvider)
+          .pendingAsset!;
+      expect(secondTake.id, isNot(firstTake.id));
+      expect(
+        (await repo.resolvePath(secondTake.id, secondTake.format)).existsSync(),
+        isTrue,
+      );
+      await notifier.cancel();
+      expect(
+        (await repo.resolvePath(secondTake.id, secondTake.format)).existsSync(),
+        isFalse,
+      );
+      expect(container.read(songProjectProvider).clips, isEmpty);
+    },
+  );
+
+  test(
+    'cancel during finalising removes a file produced after cancellation',
+    () async {
+      final driver = _DeferredStopRecorderDriver();
+      final tmp = await Directory.systemTemp.createTemp(
+        'rec_finalising_cancel_',
+      );
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final repo = SongAudioRepository.testWith(rootDirectory: tmp);
+      final container = ProviderContainer(
+        overrides: [
+          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          songAudioRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+      final trackId = container
+          .read(songProjectProvider.notifier)
+          .addTrack(SongTrackType.audio);
+      final notifier = container.read(songAudioRecorderProvider.notifier);
+      await notifier.start(trackId: trackId, startTick: 0);
+
+      final finalising = notifier.stop();
+      expect(
+        container.read(songAudioRecorderProvider).status,
+        SongAudioRecorderStatus.finalising,
+      );
+      await notifier.cancel();
+      driver.stopCompleter.complete(
+        writeWavPcm16Mono(Int16List(4410), sampleRate: 44100),
+      );
+      await finalising;
+
+      expect(
+        container.read(songAudioRecorderProvider).status,
+        SongAudioRecorderStatus.idle,
+      );
+      final directory = Directory('${tmp.path}/song_audio');
+      expect(directory.existsSync(), isTrue);
+      expect(directory.listSync(), isEmpty);
+      expect(container.read(songProjectProvider).clips, isEmpty);
+    },
+  );
+
+  test(
+    'pending take can be auditioned and stopped before acceptance',
+    () async {
+      final driver = _FakeRecorderDriver();
+      final sink = _FakeClipSink();
+      final tmp = await Directory.systemTemp.createTemp('rec_preview_test_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final container = ProviderContainer(
+        overrides: [
+          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          songAudioClipSinkProvider.overrideWithValue(sink),
+          songAudioRepositoryProvider.overrideWithValue(
+            SongAudioRepository.testWith(rootDirectory: tmp),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final trackId = container
+          .read(songProjectProvider.notifier)
+          .addTrack(SongTrackType.audio);
+      final notifier = container.read(songAudioRecorderProvider.notifier);
+      await notifier.start(trackId: trackId, startTick: 0);
+      await notifier.stop();
+
+      await notifier.previewPendingTake();
+      expect(sink.starts, 1);
+      expect(container.read(songAudioRecorderProvider).isPreviewing, isTrue);
+      await notifier.stopPreview();
+      expect(sink.stops, greaterThanOrEqualTo(1));
+      expect(container.read(songAudioRecorderProvider).pendingAsset, isNotNull);
+      await notifier.cancel();
+    },
+  );
 }

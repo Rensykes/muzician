@@ -3,13 +3,13 @@ library;
 
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
+import 'piano_roll_playback_rules.dart' as playback;
 import 'songwriter_rules.dart';
 
 /// Ticks → milliseconds at the project tempo. Parallels `audioTickToMs` in
 /// `song_audio_rules.dart` (same formula, different config type).
 int songwriterAudioTickToMs(int tick, SongwriterConfig config) {
-  final msPerBeat = 60000.0 / config.tempo;
-  return (tick * msPerBeat / config.ticksPerBeat).round();
+  return (tick * playback.millisecondsPerTick(config.tempo)).round();
 }
 
 /// A placed audio clip resolved to absolute transport milliseconds.

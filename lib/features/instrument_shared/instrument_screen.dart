@@ -43,6 +43,7 @@ class InstrumentScreen extends ConsumerWidget {
   final String scaleLabel;
 
   final ValueKey<String> detectionKey;
+  final VoidCallback? onHandoffCompleted;
 
   const InstrumentScreen({
     super.key,
@@ -59,6 +60,7 @@ class InstrumentScreen extends ConsumerWidget {
     required this.scaleHasValue,
     required this.chordHasValue,
     required this.detectionKey,
+    this.onHandoffCompleted,
     this.scaleLabel = 'Scale',
     this.scaleOffKey = false,
     this.modeSegment,
@@ -114,6 +116,7 @@ class InstrumentScreen extends ConsumerWidget {
                         key: detectionKey,
                         binding: binding,
                         onChordPanelRequested: onChordPanelRequested,
+                        onHandoffCompleted: onHandoffCompleted,
                       )
                     : InstrumentInsightHint(
                         key: ValueKey('${detectionKey.value}-empty'),

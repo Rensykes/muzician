@@ -158,6 +158,8 @@ cloneNotePatternForClip(
           midiNote: n.midiNote,
           startTick: n.startTick,
           durationTicks: n.durationTicks,
+          onsetOffsetMs: n.onsetOffsetMs,
+          durationOffsetMs: n.durationOffsetMs,
         ),
       )
       .toList();

@@ -156,6 +156,17 @@ SongBlock makeSaveBlock({
   spanBars: spanBars,
 );
 
+SongBlock makeEmbeddedSaveBlock({
+  required InstrumentSnapshot snapshot,
+  required int startBar,
+  required int spanBars,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  embedded: snapshot,
+);
+
 SongBlock makeHarmonyBlock({
   required int startBar,
   required int spanBars,
@@ -197,7 +208,55 @@ DrumPattern makeDrumPattern({String name = 'Pattern'}) => DrumPattern(
   ],
 );
 
+NotePattern makeMelodyPattern({
+  String name = 'Melody',
+  required int lengthTicks,
+}) => NotePattern(
+  id: generateId(),
+  name: name,
+  lengthTicks: lengthTicks < 1 ? 1 : lengthTicks,
+  notes: const [],
+  pitchRangeStart: 48,
+  pitchRangeEnd: 84,
+  snapTicks: 1,
+  highlightedNotes: const [],
+);
+
+GuitarStrumPattern makeGuitarStrumPattern({
+  String name = 'Strum',
+  required int lengthTicks,
+  required int beatTicks,
+}) {
+  final safeLength = lengthTicks < 1 ? 1 : lengthTicks;
+  final safeBeatTicks = beatTicks < 1 ? 1 : beatTicks;
+  return GuitarStrumPattern(
+    id: generateId(),
+    name: name,
+    lengthTicks: safeLength,
+    events: [
+      for (var tick = 0; tick < safeLength; tick += safeBeatTicks)
+        GuitarStrumEvent(
+          tick: tick,
+          direction: (tick ~/ safeBeatTicks).isEven
+              ? GuitarStrumDirection.down
+              : GuitarStrumDirection.up,
+        ),
+    ],
+  );
+}
+
 SongBlock makeDrumBlock({
+  required String patternId,
+  required int startBar,
+  required int spanBars,
+}) => SongBlock(
+  id: generateId(),
+  startBar: startBar,
+  spanBars: spanBars,
+  patternId: patternId,
+);
+
+SongBlock makePatternBlock({
   required String patternId,
   required int startBar,
   required int spanBars,
@@ -361,6 +420,8 @@ String laneKindFallbackLabel(SongLaneKind kind) => switch (kind) {
   SongLaneKind.save => 'Save',
   SongLaneKind.drum => 'Beat',
   SongLaneKind.audio => 'Sample',
+  SongLaneKind.melody => 'Melody',
+  SongLaneKind.guitarStrum => 'Guitar strum',
 };
 
 /// Natural pattern length of a lane = the max block end bar (0 if empty).

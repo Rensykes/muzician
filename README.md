@@ -1,6 +1,8 @@
 # Muzician
 
-A high-performance Flutter music theory app migrated from the React Native "Mugician" project.
+A Flutter songwriting workspace for exploring harmony on guitar and piano, capturing ideas, and developing them into song arrangements and demos.
+
+Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md).
 
 ## Tech Stack
 
@@ -12,7 +14,8 @@ A high-performance Flutter music theory app migrated from the React Native "Mugi
 | Persistence | `shared_preferences` |
 | Rendering | `CustomPainter` + `RepaintBoundary` |
 | Music theory | `music_notes` (Dart) |
-| Audio | `audioplayers` |
+| Audio | `audioplayers` for playback; `record` for capture |
+| Generated files | `share_plus`, `file_picker`, and `archive` for platform delivery and Song Bundles |
 | IDs | `uuid` |
 
 ## Features
@@ -22,7 +25,9 @@ A high-performance Flutter music theory app migrated from the React Native "Mugi
 | **Fretboard** | Interactive guitar fretboard with tunings, capo, chord voicing, scale highlighting | [docs/fretboard.md](docs/fretboard.md) |
 | **Piano** | Piano keyboard (49 / 61 / 88 keys) with chord and scale highlighting | [docs/piano.md](docs/piano.md) |
 | **Piano Roll** | Quantized timeline note editor with four tool modes, pinch-zoom, beat snapping, hum-to-MIDI, metronome | [docs/piano_roll.md](docs/piano_roll.md) |
-| **Save System** | Hierarchical folder-based progression persistence across all three instruments | [docs/save_system.md](docs/save_system.md) |
+| **Writer** | Section, chord, lyric, melody, drum, guitar-strum, and audio sketch with playback and keyboard-accessible project-scoped undo/redo; melody and strums import into Song as note tracks, while Writer audio lanes stay in Writer | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Song** | Clip arrangement workspace with recording review, Writer import, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Save System** | Project-scoped folders and snapshots, with startup recovery for malformed saved data | [docs/save_system.md](docs/save_system.md) |
 
 ## Project Structure
 
@@ -31,9 +36,9 @@ lib/
   main.dart                   ← App shell, tab navigation, screen layouts
   theme/
     muzician_theme.dart       ← Colours, gradients, glassmorphism helpers
-  models/                     ← Immutable data types (7 files)
-  schema/rules/               ← Validation, music math, default state factories (7 files)
-  store/                      ← Riverpod providers (8 files)
+  models/                     ← Immutable data types
+  schema/rules/               ← Validation, music math, default state factories
+  store/                      ← Riverpod providers and project-scoped undo history
   utils/                      ← Cross-platform helpers (note playback, pitch detection)
     note_utils.dart           ← Chord/scale detection, formatting
     note_player.dart          ← Synthesised audio note playback engine
@@ -44,15 +49,24 @@ lib/
     save_browser_panel.dart   ← Reusable folder-browser save/load panel
     core/                     ← Shared dialogs and info panels
   features/
-    fretboard/                ← Fretboard widgets (10 files)
-    piano/                    ← Piano widgets (9 files)
-    piano_roll/               ← Piano roll widgets (8 files)
+    fretboard/                ← Guitar fretboard, tuning, capo, and voicings
+    piano/                    ← Piano keyboard and harmony tools
+    piano_roll/               ← Note editor and hum-to-MIDI
+    songwriter/               ← Section, chord, lyric, melody, drum, strum, and audio writing
+    song/                     ← Track and clip arranger
     save_system/              ← Save system barrel export
 docs/
   fretboard.md
   piano.md
   piano_roll.md
+  songwriter.md
+  song_workspace.md
+  song_writer_guide.md
   save_system.md
+  superpowers/
+    HANDOFF-songwriter.md
+    plans/                    ← Implementation plans, including the approved songwriting workflow plan
+    specs/                    ← Design specifications
 ```
 
 ## Notes (Fretboard & Piano)
@@ -86,4 +100,3 @@ flutter run -d <id>
 - The piano roll uses a raw `Listener` (not `GestureDetector`) for pointer events to bypass Flutter's gesture arena — necessary for reliable resize and pitch-drag on iOS touch.
 - Pinch-to-zoom on the piano roll is tracked via a `Map<int, Offset>` keyed by pointer ID, updating `_cellW` / `_rowH` in `setState` on every move.
 - State is never mutated — all store methods return a new `copyWith` state.
-

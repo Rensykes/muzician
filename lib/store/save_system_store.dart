@@ -12,6 +12,7 @@ import '../models/save_system.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../utils/note_utils.dart';
+import 'persisted_data_recovery_store.dart';
 
 class SaveSystemNotifier extends Notifier<SaveSystemState> {
   @override
@@ -22,15 +23,19 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     final existing = prefs.getString(saveSystemStorageKey);
     if (existing != null) {
       final parsed = deserialiseState(existing);
-      if (parsed != null) {
-        state = state.copyWith(
-          folders: parsed.folders,
-          saves: parsed.saves,
-          selectedProjectId: () => parsed.selectedProjectId,
-          hydrated: true,
+      if (parsed == null) {
+        throw MalformedPersistedPayload(
+          storageKey: saveSystemStorageKey,
+          raw: existing,
         );
-        return;
       }
+      state = state.copyWith(
+        folders: parsed.folders,
+        saves: parsed.saves,
+        selectedProjectId: () => parsed.selectedProjectId,
+        hydrated: true,
+      );
+      return;
     }
     // First v3 launch — wipe legacy blobs, but only when legacy data was
     // actually present (a truly fresh install has nothing to clean, and the
@@ -158,8 +163,12 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     );
     if (folder.id.isEmpty) return;
     final ids = getSubtreeFolderIds(state.folders, id);
-    final nextFolders = state.folders.where((f) => !ids.contains(f.id)).toList();
-    final nextSaves = state.saves.where((s) => !ids.contains(s.folderId)).toList();
+    final nextFolders = state.folders
+        .where((f) => !ids.contains(f.id))
+        .toList();
+    final nextSaves = state.saves
+        .where((s) => !ids.contains(s.folderId))
+        .toList();
     final clearSel = state.selectedProjectId == id;
     state = state.copyWith(
       folders: nextFolders,
@@ -197,7 +206,10 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     }
     final folder = state.folders.where((f) => f.id == id).firstOrNull;
     if (folder == null) return;
-    if (folder.kind != SaveFolderKind.project && folder.kind != SaveFolderKind.dump) return;
+    if (folder.kind != SaveFolderKind.project &&
+        folder.kind != SaveFolderKind.dump) {
+      return;
+    }
     state = state.copyWith(selectedProjectId: () => id);
     _persist();
   }
@@ -224,7 +236,10 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     await _persist();
   }
 
-  InstrumentSnapshot _retrofitSnapshot(InstrumentSnapshot snap, ProjectConfig cfg) {
+  InstrumentSnapshot _retrofitSnapshot(
+    InstrumentSnapshot snap,
+    ProjectConfig cfg,
+  ) {
     final scaleNotes = _scaleNotesFor(cfg.keyRootPc, cfg.keyScaleName);
     if (snap is FretboardSnapshot) {
       return FretboardSnapshot(
@@ -268,8 +283,12 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
       final project = snap.project.copyWith(
         config: snap.project.config.copyWith(
           tempo: cfg.tempo,
-          timeSignature: TimeSignature(beatsPerMeasure: cfg.beatsPerBar, beatUnit: cfg.beatUnit),
-          scaleRoot: () => cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
+          timeSignature: TimeSignature(
+            beatsPerMeasure: cfg.beatsPerBar,
+            beatUnit: cfg.beatUnit,
+          ),
+          scaleRoot: () =>
+              cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
           scaleName: () => cfg.keyScaleName,
         ),
       );

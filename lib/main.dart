@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,11 +13,13 @@ import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
 import 'features/song/song_screen.dart';
 import 'features/songwriter/songwriter_feature.dart';
+import 'features/save_system/data_recovery_panel.dart';
 import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
 import 'models/piano.dart' show PianoViewMode;
 import 'models/save_system.dart';
 import 'utils/note_utils.dart' show chromaticNotes;
 import 'store/app_bootstrap.dart';
+import 'store/persisted_data_recovery_store.dart';
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/project_config_sync.dart';
@@ -84,82 +88,211 @@ class _AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<_AppShell> {
-  int _tabIndex = 0;
+  int _tabIndex = 4;
+  bool _hydrating = true;
+  StartupRecoveryRequired? _recoveryRequired;
+  StartupStorageFailure? _startupFailure;
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(() async {
-      await hydrateStores(ref.read);
-      await NotePlayer.instance.init();
-      // Mount the project config syncer (Provider body runs on first read).
-      ref.read(projectConfigSyncProvider);
+    Future.microtask(_hydrateAndOpen);
+  }
+
+  Future<void> _hydrateAndOpen() async {
+    if (!mounted) return;
+    setState(() {
+      _hydrating = true;
+      _recoveryRequired = null;
+      _startupFailure = null;
     });
+    try {
+      await hydrateStores(ref.read);
+      await ref.read(dataRecoveryProvider.notifier).hydrate();
+    } on StartupRecoveryRequired catch (recovery) {
+      if (!mounted) return;
+      setState(() {
+        _hydrating = false;
+        _recoveryRequired = recovery;
+      });
+      return;
+    } on StartupStorageFailure catch (failure) {
+      if (!mounted) return;
+      setState(() {
+        _hydrating = false;
+        _startupFailure = failure;
+      });
+      return;
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _hydrating = false;
+        _startupFailure = StartupStorageFailure(
+          'Could not load saved workspaces. Try again.',
+          error,
+        );
+      });
+      return;
+    }
+
+    // Audio preview is optional and can take longer than workspace hydration.
+    unawaited(NotePlayer.instance.init().catchError((_) {}));
+    try {
+      // Mount the project config syncer after all persisted stores are ready.
+      ref.read(projectConfigSyncProvider);
+    } catch (_) {
+      // A sync issue should not keep already hydrated workspaces inaccessible.
+    }
+    if (!mounted) return;
+    setState(() {
+      _tabIndex = contentWorkspaceTabForPreference(
+        ref.read(settingsProvider).lastContentWorkspace,
+      );
+      _hydrating = false;
+    });
+  }
+
+  Future<void> _startFreshFromRecovery() async {
+    final recovery = _recoveryRequired;
+    if (recovery == null) return;
+    setState(() {
+      _hydrating = true;
+      _recoveryRequired = null;
+      _startupFailure = null;
+    });
+    try {
+      await ref
+          .read(dataRecoveryProvider.notifier)
+          .preserveAndClear(recovery.payloads);
+    } on StartupStorageFailure catch (failure) {
+      if (!mounted) return;
+      setState(() {
+        _hydrating = false;
+        _startupFailure = failure;
+      });
+      return;
+    }
+    await _hydrateAndOpen();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _tabIndex,
-        children: const [
-          _FretboardScreen(), // index 0
-          _PianoScreen(), // index 1
-          PianoRollScreenV2(), // index 2
-          SongScreen(), // index 3
-          SongwriterScreen(), // index 4
-          _SettingsScreen(), // index 5
-        ],
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: MuzicianTheme.surface.withValues(alpha: 0.96),
-          border: const Border(
-            top: BorderSide(color: Color(0x4094A3B8), width: 0.5),
-          ),
-        ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 60,
-            child: Row(
+      body: _hydrating || _recoveryRequired != null || _startupFailure != null
+          ? _buildStartupView()
+          : IndexedStack(
+              index: _tabIndex,
               children: [
-                _NavTab(
-                  icon: Icons.music_note,
-                  label: 'Fretboard',
-                  active: _tabIndex == 0,
-                  onTap: () => _setTab(0),
-                ),
-                _NavTab(
-                  icon: Icons.piano,
-                  label: 'Piano',
-                  active: _tabIndex == 1,
-                  onTap: () => _setTab(1),
-                ),
-                _NavTab(
-                  icon: Icons.view_timeline,
-                  label: 'Roll',
-                  active: _tabIndex == 2,
-                  onTap: () => _setTab(2),
-                ),
-                _NavTab(
-                  icon: Icons.queue_music,
-                  label: 'Song',
-                  active: _tabIndex == 3,
-                  onTap: () => _setTab(3),
-                ),
-                _NavTab(
-                  icon: Icons.lyrics,
-                  label: 'Writer',
-                  active: _tabIndex == 4,
-                  onTap: () => _setTab(4),
-                ),
-                _NavTab(
-                  icon: Icons.settings,
-                  label: 'Settings',
-                  active: _tabIndex == 5,
-                  onTap: () => _setTab(5),
-                ),
+                _FretboardScreen(onHandoffCompleted: () => _setTab(4)),
+                _PianoScreen(onHandoffCompleted: () => _setTab(4)),
+                const PianoRollScreenV2(),
+                const SongScreen(),
+                const SongwriterScreen(),
+                const _SettingsScreen(),
               ],
+            ),
+      bottomNavigationBar:
+          _hydrating || _recoveryRequired != null || _startupFailure != null
+          ? null
+          : Container(
+              decoration: BoxDecoration(
+                color: MuzicianTheme.surface.withValues(alpha: 0.96),
+                border: const Border(
+                  top: BorderSide(color: Color(0x4094A3B8), width: 0.5),
+                ),
+              ),
+              child: SafeArea(
+                child: SizedBox(
+                  height: 60,
+                  child: Row(
+                    children: [
+                      _NavTab(
+                        icon: Icons.music_note,
+                        label: 'Fretboard',
+                        active: _tabIndex == 0,
+                        onTap: () => _setTab(0),
+                      ),
+                      _NavTab(
+                        icon: Icons.piano,
+                        label: 'Piano',
+                        active: _tabIndex == 1,
+                        onTap: () => _setTab(1),
+                      ),
+                      _NavTab(
+                        icon: Icons.view_timeline,
+                        label: 'Roll',
+                        active: _tabIndex == 2,
+                        onTap: () => _setTab(2),
+                      ),
+                      _NavTab(
+                        icon: Icons.queue_music,
+                        label: 'Song',
+                        active: _tabIndex == 3,
+                        onTap: () => _setTab(3),
+                      ),
+                      _NavTab(
+                        icon: Icons.lyrics,
+                        label: 'Writer',
+                        active: _tabIndex == 4,
+                        onTap: () => _setTab(4),
+                      ),
+                      _NavTab(
+                        icon: Icons.settings,
+                        label: 'Settings',
+                        active: _tabIndex == 5,
+                        onTap: () => _setTab(5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildStartupView() {
+    final recovery = _recoveryRequired;
+    final failure = _startupFailure;
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: MuzicianTheme.gradientColors,
+        ),
+      ),
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: recovery != null
+                  ? _StartupRecoveryPrompt(
+                      payloads: recovery.payloads,
+                      onRetry: _hydrateAndOpen,
+                      onStartFresh: _startFreshFromRecovery,
+                    )
+                  : failure != null
+                  ? _StartupFailurePrompt(
+                      message: failure.message,
+                      onRetry: _hydrateAndOpen,
+                    )
+                  : const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 20),
+                        Text(
+                          'Loading your workspaces…',
+                          style: TextStyle(
+                            color: MuzicianTheme.textPrimary,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ),
@@ -171,8 +304,132 @@ class _AppShellState extends ConsumerState<_AppShell> {
     if (index != _tabIndex) {
       HapticFeedback.selectionClick();
       setState(() => _tabIndex = index);
+      final workspace = contentWorkspacePreferenceForTab(index);
+      if (workspace != null) {
+        ref
+            .read(settingsProvider.notifier)
+            .setLastContentWorkspace(workspace)
+            .catchError((_) {});
+      }
     }
   }
+}
+
+class _StartupFailurePrompt extends StatelessWidget {
+  const _StartupFailurePrompt({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const Icon(Icons.storage_rounded, color: MuzicianTheme.orange, size: 42),
+      const SizedBox(height: 14),
+      const Text(
+        'Could not load your workspaces',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: MuzicianTheme.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: MuzicianTheme.textSecondary),
+      ),
+      const SizedBox(height: 20),
+      FilledButton.icon(
+        onPressed: onRetry,
+        icon: const Icon(Icons.refresh),
+        label: const Text('Retry'),
+      ),
+    ],
+  );
+}
+
+class _StartupRecoveryPrompt extends StatelessWidget {
+  const _StartupRecoveryPrompt({
+    required this.payloads,
+    required this.onRetry,
+    required this.onStartFresh,
+  });
+
+  final List<MalformedPersistedPayload> payloads;
+  final VoidCallback onRetry;
+  final VoidCallback onStartFresh;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const Icon(
+        Icons.warning_amber_rounded,
+        color: MuzicianTheme.orange,
+        size: 42,
+      ),
+      const SizedBox(height: 14),
+      const Text(
+        'Some saved data could not be read',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: MuzicianTheme.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        '${payloads.length} saved item${payloads.length == 1 ? '' : 's'} need recovery. '
+        'The original data is still intact.',
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: MuzicianTheme.textSecondary),
+      ),
+      const SizedBox(height: 18),
+      for (final payload in payloads)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            payload.storageKey,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: MuzicianTheme.textMuted,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      const SizedBox(height: 18),
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+          FilledButton.icon(
+            onPressed: onStartFresh,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Start fresh'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      const Text(
+        'Start fresh first copies the original data to Settings → Data Recovery.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+      ),
+    ],
+  );
 }
 
 // ── Nav Tab ─────────────────────────────────────────────────────────────────
@@ -194,6 +451,7 @@ class _NavTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
+        key: ValueKey('nav_$label'),
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Column(
@@ -317,7 +575,9 @@ class _Card extends StatelessWidget {
 // ── Fretboard Screen ────────────────────────────────────────────────────────
 
 class _FretboardScreen extends ConsumerStatefulWidget {
-  const _FretboardScreen();
+  const _FretboardScreen({required this.onHandoffCompleted});
+
+  final VoidCallback onHandoffCompleted;
 
   @override
   ConsumerState<_FretboardScreen> createState() => _FretboardScreenState();
@@ -384,6 +644,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       emptySubtitle:
           'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('fret-detect'),
+      onHandoffCompleted: widget.onHandoffCompleted,
       scaleHasValue: scaleInfo.hasValue,
       scaleLabel: scaleInfo.label,
       scaleOffKey: chordOffKey,
@@ -492,7 +753,9 @@ class _TuneSectionLabel extends StatelessWidget {
 // ── Piano Screen ────────────────────────────────────────────────────────────
 
 class _PianoScreen extends ConsumerStatefulWidget {
-  const _PianoScreen();
+  const _PianoScreen({required this.onHandoffCompleted});
+
+  final VoidCallback onHandoffCompleted;
 
   @override
   ConsumerState<_PianoScreen> createState() => _PianoScreenState();
@@ -546,6 +809,7 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
       emptySubtitle:
           'Selected notes turn into detected chords and scales here.',
       detectionKey: const ValueKey('piano-detect'),
+      onHandoffCompleted: widget.onHandoffCompleted,
       scaleHasValue: scaleInfo.hasValue,
       scaleLabel: scaleInfo.label,
       scaleOffKey: chordOffKey,
@@ -638,6 +902,8 @@ class _SettingsScreen extends ConsumerWidget {
       title: 'Settings',
       subtitle: 'Personalise your experience',
       children: [
+        const DataRecoveryPanel(),
+        const SizedBox(height: 12),
         _Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

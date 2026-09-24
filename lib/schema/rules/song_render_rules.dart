@@ -1,29 +1,41 @@
-/// Offline song renderer: mixes note + drum tracks into mono PCM16 for WAV
-/// export. Audio clips are excluded in v1 (noted in the export UI).
+/// Offline song renderer: mixes note, drum, and prepared audio tracks into
+/// mono PCM16 for WAV export.
 library;
 
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../models/song_project.dart';
+import 'piano_roll_playback_rules.dart' as playback;
 import 'song_playback_rules.dart' as pb_rules;
 import 'song_rules.dart' as song_rules;
 
-/// Renders [project]'s note and drum tracks to mono PCM16 at [sampleRate].
+/// Renders [project]'s note, drum, and prepared audio tracks to mono PCM16 at
+/// [sampleRate]. Audio buffers are trimmed, downmixed, and resampled before
+/// they are passed in [audioSamplesByPatternId].
 ///
 /// Simple synth voices: notes are sine tones with an exponential decay
 /// envelope; drums are short sine thumps (kick/toms) or noise bursts
 /// (snare/hats/clap/crash). Per-track volume is honored.
-Int16List renderSongPcm(SongProject project, {int sampleRate = 44100}) {
+Int16List renderSongPcm(
+  SongProject project, {
+  int sampleRate = 44100,
+  Map<String, Int16List> audioSamplesByPatternId = const {},
+}) {
   final ticksTotal = song_rules.songTotalTicks(project.config);
-  // Match the playback/audio grid: x/8 signatures use 2 ticks per beat, others
-  // 4. Hardcoding 4 here double-speeds x/8 exports relative to in-app playback.
-  final tickMs =
-      (60000 / project.config.tempo) /
-      project.config.timeSignature.ticksPerBeat;
+  final tickMs = playback.millisecondsPerTick(project.config.tempo);
   final tailMs = 1000;
-  final totalSamples =
-      ((ticksTotal * tickMs + tailMs) / 1000 * sampleRate).ceil();
+  var durationMs = ticksTotal * tickMs;
+  final audioPatternById = {for (final p in project.audioPatterns) p.id: p};
+  for (final clip in project.clips) {
+    if (clip.patternType != SongPatternType.audio) continue;
+    final samples = audioSamplesByPatternId[clip.patternId];
+    if (samples == null) continue;
+    final clipEndMs =
+        clip.startTick * tickMs + samples.length * 1000 / sampleRate;
+    if (clipEndMs > durationMs) durationMs = clipEndMs;
+  }
+  final totalSamples = ((durationMs + tailMs) / 1000 * sampleRate).ceil();
   final mix = Float64List(totalSamples);
 
   int sampleAtTick(int tick) => (tick * tickMs / 1000 * sampleRate).round();
@@ -41,8 +53,13 @@ Int16List renderSongPcm(SongProject project, {int sampleRate = 44100}) {
     final pattern = notePatternById[clip.patternId];
     if (pattern == null) continue;
     for (final note in pattern.notes) {
-      final start = sampleAtTick(clip.startTick + note.startTick);
-      final durMs = (note.durationTicks * tickMs).clamp(60.0, 2000.0);
+      final start =
+          sampleAtTick(clip.startTick + note.startTick) +
+          (note.onsetOffsetMs * sampleRate / 1000).round();
+      final durMs = math.max(
+        1.0,
+        note.durationTicks * tickMs + note.durationOffsetMs,
+      );
       _addSine(
         mix,
         start: start,
@@ -51,6 +68,22 @@ Int16List renderSongPcm(SongProject project, {int sampleRate = 44100}) {
         amplitude: 0.18 * volume,
         sampleRate: sampleRate,
       );
+    }
+  }
+
+  // ── Audio clips. ─────────────────────────────────────────────────────────
+  for (final clip in project.clips) {
+    if (clip.patternType != SongPatternType.audio) continue;
+    final volume = volumeByTrack[clip.trackId];
+    final pattern = audioPatternById[clip.patternId];
+    final samples = audioSamplesByPatternId[clip.patternId];
+    if (volume == null || pattern == null || samples == null) continue;
+    final start = sampleAtTick(clip.startTick);
+    for (var i = 0; i < samples.length; i++) {
+      final target = start + i;
+      if (target >= 0 && target < mix.length) {
+        mix[target] += samples[i] / 32768.0 * volume;
+      }
     }
   }
 
@@ -135,7 +168,8 @@ void _addThump(
     final t = (i - start) / sampleRate;
     final env = math.exp(-8.0 * (i - start) / samples);
     // Slight downward pitch sweep for punch.
-    mix[i] += amplitude * env * math.sin(2 * math.pi * freq * (1 + 0.5 * env) * t);
+    mix[i] +=
+        amplitude * env * math.sin(2 * math.pi * freq * (1 + 0.5 * env) * t);
   }
 }
 

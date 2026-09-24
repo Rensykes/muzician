@@ -3,6 +3,32 @@ import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/song_project.dart';
 
 void main() {
+  test(
+    'sequenced note duration offset defaults for old JSON and round-trips',
+    () {
+      final legacy = NotePatternNote.fromJson({
+        'id': 'legacy',
+        'midiNote': 60,
+        'startTick': 0,
+        'durationTicks': 4,
+        'onsetOffsetMs': 12,
+      });
+      expect(legacy.durationOffsetMs, 0);
+
+      const clipped = NotePatternNote(
+        id: 'clipped',
+        midiNote: 64,
+        startTick: 15,
+        durationTicks: 1,
+        onsetOffsetMs: 24,
+        durationOffsetMs: -24,
+      );
+      final restored = NotePatternNote.fromJson(clipped.toJson());
+      expect(restored.onsetOffsetMs, 24);
+      expect(restored.durationOffsetMs, -24);
+    },
+  );
+
   group('AudioAsset', () {
     test('JSON round-trip preserves all fields', () {
       const asset = AudioAsset(

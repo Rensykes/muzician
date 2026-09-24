@@ -12,7 +12,13 @@ void main() {
         NotePatternNote(id: 'a', midiNote: 60, startTick: 0, durationTicks: 4),
         NotePatternNote(id: 'b', midiNote: 62, startTick: 10, durationTicks: 4),
         // Straddles tick 8: 6..14
-        NotePatternNote(id: 'c', midiNote: 64, startTick: 6, durationTicks: 8),
+        NotePatternNote(
+          id: 'c',
+          midiNote: 64,
+          startTick: 6,
+          durationTicks: 8,
+          onsetOffsetMs: 12,
+        ),
       ],
       pitchRangeStart: 48,
       pitchRangeEnd: 84,
@@ -21,12 +27,7 @@ void main() {
     );
 
     test('partitions notes around the split tick', () {
-      final result = splitNotePattern(
-        pattern,
-        8,
-        leftId: 'L',
-        rightId: 'R',
-      );
+      final result = splitNotePattern(pattern, 8, leftId: 'L', rightId: 'R');
       expect(result, isNotNull);
       final (left, right) = (result!.left, result.right);
 
@@ -40,6 +41,7 @@ void main() {
       final cLeft = left.notes.firstWhere((n) => n.midiNote == 64);
       expect(cLeft.startTick, 6);
       expect(cLeft.durationTicks, 2);
+      expect(cLeft.onsetOffsetMs, 12);
 
       // 'b' shifts to 2; 'c' remainder starts at 0 with 6 ticks.
       expect(right.notes.map((n) => n.midiNote).toSet(), {62, 64});
@@ -48,6 +50,7 @@ void main() {
       final cRight = right.notes.firstWhere((n) => n.midiNote == 64);
       expect(cRight.startTick, 0);
       expect(cRight.durationTicks, 6);
+      expect(cRight.onsetOffsetMs, 12);
     });
 
     test('rejects out-of-range split ticks', () {

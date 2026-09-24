@@ -2,11 +2,14 @@
 /// project skeleton (tracks, clips, patterns, markers).
 library;
 
+import 'dart:math' as math;
+
 import '../../models/save_system.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../models/piano_roll.dart' show TimeSignature;
 import '../../utils/note_utils.dart';
+import 'piano_roll_playback_rules.dart' as timing;
 import 'songwriter_playback_rules.dart';
 import 'songwriter_rules.dart';
 
@@ -21,6 +24,8 @@ import 'songwriter_rules.dart';
 ///   over [DrumPattern]s;
 /// - each save lane becomes a note track of stacked-chord patterns built from
 ///   the resolved snapshots ([saves] is the live save list).
+/// - melody lanes and guitar-strum lanes become duration-aware note tracks;
+///   Writer audio lanes are not transferred.
 SongProject songFromSongwriter(
   SongwriterProjectSnapshot project,
   List<SaveEntry> saves,
@@ -29,6 +34,16 @@ SongProject songFromSongwriter(
   final beatTicks = cfg.ticksPerBeat;
   final measureTicks = cfg.measureTicks;
   final totalBars = flattenedBarCount(project.sections).clamp(1, 32);
+  final tickMs = timing.millisecondsPerTick(cfg.tempo);
+
+  int clippedDurationOffsetMs({
+    required int durationTicks,
+    required int onsetOffsetMs,
+    required int availableTicks,
+  }) => (availableTicks * tickMs - onsetOffsetMs - durationTicks * tickMs)
+      .floor()
+      .clamp(-durationTicks * tickMs.floor() + 1, 0)
+      .toInt();
 
   final expanded = expandSections(project.sections);
   final sectionById = {for (final s in project.sections) s.id: s};
@@ -54,6 +69,7 @@ SongProject songFromSongwriter(
 
   // One note pattern per harmony/save block id (reused across repeats).
   final patternByBlockId = <String, String>{};
+  final strumPatternByPlacement = <(String, String, String, int), String>{};
   final usedDrumPatternIds = <String>{};
 
   NotePattern stabPattern({
@@ -92,6 +108,170 @@ SongProject songFromSongwriter(
     );
   }
 
+  NotePattern melodyPattern({
+    required String patternId,
+    required NotePattern source,
+    required int blockLengthTicks,
+  }) {
+    final notes = <NotePatternNote>[];
+    if (source.lengthTicks > 0) {
+      for (
+        var loopOffset = 0;
+        loopOffset < blockLengthTicks;
+        loopOffset += source.lengthTicks
+      ) {
+        for (final note in source.notes) {
+          if (note.startTick < 0 || note.startTick >= source.lengthTicks) {
+            continue;
+          }
+          final startTick = loopOffset + note.startTick;
+          if (startTick >= blockLengthTicks) continue;
+          final duration = math.min(
+            math.max(1, note.durationTicks),
+            math.min(
+              source.lengthTicks - note.startTick,
+              blockLengthTicks - startTick,
+            ),
+          );
+          final availableTicks = math.min(
+            source.lengthTicks - note.startTick,
+            blockLengthTicks - startTick,
+          );
+          final onsetOffsetMs = math.max(0, note.onsetOffsetMs);
+          notes.add(
+            NotePatternNote(
+              id: nextId('n'),
+              midiNote: note.midiNote,
+              startTick: startTick,
+              durationTicks: duration,
+              onsetOffsetMs: onsetOffsetMs,
+              durationOffsetMs: clippedDurationOffsetMs(
+                durationTicks: duration,
+                onsetOffsetMs: onsetOffsetMs,
+                availableTicks: availableTicks,
+              ),
+            ),
+          );
+        }
+      }
+    }
+    return NotePattern(
+      id: patternId,
+      name: source.name,
+      lengthTicks: blockLengthTicks,
+      notes: notes,
+      pitchRangeStart: source.pitchRangeStart,
+      pitchRangeEnd: source.pitchRangeEnd,
+      snapTicks: source.snapTicks,
+      highlightedNotes: source.highlightedNotes,
+    );
+  }
+
+  SongLane? strumHarmonyLane(SongSection section, SongLane lane) {
+    for (final candidate in section.lanes) {
+      if (candidate.id == lane.anchorLaneId &&
+          candidate.kind == SongLaneKind.harmony) {
+        return candidate;
+      }
+    }
+    return primaryHarmonyLane(section);
+  }
+
+  List<int> harmonyAtTick(
+    SongLane? harmonyLane,
+    SongSection section,
+    int sectionTick,
+  ) {
+    if (harmonyLane == null || sectionTick < 0) return const [];
+    final bar = sectionTick ~/ measureTicks;
+    for (final harmonyBlock in tileLaneBlocks(
+      harmonyLane,
+      sectionLengthBars: section.lengthBars,
+    )) {
+      if (bar >= harmonyBlock.startBar &&
+          bar < math.min(harmonyBlock.endBar, section.lengthBars)) {
+        return chordMidiNotes(harmonyBlock);
+      }
+    }
+    return const [];
+  }
+
+  NotePattern guitarStrumPattern({
+    required String patternId,
+    required SongSection section,
+    required SongLane lane,
+    required SongBlock block,
+    required GuitarStrumPattern source,
+    required int blockLengthTicks,
+  }) {
+    final notes = <NotePatternNote>[];
+    final harmonyLane = strumHarmonyLane(section, lane);
+    final gateTicks = math.max(1, cfg.ticksPerBeat ~/ 2);
+    if (source.lengthTicks > 0) {
+      for (
+        var loopOffset = 0;
+        loopOffset < blockLengthTicks;
+        loopOffset += source.lengthTicks
+      ) {
+        final loopEnd = math.min(
+          blockLengthTicks,
+          loopOffset + source.lengthTicks,
+        );
+        for (final event in source.events) {
+          if (event.tick < 0 || event.tick >= source.lengthTicks) continue;
+          final startTick = loopOffset + event.tick;
+          if (startTick >= blockLengthTicks || startTick >= loopEnd) continue;
+          final sectionTick = block.startBar * measureTicks + startTick;
+          final chord = harmonyAtTick(harmonyLane, section, sectionTick);
+          if (chord.isEmpty) continue;
+          final pitches = event.direction == GuitarStrumDirection.down
+              ? chord
+              : chord.reversed.toList();
+          final duration = math.min(
+            gateTicks,
+            math.min(loopEnd - startTick, blockLengthTicks - startTick),
+          );
+          final availableTicks = math.min(
+            loopEnd - startTick,
+            blockLengthTicks - startTick,
+          );
+          for (var i = 0; i < pitches.length; i++) {
+            final onsetOffsetMs = i * 12;
+            notes.add(
+              NotePatternNote(
+                id: nextId('n'),
+                midiNote: pitches[i],
+                startTick: startTick,
+                durationTicks: duration,
+                onsetOffsetMs: onsetOffsetMs,
+                durationOffsetMs: clippedDurationOffsetMs(
+                  durationTicks: duration,
+                  onsetOffsetMs: onsetOffsetMs,
+                  availableTicks: availableTicks,
+                ),
+              ),
+            );
+          }
+        }
+      }
+    }
+    var minMidi = 48, maxMidi = 84;
+    if (notes.isNotEmpty) {
+      minMidi = notes.map((note) => note.midiNote).reduce(math.min) - 5;
+      maxMidi = notes.map((note) => note.midiNote).reduce(math.max) + 5;
+    }
+    return NotePattern(
+      id: patternId,
+      name: source.name,
+      lengthTicks: blockLengthTicks,
+      notes: notes,
+      pitchRangeStart: minMidi.clamp(0, 127),
+      pitchRangeEnd: maxMidi.clamp(0, 127),
+      snapTicks: 1,
+      highlightedNotes: const [],
+    );
+  }
+
   // Collect lanes by kind across all sections. A lane belongs to a section,
   // but musically the N-th harmony lane of every section forms one voice —
   // one Song track per harmony-lane index. Track name/volume come from the
@@ -99,6 +279,8 @@ SongProject songFromSongwriter(
   final harmonyTrackByIndex = <int, SongTrack>{};
   final drumTrackIdByLane = <String, String>{};
   final saveTrackIdByLane = <String, String>{};
+  final melodyTrackIdByLane = <String, String>{};
+  final strumTrackIdByLane = <String, String>{};
 
   double laneTrackVolume(SongLane lane) => lane.muted ? 0.0 : lane.volume;
 
@@ -245,6 +427,82 @@ SongProject songFromSongwriter(
               trackId: trackId,
               patternId: source.id,
               type: SongPatternType.drum,
+              startTick: startTick,
+            );
+          case SongLaneKind.melody:
+            final source = project.melodyPatterns
+                .where((pattern) => pattern.id == block.patternId)
+                .firstOrNull;
+            if (source == null) break;
+            final trackId = melodyTrackIdByLane.putIfAbsent(lane.id, () {
+              final id = nextId('trk');
+              tracks.add(
+                SongTrack(
+                  id: id,
+                  name: lane.label ?? 'Melody',
+                  type: SongTrackType.note,
+                  order: 0,
+                  volume: laneTrackVolume(lane),
+                ),
+              );
+              return id;
+            });
+            final patternId = patternByBlockId.putIfAbsent(block.id, () {
+              final id = nextId('np');
+              notePatterns.add(
+                melodyPattern(
+                  patternId: id,
+                  source: source,
+                  blockLengthTicks: clampedSpan * measureTicks,
+                ),
+              );
+              return id;
+            });
+            placeClip(
+              trackId: trackId,
+              patternId: patternId,
+              type: SongPatternType.note,
+              startTick: startTick,
+            );
+          case SongLaneKind.guitarStrum:
+            final source = project.guitarStrumPatterns
+                .where((pattern) => pattern.id == block.patternId)
+                .firstOrNull;
+            if (source == null) break;
+            final trackId = strumTrackIdByLane.putIfAbsent(lane.id, () {
+              final id = nextId('trk');
+              tracks.add(
+                SongTrack(
+                  id: id,
+                  name: lane.label ?? 'Guitar strum',
+                  type: SongTrackType.note,
+                  order: 0,
+                  volume: laneTrackVolume(lane),
+                ),
+              );
+              return id;
+            });
+            final patternId = strumPatternByPlacement.putIfAbsent(
+              (section.id, lane.id, block.id, block.startBar),
+              () {
+                final id = nextId('np');
+                notePatterns.add(
+                  guitarStrumPattern(
+                    patternId: id,
+                    section: section,
+                    lane: lane,
+                    block: block,
+                    source: source,
+                    blockLengthTicks: clampedSpan * measureTicks,
+                  ),
+                );
+                return id;
+              },
+            );
+            placeClip(
+              trackId: trackId,
+              patternId: patternId,
+              type: SongPatternType.note,
               startTick: startTick,
             );
         }

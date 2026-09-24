@@ -22,17 +22,18 @@ import '../utils/note_utils.dart';
 /// when the selected save folder is a project with a key configured.
 ///
 /// Returns `null` outside a project context or when no key has been set.
-final activeProjectKeyProvider =
-    Provider<({String root, String scaleName})?>((ref) {
-      final folder = ref.watch(selectedProjectProvider);
-      if (folder == null || folder.kind != SaveFolderKind.project) return null;
-      final cfg = folder.projectConfig;
-      if (cfg == null) return null;
-      final rootPc = cfg.keyRootPc;
-      final scaleName = cfg.keyScaleName;
-      if (rootPc == null || scaleName == null) return null;
-      return (root: chromaticNotes[rootPc], scaleName: scaleName);
-    });
+final activeProjectKeyProvider = Provider<({String root, String scaleName})?>((
+  ref,
+) {
+  final folder = ref.watch(selectedProjectProvider);
+  if (folder == null || folder.kind != SaveFolderKind.project) return null;
+  final cfg = folder.projectConfig;
+  if (cfg == null) return null;
+  final rootPc = cfg.keyRootPc;
+  final scaleName = cfg.keyScaleName;
+  if (rootPc == null || scaleName == null) return null;
+  return (root: chromaticNotes[rootPc], scaleName: scaleName);
+});
 
 /// Mount once on app start (read it from `main.dart`). The provider has no
 /// state — its body wires the listeners.
@@ -69,16 +70,25 @@ void _apply(Ref ref, SaveFolder? folder) {
 
   // Song
   final song = ref.read(songProjectProvider.notifier);
-  song.setTempo(cfg.tempo);
-  song.setTimeSignature(
-    TimeSignature(beatsPerMeasure: cfg.beatsPerBar, beatUnit: cfg.beatUnit),
+  song.syncProjectConfig(
+    tempo: cfg.tempo,
+    timeSignature: TimeSignature(
+      beatsPerMeasure: cfg.beatsPerBar,
+      beatUnit: cfg.beatUnit,
+    ),
+    scaleRoot: keyString,
+    scaleName: cfg.keyScaleName,
   );
-  song.setScale(root: keyString, scaleName: cfg.keyScaleName);
 
   // Songwriter
   final writer = ref.read(songwriterProvider.notifier);
-  writer.setTempo(cfg.tempo);
-  writer.setKey(cfg.keyRootPc, cfg.keyScaleName);
+  writer.syncProjectConfig(
+    tempo: cfg.tempo,
+    beatsPerBar: cfg.beatsPerBar,
+    beatUnit: cfg.beatUnit,
+    keyRoot: cfg.keyRootPc,
+    keyScaleName: cfg.keyScaleName,
+  );
 }
 
 List<String> _scaleNotesFor(int? rootPc, String? scaleName) {

@@ -72,7 +72,14 @@ void main() {
       name: 'Test',
       lengthTicks: 16,
       notes: [
-        NotePatternNote(id: 'n1', midiNote: 72, startTick: 4, durationTicks: 8),
+        NotePatternNote(
+          id: 'n1',
+          midiNote: 72,
+          startTick: 4,
+          durationTicks: 8,
+          onsetOffsetMs: 12,
+          durationOffsetMs: -5,
+        ),
       ],
       pitchRangeStart: 40,
       pitchRangeEnd: 90,
@@ -92,6 +99,8 @@ void main() {
     );
     expect(roundTripped.notes.single.midiNote, 72);
     expect(roundTripped.notes.single.startTick, 4);
+    expect(roundTripped.notes.single.onsetOffsetMs, 12);
+    expect(roundTripped.notes.single.durationOffsetMs, -5);
     expect(roundTripped.lengthTicks, 16);
   });
 

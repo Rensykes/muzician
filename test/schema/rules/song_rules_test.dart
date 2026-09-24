@@ -205,6 +205,7 @@ void main() {
                 midiNote: 60,
                 startTick: 0,
                 durationTicks: 4,
+                onsetOffsetMs: 12,
               ),
             ],
             pitchRangeStart: 48,
@@ -222,6 +223,7 @@ void main() {
       );
       expect(result.clonedPattern.id, 'p2');
       expect(result.updatedClip.patternId, 'p2');
+      expect(result.clonedPattern.notes.single.onsetOffsetMs, 12);
     });
   });
 

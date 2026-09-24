@@ -346,17 +346,19 @@ class _SongwriterAudioClipBodyState
                 icon: const Icon(Icons.remove),
                 onPressed: () {
                   final newSpan = (block.spanBars - 1).clamp(1, maxSpan);
-                  store.setBlockPlacement(
-                    sectionId: sectionId,
-                    laneId: laneId,
-                    blockId: block.id,
-                    startBar: block.startBar,
-                    spanBars: newSpan,
-                  );
-                  store.clampClipSegments(
-                    clipId: clipId,
-                    spanTotalTicks: clipSpanTicks(newSpan, project.config),
-                  );
+                  store.runHistoryGroup(() {
+                    store.setBlockPlacement(
+                      sectionId: sectionId,
+                      laneId: laneId,
+                      blockId: block.id,
+                      startBar: block.startBar,
+                      spanBars: newSpan,
+                    );
+                    store.clampClipSegments(
+                      clipId: clipId,
+                      spanTotalTicks: clipSpanTicks(newSpan, project.config),
+                    );
+                  });
                   rerenderIfStretch();
                 },
               ),
@@ -369,17 +371,19 @@ class _SongwriterAudioClipBodyState
                 icon: const Icon(Icons.add),
                 onPressed: () {
                   final newSpan = (block.spanBars + 1).clamp(1, maxSpan);
-                  store.setBlockPlacement(
-                    sectionId: sectionId,
-                    laneId: laneId,
-                    blockId: block.id,
-                    startBar: block.startBar,
-                    spanBars: newSpan,
-                  );
-                  store.clampClipSegments(
-                    clipId: clipId,
-                    spanTotalTicks: clipSpanTicks(newSpan, project.config),
-                  );
+                  store.runHistoryGroup(() {
+                    store.setBlockPlacement(
+                      sectionId: sectionId,
+                      laneId: laneId,
+                      blockId: block.id,
+                      startBar: block.startBar,
+                      spanBars: newSpan,
+                    );
+                    store.clampClipSegments(
+                      clipId: clipId,
+                      spanTotalTicks: clipSpanTicks(newSpan, project.config),
+                    );
+                  });
                   rerenderIfStretch();
                 },
               ),
