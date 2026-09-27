@@ -41,6 +41,7 @@ Creative, clear, musician-first. Muzician should feel encouraging and musically 
 3. **Show theory in context.** Chord, scale, key, and voicing information should support a musical decision and remain optional.
 4. **Make the draft audible.** Let users hear changes in the section or arrangement they are writing.
 5. **Protect creative work.** Keep drafts recoverable with undo and redo, communicate save state clearly, and confirm project replacement before it begins.
+6. **Make the next handoff visible.** When Song is empty and Writer content yields tracks, surface the import action and explain its scope: sections become measures and markers; harmony, saved voicings, melody, and guitar strums become note tracks; drum lanes become drum tracks; tempo, meter, and key carry over. Writer audio stays in Writer.
 
 ## Accessibility & Inclusion
 

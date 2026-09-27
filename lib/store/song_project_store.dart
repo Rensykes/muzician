@@ -5,7 +5,6 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import '../models/piano_roll.dart';
-import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../models/song_project.dart';
 import '../schema/rules/song_from_writer_rules.dart';
@@ -14,7 +13,6 @@ import '../schema/rules/song_audio_rules.dart'
 import '../schema/rules/song_import_rules.dart' as import_rules;
 import '../schema/rules/song_rules.dart' as rules;
 import '../schema/rules/song_split_rules.dart' as split_rules;
-import '../utils/note_utils.dart';
 import 'save_system_store.dart';
 import 'song_audio_repository.dart';
 import 'song_sessions_store.dart';
@@ -133,20 +131,7 @@ class SongProjectNotifier extends Notifier<SongProject> {
         .read(saveSystemProvider)
         .folders
         .firstWhere((f) => f.id == projectId);
-    final cfg = folder.projectConfig ?? const ProjectConfig();
-    final base = rules.getDefaultSongProject();
-    return base.copyWith(
-      config: base.config.copyWith(
-        tempo: cfg.tempo,
-        timeSignature: TimeSignature(
-          beatsPerMeasure: cfg.beatsPerBar,
-          beatUnit: cfg.beatUnit,
-        ),
-        scaleRoot: () =>
-            cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
-        scaleName: () => cfg.keyScaleName,
-      ),
-    );
+    return rules.getDefaultSongProject(projectConfig: folder.projectConfig);
   }
 
   void _schedulePersist(SongProject project) {
@@ -1161,6 +1146,12 @@ class SongProjectNotifier extends Notifier<SongProject> {
 final songProjectProvider = NotifierProvider<SongProjectNotifier, SongProject>(
   SongProjectNotifier.new,
 );
+
+final songFromWriterPreviewProvider = Provider<SongProject>((ref) {
+  final writer = ref.watch(songwriterProvider);
+  final saves = ref.watch(saveSystemProvider.select((s) => s.saves));
+  return songFromSongwriter(writer, saves);
+});
 
 final songSelectedTrackIdProvider = StateProvider<String?>((_) => null);
 

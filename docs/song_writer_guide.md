@@ -14,9 +14,10 @@ work in portrait and landscape.*
 ## Workspace roles and entry
 
 **Writer** is the section, chord, and lyric sketch. **Song** is the clip
-arrangement workspace for note, drum, and audio tracks. Song's overflow menu
-has **About Song** help explaining the distinction and linking the two
-workspaces through **Import from Writer**.
+arrangement workspace for note, drum, and audio tracks. Song's **More** menu
+has **About Song** help explaining the distinction and **Import from Writer**.
+When Song is empty, a timeline action also offers **Import from Writer** if the
+current Writer content can produce tracks.
 
 A new install opens Writer. On later starts the app restores the last content
 workspace among Fretboard, Piano, Roll, Song, and Writer; visiting Settings
@@ -175,8 +176,9 @@ marker store ops + `songTimelineZoomProvider` in
 which creates an empty clip and opens the piano-roll editor with the hum
 recorder ready.
 
-**Import from Writer** — the Song header overflow menu (⋮) → *Import from
-Writer* rebuilds the song from the current Writer arrangement:
+**Import from Writer** — choose the action on an empty Song timeline when the
+current Writer content can produce tracks, or open **More** → *Import from
+Writer*. The conversion rebuilds the song from the current Writer arrangement:
 
 - sections (with repeats expanded) → measures, plus one **marker per section
   instance**;
@@ -188,9 +190,12 @@ Writer* rebuilds the song from the current Writer arrangement:
   the strum's 12 ms tone offsets;
 - tempo, time signature, and key are copied over.
 
-It asks for confirmation before replacing a non-empty song.
-Writer audio lanes are not included in this conversion. Imported note offsets
-and durations are also used by Song live playback and WAV rendering.
+It asks for confirmation before replacing meaningful Song state, including
+trackless edits such as user-created markers or nondefault Song config; only an
+untouched default Song skips confirmation.
+Writer audio lanes remain in Writer and are not included in this conversion.
+Imported note offsets and durations are also used by Song live playback and WAV
+rendering.
 
 **Fretboard/Piano handoff** — in the instrument detection panel, choose
 *Add to Writer*, select a detected chord or the exact instrument voicing, then
@@ -266,8 +271,12 @@ sizes in either orientation.
 - **Song** — on height-starved (landscape) viewports the header collapses to a
   slim single row so the timeline keeps the vertical space. The New / Import /
   Export WAV / Export Song Bundle / Import Song Bundle actions live in the
-  header overflow menu (⋮)
-  to keep the row compact.
+  **More** menu to keep the row compact. When Song is empty and Writer content
+  can produce tracks, **Import from Writer** also appears on the timeline; the
+  More entry remains available. If the empty-state copy and actions need more
+  height than the timeline has, that content scrolls vertically.
+- **Piano/Fretboard detection** — the shared results panel scrolls vertically
+  when it exceeds the available height.
 - **Writer** — in landscape the title row is dropped and the overflow button
   moves into the config strip; when the viewport is wide enough the section
   cards flow in **two columns**.
