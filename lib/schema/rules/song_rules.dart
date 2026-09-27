@@ -3,22 +3,34 @@
 library;
 
 import '../../models/piano_roll.dart';
+import '../../models/project_config.dart';
 import '../../models/song_project.dart';
+import '../../utils/note_utils.dart' show chromaticNotes;
 import 'song_audio_rules.dart' show audioClipLengthTicks;
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
-SongProject getDefaultSongProject() => const SongProject(
-  config: SongProjectConfig(
-    tempo: 120,
-    timeSignature: TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
-    totalMeasures: 4,
-  ),
-  tracks: [],
-  clips: [],
-  notePatterns: [],
-  drumPatterns: [],
-);
+SongProject getDefaultSongProject({ProjectConfig? projectConfig}) {
+  final config = projectConfig ?? const ProjectConfig();
+  return SongProject(
+    config: SongProjectConfig(
+      tempo: config.tempo,
+      timeSignature: TimeSignature(
+        beatsPerMeasure: config.beatsPerBar,
+        beatUnit: config.beatUnit,
+      ),
+      totalMeasures: 4,
+      scaleRoot: config.keyRootPc == null
+          ? null
+          : chromaticNotes[config.keyRootPc!],
+      scaleName: config.keyScaleName,
+    ),
+    tracks: const [],
+    clips: const [],
+    notePatterns: const [],
+    drumPatterns: const [],
+  );
+}
 
 // ── Tick math ─────────────────────────────────────────────────────────────────
 

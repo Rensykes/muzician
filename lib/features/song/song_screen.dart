@@ -45,6 +45,7 @@ class _SongScreenState extends ConsumerState<SongScreen> {
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(songProjectProvider);
+    final writerPreview = ref.watch(songFromWriterPreviewProvider);
     final playback = ref.watch(songPlaybackProvider);
     final projectLocked = ref.watch(isProjectLockedProvider);
     final compactHeader = MediaQuery.sizeOf(context).width < 480;
@@ -233,32 +234,86 @@ class _SongScreenState extends ConsumerState<SongScreen> {
               child: KeyedSubtree(
                 key: _coachKeys.timeline,
                 child: project.tracks.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'No tracks yet',
-                              style: TextStyle(
-                                color: MuzicianTheme.textMuted.withValues(
-                                  alpha: 0.6,
+                    ? LayoutBuilder(
+                        builder: (context, constraints) => SingleChildScrollView(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight,
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
                                 ),
-                                fontSize: 16,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 360,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'No tracks yet',
+                                        style: TextStyle(
+                                          color: MuzicianTheme.textMuted
+                                              .withValues(alpha: 0.6),
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      if (writerPreview.tracks.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        const Text(
+                                          'Chords, voicings, drums, melody and strums become tracks. Writer audio stays in Writer.',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: MuzicianTheme.textMuted,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.icon(
+                                            style: FilledButton.styleFrom(
+                                              minimumSize: const Size(0, 44),
+                                            ),
+                                            onPressed: () =>
+                                                _confirmImportFromWriter(
+                                                  context,
+                                                ),
+                                            icon: const Icon(
+                                              Icons.input_rounded,
+                                            ),
+                                            label: const Text(
+                                              'Import from Writer',
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                      ],
+                                      TextButton.icon(
+                                        style: TextButton.styleFrom(
+                                          minimumSize: const Size(0, 44),
+                                        ),
+                                        onPressed: () =>
+                                            _showAddTrackSheet(context),
+                                        icon: const Icon(
+                                          Icons.add,
+                                          color: MuzicianTheme.sky,
+                                        ),
+                                        label: const Text(
+                                          'Add Track',
+                                          style: TextStyle(
+                                            color: MuzicianTheme.sky,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            TextButton.icon(
-                              onPressed: () => _showAddTrackSheet(context),
-                              icon: const Icon(
-                                Icons.add,
-                                color: MuzicianTheme.sky,
-                              ),
-                              label: const Text(
-                                'Add Track',
-                                style: TextStyle(color: MuzicianTheme.sky),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       )
                     : SongArrangerTimeline(
@@ -436,7 +491,14 @@ class _SongScreenState extends ConsumerState<SongScreen> {
 
   Future<void> _confirmImportFromWriter(BuildContext context) async {
     HapticFeedback.selectionClick();
-    final hasContent = ref.read(songProjectProvider).tracks.isNotEmpty;
+    final activeProject = ref.read(isProjectLockedProvider)
+        ? ref.read(selectedProjectProvider)
+        : null;
+    final baseline = song_rules.getDefaultSongProject(
+      projectConfig: activeProject?.projectConfig,
+    );
+    final current = ref.read(songProjectProvider);
+    final hasContent = _hasMeaningfulSongState(current, baseline);
     if (hasContent) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -467,6 +529,26 @@ class _SongScreenState extends ConsumerState<SongScreen> {
     ref.read(songPlaybackProvider.notifier).stopPlayback();
     ref.read(songProjectProvider.notifier).importFromSongwriter();
   }
+}
+
+bool _hasMeaningfulSongState(SongProject current, SongProject baseline) {
+  final currentConfig = current.config;
+  final baselineConfig = baseline.config;
+  return current.tracks.isNotEmpty ||
+      current.clips.isNotEmpty ||
+      current.notePatterns.isNotEmpty ||
+      current.drumPatterns.isNotEmpty ||
+      current.audioAssets.isNotEmpty ||
+      current.audioPatterns.isNotEmpty ||
+      current.markers.isNotEmpty ||
+      currentConfig.tempo != baselineConfig.tempo ||
+      currentConfig.totalMeasures != baselineConfig.totalMeasures ||
+      currentConfig.scaleRoot != baselineConfig.scaleRoot ||
+      currentConfig.scaleName != baselineConfig.scaleName ||
+      currentConfig.timeSignature.beatsPerMeasure !=
+          baselineConfig.timeSignature.beatsPerMeasure ||
+      currentConfig.timeSignature.beatUnit !=
+          baselineConfig.timeSignature.beatUnit;
 }
 
 class _SongTransportStrip extends ConsumerWidget {

@@ -80,7 +80,7 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
         );
       },
       child: hasNotes
-          ? Padding(
+          ? SingleChildScrollView(
               key: const ValueKey(true),
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
               child: Column(

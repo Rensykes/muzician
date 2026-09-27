@@ -160,6 +160,9 @@ showAppInfoPanel(context, initialTab: 1); // 0 = Fretboard, 1 = Piano, 2 = Piano
 | **Panels & Tools** | Range selector (49 / 61 / 88 keys), Chord picker, Scale picker, Detection, Saves |
 | **Behaviour Notes** | Out-of-key alert, colour coding (sky / teal / violet / emerald) |
 
+The shared detection panel scrolls vertically when its content is taller than
+the space available below the keyboard.
+
 ## Project lock
 
 When a project is selected, the instrument inherits its key / tempo /

@@ -10,6 +10,7 @@ melody, and groove sketch used to plan a song before arranging its clips.
 - **Clips**: Instances of reusable patterns (note/drum) or unique audio buffers placed on a track timeline.
 - **Patterns**: Note patterns and drum patterns are shared across multiple clip instances; audio clip patterns are 1:1 with their underlying file.
 - **Undo/Redo**: the overflow menu offers project-scoped undo and redo for track, clip, pattern, marker, and song-config edits.
+- The empty timeline scrolls vertically when its import guidance and actions exceed the available height.
 
 ## Pattern Reuse
 
@@ -91,21 +92,24 @@ flag to rename or delete it. Pinch horizontally on the timeline to zoom
 
 - **Hum a melody**: the add-clip sheet on note tracks creates an empty clip and
   opens the piano-roll editor (hum recorder included) straight away.
-- **Import from Writer**: the header overflow menu rebuilds the song from the
-  Songwriter arrangement (`songFromSongwriter`): sections → measures + a marker
-  per instance, the harmony lane → a note track of per-bar chord stabs, drum
-  lanes → drum tracks, save lanes → voicing note tracks, melody and guitar-strum
-  lanes → duration-aware note tracks with millisecond onset offsets; tempo /
-  time signature / key copied over.
-  Import asks before replacing a non-empty Song and commits the replacement as
-  one undoable transaction. Writer audio lanes are not included.
+- **Import from Writer**: the **More** menu rebuilds the song from the
+  Songwriter arrangement (`songFromSongwriter`). When Song is empty, an
+  **Import from Writer** action also appears on the timeline if this conversion
+  yields tracks. Sections become measures with a marker per instance; harmony
+  becomes a note track of per-bar chord stabs; drum lanes become drum tracks;
+  save lanes become voicing note tracks; and melody and guitar-strum lanes
+  become duration-aware note tracks with millisecond onset offsets. Tempo, time
+  signature, and key are copied over. Writer audio lanes remain in Writer.
+  The More entry stays available. Import asks before replacing meaningful Song
+  state, including trackless edits such as user-created markers or nondefault
+  Song config; it skips confirmation only for an untouched default Song. The
+  replacement is one undoable transaction.
 - **Fretboard/Piano to Writer**: use **Add to Writer** in an instrument's
   detection panel to place a detected chord or exact voicing at a chosen Writer
   section and bar. Exact voicings are embedded in the Writer block and do not
   require a library save.
 
-Writer audio lanes are not included in **Import from Writer**. The Song header's
-**About Song** help describes Song as the
+The Song header's **About Song** help describes Song as the
 clip-arrangement workspace and Writer as the section, chord, and lyric sketch.
 - **Export WAV**: the overflow menu renders audible note, drum, and supported
   audio tracks to mono PCM16 at 44.1 kHz. WAV clips must be valid little-endian

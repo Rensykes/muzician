@@ -169,6 +169,9 @@ Components use familiar touch targets and low-contrast containers. Keep control 
 - Instrument labels and highlights must remain readable at compact widths and with text scaling enabled.
 - Expose essential gestures with visible controls or contextual help.
 
+### Named Rules
+**The Empty-State Hierarchy Rule.** Name the empty state, surface the contextually likely next action, preserve an alternate creation action, and state transfer boundaries in brief copy.
+
 ## 6. Do's and Don'ts
 
 ### Do
