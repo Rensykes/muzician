@@ -69,6 +69,9 @@ abstract class InstrumentSnapshot {
     if (type == 'songwriter' || instrument == 'songwriter') {
       return SongwriterProjectSnapshot.fromJson(json);
     }
+    if (type == 'writer_block' || instrument == 'writer_block') {
+      return WriterBlockSnapshot.fromJson(json);
+    }
     if (type == 'piano_roll' || instrument == 'piano_roll') {
       return PianoRollSnapshot.fromJson(json);
     }
@@ -519,6 +522,9 @@ class SaveFolder {
   final SaveFolderKind kind;
   final ProjectConfig? projectConfig;
 
+  /// The Writer section whose managed folder this represents, if any.
+  final String? writerSectionId;
+
   const SaveFolder({
     required this.id,
     required this.name,
@@ -528,6 +534,7 @@ class SaveFolder {
     this.progressionMeta,
     this.kind = SaveFolderKind.normal,
     this.projectConfig,
+    this.writerSectionId,
   });
 
   SaveFolder copyWith({
@@ -536,6 +543,8 @@ class SaveFolder {
     SaveFolderKind? kind,
     ProjectConfig? projectConfig,
     bool clearProjectConfig = false,
+    String? writerSectionId,
+    bool clearWriterSectionId = false,
   }) => SaveFolder(
     id: id,
     name: name ?? this.name,
@@ -547,6 +556,9 @@ class SaveFolder {
     projectConfig: clearProjectConfig
         ? null
         : (projectConfig ?? this.projectConfig),
+    writerSectionId: clearWriterSectionId
+        ? null
+        : (writerSectionId ?? this.writerSectionId),
   );
 
   Map<String, dynamic> toJson() => {
@@ -558,6 +570,7 @@ class SaveFolder {
     'progressionMeta': progressionMeta?.toJson(),
     'kind': kind.toJson(),
     'projectConfig': projectConfig?.toJson(),
+    'writerSectionId': writerSectionId,
   };
 
   factory SaveFolder.fromJson(Map<String, dynamic> json) => SaveFolder(
@@ -575,6 +588,56 @@ class SaveFolder {
     projectConfig: json['projectConfig'] != null
         ? ProjectConfig.fromJson(json['projectConfig'] as Map<String, dynamic>)
         : null,
+    writerSectionId: json['writerSectionId'] as String?,
+  );
+}
+
+enum SaveOrigin {
+  manual,
+  writer;
+
+  static SaveOrigin fromJson(String? raw) {
+    for (final value in SaveOrigin.values) {
+      if (value.name == raw) return value;
+    }
+    return SaveOrigin.manual;
+  }
+}
+
+/// A link from one source Writer block to its canonical SaveEntry.
+/// Repeated timeline placements share the source block ID and therefore one link.
+class WriterSaveLink {
+  final String blockId;
+  final String sectionId;
+  final String folderId;
+  final String saveId;
+  final SongLaneKind laneKind;
+
+  const WriterSaveLink({
+    required this.blockId,
+    required this.sectionId,
+    required this.folderId,
+    required this.saveId,
+    required this.laneKind,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'blockId': blockId,
+    'sectionId': sectionId,
+    'folderId': folderId,
+    'saveId': saveId,
+    'laneKind': laneKind.name,
+  };
+
+  factory WriterSaveLink.fromJson(Map<String, dynamic> json) => WriterSaveLink(
+    blockId: json['blockId'] as String,
+    sectionId: json['sectionId'] as String,
+    folderId: json['folderId'] as String,
+    saveId: json['saveId'] as String,
+    laneKind: SongLaneKind.values.firstWhere(
+      (kind) => kind.name == json['laneKind'],
+      orElse: () => SongLaneKind.save,
+    ),
   );
 }
 
@@ -587,6 +650,11 @@ class SaveEntry {
   final int updatedAt;
   final int order;
   final ProgressionChordMeta? progressionMeta;
+  final SaveOrigin origin;
+
+  /// The canonical save preserved beside this Writer save after a startup
+  /// reconciliation found that their retained contents diverged.
+  final String? recoveredFromSaveId;
 
   const SaveEntry({
     required this.id,
@@ -597,22 +665,32 @@ class SaveEntry {
     required this.updatedAt,
     required this.order,
     this.progressionMeta,
+    this.origin = SaveOrigin.manual,
+    this.recoveredFromSaveId,
   });
 
   SaveEntry copyWith({
     String? name,
     InstrumentSnapshot? snapshot,
+    String? folderId,
     int? updatedAt,
     int? order,
+    SaveOrigin? origin,
+    String? recoveredFromSaveId,
+    bool clearRecoveredFromSaveId = false,
   }) => SaveEntry(
     id: id,
     name: name ?? this.name,
-    folderId: folderId,
+    folderId: folderId ?? this.folderId,
     snapshot: snapshot ?? this.snapshot,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     order: order ?? this.order,
     progressionMeta: progressionMeta,
+    origin: origin ?? this.origin,
+    recoveredFromSaveId: clearRecoveredFromSaveId
+        ? null
+        : (recoveredFromSaveId ?? this.recoveredFromSaveId),
   );
 
   Map<String, dynamic> toJson() => {
@@ -624,6 +702,8 @@ class SaveEntry {
     'updatedAt': updatedAt,
     'order': order,
     'progressionMeta': progressionMeta?.toJson(),
+    'origin': origin.name,
+    'recoveredFromSaveId': recoveredFromSaveId,
   };
 
   factory SaveEntry.fromJson(Map<String, dynamic> json) => SaveEntry(
@@ -641,6 +721,8 @@ class SaveEntry {
             json['progressionMeta'] as Map<String, dynamic>,
           )
         : null,
+    origin: SaveOrigin.fromJson(json['origin'] as String?),
+    recoveredFromSaveId: json['recoveredFromSaveId'] as String?,
   );
 }
 
@@ -658,6 +740,7 @@ class ActiveSession {
 class SaveSystemState {
   final List<SaveFolder> folders;
   final List<SaveEntry> saves;
+  final List<WriterSaveLink> writerLinks;
   final ActiveSession? activeSession;
   final bool hydrated;
   final String? selectedProjectId;
@@ -665,6 +748,7 @@ class SaveSystemState {
   const SaveSystemState({
     required this.folders,
     required this.saves,
+    this.writerLinks = const [],
     this.activeSession,
     required this.hydrated,
     this.selectedProjectId,
@@ -673,12 +757,14 @@ class SaveSystemState {
   SaveSystemState copyWith({
     List<SaveFolder>? folders,
     List<SaveEntry>? saves,
+    List<WriterSaveLink>? writerLinks,
     ActiveSession? Function()? activeSession,
     bool? hydrated,
     String? Function()? selectedProjectId,
   }) => SaveSystemState(
     folders: folders ?? this.folders,
     saves: saves ?? this.saves,
+    writerLinks: writerLinks ?? this.writerLinks,
     activeSession: activeSession != null ? activeSession() : this.activeSession,
     hydrated: hydrated ?? this.hydrated,
     selectedProjectId: selectedProjectId != null

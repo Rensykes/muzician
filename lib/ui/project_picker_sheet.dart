@@ -40,18 +40,18 @@ class ProjectPickerSheet extends ConsumerWidget {
     final activeProjectFolder = selectedId == null
         ? null
         : ref
-            .read(saveSystemProvider)
-            .folders
-            .where((f) => f.id == selectedId && f.kind == SaveFolderKind.project)
-            .firstOrNull;
+              .read(saveSystemProvider)
+              .folders
+              .where(
+                (f) => f.id == selectedId && f.kind == SaveFolderKind.project,
+              )
+              .firstOrNull;
 
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF141826),
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border(
-          top: BorderSide(color: Color(0x33FFFFFF), width: 0.5),
-        ),
+        border: Border(top: BorderSide(color: Color(0x33FFFFFF), width: 0.5)),
       ),
       child: SafeArea(
         top: false,
@@ -85,9 +85,7 @@ class ProjectPickerSheet extends ConsumerWidget {
                     folder: p,
                     isActive: p.id == selectedId,
                     onTap: () {
-                      ref
-                          .read(saveSystemProvider.notifier)
-                          .selectProject(p.id);
+                      ref.read(saveSystemProvider.notifier).selectProject(p.id);
                       Navigator.of(context).pop();
                     },
                     onDelete: () => _confirmDeleteProject(context, ref, p),
@@ -99,18 +97,13 @@ class ProjectPickerSheet extends ConsumerWidget {
                 label: 'New project',
                 accent: MuzicianTheme.sky,
                 onTap: () async {
-                  final name = await _promptName(
-                    context,
-                    title: 'New project',
-                  );
+                  final name = await _promptName(context, title: 'New project');
                   if (name == null || name.isEmpty) return;
                   final id = ref
                       .read(saveSystemProvider.notifier)
                       .createProject(name, const ProjectConfig());
                   if (id != null) {
-                    ref
-                        .read(saveSystemProvider.notifier)
-                        .selectProject(id);
+                    ref.read(saveSystemProvider.notifier).selectProject(id);
                   }
                   if (context.mounted) Navigator.of(context).pop();
                 },
@@ -151,9 +144,7 @@ class ProjectPickerSheet extends ConsumerWidget {
                       final id = ref
                           .read(saveSystemProvider.notifier)
                           .ensureDumpFolder();
-                      ref
-                          .read(saveSystemProvider.notifier)
-                          .selectProject(id);
+                      ref.read(saveSystemProvider.notifier).selectProject(id);
                       Navigator.of(context).pop();
                     },
                   ),
@@ -355,10 +346,10 @@ Future<void> _confirmDeleteProject(
   final body = saves.isEmpty
       ? 'Delete "${project.name}"? It has no saves.'
       : 'Delete "${project.name}"?\n\n'
-          'This will permanently remove '
-          '${saves.length} save${saves.length == 1 ? '' : 's'}'
-          '${folderCount > 0 ? ' and $folderCount subfolder${folderCount == 1 ? '' : 's'}' : ''}.\n\n'
-          'This cannot be undone.';
+            'This will permanently remove '
+            '${saves.length} save${saves.length == 1 ? '' : 's'}'
+            '${folderCount > 0 ? ' and $folderCount subfolder${folderCount == 1 ? '' : 's'}' : ''}.\n\n'
+            'This cannot be undone.';
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => MuzicianDialog(
@@ -378,7 +369,7 @@ Future<void> _confirmDeleteProject(
     ),
   );
   if (confirmed != true) return;
-  ref.read(saveSystemProvider.notifier).deleteProject(project.id);
+  await ref.read(saveSystemProvider.notifier).deleteProject(project.id);
 }
 
 class _PrimaryAction extends StatelessWidget {
@@ -450,10 +441,7 @@ Future<String?> _promptName(
         onSubmitted: (_) => Navigator.pop(ctx, ctrl.text.trim()),
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(ctx),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(ctx)),
         MuzicianDialogButton(
           'OK',
           emphasis: MuzicianDialogEmphasis.primary,

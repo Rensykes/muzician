@@ -614,6 +614,7 @@ Future<void> showWidgetSheet({
   required BuildContext context,
   required String title,
   required Widget child,
+  bool scrollBody = true,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -622,7 +623,8 @@ Future<void> showWidgetSheet({
     constraints: BoxConstraints(
       maxHeight: MediaQuery.of(context).size.height * 0.85,
     ),
-    builder: (ctx) => _WidgetSheet(title: title, child: child),
+    builder: (ctx) =>
+        _WidgetSheet(title: title, scrollBody: scrollBody, child: child),
   );
 }
 
@@ -838,7 +840,13 @@ class ClearAllButton extends StatelessWidget {
 class _WidgetSheet extends StatelessWidget {
   final String title;
   final Widget child;
-  const _WidgetSheet({required this.title, required this.child});
+  final bool scrollBody;
+
+  const _WidgetSheet({
+    required this.title,
+    required this.child,
+    required this.scrollBody,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -852,7 +860,7 @@ class _WidgetSheet extends StatelessWidget {
             border: Border(top: BorderSide(color: MuzicianTheme.glassBorder)),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: scrollBody ? MainAxisSize.min : MainAxisSize.max,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 12),
@@ -882,21 +890,35 @@ class _WidgetSheet extends StatelessWidget {
                         ),
                       ),
                     ),
-                    IconBtn(
-                      icon: Icons.close_rounded,
-                      onTap: () => Navigator.of(context).maybePop(),
+                    Semantics(
+                      label: 'Close',
+                      button: true,
+                      child: IconBtn(
+                        icon: Icons.close_rounded,
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
                     ),
                   ],
                 ),
               ),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.only(
-                    bottom: 16 + MediaQuery.of(context).padding.bottom,
+              if (scrollBody)
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      bottom: 16 + MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: child,
                   ),
-                  child: child,
+                )
+              else
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: 16 + MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: child,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

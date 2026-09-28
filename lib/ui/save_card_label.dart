@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/save_system.dart';
+import '../models/songwriter.dart';
 import '../utils/note_utils.dart';
 
-enum SaveCardLabelKind { chord, scale, notes, highlight }
+enum SaveCardLabelKind { chord, scale, notes, highlight, writerBlock }
 
 class SaveCardLabel {
   final SaveCardLabelKind kind;
@@ -15,6 +16,25 @@ class SaveCardLabel {
 /// snapshot. Resolution order: chord, scale, notes, then a literal
 /// "Highlight" fallback for selections with no derivable chord/scale.
 SaveCardLabel saveCardLabel(InstrumentSnapshot snapshot) {
+  if (snapshot is WriterBlockSnapshot) {
+    if (snapshot.chordSymbol != null && snapshot.chordSymbol!.isNotEmpty) {
+      return SaveCardLabel(SaveCardLabelKind.chord, text: snapshot.chordSymbol);
+    }
+    if (snapshot.chordNotes.isNotEmpty) {
+      return SaveCardLabel(SaveCardLabelKind.notes, notes: snapshot.chordNotes);
+    }
+    final label = switch (snapshot.laneKind) {
+      SongLaneKind.harmony => snapshot.isSilent ? 'Lyrics' : 'Harmony',
+      SongLaneKind.save => 'Voicing',
+      SongLaneKind.drum => snapshot.drumPattern?.name ?? 'Drum pattern',
+      SongLaneKind.audio => snapshot.audioAsset?.sourceLabel ?? 'Audio clip',
+      SongLaneKind.melody => snapshot.melodyPattern?.name ?? 'Melody pattern',
+      SongLaneKind.guitarStrum =>
+        snapshot.guitarStrumPattern?.name ?? 'Strum pattern',
+    };
+    return SaveCardLabel(SaveCardLabelKind.writerBlock, text: label);
+  }
+
   final chord = snapshot.pendingChord;
   if (chord != null) {
     return SaveCardLabel(SaveCardLabelKind.chord, text: chord.symbol);
@@ -67,6 +87,8 @@ IconData saveInstrumentIcon(String instrument) {
       return Icons.grid_on;
     case 'song':
       return Icons.queue_music;
+    case 'writer_block':
+      return Icons.library_add;
     case 'songwriter':
       return Icons.library_music;
     case 'fretboard':

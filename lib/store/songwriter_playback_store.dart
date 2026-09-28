@@ -135,9 +135,12 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     );
     sequencedNoteStopSink();
     final drumSink = ref.read(drumPatternPlaybackSinkProvider);
+    final saveState = ref.read(saveSystemProvider);
     final events = flattenPlaybackEvents(
       project,
-      ref.read(saveSystemProvider).saves,
+      saveState.saves,
+      projectId: saveState.selectedProjectId,
+      folders: saveState.folders,
     );
 
     final cfg = project.config;

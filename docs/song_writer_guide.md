@@ -199,18 +199,36 @@ rendering.
 
 **Fretboard/Piano handoff** — in the instrument detection panel, choose
 *Add to Writer*, select a detected chord or the exact instrument voicing, then
-choose a Writer section and bar. Chords keep their symbol, root, quality, and
-selected pitch names. Exact voicings embed the full instrument snapshot in a
-Writer save lane, without creating a library save. If there is no selected
-project, the project picker opens; canceling it leaves the selection and
-Writer untouched. An empty Writer project can create its default eight-bar
-section before placement. Occupied bars are identified in text and offer
-replace-with-confirmation, choose-another-bar, or cancel. If the project changes
-while choosing a bar, Writer cancels the handoff and explains that the
-destination changed. Occupancy includes expanded lane repeats. Replacing a
-repeated placement updates its stored source block in place, so every copy gets
-the new chord or voicing at the same offsets; the confirmation explains that
-all copies change together.
+choose a Writer section and bar. Writer asks for an editable save name after
+the destination is chosen, defaulting a chord's name to its chord symbol.
+Chords keep their symbol, root, quality, and selected pitch names; exact
+voicings keep the full instrument snapshot. Every placed block links to its
+canonical save. A saved root idea can also be explicitly linked with **Use in
+Writer**, preserving its root save and sharing later musical edits across
+placements. **Make Unique** gives one placement independent content and name.
+
+If there is no selected project, the project picker opens; canceling it leaves
+the selection and Writer untouched. An empty Writer project can create its
+default eight-bar section before placement. Occupied bars are identified in
+text and offer replace-with-confirmation, choose-another-bar, or cancel. If the
+project changes while choosing a bar, Writer cancels the handoff and explains
+that the destination changed. Occupancy includes expanded lane repeats.
+Replacing a repeated placement updates its stored source block in place, so
+every copy gets the new chord or voicing at the same offsets; the confirmation
+explains that all copies change together.
+
+Writer voicing blocks can be opened in Fretboard/Piano and written back with
+**Update linked save**, updating every placement that shares the save. Section
+folders are managed by Writer; deleting a block removes its link and keeps the
+canonical work recoverable. Named Song versions retain the block content as
+saved. Loading an older version forks content whose shared save has since
+changed, while keeping the current project's tempo, meter, and key after
+showing any differences.
+
+Changing a linked harmony block's chord updates its canonical save and every
+placement that shares it. Each placement keeps its own lyrics, bar position,
+and span; choose **Make Unique** before editing when one placement should
+change independently.
 
 **Record an audio take** — in Song, tap an empty audio lane and choose *Record
 audio*. After count-in, stop to open the take review. **Audition** plays the

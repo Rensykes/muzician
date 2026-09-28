@@ -23,13 +23,16 @@ import 'songwriter_rules.dart';
 /// - each drum lane becomes a drum track whose blocks reference the carried
 ///   over [DrumPattern]s;
 /// - each save lane becomes a note track of stacked-chord patterns built from
-///   the resolved snapshots ([saves] is the live save list).
+///   the resolved snapshots ([saves] is the live save list, scoped by
+///   [projectId] and [folders]).
 /// - melody lanes and guitar-strum lanes become duration-aware note tracks;
 ///   Writer audio lanes are not transferred.
 SongProject songFromSongwriter(
   SongwriterProjectSnapshot project,
-  List<SaveEntry> saves,
-) {
+  List<SaveEntry> saves, {
+  String? projectId,
+  List<SaveFolder> folders = const [],
+}) {
   final cfg = project.config;
   final beatTicks = cfg.ticksPerBeat;
   final measureTicks = cfg.measureTicks;
@@ -366,7 +369,12 @@ SongProject songFromSongwriter(
             );
           case SongLaneKind.save:
             final midiNotes = snapshotMidiNotes(
-              resolveBlockSnapshot(block, saves),
+              resolveBlockSnapshot(
+                block,
+                saves,
+                projectId: projectId,
+                folders: folders,
+              ),
             );
             if (midiNotes.isEmpty) break;
             final trackId = saveTrackIdByLane.putIfAbsent(lane.id, () {

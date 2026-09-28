@@ -35,6 +35,8 @@ These rules are for coding agents working in this repository. Prefer small, veri
 
 Writer and Song histories are in-memory and project-scoped, capped at 50 prior snapshots. Group continuous gestures and compound commands with the store history APIs; clear history on project switch, New, and named snapshot load. Keep repository audio files while retained snapshots can reference them.
 
+Writer block musical content is canonical in Save System entries; Writer keeps placement and local lyrics, with fallback content for recovery. Persist compound Writer, Save System, and named-save binding changes through the shared journal queue.
+
 ## Build, Test, and Development Commands
 Run `flutter pub get` after dependency changes. Use `flutter run` for the default attached device, or `flutter run -d <device-id>` after checking `flutter devices`. Keep code clean with `dart format lib` and `flutter analyze`. Run `flutter test` for Dart and widget tests once they exist under `test/`. CI currently builds with `flutter build web --release` for Firebase preview/production and `flutter build appbundle --release` for Play Store delivery.
 

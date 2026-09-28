@@ -79,6 +79,64 @@ void main() {
     expect(clip.trimEndMs, 3500);
   });
 
+  test('stretch rerender keeps assets reachable through Writer history', () {
+    seedSectionWithAudioLane();
+    final n = store();
+    const source = AudioAsset(
+      id: 'source',
+      durationMs: 2000,
+      sampleRate: 44100,
+      channels: 1,
+      format: 'wav',
+      peaks: [],
+      sourceLabel: 'Source',
+    );
+    const previousStretch = AudioAsset(
+      id: 'previous-stretch',
+      durationMs: 3000,
+      sampleRate: 44100,
+      channels: 1,
+      format: 'wav',
+      peaks: [],
+      sourceLabel: 'Previous stretch',
+    );
+    const nextStretch = AudioAsset(
+      id: 'next-stretch',
+      durationMs: 4000,
+      sampleRate: 44100,
+      channels: 1,
+      format: 'wav',
+      peaks: [],
+      sourceLabel: 'Next stretch',
+    );
+    n.addAudioAsset(source);
+    final clipId = n.addAudioClip(assetId: source.id, durationMs: 2000);
+    n.setClipStretchedAsset(clipId: clipId, stretchedAsset: previousStretch);
+    n.setTempo(132); // Undo retains the pre-rerender clip and its asset.
+
+    n.setClipStretchedAsset(
+      clipId: clipId,
+      stretchedAsset: nextStretch,
+      removeAssetId: previousStretch.id,
+    );
+
+    final current = c.read(songwriterProvider);
+    expect(current.audioClips.single.stretchedAssetId, nextStretch.id);
+    expect(
+      current.audioAssets.map((asset) => asset.id),
+      contains(previousStretch.id),
+    );
+    expect(n.undo(), isTrue);
+    expect(
+      c.read(songwriterProvider).audioClips.single.stretchedAssetId,
+      previousStretch.id,
+    );
+    expect(
+      c.read(songwriterProvider).audioAssets.map((asset) => asset.id),
+      contains(previousStretch.id),
+    );
+  });
+
   test('removeAudioBlock drops the block and its clip', () {
     final sectionId = seedSectionWithAudioLane();
     final laneId = c
@@ -123,7 +181,7 @@ void main() {
   });
 
   test(
-    'removeAudioBlock reclaims the asset when no other clip references it',
+    'removeAudioBlock retains referenced assets while undo can restore them',
     () async {
       final tmp = await Directory.systemTemp.createTemp('sw_audio_gc_test_');
       addTearDown(() => tmp.delete(recursive: true));
@@ -198,75 +256,102 @@ void main() {
             blockId: blockId,
           );
 
-      // Asset must have been removed from state.
-      expect(container.read(songwriterProvider).audioAssets, isEmpty);
-      // Clip must also be gone.
+      // The undo snapshot still contains the clip and source asset.
+      expect(
+        container.read(songwriterProvider).audioAssets.map((asset) => asset.id),
+        contains(asset.id),
+      );
       expect(container.read(songwriterProvider).audioClips, isEmpty);
+      expect(container.read(songwriterProvider.notifier).undo(), isTrue);
+      expect(container.read(songwriterProvider).audioClips, hasLength(1));
+      expect(
+        container.read(songwriterProvider).audioAssets.map((asset) => asset.id),
+        contains(asset.id),
+      );
     },
   );
 
-  test('removeAudioBlock also reclaims the derived stretched asset', () async {
-    final tmp = await Directory.systemTemp.createTemp('sw_stretch_gc_');
-    addTearDown(() => tmp.delete(recursive: true));
-    final repo = SongAudioRepository.testWith(rootDirectory: tmp);
-    final container = ProviderContainer(
-      overrides: [songwriterAudioRepositoryProvider.overrideWithValue(repo)],
-    );
-    addTearDown(container.dispose);
-    final n = container.read(songwriterProvider.notifier);
-    n.addSection(label: 'A', lengthBars: 4);
-    final sectionId = container.read(songwriterProvider).sections.single.id;
-    n.addLane(sectionId: sectionId, kind: SongLaneKind.audio);
-    final laneId = container
-        .read(songwriterProvider)
-        .sections
-        .single
-        .lanes
-        .firstWhere((l) => l.kind == SongLaneKind.audio)
-        .id;
-    const src = AudioAsset(
-      id: 'src1',
-      durationMs: 1000,
-      sampleRate: 44100,
-      channels: 1,
-      format: 'wav',
-      peaks: [],
-      sourceLabel: 'src',
-    );
-    n.addAudioAsset(src);
-    final clipId = n.addAudioClip(assetId: src.id, durationMs: src.durationMs);
-    n.addAudioBlock(
-      sectionId: sectionId,
-      laneId: laneId,
-      audioClipId: clipId,
-      startBar: 0,
-      spanBars: 2,
-    );
-    const stretched = AudioAsset(
-      id: 'src1s',
-      durationMs: 4000,
-      sampleRate: 44100,
-      channels: 1,
-      format: 'wav',
-      peaks: [],
-      sourceLabel: 'Stretched',
-    );
-    n.setClipStretchedAsset(clipId: clipId, stretchedAsset: stretched);
-    expect(container.read(songwriterProvider).audioAssets, hasLength(2));
+  test(
+    'removeAudioBlock retains stretch assets needed by undo history',
+    () async {
+      final tmp = await Directory.systemTemp.createTemp('sw_stretch_gc_');
+      addTearDown(() => tmp.delete(recursive: true));
+      final repo = SongAudioRepository.testWith(rootDirectory: tmp);
+      final container = ProviderContainer(
+        overrides: [songwriterAudioRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+      final n = container.read(songwriterProvider.notifier);
+      n.addSection(label: 'A', lengthBars: 4);
+      final sectionId = container.read(songwriterProvider).sections.single.id;
+      n.addLane(sectionId: sectionId, kind: SongLaneKind.audio);
+      final laneId = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.audio)
+          .id;
+      const src = AudioAsset(
+        id: 'src1',
+        durationMs: 1000,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [],
+        sourceLabel: 'src',
+      );
+      n.addAudioAsset(src);
+      final clipId = n.addAudioClip(
+        assetId: src.id,
+        durationMs: src.durationMs,
+      );
+      n.addAudioBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        audioClipId: clipId,
+        startBar: 0,
+        spanBars: 2,
+      );
+      const stretched = AudioAsset(
+        id: 'src1s',
+        durationMs: 4000,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [],
+        sourceLabel: 'Stretched',
+      );
+      n.setClipStretchedAsset(clipId: clipId, stretchedAsset: stretched);
+      expect(container.read(songwriterProvider).audioAssets, hasLength(2));
 
-    final blockId = container
-        .read(songwriterProvider)
-        .sections
-        .single
-        .lanes
-        .firstWhere((l) => l.kind == SongLaneKind.audio)
-        .blocks
-        .single
-        .id;
-    n.removeAudioBlock(sectionId: sectionId, laneId: laneId, blockId: blockId);
+      final blockId = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.kind == SongLaneKind.audio)
+          .blocks
+          .single
+          .id;
+      n.removeAudioBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: blockId,
+      );
 
-    // Both the source and the derived stretched asset are reclaimed.
-    expect(container.read(songwriterProvider).audioAssets, isEmpty);
-    expect(container.read(songwriterProvider).audioClips, isEmpty);
-  });
+      // Both assets remain reachable through the retained pre-removal snapshot.
+      expect(
+        container.read(songwriterProvider).audioAssets.map((asset) => asset.id),
+        containsAll([src.id, stretched.id]),
+      );
+      expect(container.read(songwriterProvider).audioClips, isEmpty);
+      expect(n.undo(), isTrue);
+      expect(container.read(songwriterProvider).audioClips, hasLength(1));
+      expect(
+        container.read(songwriterProvider).audioAssets.map((asset) => asset.id),
+        containsAll([src.id, stretched.id]),
+      );
+    },
+  );
 }

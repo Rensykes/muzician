@@ -7,6 +7,8 @@ import '../../models/harmonic_analysis.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart' show tileLaneBlocks;
+import '../../schema/rules/save_system_rules.dart'
+    show isValidSaveName, resolveSaveInProject;
 import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
@@ -21,31 +23,64 @@ Future<void> startWriterHandoff({
   required InstrumentBinding binding,
   required List<ChordDetectionResult> chordResults,
   required VoidCallback onTransferComplete,
+  SaveEntry? reuseSave,
 }) async {
-  final exactNotes = ref.read(binding.exactNotes);
-  final choice = await showModalBottomSheet<_WriterTransferChoice>(
-    context: context,
-    backgroundColor: MuzicianTheme.surface,
-    isScrollControlled: true,
-    builder: (sheetContext) => _WriterTransferChoices(
-      chordResults: chordResults,
-      canAddVoicing: exactNotes.isNotEmpty,
-      onChoose: (choice) => Navigator.of(sheetContext).pop(choice),
-    ),
-  );
-  if (choice == null || !context.mounted) return;
+  final String? initialProjectId = _selectedWriterProjectId(ref);
+  if (reuseSave != null) {
+    final current = initialProjectId == null
+        ? null
+        : resolveSaveInProject(
+            ref.read(saveSystemProvider),
+            initialProjectId,
+            reuseSave.id,
+          );
+    final instrument = binding.captureSnapshot(ref).instrument;
+    if (initialProjectId == null ||
+        current == null ||
+        current.folderId != initialProjectId ||
+        current.snapshot.instrument != instrument) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This root save is no longer available.')),
+      );
+      return;
+    }
+  }
 
-  final payload = choice.isHarmony
+  _WriterTransferChoice? choice;
+  if (reuseSave == null) {
+    final exactNotes = ref.read(binding.exactNotes);
+    choice = await showModalBottomSheet<_WriterTransferChoice>(
+      context: context,
+      backgroundColor: MuzicianTheme.surface,
+      isScrollControlled: true,
+      builder: (sheetContext) => _WriterTransferChoices(
+        chordResults: chordResults,
+        canAddVoicing: exactNotes.isNotEmpty,
+        onChoose: (choice) => Navigator.of(sheetContext).pop(choice),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+  }
+
+  final payload = reuseSave != null
+      ? _WriterTransferPayload.voicing(
+          reuseSave.snapshot,
+          reuseSaveId: reuseSave.id,
+          initialName: reuseSave.name,
+        )
+      : choice!.isHarmony
       ? _WriterTransferPayload.harmony(
           result: choice.chord!,
-          selectedPitchNames: exactNotes
+          selectedPitchNames: ref
+              .read(binding.exactNotes)
               .map((note) => note.pitchClass)
               .toList(),
         )
       : _WriterTransferPayload.voicing(binding.captureSnapshot(ref));
 
-  var projectId = _selectedWriterProjectId(ref);
+  var projectId = initialProjectId;
   if (projectId == null) {
+    if (reuseSave != null) return;
     await ProjectPickerSheet.show(context, allowDump: false);
     if (!context.mounted) return;
     projectId = _selectedWriterProjectId(ref);
@@ -171,6 +206,34 @@ Future<void> startWriterHandoff({
       await _showDestinationChanged(context);
       return;
     }
+    final saveName = await _showImportNameDialog(
+      context,
+      initialName: payload.chordSymbol ?? payload.initialName,
+    );
+    if (saveName == null || !context.mounted) return;
+    if (_selectedWriterProjectId(ref) != projectId) {
+      await _showDestinationChanged(context);
+      return;
+    }
+    if (payload.reuseSaveId != null) {
+      final currentSave = resolveSaveInProject(
+        ref.read(saveSystemProvider),
+        projectId,
+        payload.reuseSaveId!,
+      );
+      if (currentSave == null ||
+          currentSave.folderId != projectId ||
+          currentSave.snapshot.instrument != payload.snapshot!.instrument) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This root save changed while you were choosing a bar.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     final inserted = ref
         .read(songwriterProvider.notifier)
         .insertInstrumentSelectionAtBar(
@@ -182,6 +245,8 @@ Future<void> startWriterHandoff({
           chordRootPc: payload.chordRootPc,
           chordNotes: payload.chordNotes,
           replaceBlockId: replaceBlockId,
+          saveName: saveName,
+          reuseSaveId: payload.reuseSaveId,
         );
     if (!inserted) {
       if (context.mounted) {
@@ -318,15 +383,22 @@ class _WriterTransferPayload {
   const _WriterTransferPayload.harmony({
     required this.result,
     required this.selectedPitchNames,
-  }) : snapshot = null;
+  }) : snapshot = null,
+       reuseSaveId = null,
+       initialName = null;
 
-  const _WriterTransferPayload.voicing(this.snapshot)
-    : result = null,
-      selectedPitchNames = const [];
+  const _WriterTransferPayload.voicing(
+    this.snapshot, {
+    this.reuseSaveId,
+    this.initialName,
+  }) : result = null,
+       selectedPitchNames = const [];
 
   final ChordDetectionResult? result;
   final List<String> selectedPitchNames;
   final InstrumentSnapshot? snapshot;
+  final String? reuseSaveId;
+  final String? initialName;
 
   bool get isHarmony => result != null;
   SongLaneKind get laneKind =>
@@ -336,6 +408,80 @@ class _WriterTransferPayload {
   int? get chordRootPc =>
       result == null ? null : chromaticNotes.indexOf(result!.root);
   List<String> get chordNotes => selectedPitchNames;
+}
+
+Future<String?> _showImportNameDialog(
+  BuildContext context, {
+  required String? initialName,
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _WriterImportNameDialog(initialName: initialName),
+);
+
+class _WriterImportNameDialog extends StatefulWidget {
+  const _WriterImportNameDialog({required this.initialName});
+
+  final String? initialName;
+
+  @override
+  State<_WriterImportNameDialog> createState() =>
+      _WriterImportNameDialogState();
+}
+
+class _WriterImportNameDialogState extends State<_WriterImportNameDialog> {
+  late final TextEditingController _controller;
+  late bool _valid;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.initialName?.trim().isNotEmpty == true
+          ? widget.initialName!.trim()
+          : 'Instrument voicing',
+    );
+    _valid = isValidSaveName(_controller.text);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MuzicianDialog(
+    title: 'Name this Writer save',
+    content: TextField(
+      key: const Key('writerImportNameField'),
+      controller: _controller,
+      autofocus: true,
+      maxLength: 80,
+      textInputAction: TextInputAction.done,
+      decoration: const InputDecoration(labelText: 'Block and save name'),
+      onChanged: (value) => setState(() => _valid = isValidSaveName(value)),
+      onSubmitted: (_) {
+        if (_valid) {
+          Navigator.of(context).pop(_controller.text.trim());
+        }
+      },
+    ),
+    actions: [
+      MuzicianDialogButton(
+        'Cancel',
+        buttonKey: const Key('cancelWriterImportName'),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      MuzicianDialogButton(
+        'Add to Writer',
+        buttonKey: const Key('confirmWriterImportName'),
+        emphasis: MuzicianDialogEmphasis.primary,
+        onPressed: _valid
+            ? () => Navigator.of(context).pop(_controller.text.trim())
+            : null,
+      ),
+    ],
+  );
 }
 
 class _WriterTransferChoices extends StatelessWidget {

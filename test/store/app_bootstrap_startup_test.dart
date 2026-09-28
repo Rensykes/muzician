@@ -16,10 +16,90 @@ import 'package:muzician/store/song_sessions_store.dart';
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/writer_save_binding_store.dart';
+import 'package:muzician/store/writer_save_sync_store.dart'
+    show WriterSaveSyncJournal, writerSaveSyncJournalStorageKey;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'startup replays a Writer journal before hydrating workspaces',
+    () async {
+      const projectId = 'journal-project';
+      final saveSystem = SaveSystemState(
+        folders: const [
+          SaveFolder(
+            id: projectId,
+            name: 'Journal project',
+            createdAt: 1,
+            order: 0,
+            kind: SaveFolderKind.project,
+          ),
+        ],
+        saves: const [],
+        selectedProjectId: projectId,
+        hydrated: true,
+      );
+      final writerDraft = SongwriterProjectSnapshot(
+        name: 'Recovered draft',
+        config: const SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+      );
+      final journal = WriterSaveSyncJournal(
+        projectId: projectId,
+        saveSystemPayload: serialiseSaveSystemState(saveSystem),
+        writerDraftsPayload: jsonEncode({projectId: writerDraft.toJson()}),
+        writerBindingsPayload: jsonEncode({
+          projectId: {'activeSaveId': 'named-v1', 'alwaysOverwrite': true},
+        }),
+      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        writerSaveSyncJournalStorageKey: journal.encode(),
+      });
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(songwriterProvider);
+      await hydrateStores(container.read);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey(writerSaveSyncJournalStorageKey), isFalse);
+      expect(container.read(saveSystemProvider).selectedProjectId, projectId);
+      expect(
+        container.read(songwriterSessionsProvider)[projectId]?.name,
+        'Recovered draft',
+      );
+      expect(
+        container.read(writerSaveBindingProvider)[projectId]?.alwaysOverwrite,
+        isTrue,
+      );
+    },
+  );
+
+  test('malformed Writer journal is preserved for recovery', () async {
+    const malformed = '{ "projectId": 7, "saveSystem": [broken] }';
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      writerSaveSyncJournalStorageKey: malformed,
+    });
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final prefs = await SharedPreferences.getInstance();
+
+    StartupRecoveryRequired? recovery;
+    try {
+      await hydrateStores(container.read);
+      fail('A malformed Writer journal should block startup.');
+    } on StartupRecoveryRequired catch (error) {
+      recovery = error;
+    }
+
+    expect(recovery, isNotNull);
+    expect(
+      recovery.payloads.single.storageKey,
+      writerSaveSyncJournalStorageKey,
+    );
+    expect(prefs.getString(writerSaveSyncJournalStorageKey), malformed);
+  });
 
   test(
     'startup restore: a saved Writer draft survives the hydrate sequence',
@@ -63,6 +143,89 @@ void main() {
       expect(c.read(songwriterProvider).sections, isNotEmpty);
     },
   );
+
+  test('startup awaits canonical Writer save reconciliation', () async {
+    const projectId = 'writer-project';
+    const draft = SongwriterProjectSnapshot(
+      config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+      sections: [
+        SongSection(
+          id: 'verse',
+          label: 'Verse',
+          lengthBars: 4,
+          order: 0,
+          lanes: [
+            SongLane(
+              id: 'harmony',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              blocks: [
+                SongBlock(
+                  id: 'legacy-chord',
+                  startBar: 0,
+                  spanBars: 1,
+                  chordSymbol: 'Am7',
+                  chordQuality: 'm7',
+                  chordRootPc: 9,
+                  chordNotes: ['A', 'C', 'E', 'G'],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final saveState = SaveSystemState(
+      folders: const [
+        SaveFolder(
+          id: projectId,
+          name: 'Writer project',
+          createdAt: 1,
+          order: 0,
+          kind: SaveFolderKind.project,
+        ),
+      ],
+      saves: const [],
+      selectedProjectId: projectId,
+      hydrated: true,
+    );
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      saveSystemStorageKey: serialiseSaveSystemState(saveState),
+      songwriterSessionsStorageKey: jsonEncode({projectId: draft.toJson()}),
+    });
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    // Match the app shell, which may instantiate Writer before persistence is
+    // hydrated. The bootstrap must finish reconciliation before it returns.
+    container.read(songwriterProvider);
+    await hydrateStores(container.read);
+
+    final restoredBlock = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    expect(restoredBlock.saveId, isNotNull);
+    final saves = container.read(saveSystemProvider);
+    expect(saves.writerLinks, hasLength(1));
+    expect(saves.writerLinks.single.blockId, restoredBlock.id);
+    expect(
+      saves.folders
+          .singleWhere((folder) => folder.writerSectionId == 'verse')
+          .parentId,
+      projectId,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey(writerSaveSyncJournalStorageKey), isFalse);
+    expect(
+      deserialiseState(prefs.getString(saveSystemStorageKey)!)!.writerLinks,
+      hasLength(1),
+    );
+  });
 
   test('content workspace preference mapping defaults to Writer', () {
     expect(contentWorkspaceTabForPreference(null), 4);

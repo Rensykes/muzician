@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/save_system.dart';
+import '../models/songwriter.dart';
 import 'save_card_label.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/fretboard_store.dart';
@@ -48,8 +49,12 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   /// Called when the user taps "Load" on a selected save.
   final void Function(InstrumentSnapshot snap)? onLoad;
 
+  /// Async load path with the selected entry available. Return false to cancel
+  /// before Save System session state is changed.
+  final Future<bool> Function(SaveEntry entry)? onLoadEntry;
+
   /// Called with the new save id after a successful "Save here".
-  final void Function(String saveId)? onSaved;
+  final Future<void> Function(String saveId)? onSaved;
 
   /// Called with the loaded save's id when a save is loaded (alongside onLoad).
   final void Function(String saveId)? onLoadSaveId;
@@ -62,16 +67,32 @@ class SaveBrowserPanel extends ConsumerStatefulWidget {
   /// cannot escape it.  null = full tree (traditional behaviour).
   final String? rootFolderId;
 
+  /// Renames the canonical entry for a save that is linked into Writer.
+  /// Ordinary instrument browsers leave this null and show Writer ownership
+  /// feedback instead of attempting a direct Save System rename.
+  final bool Function(String saveId, String name)? onRenameLinkedSave;
+
+  /// Shows an explicit action for a Writer-native save. The Writer panel owns
+  /// destination selection and decides how to place the source block.
+  final ValueChanged<SaveEntry>? onUseInWriter;
+
+  /// Optional additional restriction for the Use in Writer action.
+  final bool Function(SaveEntry entry)? canUseInWriter;
+
   const SaveBrowserPanel({
     super.key,
     this.instrumentFilter,
     this.allowedInstruments,
     this.captureSnapshot,
     this.onLoad,
+    this.onLoadEntry,
     this.onSaved,
     this.onLoadSaveId,
     this.onPick,
     this.rootFolderId,
+    this.onRenameLinkedSave,
+    this.onUseInWriter,
+    this.canUseInWriter,
   });
 
   @override
@@ -111,9 +132,25 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
       getChildFolders(allFolders, _currentFolderId)
         ..sort((a, b) => a.order.compareTo(b.order));
 
-  List<SaveEntry> _savesHere(List<SaveEntry> allSaves) {
+  List<SaveEntry> _savesHere(
+    List<SaveEntry> allSaves,
+    List<WriterSaveLink> writerLinks,
+  ) {
     if (_currentFolderId == null) return [];
-    final all = getSavesInFolder(allSaves, _currentFolderId!);
+    final entriesById = <String, SaveEntry>{
+      for (final save in getSavesInFolder(allSaves, _currentFolderId!))
+        save.id: save,
+    };
+    for (final link in writerLinks.where(
+      (link) => link.folderId == _currentFolderId,
+    )) {
+      final linked = allSaves
+          .where((save) => save.id == link.saveId)
+          .firstOrNull;
+      if (linked != null) entriesById.putIfAbsent(linked.id, () => linked);
+    }
+    final all = entriesById.values.toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
     final filter = widget.instrumentFilter;
     final allow = widget.allowedInstruments;
     if (filter == null && allow == null) return all;
@@ -223,10 +260,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
             ],
           ),
           actions: [
-            MuzicianDialogButton(
-              'Cancel',
-              onPressed: () => Navigator.pop(ctx),
-            ),
+            MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(ctx)),
             MuzicianDialogButton(
               'OK',
               emphasis: MuzicianDialogEmphasis.primary,
@@ -267,10 +301,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           onSubmitted: (_) => Navigator.pop(ctx, value.trim()),
         ),
         actions: [
-          MuzicianDialogButton(
-            'Cancel',
-            onPressed: () => Navigator.pop(ctx),
-          ),
+          MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(ctx)),
           MuzicianDialogButton(
             'OK',
             emphasis: MuzicianDialogEmphasis.primary,
@@ -304,9 +335,9 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   Future<void> _handleNewFolder() async {
     final name = await _nameDialog(title: 'New Folder', hint: 'Folder name…');
     if (name == null || name.isEmpty) return;
-    ref
-        .read(saveSystemProvider.notifier)
-        .createSaveFolder(name, _currentFolderId);
+    final notifier = ref.read(saveSystemProvider.notifier);
+    final folderId = notifier.createSaveFolder(name, _currentFolderId);
+    if (folderId == null) _showMutationError('Could not create this folder.');
     HapticFeedback.lightImpact();
   }
 
@@ -324,7 +355,17 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     final newId = ref
         .read(saveSystemProvider.notifier)
         .saveSnapshot(name, _currentFolderId!, snap);
-    if (newId != null) widget.onSaved?.call(newId);
+    if (newId != null) {
+      try {
+        await widget.onSaved?.call(newId);
+      } catch (_) {
+        _showFeedback(
+          'Could not finish saving this Writer version. Any pending write will be recovered on next launch.',
+        );
+      }
+    } else {
+      _showMutationError('Could not save here.');
+    }
     HapticFeedback.mediumImpact();
   }
 
@@ -393,13 +434,23 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   }
 
   Future<void> _handleRenameFolder(SaveFolder folder) async {
+    if (isWriterManagedFolderOrDescendant(
+      ref.read(saveSystemProvider).folders,
+      folder.id,
+    )) {
+      _showFeedback('Writer section folders are managed from Writer.');
+      return;
+    }
     final name = await _nameDialog(
       title: 'Rename folder',
       initial: folder.name,
       hint: 'Folder name…',
     );
     if (name == null || name.isEmpty) return;
-    ref.read(saveSystemProvider.notifier).renameFolder(folder.id, name);
+    final notifier = ref.read(saveSystemProvider.notifier);
+    if (!notifier.renameFolder(folder.id, name)) {
+      _showMutationError('Could not rename this folder.');
+    }
   }
 
   Future<void> _handleRenameSave(SaveEntry save) async {
@@ -409,63 +460,167 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
       hint: 'Save name…',
     );
     if (name == null || name.isEmpty) return;
-    ref.read(saveSystemProvider.notifier).renameSave(save.id, name);
+    final linked = ref
+        .read(saveSystemProvider)
+        .writerLinks
+        .any((link) => link.saveId == save.id);
+    if (linked) {
+      final renameLinked = widget.onRenameLinkedSave;
+      if (renameLinked == null) {
+        _showFeedback('Rename this linked save from Writer.');
+      } else if (!renameLinked(save.id, name)) {
+        _showMutationError('Could not rename this linked save.');
+      }
+      return;
+    }
+    final notifier = ref.read(saveSystemProvider.notifier);
+    if (!notifier.renameSave(save.id, name)) {
+      _showMutationError('Could not rename this save.');
+    }
   }
 
   Future<void> _handleDeleteFolder(SaveFolder folder) async {
+    if (isWriterManagedFolderOrDescendant(
+      ref.read(saveSystemProvider).folders,
+      folder.id,
+    )) {
+      _showFeedback(
+        'Remove Writer work from its section before changing this folder.',
+      );
+      return;
+    }
     final confirmed = await _confirmDialog(
       'Delete "${folder.name}" and all its contents?',
     );
     if (confirmed != true) return;
+    final notifier = ref.read(saveSystemProvider.notifier);
+    final deleted = notifier.deleteFolder(folder.id);
+    if (!deleted) {
+      _showMutationError('Could not delete this folder.');
+      return;
+    }
     if (_currentFolderId == folder.id) {
       setState(() {
         _currentFolderId = folder.parentId;
         _selectedSaveId = null;
       });
     }
-    ref.read(saveSystemProvider.notifier).deleteFolder(folder.id);
     HapticFeedback.mediumImpact();
   }
 
   Future<void> _handleDeleteSave(SaveEntry save) async {
+    final linked = ref
+        .read(saveSystemProvider)
+        .writerLinks
+        .any((link) => link.saveId == save.id);
+    if (linked) {
+      _showFeedback('Remove linked Writer blocks before deleting this save.');
+      return;
+    }
     final confirmed = await _confirmDialog('Delete "${save.name}"?');
     if (confirmed != true) return;
     if (_selectedSaveId == save.id) {
       setState(() => _selectedSaveId = null);
     }
-    ref.read(saveSystemProvider.notifier).deleteSave(save.id);
+    final notifier = ref.read(saveSystemProvider.notifier);
+    if (!notifier.deleteSave(save.id)) {
+      _showMutationError('Could not delete this save.');
+      return;
+    }
     HapticFeedback.mediumImpact();
   }
 
-  void _handleLoad(SaveEntry save) {
-    final onLoad = widget.onLoad;
-    if (onLoad == null) return;
-    ref.read(saveSystemProvider.notifier).loadSave(save.id, onLoad);
-    widget.onLoadSaveId?.call(save.id);
+  void _showMutationError(String fallback) {
+    final message = ref.read(saveSystemProvider.notifier).lastMutationError;
+    _showFeedback(message == null || message.isEmpty ? fallback : message);
+  }
+
+  void _showFeedback(String message) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String? _saveContextLabel(
+    SaveEntry save, {
+    required SaveSystemState state,
+    required Set<String> linkedSaveIds,
+    required Set<String> linkedSaveIdsHere,
+  }) {
+    final recoveryLabel = _recoveryContextLabel(save, state);
+    if (recoveryLabel != null) return recoveryLabel;
+
+    if (linkedSaveIdsHere.contains(save.id)) {
+      return widget.onRenameLinkedSave == null
+          ? 'Writer link · rename in Writer'
+          : 'Writer link';
+    }
+    final currentFolder = state.folders
+        .where((folder) => folder.id == _currentFolderId)
+        .firstOrNull;
+    if (currentFolder == null ||
+        currentFolder.kind != SaveFolderKind.project ||
+        save.folderId != currentFolder.id) {
+      return null;
+    }
+    return linkedSaveIds.contains(save.id) ? 'Used in Writer' : 'Free idea';
+  }
+
+  String? _recoveryContextLabel(SaveEntry save, SaveSystemState state) {
+    final originalSaveId = save.recoveredFromSaveId;
+    if (originalSaveId != null) {
+      final original = state.saves
+          .where((candidate) => candidate.id == originalSaveId)
+          .firstOrNull;
+      return original == null
+          ? 'Recovered version'
+          : 'Recovered · “${original.name}”';
+    }
+
+    final recoveredVersions = state.saves
+        .where((candidate) => candidate.recoveredFromSaveId == save.id)
+        .map((candidate) => candidate.name)
+        .toList();
+    if (recoveredVersions.isEmpty) return null;
+    return 'Original · ${recoveredVersions.map((name) => '“$name”').join(', ')}';
+  }
+
+  Future<void> _handleLoad(SaveEntry save) async {
+    final onLoadEntry = widget.onLoadEntry;
+    if (onLoadEntry != null) {
+      if (!await onLoadEntry(save) || !mounted) return;
+      ref.read(saveSystemProvider.notifier).loadSave(save.id, (_) {});
+    } else {
+      final onLoad = widget.onLoad;
+      if (onLoad == null) return;
+      ref.read(saveSystemProvider.notifier).loadSave(save.id, onLoad);
+    }
+    if (widget.onLoadEntry == null) widget.onLoadSaveId?.call(save.id);
+    setState(() => _selectedSaveId = save.id);
     HapticFeedback.mediumImpact();
   }
 
-  void _navigatePrev() {
-    ref.read(saveSystemProvider.notifier).navigatePrev((snap) {
-      widget.onLoad?.call(snap);
-      final session = ref.read(saveSystemProvider).activeSession;
-      if (session != null) {
-        setState(() => _selectedSaveId = session.saveId);
-        widget.onLoadSaveId?.call(session.saveId);
-      }
-    });
+  Future<void> _navigatePrev() async {
+    final state = ref.read(saveSystemProvider);
+    final adjacent = getAdjacentSaves(state.saves, state.activeSession).prev;
+    if (adjacent != null) {
+      final entry = state.saves
+          .where((save) => save.id == adjacent)
+          .firstOrNull;
+      if (entry != null) await _handleLoad(entry);
+    }
     HapticFeedback.selectionClick();
   }
 
-  void _navigateNext() {
-    ref.read(saveSystemProvider.notifier).navigateNext((snap) {
-      widget.onLoad?.call(snap);
-      final session = ref.read(saveSystemProvider).activeSession;
-      if (session != null) {
-        setState(() => _selectedSaveId = session.saveId);
-        widget.onLoadSaveId?.call(session.saveId);
-      }
-    });
+  Future<void> _navigateNext() async {
+    final state = ref.read(saveSystemProvider);
+    final adjacent = getAdjacentSaves(state.saves, state.activeSession).next;
+    if (adjacent != null) {
+      final entry = state.saves
+          .where((save) => save.id == adjacent)
+          .firstOrNull;
+      if (entry != null) await _handleLoad(entry);
+    }
     HapticFeedback.selectionClick();
   }
 
@@ -479,7 +634,24 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
 
     final breadcrumb = _breadcrumb(ssState.folders);
     final subFolders = _childFolders(ssState.folders);
-    final saves = _savesHere(ssState.saves);
+    final saves = _savesHere(ssState.saves, ssState.writerLinks);
+    final linkedSaveIds = ssState.writerLinks
+        .map((link) => link.saveId)
+        .toSet();
+    final linkedSaveIdsHere = ssState.writerLinks
+        .where((link) => link.folderId == _currentFolderId)
+        .map((link) => link.saveId)
+        .toSet();
+    final selectedSave = saves
+        .where((save) => save.id == _selectedSaveId)
+        .firstOrNull;
+    final selectedCanUseInWriter =
+        selectedSave != null &&
+        widget.onUseInWriter != null &&
+        (widget.canUseInWriter?.call(selectedSave) ?? true);
+    final currentFolderIsManaged =
+        _currentFolderId != null &&
+        isWriterManagedFolderOrDescendant(ssState.folders, _currentFolderId!);
 
     final activeSession = ssState.activeSession;
     final adjSaves = getAdjacentSaves(ssState.saves, activeSession);
@@ -494,73 +666,84 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
 
     final insideFolder = _currentFolderId != null;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── Header ──
-        _Header(
-          insideFolder: insideFolder,
-          editMode: _editMode,
-          canSave: widget.captureSnapshot != null && insideFolder,
-          gridMode: gridMode,
-          onToggleGrid: () =>
-              ref.read(settingsProvider.notifier).setSaveBrowserGrid(!gridMode),
-          onToggleEdit: () => setState(() {
-            _editMode = !_editMode;
-            if (_editMode) _selectedSaveId = null;
-          }),
-          onNewFolder: _handleNewFolder,
-          onSaveHere: _handleSaveHere,
-        ),
-
-        // ── Breadcrumb ──
-        if (breadcrumb.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          _Breadcrumb(
-            breadcrumb: breadcrumb,
-            onRoot: () => setState(() {
-              _currentFolderId = widget.rootFolderId;
-              _selectedSaveId = null;
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Header ──
+          _Header(
+            insideFolder: insideFolder,
+            editMode: _editMode,
+            canSave:
+                widget.captureSnapshot != null &&
+                insideFolder &&
+                !currentFolderIsManaged,
+            canCreateFolder: !currentFolderIsManaged,
+            showUseInWriter: gridMode && selectedCanUseInWriter,
+            gridMode: gridMode,
+            onToggleGrid: () => ref
+                .read(settingsProvider.notifier)
+                .setSaveBrowserGrid(!gridMode),
+            onToggleEdit: () => setState(() {
+              _editMode = !_editMode;
+              if (_editMode) _selectedSaveId = null;
             }),
-            onNavigate: (id) => setState(() {
-              _currentFolderId = id;
-              _selectedSaveId = null;
-            }),
-            onBack: () => setState(() {
-              if (_atVirtualRoot) return;
-              final parent = breadcrumb.length > 1
-                  ? breadcrumb[breadcrumb.length - 2].id
-                  : null;
-              _currentFolderId = (widget.rootFolderId != null && parent == null)
-                  ? widget.rootFolderId
-                  : parent;
-              _selectedSaveId = null;
-            }),
+            onNewFolder: _handleNewFolder,
+            onSaveHere: _handleSaveHere,
+            onUseInWriter: () {
+              if (selectedSave != null) {
+                widget.onUseInWriter?.call(selectedSave);
+              }
+            },
           ),
+
+          // ── Breadcrumb ──
+          if (breadcrumb.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _Breadcrumb(
+              breadcrumb: breadcrumb,
+              onRoot: () => setState(() {
+                _currentFolderId = widget.rootFolderId;
+                _selectedSaveId = null;
+              }),
+              onNavigate: (id) => setState(() {
+                _currentFolderId = id;
+                _selectedSaveId = null;
+              }),
+              onBack: () => setState(() {
+                if (_atVirtualRoot) return;
+                final parent = breadcrumb.length > 1
+                    ? breadcrumb[breadcrumb.length - 2].id
+                    : null;
+                _currentFolderId =
+                    (widget.rootFolderId != null && parent == null)
+                    ? widget.rootFolderId
+                    : parent;
+                _selectedSaveId = null;
+              }),
+            ),
+          ],
+
+          const SizedBox(height: 8),
+
+          // ── Folder + Save list / grid ──
+          gridMode
+              ? _buildGrid(context, subFolders, saves, insideFolder)
+              : _buildList(
+                  context,
+                  subFolders,
+                  saves,
+                  activeSession,
+                  notifier,
+                  hasPrev,
+                  hasNext,
+                  insideFolder,
+                  linkedSaveIds,
+                  linkedSaveIdsHere,
+                ),
         ],
-
-        const SizedBox(height: 8),
-
-        // ── Folder + Save list / grid ──
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 240),
-          child: SingleChildScrollView(
-            child: gridMode
-                ? _buildGrid(context, subFolders, saves, insideFolder)
-                : _buildList(
-                    context,
-                    subFolders,
-                    saves,
-                    activeSession,
-                    notifier,
-                    hasPrev,
-                    hasNext,
-                    insideFolder,
-                  ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -573,7 +756,13 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     bool hasPrev,
     bool hasNext,
     bool insideFolder,
+    Set<String> linkedSaveIds,
+    Set<String> linkedSaveIdsHere,
   ) {
+    final folders = ref.read(saveSystemProvider).folders;
+    final currentFolderManaged =
+        _currentFolderId != null &&
+        isWriterManagedFolderOrDescendant(folders, _currentFolderId!);
     return Column(
       children: [
         if (subFolders.isEmpty && saves.isEmpty && !insideFolder)
@@ -593,6 +782,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           (folder) => _FolderRow(
             folder: folder,
             editMode: _editMode,
+            managed: isWriterManagedFolderOrDescendant(folders, folder.id),
             isFirst: subFolders.first == folder,
             isLast: subFolders.last == folder,
             onTap: () => setState(() {
@@ -616,13 +806,30 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           );
           return _SaveRow(
             save: save,
+            contextLabel: _saveContextLabel(
+              save,
+              state: ref.read(saveSystemProvider),
+              linkedSaveIds: linkedSaveIds,
+              linkedSaveIdsHere: linkedSaveIdsHere,
+            ),
             offKey: offKey,
             isSelected: isSelected,
             isActiveSession: activeSession?.saveId == save.id,
             editMode: _editMode,
             isFirst: saves.first == save,
             isLast: saves.last == save,
-            canLoad: widget.onLoad != null,
+            canLoad: widget.onLoad != null || widget.onLoadEntry != null,
+            canRename:
+                !isWriterManagedFolderOrDescendant(
+                  folders,
+                  _currentFolderId ?? '',
+                ) ||
+                widget.onRenameLinkedSave != null,
+            canDelete: !linkedSaveIds.contains(save.id),
+            canReorder: !currentFolderManaged,
+            canUseInWriter:
+                widget.onUseInWriter != null &&
+                (widget.canUseInWriter?.call(save) ?? true),
             hasPrev: isSelected && hasPrev,
             hasNext: isSelected && hasNext,
             onTap: () {
@@ -636,6 +843,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
             },
             onRename: () => _handleRenameSave(save),
             onDelete: () => _handleDeleteSave(save),
+            onUseInWriter: () => widget.onUseInWriter?.call(save),
             onMoveUp: () => notifier.moveSaveUp(save.id),
             onMoveDown: () => notifier.moveSaveDown(save.id),
             onLoad: () => _handleLoad(save),
@@ -681,7 +889,13 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
             _currentFolderId = folder.id;
             _selectedSaveId = null;
           }),
-          onLongPress: () => _handleRenameFolder(folder),
+          onLongPress:
+              isWriterManagedFolderOrDescendant(
+                ref.read(saveSystemProvider).folders,
+                folder.id,
+              )
+              ? null
+              : () => _handleRenameFolder(folder),
         ),
       ),
       ...saves.map((save) {
@@ -697,18 +911,40 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           instrument: save.snapshot.instrument,
           labelText: label.kind == SaveCardLabelKind.notes ? null : label.text,
           noteChips: label.notes,
+          contextLabel: _saveContextLabel(
+            save,
+            state: ref.read(saveSystemProvider),
+            linkedSaveIds: ref
+                .read(saveSystemProvider)
+                .writerLinks
+                .map((link) => link.saveId)
+                .toSet(),
+            linkedSaveIdsHere: ref
+                .read(saveSystemProvider)
+                .writerLinks
+                .where((link) => link.folderId == _currentFolderId)
+                .map((link) => link.saveId)
+                .toSet(),
+          ),
           offKey: offKey,
           selected: _selectedSaveId == save.id,
           onTap: () {
             if (widget.onPick != null) {
               widget.onPick!(save);
-            } else if (widget.onLoad != null) {
+            } else if (widget.onLoad != null || widget.onLoadEntry != null) {
               _handleLoad(save);
             } else {
               setState(() => _selectedSaveId = save.id);
             }
           },
-          onLongPress: () => _handleRenameSave(save),
+          onLongPress:
+              isWriterManagedFolderOrDescendant(
+                    ref.read(saveSystemProvider).folders,
+                    _currentFolderId ?? '',
+                  ) &&
+                  widget.onRenameLinkedSave == null
+              ? null
+              : () => _handleRenameSave(save),
         );
       }),
     ];
@@ -716,7 +952,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: MediaQuery.of(context).size.width < 360 ? 2 : 3,
+      crossAxisCount: MediaQuery.of(context).size.width < 560 ? 2 : 3,
       mainAxisSpacing: 8,
       crossAxisSpacing: 8,
       childAspectRatio: 1.3,
@@ -731,26 +967,36 @@ class _Header extends StatelessWidget {
   final bool insideFolder;
   final bool editMode;
   final bool canSave;
+  final bool canCreateFolder;
+  final bool showUseInWriter;
   final bool gridMode;
   final VoidCallback onToggleGrid;
   final VoidCallback onToggleEdit;
   final VoidCallback onNewFolder;
   final VoidCallback onSaveHere;
+  final VoidCallback onUseInWriter;
 
   const _Header({
     required this.insideFolder,
     required this.editMode,
     required this.canSave,
+    required this.canCreateFolder,
+    required this.showUseInWriter,
     required this.gridMode,
     required this.onToggleGrid,
     required this.onToggleEdit,
     required this.onNewFolder,
     required this.onSaveHere,
+    required this.onUseInWriter,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 4,
+      runSpacing: 2,
       children: [
         const Text(
           'SAVES',
@@ -761,33 +1007,49 @@ class _Header extends StatelessWidget {
             letterSpacing: 1.2,
           ),
         ),
-        const Spacer(),
-        IconButton(
+        Semantics(
           key: const Key('saveBrowserGridToggle'),
-          icon: Icon(gridMode ? Icons.view_list : Icons.grid_view),
-          iconSize: 16,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          color: MuzicianTheme.textSecondary,
-          tooltip: gridMode ? 'List view' : 'Grid view',
-          onPressed: onToggleGrid,
+          button: true,
+          label: gridMode ? 'List view' : 'Grid view',
+          onTap: onToggleGrid,
+          child: ExcludeSemantics(
+            child: IconButton(
+              icon: Icon(gridMode ? Icons.view_list : Icons.grid_view),
+              iconSize: 16,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              color: MuzicianTheme.textSecondary,
+              tooltip: gridMode ? 'List view' : 'Grid view',
+              onPressed: onToggleGrid,
+            ),
+          ),
         ),
-        const SizedBox(width: 6),
+        if (showUseInWriter)
+          IconButton(
+            key: const Key('useWriterSaveAction'),
+            icon: const Icon(Icons.playlist_add, size: 16),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            color: MuzicianTheme.sky,
+            tooltip: 'Use in Writer',
+            onPressed: onUseInWriter,
+          ),
         if (canSave) ...[
           _ActionChip(
+            key: const Key('saveBrowserSaveHere'),
             label: 'Save here',
             color: MuzicianTheme.emerald,
             onTap: onSaveHere,
           ),
-          const SizedBox(width: 6),
         ],
         _ActionChip(
+          key: const Key('saveBrowserNewFolder'),
           label: '+ Folder',
           color: MuzicianTheme.sky,
-          onTap: onNewFolder,
+          onTap: canCreateFolder ? onNewFolder : null,
         ),
-        const SizedBox(width: 6),
         _ActionChip(
+          key: const Key('saveBrowserEditToggle'),
           label: editMode ? 'Done' : 'Edit',
           color: editMode ? MuzicianTheme.orange : MuzicianTheme.textSecondary,
           onTap: onToggleEdit,
@@ -800,9 +1062,10 @@ class _Header extends StatelessWidget {
 class _ActionChip extends StatelessWidget {
   final String label;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _ActionChip({
+    super.key,
     required this.label,
     required this.color,
     required this.onTap,
@@ -810,21 +1073,38 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      excludeSemantics: true,
+      button: true,
+      enabled: onTap != null,
+      label: label,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: color.withValues(alpha: 0.08),
-          border: Border.all(color: color.withValues(alpha: 0.25), width: 0.5),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+      child: InkWell(
+        excludeFromSemantics: true,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: color.withValues(alpha: onTap == null ? 0.025 : 0.08),
+                border: Border.all(
+                  color: color.withValues(alpha: onTap == null ? 0.08 : 0.25),
+                  width: 0.5,
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: onTap == null ? MuzicianTheme.textDim : color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -948,6 +1228,7 @@ class _EmptyHint extends StatelessWidget {
 class _FolderRow extends StatelessWidget {
   final SaveFolder folder;
   final bool editMode;
+  final bool managed;
   final bool isFirst;
   final bool isLast;
   final VoidCallback onTap;
@@ -959,6 +1240,7 @@ class _FolderRow extends StatelessWidget {
   const _FolderRow({
     required this.folder,
     required this.editMode,
+    required this.managed,
     required this.isFirst,
     required this.isLast,
     required this.onTap,
@@ -978,13 +1260,17 @@ class _FolderRow extends StatelessWidget {
             Column(
               children: [
                 _UpDownButton(
+                  buttonKey: Key('saveBrowserFolderMoveUp-${folder.id}'),
                   icon: Icons.arrow_upward,
-                  enabled: !isFirst,
+                  enabled: !managed && !isFirst,
+                  semanticLabel: 'Move folder up',
                   onTap: onMoveUp,
                 ),
                 _UpDownButton(
+                  buttonKey: Key('saveBrowserFolderMoveDown-${folder.id}'),
                   icon: Icons.arrow_downward,
-                  enabled: !isLast,
+                  enabled: !managed && !isLast,
+                  semanticLabel: 'Move folder down',
                   onTap: onMoveDown,
                 ),
               ],
@@ -992,7 +1278,7 @@ class _FolderRow extends StatelessWidget {
             const SizedBox(width: 4),
           ],
           GestureDetector(
-            onTap: editMode ? onRename : onTap,
+            onTap: editMode && !managed ? onRename : onTap,
             child: Text(
               folder.progressionMeta != null ? '🎼' : '📁',
               style: const TextStyle(fontSize: 16),
@@ -1001,34 +1287,39 @@ class _FolderRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: GestureDetector(
-              onTap: editMode ? onRename : onTap,
+              onTap: editMode && !managed ? onRename : onTap,
               child: Text(
                 folder.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: editMode
+                  color: editMode && !managed
                       ? MuzicianTheme.orange
                       : MuzicianTheme.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  decoration: editMode ? TextDecoration.underline : null,
+                  decoration: editMode && !managed
+                      ? TextDecoration.underline
+                      : null,
                   decorationColor: MuzicianTheme.orange,
                 ),
               ),
             ),
           ),
           if (editMode)
-            GestureDetector(
-              onTap: onDelete,
-              child: const Padding(
-                padding: EdgeInsets.all(6),
-                child: Icon(
-                  Icons.delete_outline,
-                  size: 18,
-                  color: MuzicianTheme.red,
-                ),
+            IconButton(
+              tooltip: managed
+                  ? 'Writer section folders are managed from Writer.'
+                  : 'Delete folder',
+              onPressed: managed ? null : onDelete,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              padding: EdgeInsets.zero,
+              icon: Icon(
+                managed ? Icons.lock_outline : Icons.delete_outline,
+                size: 18,
               ),
+              color: MuzicianTheme.red,
+              disabledColor: MuzicianTheme.textDim,
             )
           else
             const Text(
@@ -1043,6 +1334,7 @@ class _FolderRow extends StatelessWidget {
 
 class _SaveRow extends StatefulWidget {
   final SaveEntry save;
+  final String? contextLabel;
   final bool offKey;
   final bool isSelected;
   final bool isActiveSession;
@@ -1050,6 +1342,10 @@ class _SaveRow extends StatefulWidget {
   final bool isFirst;
   final bool isLast;
   final bool canLoad;
+  final bool canRename;
+  final bool canDelete;
+  final bool canReorder;
+  final bool canUseInWriter;
   final bool hasPrev;
   final bool hasNext;
   final VoidCallback onTap;
@@ -1058,11 +1354,13 @@ class _SaveRow extends StatefulWidget {
   final VoidCallback onMoveUp;
   final VoidCallback onMoveDown;
   final VoidCallback onLoad;
+  final VoidCallback onUseInWriter;
   final VoidCallback onPrev;
   final VoidCallback onNext;
 
   const _SaveRow({
     required this.save,
+    this.contextLabel,
     this.offKey = false,
     required this.isSelected,
     required this.isActiveSession,
@@ -1070,6 +1368,10 @@ class _SaveRow extends StatefulWidget {
     required this.isFirst,
     required this.isLast,
     required this.canLoad,
+    required this.canRename,
+    required this.canDelete,
+    required this.canReorder,
+    required this.canUseInWriter,
     required this.hasPrev,
     required this.hasNext,
     required this.onTap,
@@ -1078,6 +1380,7 @@ class _SaveRow extends StatefulWidget {
     required this.onMoveUp,
     required this.onMoveDown,
     required this.onLoad,
+    required this.onUseInWriter,
     required this.onPrev,
     required this.onNext,
   });
@@ -1133,7 +1436,11 @@ class _SaveRowState extends State<_SaveRow>
     super.dispose();
   }
 
-  String get _icon => widget.save.snapshot.instrument == 'song'
+  String get _icon => widget.save.snapshot.instrument == 'songwriter'
+      ? '🎼'
+      : widget.save.snapshot.instrument == 'writer_block'
+      ? '🎵'
+      : widget.save.snapshot.instrument == 'song'
       ? '🎵'
       : widget.save.snapshot.instrument == 'piano'
       ? '🎹'
@@ -1183,7 +1490,9 @@ class _SaveRowState extends State<_SaveRow>
                 // would otherwise swallow taps (deferToChild) and make picking
                 // a save feel like it "does nothing".
                 behavior: HitTestBehavior.opaque,
-                onTap: widget.editMode ? widget.onRename : widget.onTap,
+                onTap: widget.editMode
+                    ? (widget.canRename ? widget.onRename : null)
+                    : widget.onTap,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     vertical: 7,
@@ -1195,13 +1504,21 @@ class _SaveRowState extends State<_SaveRow>
                         Column(
                           children: [
                             _UpDownButton(
+                              buttonKey: Key(
+                                'saveBrowserMoveUp-${widget.save.id}',
+                              ),
                               icon: Icons.arrow_upward,
-                              enabled: !widget.isFirst,
+                              enabled: widget.canReorder && !widget.isFirst,
+                              semanticLabel: 'Move save up',
                               onTap: widget.onMoveUp,
                             ),
                             _UpDownButton(
+                              buttonKey: Key(
+                                'saveBrowserMoveDown-${widget.save.id}',
+                              ),
                               icon: Icons.arrow_downward,
-                              enabled: !widget.isLast,
+                              enabled: widget.canReorder && !widget.isLast,
+                              semanticLabel: 'Move save down',
                               onTap: widget.onMoveDown,
                             ),
                           ],
@@ -1233,13 +1550,33 @@ class _SaveRowState extends State<_SaveRow>
                                     widget.isSelected || widget.isActiveSession
                                     ? FontWeight.w700
                                     : FontWeight.w500,
-                                decoration: widget.editMode
+                                decoration: widget.editMode && widget.canRename
                                     ? TextDecoration.underline
                                     : null,
                                 decorationColor: MuzicianTheme.orange,
                               ),
                             ),
-                            if (widget.save.snapshot.pendingChord != null)
+                            if (widget.contextLabel != null)
+                              Text(
+                                widget.contextLabel!,
+                                style: const TextStyle(
+                                  color: MuzicianTheme.textMuted,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            if (widget.save.snapshot is WriterBlockSnapshot &&
+                                saveCardLabel(widget.save.snapshot).text !=
+                                    null)
+                              Text(
+                                saveCardLabel(widget.save.snapshot).text!,
+                                style: const TextStyle(
+                                  color: MuzicianTheme.violet,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            if (widget.save.snapshot is! WriterBlockSnapshot &&
+                                widget.save.snapshot.pendingChord != null)
                               Text(
                                 widget.save.snapshot.pendingChord!.symbol,
                                 style: const TextStyle(
@@ -1273,15 +1610,48 @@ class _SaveRowState extends State<_SaveRow>
                             ),
                           ),
                         ),
-                      if (widget.editMode)
-                        GestureDetector(
-                          onTap: widget.onDelete,
-                          child: const Padding(
+                      if (widget.editMode && !widget.canRename)
+                        const Tooltip(
+                          message: 'Rename this linked save from Writer.',
+                          child: Padding(
                             padding: EdgeInsets.all(6),
                             child: Icon(
-                              Icons.delete_outline,
-                              size: 18,
+                              Icons.lock_outline,
+                              size: 16,
+                              color: MuzicianTheme.textDim,
+                            ),
+                          ),
+                        ),
+                      if (widget.editMode)
+                        Semantics(
+                          key: Key('saveBrowserDelete-${widget.save.id}'),
+                          button: true,
+                          enabled: widget.canDelete,
+                          label: widget.canDelete
+                              ? 'Delete save'
+                              : 'Remove linked Writer blocks before deleting this save.',
+                          onTap: widget.canDelete ? widget.onDelete : null,
+                          child: ExcludeSemantics(
+                            child: IconButton(
+                              tooltip: widget.canDelete
+                                  ? 'Delete save'
+                                  : 'Remove linked Writer blocks before deleting this save.',
+                              onPressed: widget.canDelete
+                                  ? widget.onDelete
+                                  : null,
+                              constraints: const BoxConstraints(
+                                minWidth: 44,
+                                minHeight: 44,
+                              ),
+                              padding: EdgeInsets.zero,
+                              icon: Icon(
+                                widget.canDelete
+                                    ? Icons.delete_outline
+                                    : Icons.lock_outline,
+                                size: 18,
+                              ),
                               color: MuzicianTheme.red,
+                              disabledColor: MuzicianTheme.textDim,
                             ),
                           ),
                         )
@@ -1322,6 +1692,8 @@ class _SaveRowState extends State<_SaveRow>
                         onLoad: widget.onLoad,
                         onPrev: widget.onPrev,
                         onNext: widget.onNext,
+                        canUseInWriter: widget.canUseInWriter,
+                        onUseInWriter: widget.onUseInWriter,
                       ),
                     ),
                   ),
@@ -1336,23 +1708,37 @@ class _SaveRowState extends State<_SaveRow>
 }
 
 class _UpDownButton extends StatelessWidget {
+  final Key? buttonKey;
+  final String semanticLabel;
   final IconData icon;
   final bool enabled;
   final VoidCallback onTap;
 
   const _UpDownButton({
+    this.buttonKey,
     required this.icon,
     required this.enabled,
+    required this.semanticLabel,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => Semantics(
+    key: buttonKey,
+    button: true,
+    enabled: enabled,
+    label: semanticLabel,
     onTap: enabled ? onTap : null,
-    child: Icon(
-      icon,
-      size: 14,
-      color: enabled ? MuzicianTheme.sky : MuzicianTheme.textDim,
+    child: ExcludeSemantics(
+      child: IconButton(
+        tooltip: semanticLabel,
+        onPressed: enabled ? onTap : null,
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, size: 14),
+        color: MuzicianTheme.sky,
+        disabledColor: MuzicianTheme.textDim,
+      ),
     ),
   );
 }
@@ -1363,7 +1749,9 @@ class _SaveExpandedDetails extends StatelessWidget {
   final bool hasPrev;
   final bool hasNext;
   final bool isActiveSession;
+  final bool canUseInWriter;
   final VoidCallback onLoad;
+  final VoidCallback onUseInWriter;
   final VoidCallback onPrev;
   final VoidCallback onNext;
 
@@ -1373,7 +1761,9 @@ class _SaveExpandedDetails extends StatelessWidget {
     required this.hasPrev,
     required this.hasNext,
     required this.isActiveSession,
+    required this.canUseInWriter,
     required this.onLoad,
+    required this.onUseInWriter,
     required this.onPrev,
     required this.onNext,
   });
@@ -1388,6 +1778,8 @@ class _SaveExpandedDetails extends StatelessWidget {
           Divider(color: MuzicianTheme.glassBorder, height: 12, thickness: 0.5),
           if (save.snapshot is SongProjectSnapshot)
             _buildSongSummary(save.snapshot as SongProjectSnapshot)
+          else if (save.snapshot is WriterBlockSnapshot)
+            _buildWriterBlockSummary(save.snapshot as WriterBlockSnapshot)
           else ...[
             if (save.snapshot.selectedNotes.isNotEmpty) ...[
               SingleChildScrollView(
@@ -1493,6 +1885,18 @@ class _SaveExpandedDetails extends StatelessWidget {
               ],
             ],
           ),
+          if (canUseInWriter) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const Key('useWriterSaveButton'),
+                onPressed: onUseInWriter,
+                icon: const Icon(Icons.playlist_add, size: 16),
+                label: const Text('Use in Writer'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1515,6 +1919,18 @@ class _SaveExpandedDetails extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildWriterBlockSummary(WriterBlockSnapshot snapshot) => Padding(
+    padding: const EdgeInsets.only(bottom: 3),
+    child: Text(
+      '${snapshot.laneKind.name} block',
+      style: const TextStyle(
+        color: MuzicianTheme.violet,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 }
 
 class _NavButton extends StatelessWidget {
@@ -1557,6 +1973,7 @@ class _SaveCard extends StatelessWidget {
   final String instrument;
   final String? labelText; // chord symbol / scale / 'Highlight'
   final List<String> noteChips; // shown when labelText is null
+  final String? contextLabel;
   final bool offKey;
   final bool selected;
   final VoidCallback onTap;
@@ -1567,6 +1984,7 @@ class _SaveCard extends StatelessWidget {
     required this.instrument,
     required this.labelText,
     required this.noteChips,
+    this.contextLabel,
     required this.onTap,
     this.offKey = false,
     this.selected = false,
@@ -1581,7 +1999,7 @@ class _SaveCard extends StatelessWidget {
       onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
@@ -1608,7 +2026,7 @@ class _SaveCard extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             if (labelText != null)
               Text(
                 labelText!,
@@ -1625,13 +2043,23 @@ class _SaveCard extends StatelessWidget {
                     .map((n) => Text(n, style: theme.textTheme.bodySmall))
                     .toList(),
               ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall,
             ),
+            if (contextLabel != null)
+              Text(
+                contextLabel!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontSize: 10,
+                  color: MuzicianTheme.textMuted,
+                ),
+              ),
           ],
         ),
       ),
@@ -1690,10 +2118,12 @@ Widget SaveCardForTest({
   required String? labelText,
   required List<String> noteChips,
   required VoidCallback onTap,
+  String? contextLabel,
 }) => _SaveCard(
   name: name,
   instrument: instrument,
   labelText: labelText,
   noteChips: noteChips,
+  contextLabel: contextLabel,
   onTap: onTap,
 );

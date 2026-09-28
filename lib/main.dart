@@ -24,6 +24,8 @@ import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/project_config_sync.dart';
 import 'store/save_system_store.dart';
+import 'schema/rules/save_system_rules.dart'
+    show getWriterLinksForSave, resolveSaveInProject;
 import 'store/settings_store.dart';
 import 'ui/project_chip.dart';
 import 'store/record_audio_session.dart';
@@ -89,6 +91,8 @@ class _AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<_AppShell> {
   int _tabIndex = 4;
+  String? _linkedEditSaveId;
+  String? _linkedEditProjectId;
   bool _hydrating = true;
   StartupRecoveryRequired? _recoveryRequired;
   StartupStorageFailure? _startupFailure;
@@ -177,17 +181,64 @@ class _AppShellState extends ConsumerState<_AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedProjectId = ref.watch(
+      saveSystemProvider.select((state) => state.selectedProjectId),
+    );
+    ref.listen<String?>(
+      saveSystemProvider.select((state) => state.selectedProjectId),
+      (previous, next) {
+        if (_linkedEditSaveId != null && _linkedEditProjectId != next) {
+          _clearLinkedEditTarget();
+        }
+      },
+    );
+    final linkedEditSaveId = _linkedEditSaveId;
+    final linkedEditProjectId = _linkedEditProjectId;
+    if (linkedEditSaveId != null && linkedEditProjectId != null) {
+      ref.listen<bool>(
+        saveSystemProvider.select(
+          (state) =>
+              state.selectedProjectId == linkedEditProjectId &&
+              getWriterLinksForSave(
+                state,
+                linkedEditProjectId,
+                linkedEditSaveId,
+              ).isNotEmpty,
+        ),
+        (previous, hasWriterLink) {
+          if (!hasWriterLink &&
+              _linkedEditSaveId == linkedEditSaveId &&
+              _linkedEditProjectId == linkedEditProjectId) {
+            _clearLinkedEditTarget();
+          }
+        },
+      );
+    }
     return Scaffold(
       body: _hydrating || _recoveryRequired != null || _startupFailure != null
           ? _buildStartupView()
           : IndexedStack(
               index: _tabIndex,
               children: [
-                _FretboardScreen(onHandoffCompleted: () => _setTab(4)),
-                _PianoScreen(onHandoffCompleted: () => _setTab(4)),
+                _FretboardScreen(
+                  onHandoffCompleted: () => _setTab(4),
+                  linkedEditSaveId: _linkedEditProjectId == selectedProjectId
+                      ? _linkedEditSaveId
+                      : null,
+                  onDifferentSaveLoaded: _onInstrumentSaveLoaded,
+                ),
+                _PianoScreen(
+                  onHandoffCompleted: () => _setTab(4),
+                  linkedEditSaveId: _linkedEditProjectId == selectedProjectId
+                      ? _linkedEditSaveId
+                      : null,
+                  onDifferentSaveLoaded: _onInstrumentSaveLoaded,
+                ),
                 const PianoRollScreenV2(),
                 const SongScreen(),
-                const SongwriterScreen(),
+                SongwriterScreen(
+                  onEditInstrumentSave: _openLinkedSaveInInstrument,
+                ),
                 const _SettingsScreen(),
               ],
             ),
@@ -311,6 +362,63 @@ class _AppShellState extends ConsumerState<_AppShell> {
             .setLastContentWorkspace(workspace)
             .catchError((_) {});
       }
+    }
+  }
+
+  void _clearLinkedEditTarget() {
+    if (_linkedEditSaveId == null && _linkedEditProjectId == null) return;
+    setState(() {
+      _linkedEditSaveId = null;
+      _linkedEditProjectId = null;
+    });
+  }
+
+  void _onInstrumentSaveLoaded(String saveId) {
+    if (_linkedEditSaveId != null && saveId != _linkedEditSaveId) {
+      _clearLinkedEditTarget();
+    }
+  }
+
+  void _openLinkedSaveInInstrument(SaveEntry requested) {
+    final saveState = ref.read(saveSystemProvider);
+    final projectId = saveState.selectedProjectId;
+    final canonical = projectId == null
+        ? null
+        : resolveSaveInProject(saveState, projectId, requested.id);
+    if (projectId == null ||
+        canonical == null ||
+        getWriterLinksForSave(saveState, projectId, requested.id).isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This linked Writer save is unavailable.'),
+        ),
+      );
+      return;
+    }
+
+    switch (canonical.snapshot) {
+      case FretboardSnapshot():
+        loadFretboardSnapshot(ref, canonical.snapshot);
+        setState(() {
+          _linkedEditSaveId = canonical.id;
+          _linkedEditProjectId = projectId;
+        });
+        _setTab(0);
+      case PianoSnapshot():
+        loadPianoSnapshot(ref, canonical.snapshot);
+        setState(() {
+          _linkedEditSaveId = canonical.id;
+          _linkedEditProjectId = projectId;
+        });
+        _setTab(1);
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This linked save cannot be edited in Fretboard or Piano.',
+            ),
+          ),
+        );
     }
   }
 }
@@ -575,9 +683,15 @@ class _Card extends StatelessWidget {
 // ── Fretboard Screen ────────────────────────────────────────────────────────
 
 class _FretboardScreen extends ConsumerStatefulWidget {
-  const _FretboardScreen({required this.onHandoffCompleted});
+  const _FretboardScreen({
+    required this.onHandoffCompleted,
+    required this.linkedEditSaveId,
+    required this.onDifferentSaveLoaded,
+  });
 
   final VoidCallback onHandoffCompleted;
+  final String? linkedEditSaveId;
+  final ValueChanged<String> onDifferentSaveLoaded;
 
   @override
   ConsumerState<_FretboardScreen> createState() => _FretboardScreenState();
@@ -609,9 +723,13 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
           onTap: () => showWidgetSheet(
             context: context,
             title: 'Saves',
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: FretboardSavePanel(),
+              child: FretboardSavePanel(
+                linkedEditSaveId: widget.linkedEditSaveId,
+                onDifferentSaveLoaded: widget.onDifferentSaveLoaded,
+                onHandoffCompleted: widget.onHandoffCompleted,
+              ),
             ),
           ),
         ),
@@ -753,9 +871,15 @@ class _TuneSectionLabel extends StatelessWidget {
 // ── Piano Screen ────────────────────────────────────────────────────────────
 
 class _PianoScreen extends ConsumerStatefulWidget {
-  const _PianoScreen({required this.onHandoffCompleted});
+  const _PianoScreen({
+    required this.onHandoffCompleted,
+    required this.linkedEditSaveId,
+    required this.onDifferentSaveLoaded,
+  });
 
   final VoidCallback onHandoffCompleted;
+  final String? linkedEditSaveId;
+  final ValueChanged<String> onDifferentSaveLoaded;
 
   @override
   ConsumerState<_PianoScreen> createState() => _PianoScreenState();
@@ -785,9 +909,13 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
           onTap: () => showWidgetSheet(
             context: context,
             title: 'Saves',
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: PianoSavePanel(),
+              child: PianoSavePanel(
+                linkedEditSaveId: widget.linkedEditSaveId,
+                onDifferentSaveLoaded: widget.onDifferentSaveLoaded,
+                onHandoffCompleted: widget.onHandoffCompleted,
+              ),
             ),
           ),
         ),

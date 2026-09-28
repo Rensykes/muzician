@@ -125,6 +125,22 @@ void main() {
     );
   });
 
+  test('first edit after project selection remains undoable', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songwriterProvider.notifier);
+    final saveSystem = container.read(saveSystemProvider.notifier);
+    final projectId = saveSystem.createProject(
+      'Selected project',
+      const ProjectConfig(),
+    )!;
+
+    saveSystem.selectProject(projectId);
+    notifier.addSection(label: 'Verse', lengthBars: 4);
+
+    expect(notifier.canUndo, isTrue);
+  });
+
   test('project switch, New, and named load clear Writer history', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);

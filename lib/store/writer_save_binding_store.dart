@@ -10,31 +10,46 @@ import '../models/save_system.dart';
 import 'persisted_data_recovery_store.dart';
 import 'save_system_store.dart';
 import 'songwriter_store.dart';
+import 'writer_save_sync_store.dart' as writer_sync;
+export 'writer_save_sync_store.dart' show writerSaveBindingsStorageKey;
 
-const writerSaveBindingsStorageKey = '@muzician/writer_save_bindings/v1';
 const _kDebounce = Duration(milliseconds: 500);
 
 /// Per-project link between the live Writer project and a named [SaveEntry].
 class WriterSaveBinding {
   final String? activeSaveId;
   final bool alwaysOverwrite;
-  const WriterSaveBinding({this.activeSaveId, this.alwaysOverwrite = false});
+  final String? materializedBaselineJson;
 
-  WriterSaveBinding copyWith({String? activeSaveId, bool? alwaysOverwrite}) =>
-      WriterSaveBinding(
-        activeSaveId: activeSaveId ?? this.activeSaveId,
-        alwaysOverwrite: alwaysOverwrite ?? this.alwaysOverwrite,
-      );
+  const WriterSaveBinding({
+    this.activeSaveId,
+    this.alwaysOverwrite = false,
+    this.materializedBaselineJson,
+  });
+
+  WriterSaveBinding copyWith({
+    String? activeSaveId,
+    bool? alwaysOverwrite,
+    String? materializedBaselineJson,
+  }) => WriterSaveBinding(
+    activeSaveId: activeSaveId ?? this.activeSaveId,
+    alwaysOverwrite: alwaysOverwrite ?? this.alwaysOverwrite,
+    materializedBaselineJson:
+        materializedBaselineJson ?? this.materializedBaselineJson,
+  );
 
   Map<String, dynamic> toJson() => {
     'activeSaveId': activeSaveId,
     'alwaysOverwrite': alwaysOverwrite,
+    if (materializedBaselineJson != null)
+      'materializedBaselineJson': materializedBaselineJson,
   };
 
   factory WriterSaveBinding.fromJson(Map<String, dynamic> json) =>
       WriterSaveBinding(
         activeSaveId: json['activeSaveId'] as String?,
         alwaysOverwrite: json['alwaysOverwrite'] as bool? ?? false,
+        materializedBaselineJson: json['materializedBaselineJson'] as String?,
       );
 }
 
@@ -52,7 +67,7 @@ class WriterSaveBindingNotifier
   Future<void> hydrate() async {
     if (_hydrated) return;
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(writerSaveBindingsStorageKey);
+    final raw = prefs.getString(writer_sync.writerSaveBindingsStorageKey);
     if (raw != null) {
       try {
         final map = jsonDecode(raw) as Map<String, dynamic>;
@@ -65,12 +80,20 @@ class WriterSaveBindingNotifier
         state = parsed;
       } catch (_) {
         throw MalformedPersistedPayload(
-          storageKey: writerSaveBindingsStorageKey,
+          storageKey: writer_sync.writerSaveBindingsStorageKey,
           raw: raw,
         );
       }
     }
     _hydrated = true;
+  }
+
+  /// Applies bindings captured by a shared Writer transaction and discards any
+  /// older debounced write.
+  void commitState(Map<String, WriterSaveBinding> next) {
+    _debounce?.cancel();
+    _debounce = null;
+    state = Map.unmodifiable(next);
   }
 
   /// Binds [projectId] to [saveId] and RESETS alwaysOverwrite. Called on load
@@ -95,15 +118,17 @@ class WriterSaveBindingNotifier
   void _schedulePersist() {
     _debounce?.cancel();
     final snapshot = state;
-    _debounce = Timer(_kDebounce, () async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        writerSaveBindingsStorageKey,
-        jsonEncode(snapshot.map((k, v) => MapEntry(k, v.toJson()))),
-      );
+    _debounce = Timer(_kDebounce, () {
+      _debounce = null;
+      ref
+          .read(writer_sync.writerSaveSyncProvider.notifier)
+          .persistWriterBindings(_serialiseBindings(snapshot));
     });
   }
 }
+
+String _serialiseBindings(Map<String, WriterSaveBinding> bindings) =>
+    jsonEncode(bindings.map((k, v) => MapEntry(k, v.toJson())));
 
 final writerSaveBindingProvider =
     NotifierProvider<WriterSaveBindingNotifier, Map<String, WriterSaveBinding>>(
@@ -132,6 +157,13 @@ final writerDirtyProvider = Provider<bool>((ref) {
   }
   if (entry == null) {
     return project.sections.isNotEmpty || project.drumPatterns.isNotEmpty;
+  }
+  final baseline = binding?.materializedBaselineJson;
+  if (baseline != null) {
+    final materialized = ref
+        .read(songwriterProvider.notifier)
+        .materializeCurrentContent();
+    return jsonEncode(materialized.toJson()) != baseline;
   }
   return jsonEncode(project.toJson()) != jsonEncode(entry.snapshot.toJson());
 });

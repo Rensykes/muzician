@@ -192,3 +192,17 @@ project is locked (`chordOffKey && isProjectLocked`).
 `lib/features/instrument_shared/chord_picker_parts.dart` provide
 `ChordPickerHeader` — a reusable header row showing the active chord as a
 badge. Used by both the Fretboard and Piano chord pickers.
+
+## Saves and Writer handoff
+
+Saving a piano voicing outside Writer stores a free idea in the selected
+project root. In the save browser, **Use in Writer** explicitly links that
+existing project-root save to a selected Writer section and placement without
+moving or copying it; Dump-root ideas stay in Dump. A fresh **Add to Writer**
+handoff creates a new named save after the destination is chosen. When a linked
+voicing is opened for editing, the explicit **Update linked save** action
+writes the current piano snapshot to the same save and updates all Writer
+placements that share it. The action is available only while the save still
+has a Writer link.
+You can rename a linked root save from this panel's save browser; the new name
+is shared by every Writer placement that uses the save.

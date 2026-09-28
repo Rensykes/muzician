@@ -18,62 +18,98 @@ void main() {
   test('createProject adds a kind=project root folder with config', () async {
     final c = makeContainer();
     await c.read(saveSystemProvider.notifier).hydrate();
-    final id = c.read(saveSystemProvider.notifier).createProject(
+    final id = c
+        .read(saveSystemProvider.notifier)
+        .createProject(
           'My song',
           const ProjectConfig(tempo: 100, keyRootPc: 0, keyScaleName: 'major'),
         );
     expect(id, isNotNull);
-    final folder = c.read(saveSystemProvider).folders.firstWhere((f) => f.id == id);
+    final folder = c
+        .read(saveSystemProvider)
+        .folders
+        .firstWhere((f) => f.id == id);
     expect(folder.kind, SaveFolderKind.project);
     expect(folder.parentId, isNull);
     expect(folder.projectConfig?.tempo, 100);
     expect(folder.projectConfig?.keyRootPc, 0);
   });
 
-  test('renameProject mutates only the named folder; trims whitespace', () async {
-    final c = makeContainer();
-    await c.read(saveSystemProvider.notifier).hydrate();
-    final id = c.read(saveSystemProvider.notifier).createProject('A', const ProjectConfig())!;
-    c.read(saveSystemProvider.notifier).renameProject(id, '  B  ');
-    expect(c.read(saveSystemProvider).folders.firstWhere((f) => f.id == id).name, 'B');
-  });
+  test(
+    'renameProject mutates only the named folder; trims whitespace',
+    () async {
+      final c = makeContainer();
+      await c.read(saveSystemProvider.notifier).hydrate();
+      final id = c
+          .read(saveSystemProvider.notifier)
+          .createProject('A', const ProjectConfig())!;
+      c.read(saveSystemProvider.notifier).renameProject(id, '  B  ');
+      expect(
+        c.read(saveSystemProvider).folders.firstWhere((f) => f.id == id).name,
+        'B',
+      );
+    },
+  );
 
-  test('deleteProject removes folder, its saves, and clears selection if matching', () async {
-    final c = makeContainer();
-    await c.read(saveSystemProvider.notifier).hydrate();
-    final id = c.read(saveSystemProvider.notifier).createProject('A', const ProjectConfig())!;
-    c.read(saveSystemProvider.notifier).selectProject(id);
-    c.read(saveSystemProvider.notifier).deleteProject(id);
-    expect(c.read(saveSystemProvider).folders.any((f) => f.id == id), isFalse);
-    expect(c.read(saveSystemProvider).selectedProjectId, isNull);
-  });
+  test(
+    'deleteProject removes folder, its saves, and clears selection if matching',
+    () async {
+      final c = makeContainer();
+      await c.read(saveSystemProvider.notifier).hydrate();
+      final id = c
+          .read(saveSystemProvider.notifier)
+          .createProject('A', const ProjectConfig())!;
+      c.read(saveSystemProvider.notifier).selectProject(id);
+      await c.read(saveSystemProvider.notifier).deleteProject(id);
+      expect(
+        c.read(saveSystemProvider).folders.any((f) => f.id == id),
+        isFalse,
+      );
+      expect(c.read(saveSystemProvider).selectedProjectId, isNull);
+    },
+  );
 
-  test('updateProjectConfig overwrites projectConfig on the project folder', () async {
-    final c = makeContainer();
-    await c.read(saveSystemProvider.notifier).hydrate();
-    final id = c.read(saveSystemProvider.notifier).createProject('A', const ProjectConfig())!;
-    c.read(saveSystemProvider.notifier).updateProjectConfig(
-          id,
-          const ProjectConfig(tempo: 90, keyRootPc: 9, keyScaleName: 'minor'),
-        );
-    final folder = c.read(saveSystemProvider).folders.firstWhere((f) => f.id == id);
-    expect(folder.projectConfig?.tempo, 90);
-    expect(folder.projectConfig?.keyRootPc, 9);
-  });
+  test(
+    'updateProjectConfig overwrites projectConfig on the project folder',
+    () async {
+      final c = makeContainer();
+      await c.read(saveSystemProvider.notifier).hydrate();
+      final id = c
+          .read(saveSystemProvider.notifier)
+          .createProject('A', const ProjectConfig())!;
+      c
+          .read(saveSystemProvider.notifier)
+          .updateProjectConfig(
+            id,
+            const ProjectConfig(tempo: 90, keyRootPc: 9, keyScaleName: 'minor'),
+          );
+      final folder = c
+          .read(saveSystemProvider)
+          .folders
+          .firstWhere((f) => f.id == id);
+      expect(folder.projectConfig?.tempo, 90);
+      expect(folder.projectConfig?.keyRootPc, 9);
+    },
+  );
 
   test('deleteFolder refuses to delete a dump root', () async {
     final c = makeContainer();
     await c.read(saveSystemProvider.notifier).hydrate();
     final dumpId = c.read(saveSystemProvider.notifier).ensureDumpFolder();
     c.read(saveSystemProvider.notifier).deleteFolder(dumpId);
-    expect(c.read(saveSystemProvider).folders.any((f) => f.id == dumpId), isTrue);
+    expect(
+      c.read(saveSystemProvider).folders.any((f) => f.id == dumpId),
+      isTrue,
+    );
   });
 
   test('selectedProjectProvider tracks selected folder', () async {
     final c = makeContainer();
     await c.read(saveSystemProvider.notifier).hydrate();
     expect(c.read(selectedProjectProvider), isNull);
-    final id = c.read(saveSystemProvider.notifier).createProject('A', const ProjectConfig())!;
+    final id = c
+        .read(saveSystemProvider.notifier)
+        .createProject('A', const ProjectConfig())!;
     c.read(saveSystemProvider.notifier).selectProject(id);
     expect(c.read(selectedProjectProvider)?.id, id);
   });
@@ -81,8 +117,12 @@ void main() {
   test('projectsListProvider returns ordered project folders', () async {
     final c = makeContainer();
     await c.read(saveSystemProvider.notifier).hydrate();
-    c.read(saveSystemProvider.notifier).createProject('A', const ProjectConfig());
-    c.read(saveSystemProvider.notifier).createProject('B', const ProjectConfig());
+    c
+        .read(saveSystemProvider.notifier)
+        .createProject('A', const ProjectConfig());
+    c
+        .read(saveSystemProvider.notifier)
+        .createProject('B', const ProjectConfig());
     final list = c.read(projectsListProvider);
     expect(list.map((f) => f.name), ['A', 'B']);
   });

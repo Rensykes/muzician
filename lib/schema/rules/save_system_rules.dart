@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../../models/project_config.dart';
 import '../../models/save_system.dart';
+import '../../models/songwriter.dart';
 
 const saveSystemStorageKey = '@muzician/save-system/v3';
 const legacySaveSystemStorageKeys = <String>[
@@ -60,13 +61,64 @@ SaveFolder createFolder(
   );
 }
 
+SaveFolder createWriterSectionFolder(
+  SaveSystemState state, {
+  required String projectId,
+  required String sectionId,
+  required String name,
+  required int order,
+}) {
+  final existing = getWriterSectionFolder(state, projectId, sectionId);
+  if (existing != null) {
+    return existing.copyWith(name: name.trim(), order: order);
+  }
+  return SaveFolder(
+    id: generateId(),
+    name: name.trim(),
+    parentId: projectId,
+    createdAt: DateTime.now().millisecondsSinceEpoch,
+    order: order,
+    writerSectionId: sectionId,
+  );
+}
+
 SaveEntry createSaveEntry(
   String name,
   String folderId,
   InstrumentSnapshot snapshot,
   int siblingCount, [
   ProgressionChordMeta? progressionMeta,
-]) {
+]) => _createSaveEntry(
+  name,
+  folderId,
+  snapshot,
+  siblingCount,
+  progressionMeta: progressionMeta,
+);
+
+SaveEntry createWriterSaveEntry(
+  String name,
+  String folderId,
+  InstrumentSnapshot snapshot,
+  int siblingCount, {
+  ProgressionChordMeta? progressionMeta,
+}) => _createSaveEntry(
+  name,
+  folderId,
+  snapshot,
+  siblingCount,
+  progressionMeta: progressionMeta,
+  origin: SaveOrigin.writer,
+);
+
+SaveEntry _createSaveEntry(
+  String name,
+  String folderId,
+  InstrumentSnapshot snapshot,
+  int siblingCount, {
+  ProgressionChordMeta? progressionMeta,
+  SaveOrigin origin = SaveOrigin.manual,
+}) {
   final now = DateTime.now().millisecondsSinceEpoch;
   return SaveEntry(
     id: generateId(),
@@ -77,6 +129,7 @@ SaveEntry createSaveEntry(
     updatedAt: now,
     order: siblingCount,
     progressionMeta: progressionMeta,
+    origin: origin,
   );
 }
 
@@ -148,17 +201,33 @@ List<({String id, String name})> buildFolderBreadcrumb(
 String serialiseState({
   required List<SaveFolder> folders,
   required List<SaveEntry> saves,
+  List<WriterSaveLink> writerLinks = const [],
   required String? selectedProjectId,
 }) {
   return jsonEncode({
     'folders': folders.map((f) => f.toJson()).toList(),
     'saves': saves.map((s) => s.toJson()).toList(),
+    'writerLinks': writerLinks.map((link) => link.toJson()).toList(),
     'selectedProjectId': selectedProjectId,
   });
 }
 
-({List<SaveFolder> folders, List<SaveEntry> saves, String? selectedProjectId})?
-    deserialiseState(String raw) {
+/// Serializes an immutable state value for transaction coordinators that must
+/// capture a consistent payload before performing asynchronous storage writes.
+String serialiseSaveSystemState(SaveSystemState state) => serialiseState(
+  folders: state.folders,
+  saves: state.saves,
+  writerLinks: state.writerLinks,
+  selectedProjectId: state.selectedProjectId,
+);
+
+({
+  List<SaveFolder> folders,
+  List<SaveEntry> saves,
+  List<WriterSaveLink> writerLinks,
+  String? selectedProjectId,
+})?
+deserialiseState(String raw) {
   try {
     final parsed = jsonDecode(raw) as Map<String, dynamic>;
     if (parsed['folders'] is! List || parsed['saves'] is! List) return null;
@@ -168,8 +237,20 @@ String serialiseState({
     final saves = (parsed['saves'] as List)
         .map((s) => SaveEntry.fromJson(s as Map<String, dynamic>))
         .toList();
+    final writerLinks =
+        (parsed['writerLinks'] as List?)
+            ?.map(
+              (link) => WriterSaveLink.fromJson(link as Map<String, dynamic>),
+            )
+            .toList() ??
+        <WriterSaveLink>[];
     final selectedProjectId = parsed['selectedProjectId'] as String?;
-    return (folders: folders, saves: saves, selectedProjectId: selectedProjectId);
+    return (
+      folders: folders,
+      saves: saves,
+      writerLinks: writerLinks,
+      selectedProjectId: selectedProjectId,
+    );
   } catch (_) {
     return null;
   }
@@ -187,6 +268,144 @@ SaveFolder? getDumpFolder(List<SaveFolder> folders) {
     if (f.parentId == null && f.kind == SaveFolderKind.dump) return f;
   }
   return null;
+}
+
+/// Returns the enclosing project root for a folder, or null outside projects.
+String? getProjectIdForFolder(List<SaveFolder> folders, String folderId) {
+  final byId = {for (final folder in folders) folder.id: folder};
+  var current = byId[folderId];
+  while (current != null) {
+    if (current.kind == SaveFolderKind.project && current.parentId == null) {
+      return current.id;
+    }
+    final parentId = current.parentId;
+    if (parentId == null) return null;
+    current = byId[parentId];
+  }
+  return null;
+}
+
+bool isFolderInProject(
+  List<SaveFolder> folders,
+  String folderId,
+  String projectId,
+) => getProjectIdForFolder(folders, folderId) == projectId;
+
+SaveFolder? getWriterSectionFolder(
+  SaveSystemState state,
+  String projectId,
+  String sectionId,
+) {
+  for (final folder in state.folders) {
+    if (folder.writerSectionId == sectionId &&
+        folder.parentId == projectId &&
+        isFolderInProject(state.folders, folder.id, projectId)) {
+      return folder;
+    }
+  }
+  return null;
+}
+
+List<WriterSaveLink> getWriterLinksForSection(
+  SaveSystemState state,
+  String projectId,
+  String sectionId,
+) {
+  final folder = getWriterSectionFolder(state, projectId, sectionId);
+  if (folder == null) return const [];
+  return state.writerLinks
+      .where(
+        (link) => link.sectionId == sectionId && link.folderId == folder.id,
+      )
+      .toList();
+}
+
+List<WriterSaveLink> getWriterLinksForSave(
+  SaveSystemState state,
+  String projectId,
+  String saveId,
+) {
+  if (resolveSaveInProject(state, projectId, saveId) == null) return const [];
+  return state.writerLinks
+      .where(
+        (link) =>
+            link.saveId == saveId &&
+            isFolderInProject(state.folders, link.folderId, projectId),
+      )
+      .toList();
+}
+
+/// Resolves a save only when its physical folder belongs to [projectId].
+SaveEntry? resolveSaveInProject(
+  SaveSystemState state,
+  String projectId,
+  String saveId,
+) {
+  final entry = state.saves.where((save) => save.id == saveId).firstOrNull;
+  if (entry == null ||
+      !isFolderInProject(state.folders, entry.folderId, projectId)) {
+    return null;
+  }
+  return entry;
+}
+
+/// True for a managed Writer section folder or any nested folder beneath it.
+bool isWriterManagedFolderOrDescendant(
+  List<SaveFolder> folders,
+  String folderId,
+) {
+  final byId = {for (final folder in folders) folder.id: folder};
+  var current = byId[folderId];
+  while (current != null) {
+    if (current.writerSectionId != null) return true;
+    final parentId = current.parentId;
+    if (parentId == null) return false;
+    current = byId[parentId];
+  }
+  return false;
+}
+
+/// The old Make Unique action retained both saveId and a detached embedded
+/// snapshot. This predicate lets reconciliation preserve that detached copy.
+bool isLegacyDetachedWriterBlock(
+  SongBlock block,
+  List<WriterSaveLink> writerLinks,
+) =>
+    block.saveId != null &&
+    block.embedded != null &&
+    !writerLinks.any((link) => link.blockId == block.id);
+
+/// Chooses the physical folder for a Writer-origin save after link changes.
+/// Manual saves always keep their existing folder.
+String? writerSaveFolderForLinks(
+  SaveSystemState state, {
+  required String projectId,
+  required SaveEntry save,
+  required List<WriterSaveLink> links,
+}) {
+  if (save.origin != SaveOrigin.writer) return save.folderId;
+  final sectionFoldersById = {
+    for (final folder in state.folders)
+      if (folder.writerSectionId != null &&
+          isFolderInProject(state.folders, folder.id, projectId))
+        folder.id: folder,
+  };
+  final linkedFolders =
+      links
+          .where((link) => link.saveId == save.id)
+          .where(
+            (link) =>
+                sectionFoldersById[link.folderId]?.writerSectionId ==
+                link.sectionId,
+          )
+          .map((link) => sectionFoldersById[link.folderId])
+          .whereType<SaveFolder>()
+          .toList()
+        ..sort((a, b) {
+          final byOrder = a.order.compareTo(b.order);
+          return byOrder != 0 ? byOrder : a.createdAt.compareTo(b.createdAt);
+        });
+  return linkedFolders.isEmpty ? projectId : linkedFolders.first.id;
 }
 
 Set<String> getSubtreeFolderIds(List<SaveFolder> folders, String rootId) {
@@ -211,10 +430,16 @@ List<SaveEntry> getSavesInSubtree(
     ..sort((a, b) => a.order.compareTo(b.order));
 }
 
-bool isProjectRoot(SaveFolder f) => f.parentId == null && f.kind == SaveFolderKind.project;
-bool isDumpRoot(SaveFolder f) => f.parentId == null && f.kind == SaveFolderKind.dump;
+bool isProjectRoot(SaveFolder f) =>
+    f.parentId == null && f.kind == SaveFolderKind.project;
+bool isDumpRoot(SaveFolder f) =>
+    f.parentId == null && f.kind == SaveFolderKind.dump;
 
-SaveFolder createProjectFolder(String name, ProjectConfig cfg, int siblingCount) {
+SaveFolder createProjectFolder(
+  String name,
+  ProjectConfig cfg,
+  int siblingCount,
+) {
   return SaveFolder(
     id: generateId(),
     name: name.trim(),

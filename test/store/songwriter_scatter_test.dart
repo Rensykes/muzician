@@ -6,7 +6,7 @@ import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_slice_rules.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
-/// Ids returned by [seedAudioSourceBlock].
+/// Ids returned by [_seedAudioSourceBlock].
 class _SeededAudio {
   const _SeededAudio({
     required this.sectionId,
@@ -25,7 +25,7 @@ class _SeededAudio {
 /// Seeds a section with one audio lane carrying a single 1-bar source
 /// clip+block at [startBar], using the real store API. Mirrors the seeding in
 /// `test/store/songwriter_audio_playback_test.dart`.
-_SeededAudio seedAudioSourceBlock(
+_SeededAudio _seedAudioSourceBlock(
   SongwriterNotifier store, {
   required int sectionLengthBars,
   required int startBar,
@@ -82,7 +82,7 @@ void main() {
     final store = container.read(songwriterProvider.notifier);
 
     // --- Seed: 4-bar section, audio lane, one source clip+block at bar 0. ---
-    final ids = seedAudioSourceBlock(store, sectionLengthBars: 4, startBar: 0);
+    final ids = _seedAudioSourceBlock(store, sectionLengthBars: 4, startBar: 0);
 
     final placedIds = store.scatterSlices(
       sectionId: ids.sectionId,

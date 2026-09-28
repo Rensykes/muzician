@@ -6,7 +6,7 @@ import '../../models/save_system.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
-import 'save_system_rules.dart' show generateId;
+import 'save_system_rules.dart' show generateId, getProjectIdForFolder;
 
 const _romanByDegree = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
@@ -316,6 +316,152 @@ SongBlock makeAudioBlock({
   audioClipId: audioClipId,
 );
 
+/// Captures the placement-free Writer content owned by [block]. Save-lane
+/// instrument content remains in its canonical instrument snapshot (or in the
+/// legacy embedded fallback), so this helper returns null for those blocks.
+/// Missing pattern, clip, or source-asset references are left unresolved rather
+/// than replaced with fabricated content.
+WriterBlockSnapshot? writerBlockSnapshotFor(
+  SongwriterProjectSnapshot project,
+  SongLane lane,
+  SongBlock block,
+) {
+  if (lane.kind == SongLaneKind.save) {
+    final fallback = block.embedded;
+    return fallback is WriterBlockSnapshot ? fallback : null;
+  }
+
+  final fallback = block.embedded;
+  final defaultLyrics =
+      fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+      ? fallback.defaultLyrics
+      : block.lyrics;
+
+  if (lane.kind == SongLaneKind.harmony) {
+    if (fallback is WriterBlockSnapshot &&
+        fallback.laneKind == lane.kind &&
+        block.chordSymbol == null &&
+        block.chordQuality == null &&
+        block.chordRootPc == null &&
+        block.chordNotes.isEmpty &&
+        (fallback.isSilent || fallback.chordSymbol != null)) {
+      return fallback;
+    }
+    return WriterBlockSnapshot(
+      laneKind: lane.kind,
+      isSilent: block.isSilent,
+      chordSymbol: block.chordSymbol,
+      chordQuality: block.chordQuality,
+      chordRootPc: block.chordRootPc,
+      chordNotes: block.chordNotes,
+      romanNumeral: block.romanNumeral,
+      defaultLyrics: defaultLyrics,
+    );
+  }
+
+  if (lane.kind == SongLaneKind.drum) {
+    final patternId = block.patternId;
+    if (patternId == null) {
+      return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+          ? fallback
+          : null;
+    }
+    final pattern = project.drumPatterns
+        .where((candidate) => candidate.id == patternId)
+        .firstOrNull;
+    if (pattern == null) {
+      return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+          ? fallback
+          : null;
+    }
+    return WriterBlockSnapshot(
+      laneKind: lane.kind,
+      drumPattern: pattern,
+      defaultLyrics: defaultLyrics,
+    );
+  }
+
+  if (lane.kind == SongLaneKind.melody) {
+    final patternId = block.patternId;
+    if (patternId == null) {
+      return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+          ? fallback
+          : null;
+    }
+    final pattern = project.melodyPatterns
+        .where((candidate) => candidate.id == patternId)
+        .firstOrNull;
+    if (pattern == null) {
+      return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+          ? fallback
+          : null;
+    }
+    return WriterBlockSnapshot(
+      laneKind: lane.kind,
+      melodyPattern: pattern,
+      defaultLyrics: defaultLyrics,
+    );
+  }
+
+  if (lane.kind == SongLaneKind.guitarStrum) {
+    final patternId = block.patternId;
+    if (patternId == null) {
+      return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+          ? fallback
+          : null;
+    }
+    final pattern = project.guitarStrumPatterns
+        .where((candidate) => candidate.id == patternId)
+        .firstOrNull;
+    if (pattern == null) {
+      return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+          ? fallback
+          : null;
+    }
+    return WriterBlockSnapshot(
+      laneKind: lane.kind,
+      guitarStrumPattern: pattern,
+      defaultLyrics: defaultLyrics,
+    );
+  }
+
+  final clipId = block.audioClipId;
+  if (clipId == null) {
+    return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+        ? fallback
+        : null;
+  }
+  final clip = project.audioClips
+      .where((candidate) => candidate.id == clipId)
+      .firstOrNull;
+  if (clip == null) {
+    return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+        ? fallback
+        : null;
+  }
+  final asset = project.audioAssets
+      .where((candidate) => candidate.id == clip.assetId)
+      .firstOrNull;
+  if (asset == null) {
+    return fallback is WriterBlockSnapshot && fallback.laneKind == lane.kind
+        ? fallback
+        : null;
+  }
+  final stretchedAssetId = clip.stretchedAssetId;
+  final stretchedAsset = stretchedAssetId == null
+      ? null
+      : project.audioAssets
+            .where((candidate) => candidate.id == stretchedAssetId)
+            .firstOrNull;
+  return WriterBlockSnapshot(
+    laneKind: lane.kind,
+    audioClip: clip,
+    audioAsset: asset,
+    stretchedAudioAsset: stretchedAsset,
+    defaultLyrics: defaultLyrics,
+  );
+}
+
 // ─── Expanded-Section Mapping ────────────────────────────────────────────────
 
 class ExpandedSection {
@@ -460,17 +606,23 @@ List<SongBlock> tileLaneBlocks(
 
 // ─── Snapshot Resolution ─────────────────────────────────────────────────────
 
+/// Resolves a block's content. A canonical save is used only when its folder is
+/// inside [projectId]; a missing or foreign save falls back to retained content.
 InstrumentSnapshot? resolveBlockSnapshot(
   SongBlock block,
-  List<SaveEntry> saves,
-) {
-  if (block.embedded != null) return block.embedded;
+  List<SaveEntry> saves, {
+  required String? projectId,
+  required List<SaveFolder> folders,
+}) {
   final id = block.saveId;
-  if (id == null) return null;
-  for (final e in saves) {
-    if (e.id == id) return e.snapshot;
+  if (id != null && projectId != null) {
+    final entry = saves.where((save) => save.id == id).firstOrNull;
+    if (entry != null &&
+        getProjectIdForFolder(folders, entry.folderId) == projectId) {
+      return entry.snapshot;
+    }
   }
-  return null;
+  return block.embedded;
 }
 
 /// The chord a save block resolves to, for Roman-numeral display.

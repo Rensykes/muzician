@@ -74,6 +74,8 @@ Future<void> showSongwriterAudioPicker(
               section,
               cfg,
               ref.read(saveSystemProvider).saves,
+              projectId: ref.read(saveSystemProvider).selectedProjectId,
+              folders: ref.read(saveSystemProvider).folders,
               drumPatterns: project.drumPatterns,
             ),
             clips: sectionClips.clips,

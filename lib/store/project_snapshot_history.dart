@@ -23,6 +23,9 @@ class ProjectSnapshotHistory<T> {
   int get redoCount => _redo.length;
   int get revision => revisionListenable.value;
 
+  /// Snapshots still reachable through undo, redo, or an active history group.
+  Iterable<T> get retainedSnapshots => [..._undo, ..._redo, ?_groupStart];
+
   void recordChange(T before, T after) {
     if (_restoring || identical(before, after)) return;
     if (_groupDepth > 0) {

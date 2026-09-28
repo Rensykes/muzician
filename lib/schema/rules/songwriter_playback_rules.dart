@@ -165,9 +165,18 @@ List<int> _blockPitches(
   SongLane lane,
   SongBlock block,
   List<SaveEntry> saves,
+  String? projectId,
+  List<SaveFolder> folders,
 ) => lane.kind == SongLaneKind.harmony
     ? chordMidiNotes(block)
-    : snapshotMidiNotes(resolveBlockSnapshot(block, saves));
+    : snapshotMidiNotes(
+        resolveBlockSnapshot(
+          block,
+          saves,
+          projectId: projectId,
+          folders: folders,
+        ),
+      );
 
 SongLane? _strumHarmonyLane(SongSection section, SongLane lane) {
   for (final candidate in section.lanes) {
@@ -229,11 +238,14 @@ void _tileDrumHits(
 /// pitches at the block's start bar and every later bar boundary inside the
 /// block (clipped to the section); drum blocks fire their referenced
 /// [DrumPattern] hits at native tick resolution, tiled across the block span.
-/// Events sharing a tick are merged.
+/// Events sharing a tick are merged. Save references resolve only inside the
+/// supplied [projectId] folder tree; without project scope, fallbacks still work.
 List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   SongwriterProjectSnapshot project,
-  List<SaveEntry> saves,
-) {
+  List<SaveEntry> saves, {
+  String? projectId,
+  List<SaveFolder> folders = const [],
+}) {
   final cfg = project.config;
   final measureTicks = cfg.measureTicks;
 
@@ -302,7 +314,13 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
         switch (lane.kind) {
           case SongLaneKind.harmony:
           case SongLaneKind.save:
-            final pitches = _blockPitches(lane, block, saves);
+            final pitches = _blockPitches(
+              lane,
+              block,
+              saves,
+              projectId,
+              folders,
+            );
             if (pitches.isEmpty) break;
             for (var bar = block.startBar; bar < clippedEnd; bar++) {
               final tick = (exp.globalStartBar + bar) * measureTicks;
@@ -467,6 +485,8 @@ Map<int, List<int>> _sectionChordBed(
   SongSection section,
   SongwriterConfig config,
   List<SaveEntry> saves,
+  String? projectId,
+  List<SaveFolder> folders,
 ) {
   final measureTicks = config.measureTicks;
   final notesAt = <int, List<int>>{};
@@ -478,7 +498,7 @@ Map<int, List<int>> _sectionChordBed(
     final blocks = tileLaneBlocks(lane, sectionLengthBars: section.lengthBars);
     for (final block in blocks) {
       final clippedEnd = math.min(block.endBar, section.lengthBars);
-      final pitches = _blockPitches(lane, block, saves);
+      final pitches = _blockPitches(lane, block, saves, projectId, folders);
       if (pitches.isEmpty) continue;
       for (var bar = block.startBar; bar < clippedEnd; bar++) {
         (notesAt[bar * measureTicks] ??= <int>[]).addAll(pitches);
@@ -499,12 +519,14 @@ Map<int, List<int>> _sectionChordBed(
 ({int loopTicks, Map<int, List<int>> notesByTick}) sectionHarmonyLoop(
   SongSection section,
   SongwriterConfig config,
-  List<SaveEntry> saves,
-) {
+  List<SaveEntry> saves, {
+  String? projectId,
+  List<SaveFolder> folders = const [],
+}) {
   final measureTicks = config.measureTicks;
   return (
     loopTicks: section.lengthBars * measureTicks,
-    notesByTick: _sectionChordBed(section, config, saves),
+    notesByTick: _sectionChordBed(section, config, saves, projectId, folders),
   );
 }
 
@@ -517,6 +539,8 @@ SongwriterAuditionBed sectionAuditionBed(
   SongwriterConfig config,
   List<SaveEntry> saves, {
   List<DrumPattern> drumPatterns = const [],
+  String? projectId,
+  List<SaveFolder> folders = const [],
 }) {
   final measureTicks = config.measureTicks;
   final patterns = {for (final p in drumPatterns) p.id: p};
@@ -539,7 +563,7 @@ SongwriterAuditionBed sectionAuditionBed(
 
   return (
     loopTicks: section.lengthBars * measureTicks,
-    notesByTick: _sectionChordBed(section, config, saves),
+    notesByTick: _sectionChordBed(section, config, saves, projectId, folders),
     drumByTick: {for (final e in drumsAt.entries) e.key: e.value.toList()},
   );
 }
