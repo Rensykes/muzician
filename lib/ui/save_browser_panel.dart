@@ -135,17 +135,22 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   List<SaveEntry> _savesHere(
     List<SaveEntry> allSaves,
     List<WriterSaveLink> writerLinks,
+    List<SaveFolder> allFolders,
   ) {
     if (_currentFolderId == null) return [];
     final entriesById = <String, SaveEntry>{
       for (final save in getSavesInFolder(allSaves, _currentFolderId!))
         save.id: save,
     };
-    for (final link in writerLinks.where(
-      (link) => link.folderId == _currentFolderId,
-    )) {
+    for (final link in _writerLinksHere(allFolders, writerLinks)) {
+      final projectId = getProjectIdForFolder(allFolders, link.folderId);
       final linked = allSaves
-          .where((save) => save.id == link.saveId)
+          .where(
+            (save) =>
+                save.id == link.saveId &&
+                projectId != null &&
+                isFolderInProject(allFolders, save.folderId, projectId),
+          )
           .firstOrNull;
       if (linked != null) entriesById.putIfAbsent(linked.id, () => linked);
     }
@@ -159,6 +164,26 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
       if (filter != null && inst != filter) return false;
       if (allow != null && !allow.contains(inst)) return false;
       return true;
+    }).toList();
+  }
+
+  List<WriterSaveLink> _writerLinksHere(
+    List<SaveFolder> allFolders,
+    List<WriterSaveLink> writerLinks,
+  ) {
+    final folderId = _currentFolderId;
+    if (folderId == null) return const [];
+    final rootProjectId = widget.rootFolderId == null
+        ? getProjectIdForFolder(allFolders, folderId)
+        : getProjectIdForFolder(allFolders, widget.rootFolderId!);
+    if (rootProjectId == null) return const [];
+    return writerLinks.where((link) {
+      if (link.folderId != folderId) return false;
+      return isWriterSaveLinkCategoryValid(
+        allFolders,
+        link,
+        projectId: rootProjectId,
+      );
     }).toList();
   }
 
@@ -634,14 +659,18 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
 
     final breadcrumb = _breadcrumb(ssState.folders);
     final subFolders = _childFolders(ssState.folders);
-    final saves = _savesHere(ssState.saves, ssState.writerLinks);
+    final saves = _savesHere(
+      ssState.saves,
+      ssState.writerLinks,
+      ssState.folders,
+    );
     final linkedSaveIds = ssState.writerLinks
         .map((link) => link.saveId)
         .toSet();
-    final linkedSaveIdsHere = ssState.writerLinks
-        .where((link) => link.folderId == _currentFolderId)
-        .map((link) => link.saveId)
-        .toSet();
+    final linkedSaveIdsHere = _writerLinksHere(
+      ssState.folders,
+      ssState.writerLinks,
+    ).map((link) => link.saveId).toSet();
     final selectedSave = saves
         .where((save) => save.id == _selectedSaveId)
         .firstOrNull;
@@ -729,7 +758,13 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
 
           // ── Folder + Save list / grid ──
           gridMode
-              ? _buildGrid(context, subFolders, saves, insideFolder)
+              ? _buildGrid(
+                  context,
+                  subFolders,
+                  saves,
+                  insideFolder,
+                  linkedSaveIdsHere,
+                )
               : _buildList(
                   context,
                   subFolders,
@@ -860,6 +895,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     List<SaveFolder> subFolders,
     List<SaveEntry> saves,
     bool insideFolder,
+    Set<String> linkedSaveIdsHere,
   ) {
     if (subFolders.isEmpty && saves.isEmpty) {
       if (!insideFolder) {
@@ -919,12 +955,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                 .writerLinks
                 .map((link) => link.saveId)
                 .toSet(),
-            linkedSaveIdsHere: ref
-                .read(saveSystemProvider)
-                .writerLinks
-                .where((link) => link.folderId == _currentFolderId)
-                .map((link) => link.saveId)
-                .toSet(),
+            linkedSaveIdsHere: linkedSaveIdsHere,
           ),
           offKey: offKey,
           selected: _selectedSaveId == save.id,

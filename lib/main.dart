@@ -15,6 +15,7 @@ import 'features/song/song_screen.dart';
 import 'features/songwriter/songwriter_feature.dart';
 import 'features/save_system/data_recovery_panel.dart';
 import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
+import 'models/harmony_lane_instrument.dart';
 import 'models/piano.dart' show PianoViewMode;
 import 'models/save_system.dart';
 import 'utils/note_utils.dart' show chromaticNotes;
@@ -396,16 +397,19 @@ class _AppShellState extends ConsumerState<_AppShell> {
       return;
     }
 
-    switch (canonical.snapshot) {
+    final snapshot = canonical.snapshot is HarmonyChordSnapshot
+        ? (canonical.snapshot as HarmonyChordSnapshot).instrumentState
+        : canonical.snapshot;
+    switch (snapshot) {
       case FretboardSnapshot():
-        loadFretboardSnapshot(ref, canonical.snapshot);
+        loadFretboardSnapshot(ref, snapshot);
         setState(() {
           _linkedEditSaveId = canonical.id;
           _linkedEditProjectId = projectId;
         });
         _setTab(0);
       case PianoSnapshot():
-        loadPianoSnapshot(ref, canonical.snapshot);
+        loadPianoSnapshot(ref, snapshot);
         setState(() {
           _linkedEditSaveId = canonical.id;
           _linkedEditProjectId = projectId;
@@ -1031,6 +1035,55 @@ class _SettingsScreen extends ConsumerWidget {
       subtitle: 'Personalise your experience',
       children: [
         const DataRecoveryPanel(),
+        const SizedBox(height: 12),
+        _Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.queue_music, color: MuzicianTheme.sky, size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'Default Harmony instrument for new projects',
+                    style: TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              for (final instrument in HarmonyLaneInstrument.values)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    instrument == HarmonyLaneInstrument.fretboard
+                        ? Icons.music_note
+                        : Icons.piano,
+                    color: MuzicianTheme.sky,
+                  ),
+                  title: Text(
+                    instrument == HarmonyLaneInstrument.fretboard
+                        ? 'Fretboard'
+                        : 'Piano',
+                  ),
+                  trailing:
+                      settings.defaultNewProjectHarmonyInstrument == instrument
+                      ? const Icon(Icons.check_circle, color: MuzicianTheme.sky)
+                      : const Icon(Icons.circle_outlined),
+                  onTap: () => notifier.setDefaultNewProjectHarmonyInstrument(
+                    instrument,
+                  ),
+                ),
+              const Text(
+                'This choice is copied to new projects. Existing projects keep their current instrument.',
+                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 12),
         _Card(
           child: Column(

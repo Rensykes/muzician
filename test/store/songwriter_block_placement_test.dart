@@ -17,7 +17,13 @@ void main() {
     n.addSection(label: 'V', lengthBars: 16);
     final s = c.read(songwriterProvider).sections.single.id;
     n.addLane(sectionId: s, kind: SongLaneKind.save);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    final l = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.save)
+        .id;
     n.addSaveBlock(
       sectionId: s,
       laneId: l,
@@ -30,7 +36,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == l)
         .blocks
         .single
         .id;
@@ -47,7 +53,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == l)
         .blocks
         .single;
     expect(b.startBar, 4);
@@ -66,7 +72,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == l)
         .blocks
         .firstWhere((blk) => blk.saveId == 'y')
         .id;
@@ -82,7 +88,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == l)
         .blocks
         .firstWhere((blk) => blk.saveId == 'y');
     expect(y.startBar, 10); // unchanged — overlap rejected
@@ -136,7 +142,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == laneId)
           .blocks
           .single
           .id;
@@ -221,10 +227,13 @@ void main() {
       final n = c.read(songwriterProvider.notifier);
       n.addSection(label: 'Verse', lengthBars: 4);
       final sectionId = c.read(songwriterProvider).sections.single.id;
-      final harmonyLaneId = n.addLane(
-        sectionId: sectionId,
-        kind: SongLaneKind.harmony,
-      );
+      final harmonyLaneId = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+          .id;
       n.addHarmonyBlock(
         sectionId: sectionId,
         laneId: harmonyLaneId,
@@ -232,7 +241,7 @@ void main() {
           startBar: 0,
           spanBars: 4,
           chordSymbol: 'C',
-          chordQuality: 'major',
+          chordQuality: '',
           chordRootPc: 0,
           chordNotes: const ['C', 'E', 'G'],
         ),

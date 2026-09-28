@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
+import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
@@ -146,7 +148,7 @@ void main() {
 
   test('startup awaits canonical Writer save reconciliation', () async {
     const projectId = 'writer-project';
-    const draft = SongwriterProjectSnapshot(
+    final draft = SongwriterProjectSnapshot(
       config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
       sections: [
         SongSection(
@@ -159,6 +161,7 @@ void main() {
               id: 'harmony',
               kind: SongLaneKind.harmony,
               order: 0,
+              harmonyInstrument: HarmonyLaneInstrument.piano,
               blocks: [
                 SongBlock(
                   id: 'legacy-chord',
@@ -168,6 +171,43 @@ void main() {
                   chordQuality: 'm7',
                   chordRootPc: 9,
                   chordNotes: ['A', 'C', 'E', 'G'],
+                  embedded: HarmonyChordSnapshot(
+                    harmonyInstrument: HarmonyLaneInstrument.piano,
+                    writerBlock: WriterBlockSnapshot(
+                      laneKind: SongLaneKind.harmony,
+                      chordSymbol: 'Am7',
+                      chordQuality: 'm7',
+                      chordRootPc: 9,
+                      chordNotes: ['A', 'C', 'E', 'G'],
+                    ),
+                    instrumentState: PianoSnapshot(
+                      currentRange: PianoRangeName.key88,
+                      selectedKeys: const [
+                        PianoCoordinate(
+                          keyIndex: 36,
+                          midiNote: 57,
+                          noteName: 'A',
+                        ),
+                        PianoCoordinate(
+                          keyIndex: 39,
+                          midiNote: 60,
+                          noteName: 'C',
+                        ),
+                        PianoCoordinate(
+                          keyIndex: 43,
+                          midiNote: 64,
+                          noteName: 'E',
+                        ),
+                        PianoCoordinate(
+                          keyIndex: 46,
+                          midiNote: 67,
+                          noteName: 'G',
+                        ),
+                      ],
+                      selectedNotes: const ['A', 'C', 'E', 'G'],
+                      viewMode: PianoViewMode.exact,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -206,7 +246,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
         .blocks
         .single;
     expect(restoredBlock.saveId, isNotNull);
@@ -215,7 +255,11 @@ void main() {
     expect(saves.writerLinks.single.blockId, restoredBlock.id);
     expect(
       saves.folders
-          .singleWhere((folder) => folder.writerSectionId == 'verse')
+          .singleWhere(
+            (folder) =>
+                folder.writerSectionId == 'verse' &&
+                folder.writerLaneKind == null,
+          )
           .parentId,
       projectId,
     );

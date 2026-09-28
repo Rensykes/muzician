@@ -298,7 +298,9 @@ SaveFolder? getWriterSectionFolder(
 ) {
   for (final folder in state.folders) {
     if (folder.writerSectionId == sectionId &&
+        folder.writerLaneKind == null &&
         folder.parentId == projectId &&
+        folder.kind == SaveFolderKind.normal &&
         isFolderInProject(state.folders, folder.id, projectId)) {
       return folder;
     }
@@ -306,16 +308,146 @@ SaveFolder? getWriterSectionFolder(
   return null;
 }
 
+/// True when [folder] is the direct, lane-kind category child of a Writer
+/// section root. A Writer section root itself never carries a lane kind.
+bool isWriterLaneCategoryFolder(
+  List<SaveFolder> folders,
+  SaveFolder folder, {
+  String? projectId,
+  String? sectionId,
+  SongLaneKind? laneKind,
+}) {
+  final folderSectionId = folder.writerSectionId;
+  final folderLaneKind = folder.writerLaneKind;
+  if (folderSectionId == null ||
+      folderLaneKind == null ||
+      folder.kind != SaveFolderKind.normal ||
+      (sectionId != null && folderSectionId != sectionId) ||
+      (laneKind != null && folderLaneKind != laneKind)) {
+    return false;
+  }
+
+  final sectionFolder = folders
+      .where((candidate) => candidate.id == folder.parentId)
+      .firstOrNull;
+  if (sectionFolder == null ||
+      sectionFolder.parentId == null ||
+      sectionFolder.writerSectionId != folderSectionId ||
+      sectionFolder.writerLaneKind != null ||
+      sectionFolder.kind != SaveFolderKind.normal ||
+      (projectId != null && sectionFolder.parentId != projectId)) {
+    return false;
+  }
+  final enclosingProjectId = getProjectIdForFolder(folders, sectionFolder.id);
+  return enclosingProjectId != null &&
+      sectionFolder.parentId == enclosingProjectId &&
+      (projectId == null || enclosingProjectId == projectId) &&
+      isFolderInProject(folders, folder.id, enclosingProjectId);
+}
+
+bool isWriterSaveLinkCategoryValid(
+  List<SaveFolder> folders,
+  WriterSaveLink link, {
+  required String projectId,
+}) {
+  final folder = folders
+      .where((candidate) => candidate.id == link.folderId)
+      .firstOrNull;
+  return folder != null &&
+      isWriterLaneCategoryFolder(
+        folders,
+        folder,
+        projectId: projectId,
+        sectionId: link.sectionId,
+        laneKind: link.laneKind,
+      );
+}
+
+SaveFolder? getWriterLaneCategoryFolder(
+  SaveSystemState state, {
+  required String projectId,
+  required String sectionId,
+  required SongLaneKind laneKind,
+}) {
+  final sectionFolder = getWriterSectionFolder(state, projectId, sectionId);
+  if (sectionFolder == null) return null;
+  return state.folders
+      .where(
+        (folder) =>
+            folder.parentId == sectionFolder.id &&
+            isWriterLaneCategoryFolder(
+              state.folders,
+              folder,
+              projectId: projectId,
+              sectionId: sectionId,
+              laneKind: laneKind,
+            ),
+      )
+      .firstOrNull;
+}
+
+/// Reuses a lane category's stable ID when it already exists in [state], or
+/// stages a new direct child of [sectionFolder] with deterministic ordering.
+SaveFolder getOrCreateWriterLaneFolder(
+  SaveSystemState state, {
+  required String projectId,
+  required String sectionId,
+  required SongLaneKind laneKind,
+  required SaveFolder sectionFolder,
+}) {
+  final sectionRoot = getWriterSectionFolder(state, projectId, sectionId);
+  final root = sectionRoot?.id == sectionFolder.id ? sectionRoot : null;
+  if (root == null || sectionFolder.writerSectionId != sectionId) {
+    throw ArgumentError('sectionFolder must be the Writer section root.');
+  }
+  final existing = getWriterLaneCategoryFolder(
+    state,
+    projectId: projectId,
+    sectionId: sectionId,
+    laneKind: laneKind,
+  );
+  if (existing != null) return existing;
+
+  return SaveFolder(
+    id: generateId(),
+    name: _writerLaneFolderName(laneKind),
+    parentId: sectionFolder.id,
+    createdAt: DateTime.now().millisecondsSinceEpoch,
+    order: laneKind.index,
+    writerSectionId: sectionId,
+    writerLaneKind: laneKind,
+  );
+}
+
+String _writerLaneFolderName(SongLaneKind laneKind) => switch (laneKind) {
+  SongLaneKind.harmony => 'Harmony',
+  SongLaneKind.save => 'Voicing',
+  SongLaneKind.drum => 'Drum',
+  SongLaneKind.audio => 'Audio',
+  SongLaneKind.melody => 'Melody',
+  SongLaneKind.guitarStrum => 'Guitar strum',
+};
+
 List<WriterSaveLink> getWriterLinksForSection(
   SaveSystemState state,
   String projectId,
   String sectionId,
 ) {
-  final folder = getWriterSectionFolder(state, projectId, sectionId);
-  if (folder == null) return const [];
+  if (getWriterSectionFolder(state, projectId, sectionId) == null) {
+    return const [];
+  }
   return state.writerLinks
       .where(
-        (link) => link.sectionId == sectionId && link.folderId == folder.id,
+        (link) =>
+            link.sectionId == sectionId &&
+            resolveSaveInProject(state, projectId, link.saveId) != null &&
+            getWriterLaneCategoryFolder(
+                  state,
+                  projectId: projectId,
+                  sectionId: sectionId,
+                  laneKind: link.laneKind,
+                )?.id ==
+                link.folderId,
       )
       .toList();
 }
@@ -330,7 +462,11 @@ List<WriterSaveLink> getWriterLinksForSave(
       .where(
         (link) =>
             link.saveId == saveId &&
-            isFolderInProject(state.folders, link.folderId, projectId),
+            isWriterSaveLinkCategoryValid(
+              state.folders,
+              link,
+              projectId: projectId,
+            ),
       )
       .toList();
 }
@@ -382,12 +518,28 @@ String? writerSaveFolderForLinks(
   required String projectId,
   required SaveEntry save,
   required List<WriterSaveLink> links,
+  String? originalFolderId,
 }) {
   if (save.origin != SaveOrigin.writer) return save.folderId;
-  final sectionFoldersById = {
+  final physicalFolderId = originalFolderId ?? save.folderId;
+  if (isFolderInProject(state.folders, physicalFolderId, projectId)) {
+    return physicalFolderId;
+  }
+  final sectionRootsById = {
     for (final folder in state.folders)
       if (folder.writerSectionId != null &&
+          folder.writerLaneKind == null &&
+          folder.parentId == projectId &&
           isFolderInProject(state.folders, folder.id, projectId))
+        folder.writerSectionId!: folder,
+  };
+  final laneFoldersById = {
+    for (final folder in state.folders)
+      if (isWriterLaneCategoryFolder(
+        state.folders,
+        folder,
+        projectId: projectId,
+      ))
         folder.id: folder,
   };
   final linkedFolders =
@@ -395,15 +547,26 @@ String? writerSaveFolderForLinks(
           .where((link) => link.saveId == save.id)
           .where(
             (link) =>
-                sectionFoldersById[link.folderId]?.writerSectionId ==
-                link.sectionId,
+                laneFoldersById[link.folderId]?.writerSectionId ==
+                    link.sectionId &&
+                laneFoldersById[link.folderId]?.writerLaneKind == link.laneKind,
           )
-          .map((link) => sectionFoldersById[link.folderId])
+          .map((link) => laneFoldersById[link.folderId])
           .whereType<SaveFolder>()
           .toList()
         ..sort((a, b) {
-          final byOrder = a.order.compareTo(b.order);
-          return byOrder != 0 ? byOrder : a.createdAt.compareTo(b.createdAt);
+          final aSectionOrder =
+              sectionRootsById[a.writerSectionId]?.order ?? a.order;
+          final bSectionOrder =
+              sectionRootsById[b.writerSectionId]?.order ?? b.order;
+          final bySectionOrder = aSectionOrder.compareTo(bSectionOrder);
+          if (bySectionOrder != 0) return bySectionOrder;
+          final bySectionId = a.writerSectionId!.compareTo(b.writerSectionId!);
+          if (bySectionId != 0) return bySectionId;
+          final byLaneOrder = a.writerLaneKind!.index.compareTo(
+            b.writerLaneKind!.index,
+          );
+          return byLaneOrder != 0 ? byLaneOrder : a.id.compareTo(b.id);
         });
   return linkedFolders.isEmpty ? projectId : linkedFolders.first.id;
 }

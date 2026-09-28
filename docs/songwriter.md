@@ -23,7 +23,7 @@ Settings does not change that preference.
 | `SongwriterProjectSnapshot` | `InstrumentSnapshot` subtype (`type: 'songwriter'`) — `config` + ordered `sections`. |
 | `SongwriterConfig` | `tempo`, `beatsPerBar`, `beatUnit`, optional `keyRoot` (pitch class) + `keyScaleName`. |
 | `SongSection` | `id`, optional `label`, `lengthBars`, `order`, `repeat`, `lanes`. |
-| `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; strum lanes may select an `anchorLaneId` harmony lane. |
+| `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; Harmony lanes carry a fixed Piano or Fretboard identity, and strum lanes may select an `anchorLaneId` harmony lane. |
 | `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter), canonical `saveId`, and local lyrics/placement; pattern lanes reference their pattern id; legacy content fields and `embedded` snapshot are fallback data. Harmony extras include `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, and `romanNumeral`. |
 | `NotePattern` / `GuitarStrumPattern` | Melody pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. |
 
@@ -36,18 +36,50 @@ broken.
 
 Each Writer section has a managed folder directly under the selected project;
 folder identity follows the section ID, so same-named sections remain separate
-and section repeats do not create extra folders. Each recoverable source block,
-in every lane, has one canonical `SaveEntry` and one section link. Repeated
-renderings of the same source block reuse that link. The Save browser shows
-linked entries inside each section folder while retaining one canonical save
-record.
+and section repeats do not create extra folders. Category folders beneath it
+group linked saves by lane kind: Harmony, Voicing, Drum, Audio, Melody, and
+Guitar strum. Each recoverable source block has one canonical `SaveEntry` and
+one link to its section/category. Repeated renderings of the same source block
+reuse that link. The Save browser shows linked entries inside the category
+folder while retaining one canonical save record.
 
-Editing a shared save updates the musical content in every Writer placement
-that uses it. Lyrics, bar position, span, and section-specific placement remain
-local. Pattern and clip edits also update every block that references the
-edited pattern or clip. **Make Unique** copies the save for the selected block;
-Writer-native patterns and clips receive independent IDs, while audio source
-files can remain shared. The copied save can then be renamed independently.
+The app-wide **Default Harmony instrument for new projects** setting selects
+Piano or Fretboard. If it is unset, creating the first project asks for an
+instrument before creating anything; the choice is saved in Settings and in
+the new project's config. Each new section starts with one primary Harmony
+Lane using that project default. Additional Harmony lanes choose their
+instrument when created. An empty Harmony lane with no anchored Save/Voicing
+lane can change instruments without changing its lane ID. Existing projects
+keep their stored default.
+
+**Add chord** creates one Harmony block and one linked `HarmonyChordSnapshot`
+in that section's Harmony folder. The snapshot keeps the Writer chord and its
+native Piano/Fretboard realization together. No separate visible Save block is
+created for the chord. Harmony library choices must match the lane instrument.
+The block action sheet opens its native Piano or Fretboard editor. Exact native
+voicings can only be placed on Save/Voicing lanes anchored to a Harmony lane
+with the same instrument; handoff offers a compatible existing lane or stages
+one when needed.
+
+Editing a shared Harmony save warns when it is linked in multiple places and
+offers **Update all placements** or **Create standalone Save**. Updating all
+changes the canonical save. Creating a standalone Save copies the complete
+composite to a manual Save in the project root and leaves Writer blocks and
+links untouched; use **Replace chord** in Writer to bind it to one placement.
+Replacement preserves that block's bar, duration, repeats, and local lyrics.
+The Harmony block action sheet uses **Create standalone Save**; **Make Unique**
+keeps its detach behavior for other Writer block and Save-lane kinds.
+
+Deleting a Harmony lane also deletes its dependent Save/Voicing lanes in the
+same undoable change, and the confirmation names that impact. A Save/Voicing
+lane with a stale explicit anchor stays visible in its own unresolved row and
+offers only compatible Harmony lanes for repair; it never falls back to the
+primary lane. Tap a Save block there to edit it in its native instrument when
+that editor is available, or choose **Remove save**. If no Harmony lane can
+accept the blocks, the row offers **Remove lane**. An explicitly anchored
+Guitar Strum lane keeps its missing lane ID and stays unresolved until
+repaired; an unset anchor continues to follow the section's primary Harmony
+lane.
 
 Fretboard and Piano saves made outside Writer stay in the project root as free
 ideas. **Use in Writer** explicitly links a selected root idea without moving or
@@ -169,10 +201,11 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `makeBlockUnique(...)` | Copy the canonical save and detach the selected placement; one Writer history step. |
 | `loadProject(project)` | Replace the active Writer session from a named Song version, materializing its retained block content when shared saves have since changed. |
 
-Writer's **Add chord** action creates a named canonical save, using the chord
-symbol as its default name. Block actions can rename the save, make the block
-unique, or open a linked voicing in Fretboard/Piano for an explicit **Update
-linked save**. Updating a linked save refreshes all its Writer placements.
+Writer's **Add chord** action creates a named canonical Harmony save, using the
+chord symbol as its default name. Block actions can rename the save, replace a
+chord from the compatible Harmony library, or open its native Piano/Fretboard
+representation. A shared-save edit offers **Update all placements** or a
+standalone Save; the latter does not rebind blocks automatically.
 
 The notifier no longer exposes a public `hydrate()`. Instead, `build()` listens
 to `saveSystemProvider.selectedProjectId` changes. When the project changes the

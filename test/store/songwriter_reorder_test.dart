@@ -17,10 +17,10 @@ void main() {
     n.addLane(sectionId: s, kind: SongLaneKind.save, label: 'B');
     n.addLane(sectionId: s, kind: SongLaneKind.save, label: 'C');
 
-    n.reorderLanes(s, 2, 0); // move C to front
+    n.reorderLanes(s, 3, 1); // move C before A, after the primary Harmony lane
 
     final lanes = c.read(songwriterProvider).sections.single.lanes;
-    expect(lanes.map((l) => l.label).toList(), ['C', 'A', 'B']);
-    expect(lanes.map((l) => l.order).toList(), [0, 1, 2]);
+    expect(lanes.map((l) => l.label).toList(), [null, 'C', 'A', 'B']);
+    expect(lanes.map((l) => l.order).toList(), [0, 1, 2, 3]);
   });
 }

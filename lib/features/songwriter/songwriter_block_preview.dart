@@ -85,6 +85,40 @@ Future<void> makeWriterBlockUnique(
   }
 }
 
+Future<void> createStandaloneHarmonySaveFromBlock(
+  BuildContext context,
+  WidgetRef ref,
+  SaveEntry entry,
+) async {
+  final name = await showWriterSaveNameDialog(
+    context,
+    initialName: _copyName(entry.name),
+    title: 'Create standalone Save',
+  );
+  if (name == null || !context.mounted) return;
+  if (!isValidSaveName(name)) {
+    _showWriterSaveFeedback(context, 'Enter a name of up to 80 characters.');
+    return;
+  }
+  final notifier = ref.read(songwriterProvider.notifier);
+  final standaloneId = notifier.createStandaloneHarmonySave(
+    sourceSaveId: entry.id,
+    name: name,
+  );
+  if (standaloneId == null) {
+    _showWriterSaveFeedback(
+      context,
+      notifier.lastHarmonyMutationError ??
+          'Could not create a standalone Save.',
+    );
+    return;
+  }
+  _showWriterSaveFeedback(
+    context,
+    'Created standalone Save “$name”. Writer chords are unchanged.',
+  );
+}
+
 Widget writerLinkedBlockActionsMenu(
   BuildContext context,
   WidgetRef ref, {

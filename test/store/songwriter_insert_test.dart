@@ -20,11 +20,17 @@ void main() {
     expect(c.read(songwriterProvider).sections.map((s) => s.label), ['A', 'C']);
 
     n.insertSection(removed, 1);
-    final labels =
-        c.read(songwriterProvider).sections.map((s) => s.label).toList();
+    final labels = c
+        .read(songwriterProvider)
+        .sections
+        .map((s) => s.label)
+        .toList();
     expect(labels, ['A', 'B', 'C']);
-    final orders =
-        c.read(songwriterProvider).sections.map((s) => s.order).toList();
+    final orders = c
+        .read(songwriterProvider)
+        .sections
+        .map((s) => s.order)
+        .toList();
     expect(orders, [0, 1, 2]);
   });
 
@@ -34,15 +40,24 @@ void main() {
     final n = c.read(songwriterProvider.notifier);
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
-    n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'H');
     n.addLane(sectionId: s, kind: SongLaneKind.save, label: 'G');
-    final lane = c.read(songwriterProvider).sections.single.lanes[0];
+    final lane = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((candidate) => candidate.kind == SongLaneKind.save);
     n.removeLane(sectionId: s, laneId: lane.id);
     expect(c.read(songwriterProvider).sections.single.lanes.length, 1);
-    n.insertLane(sectionId: s, lane: lane, index: 0);
+    n.insertLane(sectionId: s, lane: lane, index: 1);
     expect(
-        c.read(songwriterProvider).sections.single.lanes.map((l) => l.label),
-        ['H', 'G']);
+      c.read(songwriterProvider).sections.single.lanes.map((l) => l.kind),
+      [SongLaneKind.harmony, SongLaneKind.save],
+    );
+    expect(
+      c.read(songwriterProvider).sections.single.lanes.map((l) => l.label),
+      [null, 'G'],
+    );
   });
 
   test('insertBlock restores a removed block', () {
@@ -52,25 +67,51 @@ void main() {
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
     n.addLane(sectionId: s, kind: SongLaneKind.save);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    final l = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.save)
+        .id;
     n.addSaveBlock(
-        sectionId: s, laneId: l, saveId: 'x', startBar: 0, spanBars: 2);
-    final block =
-        c.read(songwriterProvider).sections.single.lanes.single.blocks.single;
+      sectionId: s,
+      laneId: l,
+      saveId: 'x',
+      startBar: 0,
+      spanBars: 2,
+    );
+    final block = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == l)
+        .blocks
+        .single;
     n.removeBlock(sectionId: s, laneId: l, blockId: block.id);
-    expect(c.read(songwriterProvider).sections.single.lanes.single.blocks,
-        isEmpty);
+    expect(
+      c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == l)
+          .blocks,
+      isEmpty,
+    );
     n.insertBlock(sectionId: s, laneId: l, block: block);
     expect(
-        c
-            .read(songwriterProvider)
-            .sections
-            .single
-            .lanes
-            .single
-            .blocks
-            .single
-            .id,
-        block.id);
+      c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == l)
+          .blocks
+          .single
+          .id,
+      block.id,
+    );
   });
 }

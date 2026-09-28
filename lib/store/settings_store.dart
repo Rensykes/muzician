@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/harmony_lane_instrument.dart';
 import '../models/save_system.dart';
 import '../schema/rules/mono_pitch_rules.dart';
 
@@ -81,6 +82,15 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setLastContentWorkspace(String? workspace) async {
     state = state.copyWith(lastContentWorkspace: () => workspace);
+    await _persist();
+  }
+
+  Future<void> setDefaultNewProjectHarmonyInstrument(
+    HarmonyLaneInstrument instrument,
+  ) async {
+    state = state.copyWith(
+      defaultNewProjectHarmonyInstrument: () => instrument,
+    );
     await _persist();
   }
 }

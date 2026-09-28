@@ -4,7 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
+import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/schema/rules/songwriter_rules.dart';
+import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
@@ -15,6 +21,7 @@ void main() {
   Future<ProviderContainer> pumpSheet(
     WidgetTester tester, {
     required void Function(SongwriterNotifier n) seed,
+    ValueChanged<SaveEntry>? onEditInstrumentSave,
   }) async {
     await tester.binding.setSurfaceSize(const Size(400, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -24,7 +31,13 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+        child: MaterialApp(
+          home: Scaffold(
+            body: SongwriterScreenSheet(
+              onEditInstrumentSave: onEditInstrumentSave,
+            ),
+          ),
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
@@ -39,7 +52,6 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 4);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
         n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
       },
     );
@@ -55,13 +67,274 @@ void main() {
     );
   });
 
+  testWidgets('stale explicit Save anchor stays visible and can be repaired', (
+    tester,
+  ) async {
+    final container = await pumpSheet(tester, seed: (_) {});
+    final saveSystem = container.read(saveSystemProvider.notifier);
+    final projectId = saveSystem.createProject(
+      'Project',
+      const ProjectConfig(
+        defaultHarmonyInstrument: HarmonyLaneInstrument.fretboard,
+      ),
+    )!;
+    saveSystem.selectProject(projectId);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final pianoLaneId = writer.addHarmonyLane(
+      sectionId: section.id,
+      harmonyInstrument: HarmonyLaneInstrument.piano,
+      label: 'Piano',
+    )!;
+    final saveLaneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.save,
+      label: 'Piano Voicings',
+    );
+    writer.setLaneAnchorLane(
+      sectionId: section.id,
+      laneId: saveLaneId,
+      harmonyLaneId: pianoLaneId,
+    );
+    final pianoSaveId = saveSystem.saveSnapshot(
+      'Piano voicing',
+      projectId,
+      PianoSnapshot(
+        currentRange: PianoRangeName.key61,
+        selectedKeys: const [],
+        selectedNotes: const ['C4', 'E4', 'G4'],
+        viewMode: PianoViewMode.exact,
+      ),
+    )!;
+    writer.addSaveBlock(
+      sectionId: section.id,
+      laneId: saveLaneId,
+      saveId: pianoSaveId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    await writer.reconcileCurrentProject();
+    final block = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == saveLaneId)
+        .blocks
+        .single;
+    final currentSection = container.read(songwriterProvider).sections.single;
+    writer.state = writer.state.copyWith(
+      sections: [
+        currentSection.copyWith(
+          lanes: [
+            for (final lane in currentSection.lanes)
+              if (lane.id == saveLaneId)
+                lane.copyWith(anchorLaneId: 'deleted-harmony-lane')
+              else
+                lane,
+          ],
+        ),
+      ],
+    );
+
+    for (final size in [const Size(390, 844), const Size(1180, 820)]) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'viewport $size');
+    }
+    expect(
+      find.byKey(Key('unresolvedSaveLane_${saveLaneId}_0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(Key('unresolvedSaveBlock_${block.id}_0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(Key('saveCell_${block.id}_0')), findsNothing);
+
+    await tester.tap(find.byKey(Key('repairSaveAnchor_${saveLaneId}_0')));
+    await tester.pumpAndSettle();
+    final pianoHarmonyLane = currentSection.lanes.firstWhere(
+      (lane) =>
+          lane.kind == SongLaneKind.harmony &&
+          lane.harmonyInstrument == HarmonyLaneInstrument.piano,
+    );
+    await tester.tap(find.text('Piano').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == saveLaneId)
+          .anchorLaneId,
+      pianoHarmonyLane.id,
+    );
+    expect(find.byKey(Key('unresolvedSaveLane_${saveLaneId}_0')), findsNothing);
+    expect(find.byKey(Key('saveCell_${block.id}_0')), findsOneWidget);
+  });
+
+  testWidgets(
+    'unresolved Save blocks open native editor and can be removed with their lane',
+    (tester) async {
+      SaveEntry? editedEntry;
+      final container = await pumpSheet(
+        tester,
+        seed: (_) {},
+        onEditInstrumentSave: (entry) => editedEntry = entry,
+      );
+      final saveSystem = container.read(saveSystemProvider.notifier);
+      final projectId = saveSystem.createProject(
+        'Project',
+        const ProjectConfig(
+          defaultHarmonyInstrument: HarmonyLaneInstrument.fretboard,
+        ),
+      )!;
+      saveSystem.selectProject(projectId);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final pianoLaneId = writer.addHarmonyLane(
+        sectionId: section.id,
+        harmonyInstrument: HarmonyLaneInstrument.piano,
+        label: 'Piano',
+      )!;
+      final saveLaneId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.save,
+        label: 'Piano Voicings',
+      );
+      writer.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: saveLaneId,
+        harmonyLaneId: pianoLaneId,
+      );
+      final pianoSaveId = saveSystem.saveSnapshot(
+        'Piano voicing',
+        projectId,
+        PianoSnapshot(
+          currentRange: PianoRangeName.key61,
+          selectedKeys: const [],
+          selectedNotes: const ['C4', 'E4', 'G4'],
+          viewMode: PianoViewMode.exact,
+        ),
+      )!;
+      for (var bar = 0; bar < 2; bar++) {
+        writer.addSaveBlock(
+          sectionId: section.id,
+          laneId: saveLaneId,
+          saveId: pianoSaveId,
+          startBar: bar,
+          spanBars: 1,
+        );
+      }
+      await writer.reconcileCurrentProject();
+
+      final currentSection = container.read(songwriterProvider).sections.single;
+      final saveBlocks = currentSection.lanes
+          .singleWhere((lane) => lane.id == saveLaneId)
+          .blocks;
+      final primaryHarmonyLane = currentSection.lanes.firstWhere(
+        (lane) => lane.kind == SongLaneKind.harmony,
+      );
+      writer.state = writer.state.copyWith(
+        sections: [
+          currentSection.copyWith(
+            lanes: [
+              for (final lane in currentSection.lanes)
+                if (lane.id != pianoLaneId)
+                  if (lane.id == saveLaneId)
+                    lane.copyWith(anchorLaneId: 'deleted-harmony-lane')
+                  else
+                    lane,
+            ],
+          ),
+        ],
+      );
+
+      for (final size in [const Size(390, 844), const Size(1180, 820)]) {
+        await tester.binding.setSurfaceSize(size);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'viewport $size');
+      }
+      expect(primaryHarmonyLane.kind, SongLaneKind.harmony);
+      expect(
+        find.byKey(Key('unresolvedSaveLane_${saveLaneId}_0')),
+        findsOneWidget,
+      );
+      expect(find.text('No compatible Harmony lane'), findsOneWidget);
+      expect(
+        find.byKey(Key('saveCell_${saveBlocks.first.id}_0')),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(Key('unresolvedSaveBlock_${saveBlocks.first.id}_0')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(Key('unresolvedSaveEdit_${saveBlocks.first.id}')),
+      );
+      await tester.pumpAndSettle();
+      expect(editedEntry?.id, pianoSaveId);
+
+      await tester.tap(
+        find.byKey(Key('unresolvedSaveBlock_${saveBlocks.first.id}_0')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(Key('unresolvedSaveRemove_${saveBlocks.first.id}')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .singleWhere((lane) => lane.id == saveLaneId)
+            .blocks,
+        hasLength(1),
+      );
+      expect(find.text('No compatible Harmony lane'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(Key('removeUnresolvedSaveLane_${saveLaneId}_0')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(Key('confirmRemoveUnresolvedSaveLane_$saveLaneId')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .any((lane) => lane.id == saveLaneId),
+        isFalse,
+      );
+      expect(
+        container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .any((lane) => lane.id == primaryHarmonyLane.id),
+        isTrue,
+      );
+    },
+  );
+
   testWidgets('section menu adds a numbered harmony lane', (tester) async {
     final container = await pumpSheet(
       tester,
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 4);
-        final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
       },
     );
     final sectionId = container.read(songwriterProvider).sections.single.id;
@@ -69,6 +342,9 @@ void main() {
     await tester.tap(find.byKey(Key('sheetSectionMenu_$sectionId')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('addHarmonyLaneSheetAction')));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a Harmony instrument'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('harmonyInstrumentOption_piano')));
     await tester.pumpAndSettle();
 
     final lanes = container
@@ -80,7 +356,355 @@ void main() {
         .toList();
     expect(lanes, hasLength(2));
     expect(lanes.last.label, 'Harmony 2');
+    expect(lanes.last.harmonyInstrument, HarmonyLaneInstrument.piano);
+    expect(find.text('Piano'), findsOneWidget);
   });
+
+  testWidgets(
+    'canceling secondary lane instrument selection is mutation-free',
+    (tester) async {
+      final container = await pumpSheet(
+        tester,
+        seed: (n) => n.addSection(label: 'Verse', lengthBars: 4),
+      );
+      final sectionId = container.read(songwriterProvider).sections.single.id;
+      final initialLanes = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes;
+
+      await tester.tap(find.byKey(Key('sheetSectionMenu_$sectionId')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('addHarmonyLaneSheetAction')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('harmonyInstrumentCancel')));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(songwriterProvider).sections.single.lanes,
+        same(initialLanes),
+      );
+      expect(find.text('Choose a Harmony instrument'), findsNothing);
+    },
+  );
+
+  testWidgets('Harmony lane header exposes its project-default instrument', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final projectId = container
+        .read(saveSystemProvider.notifier)
+        .createProject(
+          'Piano project',
+          const ProjectConfig(
+            defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+          ),
+        )!;
+    container.read(saveSystemProvider.notifier).selectProject(projectId);
+    container
+        .read(songwriterProvider.notifier)
+        .addSection(label: 'Verse', lengthBars: 2);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final lane = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single;
+    expect(lane.harmonyInstrument, HarmonyLaneInstrument.piano);
+    expect(find.text('Piano'), findsOneWidget);
+    expect(find.byKey(Key('harmonyLaneInstrument_${lane.id}')), findsOneWidget);
+  });
+
+  testWidgets('empty Harmony lane can change instrument without changing ID', (
+    tester,
+  ) async {
+    final container = await pumpSheet(
+      tester,
+      seed: (n) => n.addSection(label: 'Verse', lengthBars: 2),
+    );
+    final section = container.read(songwriterProvider).sections.single;
+    final lane = section.lanes.single;
+    expect(
+      find.byKey(Key('changeHarmonyLaneInstrument_${lane.id}')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(Key('changeHarmonyLaneInstrument_${lane.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('harmonyInstrumentOption_piano')));
+    await tester.pumpAndSettle();
+
+    final changedLane = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single;
+    expect(changedLane.id, lane.id);
+    expect(changedLane.harmonyInstrument, HarmonyLaneInstrument.piano);
+  });
+
+  testWidgets('stale guitar strum anchor shows unresolved instead of primary', (
+    tester,
+  ) async {
+    SongLane? strumLane;
+    final container = await pumpSheet(
+      tester,
+      seed: (n) {
+        n.addSection(label: 'Verse', lengthBars: 2);
+        final sectionId = n.state.sections.single.id;
+        final secondaryId = n.addLane(
+          sectionId: sectionId,
+          kind: SongLaneKind.harmony,
+        );
+        final strumId = n.addLane(
+          sectionId: sectionId,
+          kind: SongLaneKind.guitarStrum,
+        );
+        n.setLaneAnchorLane(
+          sectionId: sectionId,
+          laneId: strumId,
+          harmonyLaneId: secondaryId,
+        );
+        n.removeLane(sectionId: sectionId, laneId: secondaryId);
+        strumLane = n.state.sections.single.lanes.singleWhere(
+          (lane) => lane.id == strumId,
+        );
+      },
+    );
+
+    final dropdown = tester.widget<DropdownButton<String>>(
+      find.byKey(Key('strumAnchor_${strumLane!.id}_0')),
+    );
+    expect(dropdown.value, isNull);
+    expect(find.text('Unresolved'), findsOneWidget);
+    expect(
+      container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == strumLane!.id)
+          .anchorLaneId,
+      strumLane!.anchorLaneId,
+    );
+  });
+
+  testWidgets(
+    'duplicate Harmony action copies placements with shared Save IDs',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final projectId = container
+          .read(saveSystemProvider.notifier)
+          .createProject('Writer project', const ProjectConfig())!;
+      container.read(saveSystemProvider.notifier).selectProject(projectId);
+      final notifier = container.read(songwriterProvider.notifier);
+      notifier.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final sourceLane = section.lanes.single;
+      final result = notifier.addHarmonyChord(
+        sectionId: section.id,
+        laneId: sourceLane.id,
+        block: makeHarmonyBlock(
+          startBar: 0,
+          spanBars: 1,
+          chordSymbol: 'C',
+          chordQuality: '',
+          chordRootPc: 0,
+          chordNotes: const ['C', 'E', 'G'],
+        ),
+      );
+      expect(result.success, isTrue, reason: result.errorMessage);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(
+        find.byKey(Key('duplicateHarmonyLane_${sourceLane.id}')),
+      );
+      await tester.pumpAndSettle();
+
+      final lanes = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .where((lane) => lane.kind == SongLaneKind.harmony)
+          .toList();
+      expect(lanes, hasLength(2));
+      expect(lanes.last.harmonyInstrument, sourceLane.harmonyInstrument);
+      expect(lanes.last.blocks, hasLength(1));
+      expect(lanes.last.blocks.single.id, isNot(lanes.first.blocks.single.id));
+      expect(lanes.last.blocks.single.saveId, lanes.first.blocks.single.saveId);
+    },
+  );
+
+  testWidgets(
+    'Replace chord picker filters by lane instrument and cancel keeps placement',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final projectId = container
+          .read(saveSystemProvider.notifier)
+          .createProject('Writer project', const ProjectConfig())!;
+      container.read(saveSystemProvider.notifier).selectProject(projectId);
+      final notifier = container.read(songwriterProvider.notifier);
+      notifier.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final primaryLane = section.lanes.single;
+      final target = notifier.addHarmonyChord(
+        sectionId: section.id,
+        laneId: primaryLane.id,
+        block: makeHarmonyBlock(
+          startBar: 0,
+          spanBars: 2,
+          chordSymbol: 'C',
+          chordQuality: '',
+          chordRootPc: 0,
+          chordNotes: const ['C', 'E', 'G'],
+        ).copyWith(lyrics: const ['Keep this lyric']),
+      );
+      final replacement = notifier.addHarmonyChord(
+        sectionId: section.id,
+        laneId: primaryLane.id,
+        block: makeHarmonyBlock(
+          startBar: 2,
+          spanBars: 1,
+          chordSymbol: 'G',
+          chordQuality: '',
+          chordRootPc: 7,
+          chordNotes: const ['G', 'B', 'D'],
+        ),
+      );
+      final pianoLaneId = notifier.addHarmonyLane(
+        sectionId: section.id,
+        harmonyInstrument: HarmonyLaneInstrument.piano,
+      );
+      final incompatible = notifier.addHarmonyChord(
+        sectionId: section.id,
+        laneId: pianoLaneId,
+        block: makeHarmonyBlock(
+          startBar: 0,
+          spanBars: 1,
+          chordSymbol: 'Dm',
+          chordQuality: 'm',
+          chordRootPc: 2,
+          chordNotes: const ['D', 'F', 'A'],
+        ),
+      );
+      expect(target.success, isTrue, reason: target.errorMessage);
+      expect(replacement.success, isTrue, reason: replacement.errorMessage);
+      expect(incompatible.success, isTrue, reason: incompatible.errorMessage);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.text('C'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('barActionReplaceChord')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('barActionReplaceChord')));
+      await tester.pumpAndSettle();
+
+      final saves = container.read(saveSystemProvider).saves;
+      final replacementId = saves.singleWhere((save) => save.name == 'G').id;
+      final incompatibleId = saves.singleWhere((save) => save.name == 'Dm').id;
+      expect(
+        find.byKey(Key('harmonyLibrarySave_$replacementId')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('harmonyLibrarySave_$incompatibleId')),
+        findsNothing,
+      );
+
+      await tester.tap(find.bySemanticsLabel('Close').last);
+      await tester.pumpAndSettle();
+      final currentTarget = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == primaryLane.id)
+          .blocks
+          .singleWhere((block) => block.id == target.blockId);
+      expect(currentTarget.saveId, isNot(replacementId));
+      expect(currentTarget.startBar, 0);
+      expect(currentTarget.spanBars, 2);
+      expect(currentTarget.lyrics, ['Keep this lyric']);
+
+      await tester.tap(find.text('C'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('barActionReplaceChord')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('harmonyLibrarySave_$replacementId')));
+      await tester.pumpAndSettle();
+
+      final replacedTarget = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == primaryLane.id)
+          .blocks
+          .singleWhere((block) => block.id == target.blockId);
+      expect(replacedTarget.saveId, replacementId);
+      expect(replacedTarget.chordSymbol, 'G');
+      expect(replacedTarget.startBar, 0);
+      expect(replacedTarget.spanBars, 2);
+      expect(replacedTarget.lyrics, ['Keep this lyric']);
+
+      await tester.tap(find.text('·').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('barActionAddLibrary')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('harmonyLibrarySave_$replacementId')));
+      await tester.pumpAndSettle();
+
+      final inserted = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == primaryLane.id)
+          .blocks
+          .singleWhere((block) => block.startBar == 3);
+      expect(inserted.saveId, replacementId);
+      expect(inserted.chordSymbol, 'G');
+      expect(
+        container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .where((lane) => lane.kind == SongLaneKind.save),
+        isEmpty,
+      );
+    },
+  );
 
   testWidgets('secondary lane header deletes the lane after confirm', (
     tester,
@@ -90,8 +714,17 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 4);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
+        final secondary = n.addLane(
+          sectionId: s,
+          kind: SongLaneKind.harmony,
+          label: 'Harmony 2',
+        );
+        final saveLane = n.addLane(sectionId: s, kind: SongLaneKind.save);
+        n.setLaneAnchorLane(
+          sectionId: s,
+          laneId: saveLane,
+          harmonyLaneId: secondary,
+        );
       },
     );
     final laneId = container
@@ -99,17 +732,35 @@ void main() {
         .sections
         .single
         .lanes
-        .last
+        .singleWhere(
+          (lane) =>
+              lane.kind == SongLaneKind.harmony && lane.label == 'Harmony 2',
+        )
         .id;
 
     await tester.tap(find.byKey(Key('deleteHarmonyLane_$laneId')));
     await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'The chords in this lane and any Save / Voicing lanes anchored to it are removed.',
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const Key('confirmDeleteHarmonyLane')));
     await tester.pumpAndSettle();
 
     expect(
       container.read(songwriterProvider).sections.single.lanes,
       hasLength(1),
+    );
+    expect(
+      container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .where((lane) => lane.kind == SongLaneKind.save),
+      isEmpty,
     );
   });
 
@@ -121,7 +772,6 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 4);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
         n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
       },
     );
@@ -149,7 +799,6 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 4);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
         n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
       },
     );
@@ -182,11 +831,9 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 2);
         final s = n.state.sections.single.id;
-        final l1 = n.addLane(
-          sectionId: s,
-          kind: SongLaneKind.harmony,
-          label: 'Harmony',
-        );
+        final l1 = n.state.sections.single.lanes
+            .firstWhere((lane) => lane.kind == SongLaneKind.harmony)
+            .id;
         final l2 = n.addLane(
           sectionId: s,
           kind: SongLaneKind.harmony,
@@ -196,12 +843,13 @@ void main() {
           n.addHarmonyBlock(
             sectionId: s,
             laneId: l,
-            block: const SongBlock(
-              id: '',
+            block: makeHarmonyBlock(
               startBar: 0,
               spanBars: 1,
               chordSymbol: 'C',
-              chordNotes: ['C', 'E', 'G'],
+              chordQuality: '',
+              chordRootPc: 0,
+              chordNotes: const ['C', 'E', 'G'],
             ),
           );
         }
@@ -225,15 +873,12 @@ void main() {
     expect(find.byKey(const Key('barActionLyrics')), findsNothing);
   });
 
-  testWidgets('secondary empty bar offers library saves too', (
-    tester,
-  ) async {
+  testWidgets('secondary empty bar offers library saves too', (tester) async {
     await pumpSheet(
       tester,
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 2);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
         n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
       },
     );
@@ -253,7 +898,6 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 2);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
         n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony 2');
       },
     );
@@ -274,11 +918,9 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 2);
         final s = n.state.sections.single.id;
-        final primary = n.addLane(
-          sectionId: s,
-          kind: SongLaneKind.harmony,
-          label: 'Harmony',
-        );
+        final primary = n.state.sections.single.lanes
+            .firstWhere((lane) => lane.kind == SongLaneKind.harmony)
+            .id;
         final secondary = n.addLane(
           sectionId: s,
           kind: SongLaneKind.harmony,
@@ -297,7 +939,7 @@ void main() {
             startBar: 0,
             spanBars: 1,
             chordSymbol: 'C',
-            chordQuality: 'maj',
+            chordQuality: '',
             chordRootPc: 0,
             chordNotes: ['C', 'E', 'G'],
           ),
@@ -310,7 +952,7 @@ void main() {
             startBar: 0,
             spanBars: 1,
             chordSymbol: 'G',
-            chordQuality: 'maj',
+            chordQuality: '',
             chordRootPc: 7,
             chordNotes: ['G', 'B', 'D'],
           ),
@@ -332,15 +974,12 @@ void main() {
     expect(find.byKey(const Key('barActionRemoveSave')), findsNothing);
   });
 
-  testWidgets('secondary chord tools expose the library too', (
-    tester,
-  ) async {
+  testWidgets('secondary chord tools expose the library too', (tester) async {
     await pumpSheet(
       tester,
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 2);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
         final secondary = n.addLane(
           sectionId: s,
           kind: SongLaneKind.harmony,
@@ -354,7 +993,7 @@ void main() {
             startBar: 0,
             spanBars: 1,
             chordSymbol: 'G',
-            chordQuality: 'maj',
+            chordQuality: '',
             chordRootPc: 7,
             chordNotes: ['G', 'B', 'D'],
           ),
@@ -386,7 +1025,6 @@ void main() {
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 2);
         final s = n.state.sections.single.id;
-        n.addLane(sectionId: s, kind: SongLaneKind.harmony, label: 'Harmony');
         final secondary = n.addLane(
           sectionId: s,
           kind: SongLaneKind.harmony,

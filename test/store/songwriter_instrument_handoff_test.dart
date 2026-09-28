@@ -1,11 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart'
-    show tileLaneBlocks;
+    show makeHarmonyBlock, tileLaneBlocks;
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,40 +14,54 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test(
-    'detected chord inserts a harmony block without a library save',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      await container.read(saveSystemProvider.notifier).hydrate();
-      final writer = container.read(songwriterProvider.notifier);
-      writer.addSection(label: 'Verse', lengthBars: 8);
-      final sectionId = container.read(songwriterProvider).sections.single.id;
+  test('detected chord creates one canonical Harmony composite Save', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final saveSystem = container.read(saveSystemProvider.notifier);
+    await saveSystem.hydrate();
+    final projectId = saveSystem.createProject(
+      'Writer project',
+      const ProjectConfig(),
+    )!;
+    saveSystem.selectProject(projectId);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 8);
+    final sectionId = container.read(songwriterProvider).sections.single.id;
 
-      final inserted = writer.insertInstrumentSelectionAtBar(
-        sectionId: sectionId,
+    final result = writer.addHarmonyChord(
+      sectionId: sectionId,
+      block: makeHarmonyBlock(
         startBar: 2,
-        chordSymbol: 'Cmaj7',
-        chordQuality: 'maj7',
+        spanBars: 1,
+        chordSymbol: 'C',
+        chordQuality: '',
         chordRootPc: 0,
-        chordNotes: const ['C', 'E', 'G', 'B'],
-      );
+        chordNotes: const ['C', 'E', 'G'],
+      ),
+    );
 
-      expect(inserted, isTrue);
-      final section = container.read(songwriterProvider).sections.single;
-      final lane = section.lanes.single;
-      final block = lane.blocks.single;
-      expect(lane.kind, SongLaneKind.harmony);
-      expect(block.startBar, 2);
-      expect(block.chordSymbol, 'Cmaj7');
-      expect(block.chordQuality, 'maj7');
-      expect(block.chordRootPc, 0);
-      expect(block.chordNotes, ['C', 'E', 'G', 'B']);
-      expect(block.saveId, isNull);
-      expect(block.embedded, isNull);
-      expect(container.read(saveSystemProvider).saves, isEmpty);
-    },
-  );
+    expect(result.success, isTrue);
+    final section = container.read(songwriterProvider).sections.single;
+    final lane = section.lanes.singleWhere(
+      (lane) => lane.kind == SongLaneKind.harmony,
+    );
+    final block = lane.blocks.single;
+    expect(lane.kind, SongLaneKind.harmony);
+    expect(block.startBar, 2);
+    expect(block.chordSymbol, 'C');
+    expect(block.chordQuality, '');
+    expect(block.chordRootPc, 0);
+    expect(block.chordNotes, ['C', 'E', 'G']);
+    expect(block.saveId, isNotNull);
+    expect(block.embedded, isA<HarmonyChordSnapshot>());
+    final saveState = container.read(saveSystemProvider);
+    expect(saveState.saves, hasLength(1));
+    expect(saveState.writerLinks, hasLength(1));
+    expect(saveState.writerLinks.single.saveId, block.saveId);
+    expect(saveState.saves.single.origin, SaveOrigin.writer);
+    expect(saveState.saves.single.folderId, isNot(projectId));
+    expect(saveState.saves.single.snapshot, isA<HarmonyChordSnapshot>());
+  });
 
   test(
     'exact piano selection embeds its snapshot without a library save',
@@ -75,7 +90,9 @@ void main() {
 
       expect(inserted, isTrue);
       final section = container.read(songwriterProvider).sections.single;
-      final lane = section.lanes.single;
+      final lane = section.lanes.singleWhere(
+        (lane) => lane.kind == SongLaneKind.save,
+      );
       final block = lane.blocks.single;
       expect(lane.kind, SongLaneKind.save);
       expect(block.saveId, isNull);
@@ -106,7 +123,9 @@ void main() {
         isTrue,
       );
       final initialSection = container.read(songwriterProvider).sections.single;
-      final initialLane = initialSection.lanes.single;
+      final initialLane = initialSection.lanes.singleWhere(
+        (lane) => lane.kind == SongLaneKind.harmony,
+      );
       final source = initialLane.blocks.single;
       writer.setBlockLyric(
         sectionId: sectionId,
@@ -135,7 +154,9 @@ void main() {
       );
 
       final section = container.read(songwriterProvider).sections.single;
-      final lane = section.lanes.single;
+      final lane = section.lanes.singleWhere(
+        (lane) => lane.id == initialLane.id,
+      );
       final updatedSource = lane.blocks.single;
       expect(updatedSource.id, source.id);
       expect(updatedSource.startBar, source.startBar);
@@ -161,7 +182,9 @@ void main() {
       await saveSystem.hydrate();
       final projectId = saveSystem.createProject(
         'Writer project',
-        const ProjectConfig(),
+        const ProjectConfig(
+          defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+        ),
       )!;
       saveSystem.selectProject(projectId);
       final originalSnapshot = PianoSnapshot(
@@ -183,7 +206,11 @@ void main() {
       final sectionId = container.read(songwriterProvider).sections.single.id;
       final newSnapshot = PianoSnapshot(
         currentRange: PianoRangeName.key61,
-        selectedKeys: const [],
+        selectedKeys: const [
+          PianoCoordinate(keyIndex: 26, midiNote: 62, noteName: 'D'),
+          PianoCoordinate(keyIndex: 30, midiNote: 66, noteName: 'F#'),
+          PianoCoordinate(keyIndex: 33, midiNote: 69, noteName: 'A'),
+        ],
         selectedNotes: const ['D', 'F#', 'A'],
         viewMode: PianoViewMode.exact,
       );
@@ -200,7 +227,9 @@ void main() {
         spanBars: 1,
       );
       final initialSection = container.read(songwriterProvider).sections.single;
-      final initialLane = initialSection.lanes.single;
+      final initialLane = initialSection.lanes.singleWhere(
+        (lane) => lane.id == laneId,
+      );
       final source = initialLane.blocks.single;
       writer.setBlockLyric(
         sectionId: sectionId,
@@ -226,7 +255,7 @@ void main() {
       );
 
       final section = container.read(songwriterProvider).sections.single;
-      final lane = section.lanes.single;
+      final lane = section.lanes.singleWhere((lane) => lane.id == laneId);
       final updatedSource = lane.blocks.single;
       expect(updatedSource.id, source.id);
       expect(updatedSource.startBar, source.startBar);
@@ -261,6 +290,9 @@ void main() {
       final sectionFolder = saveState.folders.singleWhere(
         (folder) => folder.id == link.folderId,
       );
+      final writerSectionFolder = saveState.folders.singleWhere(
+        (folder) => folder.id == sectionFolder.parentId,
+      );
       expect(updatedSource.saveId, originalSaveId);
       expect(link.saveId, originalSaveId);
       expect(link.sectionId, sectionId);
@@ -268,7 +300,8 @@ void main() {
       expect(canonicalSave.folderId, projectId);
       expect(canonicalSave.origin, SaveOrigin.manual);
       expect(sectionFolder.writerSectionId, sectionId);
-      expect(sectionFolder.parentId, projectId);
+      expect(writerSectionFolder.writerSectionId, sectionId);
+      expect(writerSectionFolder.parentId, projectId);
     },
   );
 }

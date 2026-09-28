@@ -261,10 +261,16 @@ Saving a fretboard voicing outside Writer stores a free idea in the selected
 project root. In the save browser, **Use in Writer** explicitly links that
 existing project-root save to a selected Writer section and placement without
 moving or copying it; Dump-root ideas stay in Dump. A fresh **Add to Writer**
-handoff creates a new named save after the destination is chosen. When a linked
-voicing is opened for editing, the explicit **Update linked save** action
-writes the current fretboard snapshot to the same save and updates all Writer
-placements that share it. The action is available only while the save still
-has a Writer link.
-You can rename a linked root save from this panel's save browser; the new name
-is shared by every Writer placement that uses the save.
+handoff creates a new named save after the destination is chosen. Harmony
+chord saves keep the symbolic Writer chord together with its native Fretboard
+realization. The selected fretboard pitch classes must match that chord, and
+the saved pending-chord label is normalized to the Writer chord on update.
+
+If a linked Save is used by multiple Writer blocks, updating it offers
+**Update all placements** or **Create a unique instance**. The unique choice
+creates a standalone Save in the project and leaves Writer blocks unchanged.
+Use **Replace chord** on a Writer block to apply that Save to one placement,
+preserving its bar, duration, repeats, and lyrics. A Fretboard realization
+that does not fit the valid tuning, capo, and fret range produces an actionable
+settings error and does not change the chord or Save. Renaming a shared linked
+Save changes its name for all placements.

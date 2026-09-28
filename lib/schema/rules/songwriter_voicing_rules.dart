@@ -1,17 +1,16 @@
-/// CAGED voicing suggestion rules for the Songwriter Phase C v1 slice.
+/// Fretboard voicing suggestion rules for Songwriter harmony blocks.
 ///
-/// Given a chord (root pitch-class + quality), [suggestVoicings] returns
-/// up to 5 CAGED shape voicings transposed onto the standard-tuned fretboard,
-/// sorted by lowest fret ascending. Shapes whose highest fret exceeds 12
-/// after transposition are skipped. Only major ('') and minor ('m') triads
-/// are supported in v1.
+/// [suggestVoicings] preserves the original CAGED major/minor API. The more
+/// general [suggestPlayableVoicings] searches playable positions for every
+/// quality in [chordIntervals] and can target a tuning, capo, and fret range.
 library;
 
 import '../../models/fretboard.dart';
 import '../../models/save_system.dart';
+import 'fretboard_rules.dart' show tunings;
 import '../../utils/note_utils.dart';
 
-enum CagedShape { c, a, g, e, d }
+enum CagedShape { c, a, g, e, d, generated }
 
 /// A CAGED shape template defined in its open-position fingering.
 ///
@@ -41,6 +40,9 @@ class VoicingSuggestion {
     required this.cells,
     required this.lowestFret,
     required this.label,
+    this.tuning = TuningName.standard,
+    this.capo = 0,
+    this.numFrets = 12,
   });
   final CagedShape shape;
   final int rootPc;
@@ -48,10 +50,14 @@ class VoicingSuggestion {
   final List<FretCoordinate> cells;
   final int lowestFret;
   final String label;
+  final TuningName tuning;
+  final int capo;
+  final int numFrets;
 }
 
 /// Fret value past which a CAGED shape will not fit on a 12-fret display.
 const _kMaxFret = 12;
+const _kMaxFretSpan = 4;
 
 // ─── Templates ───────────────────────────────────────────────────────────────
 //
@@ -165,7 +171,7 @@ List<VoicingSuggestion> suggestVoicings({
     out.add(
       VoicingSuggestion(
         shape: t.shape,
-        rootPc: chordRootPc,
+        rootPc: _normalizePc(chordRootPc),
         quality: quality,
         cells: cells,
         lowestFret: minFret,
@@ -179,22 +185,213 @@ List<VoicingSuggestion> suggestVoicings({
   return out;
 }
 
-/// Wraps a voicing's cells into a `FretboardSnapshot` (standard tuning,
-/// 12 frets, capo 0, exact view).
+/// Searches for playable guitar voicings that contain every chord pitch class
+/// and no pitches outside that chord.
+///
+/// Frets are physical fret numbers, so selected cells start at [capo] and the
+/// pitch at each cell is computed from its tuning's open-string MIDI note plus
+/// that fret. Each string is either muted or plays one note. Results are
+/// deduplicated, ranked deterministically toward lower positions and smaller
+/// stretches, and limited to [maxResults].
+List<VoicingSuggestion> suggestPlayableVoicings({
+  required int chordRootPc,
+  required String quality,
+  TuningName tuning = TuningName.standard,
+  int capo = 0,
+  int numFrets = 12,
+  int maxResults = 8,
+}) {
+  final intervals = chordIntervals[quality];
+  final tuningSpec = tunings[tuning];
+  if (intervals == null ||
+      intervals.isEmpty ||
+      tuningSpec == null ||
+      capo < 0 ||
+      capo > 11 ||
+      numFrets < 1 ||
+      numFrets > 24 ||
+      capo > numFrets ||
+      maxResults <= 0) {
+    return const [];
+  }
+
+  final rootPc = _normalizePc(chordRootPc);
+  final chordPcs = <int>{
+    for (final interval in intervals) (rootPc + interval) % 12,
+  };
+  if (chordPcs.length > tuningSpec.strings.length) return const [];
+
+  final candidates = <String, List<int?>>{};
+  final positions = List<int?>.filled(tuningSpec.strings.length, null);
+  final coverageCounts = <int, int>{};
+
+  void collectInWindow(int windowStart) {
+    final windowEnd = (windowStart + _kMaxFretSpan)
+        .clamp(capo, numFrets)
+        .toInt();
+    final fretsByString = <List<int?>>[];
+    for (final string in tuningSpec.strings) {
+      final frets = <int?>[null];
+      for (var fret = capo; fret <= numFrets; fret++) {
+        final isOpen = capo == 0 && fret == 0;
+        if ((isOpen || (fret >= windowStart && fret <= windowEnd)) &&
+            chordPcs.contains(_normalizePc(string.midiNote + fret))) {
+          frets.add(fret);
+        }
+      }
+      fretsByString.add(frets);
+    }
+
+    void visit(int stringIndex) {
+      if (chordPcs.length - coverageCounts.length >
+          fretsByString.length - stringIndex) {
+        return;
+      }
+      if (stringIndex == fretsByString.length) {
+        if (coverageCounts.length != chordPcs.length) return;
+        final key = positions.map((fret) => fret ?? -1).join(',');
+        candidates.putIfAbsent(key, () => List<int?>.of(positions));
+        return;
+      }
+
+      for (final fret in fretsByString[stringIndex]) {
+        positions[stringIndex] = fret;
+        if (fret != null) {
+          final pc = _normalizePc(
+            tuningSpec.strings[stringIndex].midiNote + fret,
+          );
+          coverageCounts.update(pc, (count) => count + 1, ifAbsent: () => 1);
+        }
+        visit(stringIndex + 1);
+        if (fret != null) {
+          final pc = _normalizePc(
+            tuningSpec.strings[stringIndex].midiNote + fret,
+          );
+          final count = coverageCounts[pc]! - 1;
+          if (count == 0) {
+            coverageCounts.remove(pc);
+          } else {
+            coverageCounts[pc] = count;
+          }
+        }
+      }
+      positions[stringIndex] = null;
+    }
+
+    visit(0);
+  }
+
+  for (var start = capo; start <= numFrets; start++) {
+    collectInWindow(start);
+  }
+
+  final out = <VoicingSuggestion>[];
+  for (final frets in candidates.values) {
+    final cells = <FretCoordinate>[];
+    var lowestFret = 1 << 30;
+    for (var stringIndex = 0; stringIndex < frets.length; stringIndex++) {
+      final fret = frets[stringIndex];
+      if (fret == null) continue;
+      final midi = tuningSpec.strings[stringIndex].midiNote + fret;
+      final pc = _normalizePc(midi);
+      cells.add(
+        FretCoordinate(
+          stringIndex: stringIndex,
+          fret: fret,
+          noteName: chromaticNotes[pc],
+        ),
+      );
+      if (fret < lowestFret) lowestFret = fret;
+    }
+    out.add(
+      VoicingSuggestion(
+        shape: CagedShape.generated,
+        rootPc: rootPc,
+        quality: quality,
+        cells: cells,
+        lowestFret: lowestFret,
+        label:
+            'Voicing (${lowestFret == 0 ? 'open' : '${_ordinal(lowestFret)} fret'})',
+        tuning: tuning,
+        capo: capo,
+        numFrets: numFrets,
+      ),
+    );
+  }
+
+  out.sort((a, b) {
+    var order = a.lowestFret.compareTo(b.lowestFret);
+    if (order != 0) return order;
+    order = _fretSpan(a.cells, capo).compareTo(_fretSpan(b.cells, capo));
+    if (order != 0) return order;
+    order = _highestFret(a.cells).compareTo(_highestFret(b.cells));
+    if (order != 0) return order;
+    order = b.cells.length.compareTo(a.cells.length);
+    if (order != 0) return order;
+    for (var i = 0; i < tuningSpec.strings.length; i++) {
+      order = _fretAtString(a.cells, i).compareTo(_fretAtString(b.cells, i));
+      if (order != 0) return order;
+    }
+    return 0;
+  });
+
+  final chordLabel = chromaticNotes[rootPc];
+  final limited = out.take(maxResults).toList();
+  for (var i = 0; i < limited.length; i++) {
+    final voicing = limited[i];
+    limited[i] = VoicingSuggestion(
+      shape: voicing.shape,
+      rootPc: voicing.rootPc,
+      quality: voicing.quality,
+      cells: voicing.cells,
+      lowestFret: voicing.lowestFret,
+      label:
+          '$chordLabel$quality voicing ${i + 1} '
+          '(${voicing.lowestFret == 0 ? 'open' : '${_ordinal(voicing.lowestFret)} fret'})',
+      tuning: voicing.tuning,
+      capo: voicing.capo,
+      numFrets: voicing.numFrets,
+    );
+  }
+  return limited;
+}
+
+int _normalizePc(int midiOrPc) => ((midiOrPc % 12) + 12) % 12;
+
+int _fretAtString(List<FretCoordinate> cells, int stringIndex) {
+  for (final cell in cells) {
+    if (cell.stringIndex == stringIndex) return cell.fret;
+  }
+  return -1;
+}
+
+int _highestFret(List<FretCoordinate> cells) => cells.fold<int>(
+  0,
+  (highest, cell) => cell.fret > highest ? cell.fret : highest,
+);
+
+int _fretSpan(List<FretCoordinate> cells, int capo) {
+  final fingered = cells
+      .where((cell) => cell.fret > capo)
+      .map((cell) => cell.fret)
+      .toList();
+  if (fingered.length < 2) return 0;
+  fingered.sort();
+  return fingered.last - fingered.first;
+}
+
+/// Wraps a voicing's cells into an exact-view `FretboardSnapshot`.
 ///
 /// Sets `pendingChord` from the suggestion's source chord (`rootPc` +
 /// `quality`) so the saved voicing can be matched back to the same harmony
 /// block via `matchLibrary`'s chord-hit predicate.
 FretboardSnapshot voicingToSnapshot(VoicingSuggestion v) {
-  final pcs = <String>{};
-  for (final c in v.cells) {
-    pcs.add(c.noteName);
-  }
-  final rootName = chromaticNotes[v.rootPc];
+  final pcs = <String>{for (final c in v.cells) c.noteName};
+  final rootName = chromaticNotes[_normalizePc(v.rootPc)];
   return FretboardSnapshot(
-    tuning: TuningName.standard,
-    numFrets: _kMaxFret,
-    capo: 0,
+    tuning: v.tuning,
+    numFrets: v.numFrets,
+    capo: v.capo,
     selectedCells: v.cells,
     selectedNotes: pcs.toList(),
     viewMode: FretboardViewMode.exact,

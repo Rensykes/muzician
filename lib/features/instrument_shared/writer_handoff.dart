@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/harmonic_analysis.dart';
+import '../../models/harmony_lane_instrument.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
-import '../../schema/rules/songwriter_rules.dart' show tileLaneBlocks;
+import '../../schema/rules/songwriter_rules.dart'
+    show saveAnchorLane, tileLaneBlocks;
 import '../../schema/rules/save_system_rules.dart'
-    show isValidSaveName, resolveSaveInProject;
+    show isFolderInProject, isValidSaveName, resolveSaveInProject;
 import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
@@ -35,12 +37,23 @@ Future<void> startWriterHandoff({
             reuseSave.id,
           );
     final instrument = binding.captureSnapshot(ref).instrument;
+    final isHarmonySave = reuseSave.snapshot is HarmonyChordSnapshot;
     if (initialProjectId == null ||
         current == null ||
-        current.folderId != initialProjectId ||
+        (isHarmonySave
+            ? !isFolderInProject(
+                ref.read(saveSystemProvider).folders,
+                current.folderId,
+                initialProjectId,
+              )
+            : current.folderId != initialProjectId) ||
         current.snapshot.instrument != instrument) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This root save is no longer available.')),
+        const SnackBar(
+          content: Text(
+            'This save is no longer available in the selected project.',
+          ),
+        ),
       );
       return;
     }
@@ -63,11 +76,17 @@ Future<void> startWriterHandoff({
   }
 
   final payload = reuseSave != null
-      ? _WriterTransferPayload.voicing(
-          reuseSave.snapshot,
-          reuseSaveId: reuseSave.id,
-          initialName: reuseSave.name,
-        )
+      ? reuseSave.snapshot is HarmonyChordSnapshot
+            ? _WriterTransferPayload.harmonySave(
+                reuseSave.snapshot as HarmonyChordSnapshot,
+                reuseSaveId: reuseSave.id,
+                initialName: reuseSave.name,
+              )
+            : _WriterTransferPayload.voicing(
+                reuseSave.snapshot,
+                reuseSaveId: reuseSave.id,
+                initialName: reuseSave.name,
+              )
       : choice!.isHarmony
       ? _WriterTransferPayload.harmony(
           result: choice.chord!,
@@ -75,6 +94,9 @@ Future<void> startWriterHandoff({
               .read(binding.exactNotes)
               .map((note) => note.pitchClass)
               .toList(),
+          sourceHarmonyInstrument: HarmonyLaneInstrument.fromJson(
+            binding.captureSnapshot(ref).instrument,
+          )!,
         )
       : _WriterTransferPayload.voicing(binding.captureSnapshot(ref));
 
@@ -118,13 +140,8 @@ Future<void> startWriterHandoff({
       await _showDestinationChanged(context);
       return;
     }
-    ref.read(songwriterProvider.notifier).addSection(lengthBars: 8);
-    project = ref.read(songwriterProvider);
-    initialSectionId = project.sections.isEmpty
-        ? null
-        : project.sections.last.id;
+    initialSectionId = null;
   }
-  if (initialSectionId == null) return;
 
   while (context.mounted) {
     final target = await showModalBottomSheet<WriterBarTarget>(
@@ -134,6 +151,7 @@ Future<void> startWriterHandoff({
       builder: (_) => _WriterDestinationPicker(
         laneKind: payload.laneKind,
         initialSectionId: initialSectionId,
+        harmonyInstrument: payload.harmonyInstrument,
       ),
     );
     if (target == null || !context.mounted) return;
@@ -143,14 +161,37 @@ Future<void> startWriterHandoff({
     }
 
     final current = ref.read(songwriterProvider);
-    final section = current.sections
-        .where((s) => s.id == target.sectionId)
-        .firstOrNull;
-    if (section == null || target.startBar >= section.lengthBars) return;
-    final lane = section.lanes
-        .where((candidate) => candidate.kind == payload.laneKind)
-        .firstOrNull;
-    final occupiedPlacement = lane == null
+    final section = target.sectionId == null
+        ? null
+        : current.sections.where((s) => s.id == target.sectionId).firstOrNull;
+    final sectionLengthBars =
+        section?.lengthBars ?? target.stagedSectionLengthBars;
+    if (target.startBar >= sectionLengthBars ||
+        (section == null && !target.createSection)) {
+      return;
+    }
+    final lane = target.laneId != null
+        ? section?.lanes
+              .where((candidate) => candidate.id == target.laneId)
+              .firstOrNull
+        : payload.laneKind == SongLaneKind.harmony
+        ? null
+        : section?.lanes
+              .where(
+                (candidate) =>
+                    candidate.kind == payload.laneKind &&
+                    _saveLaneMatchesHandoffTarget(
+                      section,
+                      candidate,
+                      harmonyInstrument: payload.harmonyInstrument,
+                      expectedAnchorLaneId: target.anchorLaneId,
+                      defaultHarmonyInstrument: ref
+                          .read(songwriterProvider.notifier)
+                          .projectDefaultHarmonyInstrumentForSelectedProject,
+                    ),
+              )
+              .firstOrNull;
+    final occupiedPlacement = lane == null || section == null
         ? null
         : tileLaneBlocks(lane, sectionLengthBars: section.lengthBars)
               .where(
@@ -206,11 +247,15 @@ Future<void> startWriterHandoff({
       await _showDestinationChanged(context);
       return;
     }
-    final saveName = await _showImportNameDialog(
-      context,
-      initialName: payload.chordSymbol ?? payload.initialName,
-    );
-    if (saveName == null || !context.mounted) return;
+    final saveName = payload.reuseSaveId != null
+        ? null
+        : await _showImportNameDialog(
+            context,
+            initialName: payload.chordSymbol ?? payload.initialName,
+          );
+    if (payload.reuseSaveId == null && saveName == null || !context.mounted) {
+      return;
+    }
     if (_selectedWriterProjectId(ref) != projectId) {
       await _showDestinationChanged(context);
       return;
@@ -221,33 +266,67 @@ Future<void> startWriterHandoff({
         projectId,
         payload.reuseSaveId!,
       );
+      final currentHarmonySnapshot = currentSave?.snapshot;
+      final compatibleLocation = payload.isHarmony
+          ? currentSave != null &&
+                isFolderInProject(
+                  ref.read(saveSystemProvider).folders,
+                  currentSave.folderId,
+                  projectId,
+                )
+          : currentSave?.folderId == projectId;
       if (currentSave == null ||
-          currentSave.folderId != projectId ||
-          currentSave.snapshot.instrument != payload.snapshot!.instrument) {
+          !compatibleLocation ||
+          currentSave.snapshot.instrument != payload.snapshot!.instrument ||
+          (payload.isHarmony &&
+              (currentHarmonySnapshot is! HarmonyChordSnapshot ||
+                  currentHarmonySnapshot.harmonyInstrument !=
+                      payload.harmonyInstrument))) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'This root save changed while you were choosing a bar.',
+              'This save changed while you were choosing a Writer bar.',
             ),
           ),
         );
         return;
       }
     }
-    final inserted = ref
-        .read(songwriterProvider.notifier)
-        .insertInstrumentSelectionAtBar(
-          sectionId: target.sectionId,
-          startBar: target.startBar,
-          snapshot: payload.snapshot,
-          chordSymbol: payload.chordSymbol,
-          chordQuality: payload.chordQuality,
-          chordRootPc: payload.chordRootPc,
-          chordNotes: payload.chordNotes,
-          replaceBlockId: replaceBlockId,
-          saveName: saveName,
-          reuseSaveId: payload.reuseSaveId,
-        );
+    final writer = ref.read(songwriterProvider.notifier);
+    final inserted = payload.reuseSaveId != null && payload.isHarmony
+        ? writer.insertWriterBlockFromSave(
+            saveId: payload.reuseSaveId!,
+            sectionId: target.sectionId,
+            laneKind: SongLaneKind.harmony,
+            startBar: target.startBar,
+            laneId: target.laneId,
+            replaceBlockId: replaceBlockId,
+            expectedProjectId: projectId,
+            createSectionIfMissing: target.createSection,
+            stagedSectionId: target.stagedSectionId,
+            stagedSectionLengthBars: target.stagedSectionLengthBars,
+          )
+        : writer.insertInstrumentSelectionAtBar(
+            sectionId: target.sectionId,
+            startBar: target.startBar,
+            snapshot: payload.snapshot,
+            chordSymbol: payload.chordSymbol,
+            chordQuality: payload.chordQuality,
+            chordRootPc: payload.chordRootPc,
+            chordNotes: payload.chordNotes,
+            replaceBlockId: replaceBlockId,
+            saveName: saveName,
+            reuseSaveId: payload.reuseSaveId,
+            laneId: target.laneId,
+            anchorLaneId: target.anchorLaneId,
+            harmonyInstrument: payload.isHarmony
+                ? payload.harmonyInstrument
+                : null,
+            expectedProjectId: projectId,
+            createSectionIfMissing: target.createSection,
+            stagedSectionId: target.stagedSectionId,
+            stagedSectionLengthBars: target.stagedSectionLengthBars,
+          );
     if (!inserted) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -259,11 +338,16 @@ Future<void> startWriterHandoff({
       initialSectionId = target.sectionId;
       continue;
     }
+    final insertedSection = ref
+        .read(songwriterProvider)
+        .sections
+        .where((candidate) => candidate.id == target.sectionId)
+        .firstOrNull;
     final title = payload.chordSymbol ?? 'Instrument voicing';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Added $title to Writer · ${section.label ?? 'Section'} · bar ${target.startBar + 1}',
+          'Added $title to Writer · ${insertedSection?.label ?? 'Section'} · bar ${target.startBar + 1}',
         ),
       ),
     );
@@ -383,6 +467,7 @@ class _WriterTransferPayload {
   const _WriterTransferPayload.harmony({
     required this.result,
     required this.selectedPitchNames,
+    required this.sourceHarmonyInstrument,
   }) : snapshot = null,
        reuseSaveId = null,
        initialName = null;
@@ -392,22 +477,54 @@ class _WriterTransferPayload {
     this.reuseSaveId,
     this.initialName,
   }) : result = null,
-       selectedPitchNames = const [];
+       selectedPitchNames = const [],
+       sourceHarmonyInstrument = null;
+
+  const _WriterTransferPayload.harmonySave(
+    this.snapshot, {
+    required this.reuseSaveId,
+    required this.initialName,
+  }) : result = null,
+       selectedPitchNames = const [],
+       sourceHarmonyInstrument = null;
 
   final ChordDetectionResult? result;
   final List<String> selectedPitchNames;
+  final HarmonyLaneInstrument? sourceHarmonyInstrument;
   final InstrumentSnapshot? snapshot;
   final String? reuseSaveId;
   final String? initialName;
 
-  bool get isHarmony => result != null;
+  bool get isHarmony => result != null || snapshot is HarmonyChordSnapshot;
   SongLaneKind get laneKind =>
       isHarmony ? SongLaneKind.harmony : SongLaneKind.save;
-  String? get chordSymbol => result == null ? null : formatChordSymbol(result!);
-  String? get chordQuality => result?.quality;
-  int? get chordRootPc =>
-      result == null ? null : chromaticNotes.indexOf(result!.root);
-  List<String> get chordNotes => selectedPitchNames;
+  HarmonyLaneInstrument? get harmonyInstrument {
+    if (snapshot is HarmonyChordSnapshot) {
+      return (snapshot as HarmonyChordSnapshot).harmonyInstrument;
+    }
+    if (sourceHarmonyInstrument != null) return sourceHarmonyInstrument;
+    if (result != null || snapshot != null) {
+      return HarmonyLaneInstrument.fromJson(snapshot?.instrument);
+    }
+    return null;
+  }
+
+  String? get chordSymbol => switch (snapshot) {
+    HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordSymbol,
+    _ => result == null ? null : formatChordSymbol(result!),
+  };
+  String? get chordQuality => switch (snapshot) {
+    HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordQuality,
+    _ => result?.quality,
+  };
+  int? get chordRootPc => switch (snapshot) {
+    HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordRootPc,
+    _ => result == null ? null : chromaticNotes.indexOf(result!.root),
+  };
+  List<String> get chordNotes => switch (snapshot) {
+    HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordNotes,
+    _ => selectedPitchNames,
+  };
 }
 
 Future<String?> _showImportNameDialog(
@@ -549,28 +666,47 @@ class _WriterTransferChoices extends StatelessWidget {
 }
 
 class WriterBarTarget {
-  const WriterBarTarget({required this.sectionId, required this.startBar});
+  const WriterBarTarget({
+    required this.sectionId,
+    required this.startBar,
+    this.laneId,
+    this.anchorLaneId,
+    this.createSection = false,
+    this.stagedSectionId,
+    this.stagedSectionLengthBars = 8,
+  });
 
-  final String sectionId;
+  final String? sectionId;
   final int startBar;
+  final String? laneId;
+  final String? anchorLaneId;
+  final bool createSection;
+  final String? stagedSectionId;
+  final int stagedSectionLengthBars;
 }
 
 class _WriterDestinationPicker extends ConsumerWidget {
   const _WriterDestinationPicker({
     required this.laneKind,
     required this.initialSectionId,
+    required this.harmonyInstrument,
   });
 
   final SongLaneKind laneKind;
   final String? initialSectionId;
+  final HarmonyLaneInstrument? harmonyInstrument;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sections = ref.watch(
       songwriterProvider.select((project) => project.sections),
     );
-    final kind = laneKind;
-    final laneLabel = kind == SongLaneKind.harmony ? 'harmony' : 'save';
+    final laneLabel = laneKind == SongLaneKind.harmony ? 'harmony' : 'save';
+    final instrumentLabel = switch (harmonyInstrument) {
+      HarmonyLaneInstrument.piano => 'Piano',
+      HarmonyLaneInstrument.fretboard => 'Fretboard',
+      null => null,
+    };
     return SafeArea(
       top: false,
       child: SizedBox(
@@ -591,7 +727,9 @@ class _WriterDestinationPicker extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text(
-                'This selection will become a $laneLabel block. Bars marked Occupied already contain a block in that lane.',
+                'This selection will become a $laneLabel block. '
+                'Choose the section, Harmony Lane and bar. Occupied bars '
+                'already contain a block in that lane.',
                 style: const TextStyle(
                   color: MuzicianTheme.textSecondary,
                   fontSize: 13,
@@ -600,11 +738,40 @@ class _WriterDestinationPicker extends ConsumerWidget {
             ),
             Expanded(
               child: sections.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No Writer sections yet.',
-                        style: TextStyle(color: MuzicianTheme.textMuted),
-                      ),
+                  ? ListView(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                      children: [
+                        ExpansionTile(
+                          key: const Key('writerHandoffNewSection'),
+                          initiallyExpanded: true,
+                          title: const Text(
+                            'New eight-bar section',
+                            style: TextStyle(
+                              color: MuzicianTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            instrumentLabel == null
+                                ? 'A section will be created with this block.'
+                                : 'Starts with the project default Harmony Lane; a matching $instrumentLabel lane will be added if needed.',
+                            style: const TextStyle(
+                              color: MuzicianTheme.textMuted,
+                            ),
+                          ),
+                          children: [
+                            _barChoices(
+                              context,
+                              sectionId: null,
+                              sectionLabel: 'New section',
+                              laneId: null,
+                              createSection: true,
+                              lengthBars: 8,
+                              occupied: const [],
+                            ),
+                          ],
+                        ),
+                      ],
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -615,15 +782,102 @@ class _WriterDestinationPicker extends ConsumerWidget {
                             section.label?.trim().isNotEmpty == true
                             ? section.label!.trim()
                             : 'Section ${section.order + 1}';
-                        final lane = section.lanes
-                            .where((candidate) => candidate.kind == kind)
-                            .firstOrNull;
-                        final occupiedBlocks = lane == null
-                            ? const <SongBlock>[]
-                            : tileLaneBlocks(
-                                lane,
-                                sectionLengthBars: section.lengthBars,
-                              );
+                        final matchingHarmonyLanes = harmonyInstrument == null
+                            ? const <SongLane>[]
+                            : section.lanes
+                                  .where(
+                                    (candidate) =>
+                                        candidate.kind ==
+                                            SongLaneKind.harmony &&
+                                        candidate.harmonyInstrument ==
+                                            harmonyInstrument,
+                                  )
+                                  .toList();
+                        final defaultHarmonyInstrument = ref
+                            .read(songwriterProvider.notifier)
+                            .projectDefaultHarmonyInstrumentForSelectedProject;
+                        final lanes = laneKind == SongLaneKind.harmony
+                            ? matchingHarmonyLanes
+                            : laneKind == SongLaneKind.save &&
+                                  harmonyInstrument != null
+                            ? section.lanes
+                                  .where(
+                                    (candidate) =>
+                                        candidate.kind == SongLaneKind.save &&
+                                        _saveLaneMatchesHandoffTarget(
+                                          section,
+                                          candidate,
+                                          harmonyInstrument: harmonyInstrument,
+                                          defaultHarmonyInstrument:
+                                              defaultHarmonyInstrument,
+                                        ),
+                                  )
+                                  .toList()
+                            : section.lanes
+                                  .where(
+                                    (candidate) => candidate.kind == laneKind,
+                                  )
+                                  .take(1)
+                                  .toList();
+                        final needsHarmonyLane =
+                            laneKind == SongLaneKind.harmony && lanes.isEmpty;
+                        final needsCompatibleSaveLane =
+                            laneKind == SongLaneKind.save &&
+                            harmonyInstrument != null &&
+                            lanes.isEmpty;
+                        final laneChoices = <Widget>[
+                          if (lanes.length == 1)
+                            _laneBars(
+                              context,
+                              section: section,
+                              sectionLabel: sectionLabel,
+                              lane: lanes.single,
+                              laneKind: laneKind,
+                              harmonyInstrument: harmonyInstrument,
+                            )
+                          else
+                            for (
+                              var laneIndex = 0;
+                              laneIndex < lanes.length;
+                              laneIndex++
+                            )
+                              _laneChoice(
+                                context,
+                                section: section,
+                                sectionLabel: sectionLabel,
+                                lane: lanes[laneIndex],
+                                laneKind: laneKind,
+                                harmonyInstrument: harmonyInstrument,
+                              ),
+                          if (needsHarmonyLane)
+                            _stagedHarmonyLaneChoice(
+                              context,
+                              section: section,
+                              sectionLabel: sectionLabel,
+                              laneKind: laneKind,
+                              harmonyInstrument: harmonyInstrument,
+                            ),
+                          if (needsCompatibleSaveLane)
+                            _stagedSaveLaneChoice(
+                              context,
+                              section: section,
+                              sectionLabel: sectionLabel,
+                              harmonyInstrument: harmonyInstrument!,
+                              anchorLaneId:
+                                  matchingHarmonyLanes.firstOrNull?.id,
+                            ),
+                          if (laneKind != SongLaneKind.harmony &&
+                              lanes.isEmpty &&
+                              !needsCompatibleSaveLane)
+                            _barChoices(
+                              context,
+                              sectionId: section.id,
+                              sectionLabel: sectionLabel,
+                              laneId: null,
+                              lengthBars: section.lengthBars,
+                              occupied: const [],
+                            ),
+                        ];
                         return ExpansionTile(
                           key: Key('writerHandoffSection_${section.id}'),
                           initiallyExpanded:
@@ -642,38 +896,7 @@ class _WriterDestinationPicker extends ConsumerWidget {
                               color: MuzicianTheme.textMuted,
                             ),
                           ),
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  for (
-                                    var bar = 0;
-                                    bar < section.lengthBars;
-                                    bar++
-                                  )
-                                    _WriterBarButton(
-                                      sectionId: section.id,
-                                      sectionLabel: sectionLabel,
-                                      startBar: bar,
-                                      occupied: occupiedBlocks.any(
-                                        (block) =>
-                                            block.startBar <= bar &&
-                                            bar < block.endBar,
-                                      ),
-                                      onTap: () => Navigator.of(context).pop(
-                                        WriterBarTarget(
-                                          sectionId: section.id,
-                                          startBar: bar,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          children: [...laneChoices],
                         );
                       },
                     ),
@@ -683,18 +906,193 @@ class _WriterDestinationPicker extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _laneChoice(
+    BuildContext context, {
+    required SongSection section,
+    required String sectionLabel,
+    required SongLane lane,
+    required SongLaneKind laneKind,
+    required HarmonyLaneInstrument? harmonyInstrument,
+  }) {
+    final laneNumber =
+        section.lanes
+            .where((candidate) => candidate.kind == lane.kind)
+            .toList()
+            .indexWhere((candidate) => candidate.id == lane.id) +
+        1;
+    final laneLabel = lane.label?.trim().isNotEmpty == true
+        ? lane.label!.trim()
+        : laneKind == SongLaneKind.harmony
+        ? '${_instrumentLabel(harmonyInstrument)} Harmony $laneNumber'
+        : 'Save lane';
+    return ExpansionTile(
+      key: Key('writerHandoffLane_${section.id}_${lane.id}'),
+      title: Text(
+        laneLabel,
+        style: const TextStyle(color: MuzicianTheme.textPrimary),
+      ),
+      children: [
+        _laneBars(
+          context,
+          section: section,
+          sectionLabel: sectionLabel,
+          lane: lane,
+          laneKind: laneKind,
+          harmonyInstrument: harmonyInstrument,
+        ),
+      ],
+    );
+  }
+
+  Widget _laneBars(
+    BuildContext context, {
+    required SongSection section,
+    required String sectionLabel,
+    required SongLane lane,
+    required SongLaneKind laneKind,
+    required HarmonyLaneInstrument? harmonyInstrument,
+  }) => _barChoices(
+    context,
+    sectionId: section.id,
+    sectionLabel: sectionLabel,
+    laneId: lane.id,
+    anchorLaneId: laneKind == SongLaneKind.save
+        ? saveAnchorLane(section, lane)?.id
+        : null,
+    lengthBars: section.lengthBars,
+    occupied: tileLaneBlocks(lane, sectionLengthBars: section.lengthBars),
+  );
+
+  Widget _stagedHarmonyLaneChoice(
+    BuildContext context, {
+    required SongSection section,
+    required String sectionLabel,
+    required SongLaneKind laneKind,
+    required HarmonyLaneInstrument? harmonyInstrument,
+  }) => ExpansionTile(
+    key: Key('writerHandoffNewHarmonyLane_${section.id}'),
+    title: Text(
+      'Create ${_instrumentLabel(harmonyInstrument)} Harmony Lane',
+      style: const TextStyle(color: MuzicianTheme.textPrimary),
+    ),
+    subtitle: const Text(
+      'This section has no Harmony Lane for this instrument.',
+      style: TextStyle(color: MuzicianTheme.textMuted),
+    ),
+    children: [
+      _barChoices(
+        context,
+        sectionId: section.id,
+        sectionLabel: sectionLabel,
+        laneId: null,
+        lengthBars: section.lengthBars,
+        occupied: const [],
+      ),
+    ],
+  );
+
+  Widget _stagedSaveLaneChoice(
+    BuildContext context, {
+    required SongSection section,
+    required String sectionLabel,
+    required HarmonyLaneInstrument harmonyInstrument,
+    required String? anchorLaneId,
+  }) => ExpansionTile(
+    key: Key('writerHandoffNewSaveLane_${section.id}'),
+    title: Text(
+      'Create ${_instrumentLabel(harmonyInstrument)} Voicing lane',
+      style: const TextStyle(color: MuzicianTheme.textPrimary),
+    ),
+    subtitle: const Text(
+      'This section has no compatible Voicing lane.',
+      style: TextStyle(color: MuzicianTheme.textMuted),
+    ),
+    children: [
+      _barChoices(
+        context,
+        sectionId: section.id,
+        sectionLabel: sectionLabel,
+        laneId: null,
+        anchorLaneId: anchorLaneId,
+        lengthBars: section.lengthBars,
+        occupied: const [],
+      ),
+    ],
+  );
+
+  Widget _barChoices(
+    BuildContext context, {
+    required String? sectionId,
+    required String sectionLabel,
+    required String? laneId,
+    String? anchorLaneId,
+    required int lengthBars,
+    required List<SongBlock> occupied,
+    bool createSection = false,
+  }) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var bar = 0; bar < lengthBars; bar++)
+          _WriterBarButton(
+            sectionKey: sectionId ?? 'new',
+            sectionLabel: sectionLabel,
+            startBar: bar,
+            occupied: occupied.any(
+              (block) => block.startBar <= bar && bar < block.endBar,
+            ),
+            onTap: () => Navigator.of(context).pop(
+              WriterBarTarget(
+                sectionId: sectionId,
+                startBar: bar,
+                laneId: laneId,
+                anchorLaneId: anchorLaneId,
+                createSection: createSection,
+                stagedSectionLengthBars: lengthBars,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+String _instrumentLabel(HarmonyLaneInstrument? instrument) =>
+    switch (instrument) {
+      HarmonyLaneInstrument.piano => 'Piano',
+      HarmonyLaneInstrument.fretboard => 'Fretboard',
+      null => 'Harmony',
+    };
+
+bool _saveLaneMatchesHandoffTarget(
+  SongSection section,
+  SongLane lane, {
+  required HarmonyLaneInstrument? harmonyInstrument,
+  required HarmonyLaneInstrument defaultHarmonyInstrument,
+  String? expectedAnchorLaneId,
+}) {
+  final anchor = saveAnchorLane(section, lane);
+  if (lane.anchorLaneId != null && anchor == null) return false;
+  if (expectedAnchorLaneId != null && anchor?.id != expectedAnchorLaneId) {
+    return false;
+  }
+  final laneInstrument = anchor?.harmonyInstrument ?? defaultHarmonyInstrument;
+  return harmonyInstrument == null || laneInstrument == harmonyInstrument;
 }
 
 class _WriterBarButton extends StatelessWidget {
   const _WriterBarButton({
-    required this.sectionId,
+    required this.sectionKey,
     required this.sectionLabel,
     required this.startBar,
     required this.occupied,
     required this.onTap,
   });
 
-  final String sectionId;
+  final String sectionKey;
   final String sectionLabel;
   final int startBar;
   final bool occupied;
@@ -707,7 +1105,7 @@ class _WriterBarButton extends StatelessWidget {
       button: true,
       label: '$sectionLabel, bar ${startBar + 1}, $status',
       child: TextButton(
-        key: Key('writerHandoffBar_${sectionId}_$startBar'),
+        key: Key('writerHandoffBar_${sectionKey}_$startBar'),
         onPressed: onTap,
         style: TextButton.styleFrom(
           minimumSize: const Size(104, 48),

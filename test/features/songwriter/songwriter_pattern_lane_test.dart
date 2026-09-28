@@ -63,10 +63,13 @@ void main() {
     final notifier = container.read(songwriterProvider.notifier);
     notifier.addSection(label: 'Verse', lengthBars: 2);
     final section = container.read(songwriterProvider).sections.single;
-    final laneId = notifier.addLane(
-      sectionId: section.id,
-      kind: SongLaneKind.harmony,
-    );
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .singleWhere((candidate) => candidate.id == section.id)
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     final beforeLyrics = notifier.undoCount;
 
     await tester.pumpWidget(
@@ -100,7 +103,13 @@ void main() {
     expect(notifier.undoCount, beforeDrag + 1);
     expect(notifier.undo(), isTrue);
     expect(
-      container.read(songwriterProvider).sections.single.lanes.single.volume,
+      container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .volume,
       1.0,
     );
   });

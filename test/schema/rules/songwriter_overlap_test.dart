@@ -8,26 +8,34 @@ void main() {
       const SongBlock(id: 'a', startBar: 0, spanBars: 2),
       const SongBlock(id: 'b', startBar: 4, spanBars: 2), // gap at 2-4 ok
     ];
-    expect(blocksOverlap(blocks, const SongBlock(id: 'c', startBar: 2, spanBars: 2)),
-        isFalse);
+    expect(
+      blocksOverlap(blocks, const SongBlock(id: 'c', startBar: 2, spanBars: 2)),
+      isFalse,
+    );
   });
 
   test('overlapping placement is rejected', () {
     final blocks = [const SongBlock(id: 'a', startBar: 0, spanBars: 4)];
-    expect(blocksOverlap(blocks, const SongBlock(id: 'c', startBar: 2, spanBars: 2)),
-        isTrue);
+    expect(
+      blocksOverlap(blocks, const SongBlock(id: 'c', startBar: 2, spanBars: 2)),
+      isTrue,
+    );
   });
 
   test('touching edges do not overlap', () {
     final blocks = [const SongBlock(id: 'a', startBar: 0, spanBars: 4)];
-    expect(blocksOverlap(blocks, const SongBlock(id: 'c', startBar: 4, spanBars: 2)),
-        isFalse);
+    expect(
+      blocksOverlap(blocks, const SongBlock(id: 'c', startBar: 4, spanBars: 2)),
+      isFalse,
+    );
   });
 
   test('a block does not overlap itself (same id ignored)', () {
     final blocks = [const SongBlock(id: 'a', startBar: 0, spanBars: 4)];
-    expect(blocksOverlap(blocks, const SongBlock(id: 'a', startBar: 0, spanBars: 4)),
-        isFalse);
+    expect(
+      blocksOverlap(blocks, const SongBlock(id: 'a', startBar: 0, spanBars: 4)),
+      isFalse,
+    );
   });
 
   test('makeSection produces a valid id and defaults', () {
@@ -35,6 +43,7 @@ void main() {
     expect(s.id, isNotEmpty);
     expect(s.lengthBars, 8);
     expect(s.repeat, 1);
-    expect(s.lanes, isEmpty);
+    expect(s.lanes, hasLength(1));
+    expect(s.lanes.single.kind, SongLaneKind.harmony);
   });
 }

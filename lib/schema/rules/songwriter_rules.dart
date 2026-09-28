@@ -5,6 +5,7 @@ library;
 import '../../models/save_system.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
+import '../../models/harmony_lane_instrument.dart';
 import '../../utils/note_utils.dart';
 import 'save_system_rules.dart' show generateId, getProjectIdForFolder;
 
@@ -129,21 +130,39 @@ bool blocksOverlap(List<SongBlock> existing, SongBlock candidate) {
 // ─── Factory Helpers ─────────────────────────────────────────────────────────
 
 SongSection makeSection({
+  String? id,
   String? label,
   required int lengthBars,
   required int order,
+  HarmonyLaneInstrument harmonyInstrument = HarmonyLaneInstrument.fretboard,
 }) => SongSection(
-  id: generateId(),
+  id: id ?? generateId(),
   label: label,
   lengthBars: lengthBars,
   order: order,
+  lanes: [
+    makeLane(
+      kind: SongLaneKind.harmony,
+      order: 0,
+      harmonyInstrument: harmonyInstrument,
+    ),
+  ],
 );
 
 SongLane makeLane({
   required SongLaneKind kind,
   String? label,
   required int order,
-}) => SongLane(id: generateId(), kind: kind, label: label, order: order);
+  HarmonyLaneInstrument? harmonyInstrument,
+}) => SongLane(
+  id: generateId(),
+  kind: kind,
+  label: label,
+  order: order,
+  harmonyInstrument: kind == SongLaneKind.harmony
+      ? harmonyInstrument ?? HarmonyLaneInstrument.fretboard
+      : null,
+);
 
 SongBlock makeSaveBlock({
   required String saveId,
@@ -534,21 +553,22 @@ SongLane? primaryHarmonyLane(SongSection section) {
 }
 
 /// The harmony lane a save [lane]'s voicings belong to: its
-/// [SongLane.anchorLaneId] when that still names a harmony lane in
-/// [section], otherwise the primary harmony lane (legacy save lanes have no
-/// anchor). Null when the section has no harmony lane at all.
+/// [SongLane.anchorLaneId] when that names a harmony lane in [section].
+/// Anchor-less legacy lanes use the primary harmony lane; an explicit stale
+/// anchor remains unresolved instead of borrowing another lane's harmony.
 SongLane? saveAnchorLane(SongSection section, SongLane lane) {
+  if (lane.anchorLaneId == null) return primaryHarmonyLane(section);
   for (final l in section.lanes) {
     if (l.id == lane.anchorLaneId && l.kind == SongLaneKind.harmony) return l;
   }
-  return primaryHarmonyLane(section);
+  return null;
 }
 
 /// The lane whose mix settings (volume / pan / muted) govern [lane] during
 /// playback and export. Save lanes follow their anchor harmony lane (see
 /// [saveAnchorLane]) — their blocks render as badges on that lane and sound
 /// as part of it — so they have no mix of their own. Every other lane
-/// governs itself, as does a save lane in a section with no harmony lane.
+/// governs itself, as does a save lane whose anchor no longer resolves.
 SongLane mixGoverningLane(SongSection section, SongLane lane) {
   if (lane.kind != SongLaneKind.save) return lane;
   return saveAnchorLane(section, lane) ?? lane;

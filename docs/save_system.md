@@ -2,10 +2,10 @@
 
 The save system provides project-scoped folders and canonical snapshots for
 Fretboard, Piano, Piano Roll, Song, Writer, and reusable drum loops. Recoverable
-Writer blocks link to these shared saves through managed section folders; a
-shared save keeps one snapshot even when several Writer placements use it. A
-block whose save and fallback content are both unavailable remains visible as
-broken in Writer.
+Writer blocks link to shared saves through managed section folders and their
+lane-category subfolders. A shared save keeps one snapshot even when several
+Writer placements use it. A block whose save and fallback content are both
+unavailable remains visible as broken in Writer.
 
 ---
 
@@ -34,8 +34,8 @@ Every top-level folder has a `kind`:
 
 | Kind | Meaning |
 |---|---|
-| `normal` | Ordinary project subfolder, or a Writer-managed section folder. |
-| `project` | A user-facing project root. Carries a `ProjectConfig` (key, tempo, time signature). |
+| `normal` | Ordinary project subfolder, or a Writer-managed section/category folder. |
+| `project` | A user-facing project root. Carries a `ProjectConfig` (key, tempo, time signature, default Harmony instrument). |
 | `dump` | Single global spare folder (at most one). Holds ad-hoc saves until copied into a real project. |
 
 `SaveSystemState.selectedProjectId` identifies the active project (`project` or `dump`). Persisted in the v3 blob. Song + Songwriter require `kind == project` (Dump is rejected). Fretboard / Piano / Roll accept either.
@@ -49,6 +49,7 @@ Every top-level folder has a `kind`:
 | `tempo` | `int` | 120 |
 | `beatsPerBar` | `int` | 4 |
 | `beatUnit` | `int` | 4 |
+| `defaultHarmonyInstrument` | `HarmonyLaneInstrument` | Fretboard |
 
 When a project is selected, tempo / key / time-signature controls on the instrument and arrangement headers are locked. Edit them through the project config sheet, which prompts before retrofitting eligible saves in the project's subtree. Named Writer Song versions are immutable and are not retrofitted; the active Writer session follows the current project config.
 
@@ -66,7 +67,8 @@ shown in the startup recovery prompt until the user chooses **Start fresh**.
 |---|---|
 | `PendingChord` | Root + quality pending detection (`root`, `quality`, `symbol`) |
 | `PendingScale` | Root + scale name pending detection |
-| `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot`, `WriterBlockSnapshot`, `DrumLoopSnapshot` |
+| `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `HarmonyChordSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot`, `WriterBlockSnapshot`, `DrumLoopSnapshot` |
+| `HarmonyChordSnapshot` | One Harmony chord's symbolic Writer block, native Piano/Fretboard snapshot, and fixed lane instrument identity |
 | `FretboardSnapshot` | Fretboard save: tuning, capo, selected cells, notes, view mode, pending chord/scale |
 | `PianoSnapshot` | Piano save: key range, selected keys, notes, view mode, pending chord/scale |
 | `PianoRollSnapshot` | Piano roll session: tempo, time signature, notes, range, snap, highlights, derivable chord/scale |
@@ -77,10 +79,10 @@ shown in the startup recovery prompt until the user chooses **Start fresh**.
 | `ProgressionFolderMeta` | Metadata attached to a folder: source type, progression ID, key |
 | `ProgressionChordMeta` | Metadata attached to a save: chord symbol, root, Roman numeral, chord notes |
 | `ActiveSession` | Current navigation context: `saveId` + `folderId` |
-| `AppSettings` | User preferences — `suppressOutOfKeyAlert`, `noteVolume`, `showNoteLabels`, `humSensitivity`, `metronomeEnabled`, `saveBrowserGrid`, and the last content workspace |
+| `AppSettings` | User preferences — includes an optional default Harmony instrument for future projects and the last content workspace |
 | `SaveSystemState` | Root state: `folders`, `saves`, Writer links, `activeSession`, `hydrated`, and `selectedProjectId` |
 
-> `SaveFolder.writerSectionId` marks a Writer-managed section folder; it is absent on ordinary folders and existing data. `SaveSystemState.writerLinks` is additive in v3 and defaults to an empty list for older payloads. Legacy saves default to origin `manual`. Snapshots implement `toJson` / `fromJson` for `SharedPreferences` persistence.
+> `SaveFolder.writerSectionId` marks a Writer-managed section or one of its category folders; `writerLaneKind` identifies the category child. Ordinary folders have neither field. `SaveSystemState.writerLinks` is additive in v3 and defaults to an empty list for older payloads. Legacy saves default to origin `manual`. Snapshots implement `toJson` / `fromJson` for `SharedPreferences` persistence.
 
 ## Startup hydration and Data Recovery
 
@@ -238,12 +240,14 @@ Provider: `saveSystemProvider` (Riverpod `NotifierProvider<SaveSystemNotifier, S
 ### Writer links and removal safeguards
 
 Section folders are direct children of the project and are owned by Writer.
-Renaming, reordering, removing, undoing, redoing, or loading a named Writer
-version reconciles those folders and their links by section ID. A Writer-origin
-save is placed in its earliest linked section folder and returns to the project
-root after its final Writer link is removed. A manual save linked from the root
-keeps its original folder. Linking a manual root save does not duplicate or
-move it.
+Each section contains category folders for Harmony, Voicing, Drum, Audio,
+Melody, and Guitar strum. Renaming, reordering, removing, undoing, redoing, or
+loading a named Writer version reconciles these folders and their links by
+section and lane kind. Writer-origin saves live in the matching category while
+linked and return to the project root after their final Writer link is removed.
+A manual save linked from the root keeps its original folder. Linking a manual
+root save does not duplicate or move it. A manual save is rehomed to the root
+only if deleting its managed parent would otherwise orphan it.
 
 The Writer store prepares block content, canonical saves, and links, then uses
 `buildWriterStructure` and `commitWriterStructure` to validate and publish the

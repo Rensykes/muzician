@@ -127,7 +127,9 @@ void main() {
     await writer.reconcileCurrentProject();
 
     var section = container.read(songwriterProvider).sections.single;
-    var lane = section.lanes.single;
+    var lane = section.lanes.singleWhere(
+      (candidate) => candidate.kind == SongLaneKind.audio,
+    );
     final blockId = lane.blocks.single.id;
     final saveId = lane.blocks.single.saveId!;
     final saveName = container
@@ -208,7 +210,9 @@ void main() {
     await tester.pumpAndSettle();
 
     section = container.read(songwriterProvider).sections.single;
-    lane = section.lanes.single;
+    lane = section.lanes.singleWhere(
+      (candidate) => candidate.kind == SongLaneKind.audio,
+    );
     final uniqueSaveId = lane.blocks.single.saveId!;
     expect(uniqueSaveId, isNot(saveId));
     expect(

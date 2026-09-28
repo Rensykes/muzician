@@ -53,7 +53,10 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
       return;
     }
     final snapshot = entry.snapshot;
-    if (snapshot is! WriterBlockSnapshot) return;
+    if (snapshot is! WriterBlockSnapshot ||
+        snapshot.laneKind == SongLaneKind.harmony) {
+      return;
+    }
 
     final sections = ref.read(songwriterProvider).sections;
     if (sections.isEmpty) {
@@ -387,7 +390,9 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
                         entry.folderId,
                         selected.id,
                       ) &&
-                      entry.snapshot is WriterBlockSnapshot,
+                      entry.snapshot is WriterBlockSnapshot &&
+                      (entry.snapshot as WriterBlockSnapshot).laneKind !=
+                          SongLaneKind.harmony,
                 ),
               ],
             ),

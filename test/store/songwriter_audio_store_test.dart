@@ -68,6 +68,35 @@ void main() {
     expect(block.spanBars, 2);
   });
 
+  test('clip chord segments stay separate from Writer Harmony blocks', () {
+    seedSectionWithAudioLane();
+    final clipId = store().addAudioClip(assetId: 'a1', durationMs: 4000);
+
+    final segmentId = store().addChordSegment(
+      clipId: clipId,
+      startTick: 0,
+      spanTicks: 16,
+      chordSymbol: 'C',
+      chordQuality: '',
+      chordRootPc: 0,
+      chordNotes: const ['C', 'E', 'G'],
+    );
+
+    final project = c.read(songwriterProvider);
+    final harmonyLane = project.sections.single.lanes.singleWhere(
+      (lane) => lane.kind == SongLaneKind.harmony,
+    );
+    expect(project.audioClips.single.segments.single.id, segmentId);
+    expect(project.audioClips.single.segments.single.chordSymbol, 'C');
+    expect(harmonyLane.blocks, isEmpty);
+    expect(
+      project.sections.single.lanes.where(
+        (lane) => lane.kind == SongLaneKind.save,
+      ),
+      isEmpty,
+    );
+  });
+
   test('setClipFitMode and setClipTrim mutate the clip', () {
     seedSectionWithAudioLane();
     final clipId = store().addAudioClip(assetId: 'a1', durationMs: 4000);

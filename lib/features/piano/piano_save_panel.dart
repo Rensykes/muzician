@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/harmony_lane_instrument.dart';
 import '../../models/save_system.dart';
 import '../../store/piano_store.dart';
 import '../../store/save_system_store.dart';
@@ -10,8 +11,8 @@ import '../../store/songwriter_store.dart';
 import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 import '../../schema/rules/save_system_rules.dart';
+import '../instrument_shared/harmony_save_edit_dialog.dart';
 import '../instrument_shared/writer_handoff.dart';
-import '../../theme/muzician_theme.dart';
 
 /// A panel that lets the user save and load piano snapshots.
 ///
@@ -113,7 +114,7 @@ class _PianoSavePanelState extends ConsumerState<PianoSavePanel> {
           _linkedEditSaveId!,
         ).isNotEmpty;
     final linkedEditEntry =
-        editTargetIsLinked && editSave?.snapshot is PianoSnapshot
+        editTargetIsLinked && _pianoSnapshotFor(editSave?.snapshot) != null
         ? editSave
         : null;
     return Column(
@@ -121,27 +122,17 @@ class _PianoSavePanelState extends ConsumerState<PianoSavePanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (linkedEditEntry != null) ...[
-          _UpdateLinkedSaveButton(
+          harmonyLinkedSaveButton(
             saveName: linkedEditEntry.name,
-            onPressed: () {
-              final updated = ref
-                  .read(songwriterProvider.notifier)
-                  .updateLinkedInstrumentSave(
-                    saveId: linkedEditEntry.id,
-                    snapshot: _captureSnapshot(ref),
-                  );
-              ScaffoldMessenger.maybeOf(context)
-                ?..hideCurrentSnackBar()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      updated
-                          ? 'Updated ${linkedEditEntry.name} in Writer.'
-                          : 'This linked Writer save is no longer available.',
-                    ),
-                  ),
-                );
-            },
+            onPressed: () => _updateLinkedSave(
+              context,
+              linkedEditEntry,
+              getWriterLinksForSave(
+                saveState,
+                selectedId,
+                linkedEditEntry.id,
+              ).length,
+            ),
           ),
           const SizedBox(height: 8),
         ],
@@ -156,8 +147,14 @@ class _PianoSavePanelState extends ConsumerState<PianoSavePanel> {
           onLoadSaveId: _onSaveLoaded,
           canUseInWriter: (save) =>
               selectedProjectRoot &&
-              save.folderId == selectedId &&
-              save.snapshot is PianoSnapshot,
+              _pianoSnapshotFor(save.snapshot) != null &&
+              (save.snapshot is HarmonyChordSnapshot
+                  ? isFolderInProject(
+                      saveState.folders,
+                      save.folderId,
+                      selectedId,
+                    )
+                  : save.folderId == selectedId),
           onUseInWriter: (save) => startWriterHandoff(
             context: context,
             ref: ref,
@@ -183,6 +180,84 @@ class _PianoSavePanelState extends ConsumerState<PianoSavePanel> {
       });
     }
     widget.onDifferentSaveLoaded?.call(saveId);
+  }
+
+  Future<void> _updateLinkedSave(
+    BuildContext context,
+    SaveEntry entry,
+    int placementCount,
+  ) async {
+    final notifier = ref.read(songwriterProvider.notifier);
+    if (entry.snapshot is HarmonyChordSnapshot && placementCount > 1) {
+      final choice = await showHarmonySharedSaveEditChoice(
+        context,
+        saveName: entry.name,
+        placementCount: placementCount,
+      );
+      if (choice == null || !context.mounted) return;
+      if (choice == HarmonySharedSaveEditChoice.createStandaloneSave) {
+        final suggestedName = '${entry.name} copy';
+        final name = await showStandaloneHarmonySaveNameDialog(
+          context,
+          initialName: suggestedName.length <= 80
+              ? suggestedName
+              : suggestedName.substring(0, 80),
+        );
+        if (name == null || !context.mounted) return;
+        final standaloneId = notifier.saveStandaloneHarmonyEdit(
+          sourceSaveId: entry.id,
+          name: name,
+          snapshot: _captureSnapshot(ref),
+        );
+        if (standaloneId != null) {
+          if (!mounted) return;
+          setState(() {
+            _linkedEditSaveId = null;
+            _editTargetCleared = true;
+          });
+          widget.onDifferentSaveLoaded?.call(standaloneId);
+        }
+        _showEditResult(
+          context,
+          success: standaloneId != null,
+          successMessage:
+              'Created standalone Save “$name”. Writer chords are unchanged.',
+          errorMessage: notifier.lastHarmonyMutationError,
+        );
+        return;
+      }
+    }
+
+    final updated = notifier.updateLinkedInstrumentSave(
+      saveId: entry.id,
+      snapshot: _captureSnapshot(ref),
+    );
+    _showEditResult(
+      context,
+      success: updated,
+      successMessage: 'Updated ${entry.name} in Writer.',
+      errorMessage: notifier.lastHarmonyMutationError,
+    );
+  }
+
+  void _showEditResult(
+    BuildContext context, {
+    required bool success,
+    required String successMessage,
+    String? errorMessage,
+  }) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? successMessage
+                : errorMessage ??
+                      'This linked Writer save is no longer available.',
+          ),
+        ),
+      );
   }
 
   /// Builds a [PianoSnapshot] from the current store state.
@@ -220,13 +295,14 @@ class _PianoSavePanelState extends ConsumerState<PianoSavePanel> {
 
 /// Loads all Piano and picker state from a canonical snapshot.
 void loadPianoSnapshot(WidgetRef ref, InstrumentSnapshot snapshot) {
-  if (snapshot is! PianoSnapshot) return;
+  final pianoSnapshot = _pianoSnapshotFor(snapshot);
+  if (pianoSnapshot == null) return;
 
-  ref.read(pianoProvider.notifier).loadSnapshot(snapshot);
-  if (snapshot.pendingChord != null) {
+  ref.read(pianoProvider.notifier).loadSnapshot(pianoSnapshot);
+  if (pianoSnapshot.pendingChord != null) {
     ref.read(pianoPendingChordProvider.notifier).state = (
-      root: snapshot.pendingChord!.root,
-      quality: snapshot.pendingChord!.quality,
+      root: pianoSnapshot.pendingChord!.root,
+      quality: pianoSnapshot.pendingChord!.quality,
     );
     ref.read(pianoChordCommittedProvider.notifier).state = true;
   } else {
@@ -234,50 +310,31 @@ void loadPianoSnapshot(WidgetRef ref, InstrumentSnapshot snapshot) {
     ref.read(pianoChordCommittedProvider.notifier).state = false;
   }
 
-  if (snapshot.pendingScale != null) {
+  if (pianoSnapshot.pendingScale != null) {
     ref.read(pianoPendingScaleProvider.notifier).state = (
-      root: snapshot.pendingScale!.root,
-      scaleName: snapshot.pendingScale!.scaleName,
+      root: pianoSnapshot.pendingScale!.root,
+      scaleName: pianoSnapshot.pendingScale!.scaleName,
     );
     ref.read(pianoActiveScaleProvider.notifier).state = (
-      root: snapshot.pendingScale!.root,
-      scaleName: snapshot.pendingScale!.scaleName,
+      root: pianoSnapshot.pendingScale!.root,
+      scaleName: pianoSnapshot.pendingScale!.scaleName,
     );
   } else {
     ref.read(pianoPendingScaleProvider.notifier).state = null;
     ref.read(pianoActiveScaleProvider.notifier).state = null;
   }
-  if (snapshot.selectedKeys.isNotEmpty) {
+  if (pianoSnapshot.selectedKeys.isNotEmpty) {
     ref.read(pianoScrollToMidiProvider.notifier).state =
-        snapshot.selectedKeys.first.midiNote;
+        pianoSnapshot.selectedKeys.first.midiNote;
   }
 }
 
-class _UpdateLinkedSaveButton extends StatelessWidget {
-  const _UpdateLinkedSaveButton({
-    required this.saveName,
-    required this.onPressed,
-  });
-
-  final String saveName;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 4),
-    child: Semantics(
-      button: true,
-      label: 'Update linked save $saveName',
-      child: OutlinedButton.icon(
-        key: const Key('updateLinkedSaveButton'),
-        onPressed: onPressed,
-        icon: const Icon(Icons.sync),
-        label: Text('Update linked save · $saveName'),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
-          foregroundColor: MuzicianTheme.sky,
-        ),
-      ),
-    ),
-  );
+PianoSnapshot? _pianoSnapshotFor(InstrumentSnapshot? snapshot) {
+  if (snapshot is PianoSnapshot) return snapshot;
+  if (snapshot is HarmonyChordSnapshot &&
+      snapshot.harmonyInstrument == HarmonyLaneInstrument.piano &&
+      snapshot.instrumentState is PianoSnapshot) {
+    return snapshot.instrumentState as PianoSnapshot;
+  }
+  return null;
 }

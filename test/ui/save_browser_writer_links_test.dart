@@ -10,7 +10,7 @@ import 'package:muzician/ui/save_browser_panel.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('Writer links appear in their section folder once', (
+  testWidgets('Writer links appear in their lane category once', (
     tester,
   ) async {
     final state = _stateWithSectionSave();
@@ -39,9 +39,87 @@ void main() {
 
     await tester.tap(find.text('Verse'));
     await tester.pumpAndSettle();
+    expect(find.text('Harmony'), findsOneWidget);
+    expect(find.text('Shared chord'), findsNothing);
+    await tester.tap(find.text('Harmony'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Shared chord'), findsOneWidget);
     expect(find.text('Writer link'), findsOneWidget);
+  });
+
+  testWidgets('cross-section link displays the canonical source save once', (
+    tester,
+  ) async {
+    final source = _stateWithSectionSave();
+    const chorus = SaveFolder(
+      id: 'chorus-folder',
+      name: 'Chorus',
+      parentId: 'project',
+      createdAt: 4,
+      order: 1,
+      writerSectionId: 'chorus',
+    );
+    const chorusHarmony = SaveFolder(
+      id: 'chorus-harmony-folder',
+      name: 'Harmony',
+      parentId: 'chorus-folder',
+      createdAt: 5,
+      order: 0,
+      writerSectionId: 'chorus',
+      writerLaneKind: SongLaneKind.harmony,
+    );
+    final state = source.copyWith(
+      folders: [...source.folders, chorus, chorusHarmony],
+      writerLinks: [
+        ...source.writerLinks,
+        const WriterSaveLink(
+          blockId: 'chorus-block',
+          sectionId: 'chorus',
+          folderId: 'chorus-harmony-folder',
+          saveId: 'save',
+          laneKind: SongLaneKind.harmony,
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        saveSystemProvider.overrideWith(() => _SeededSaveSystemNotifier(state)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SaveBrowserPanel(
+              rootFolderId: 'project',
+              allowedInstruments: const {'writer_block'},
+              onRenameLinkedSave: (_, _) => true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Chorus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Harmony'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shared chord'), findsOneWidget);
+    expect(find.text('Writer link'), findsOneWidget);
+    expect(
+      container
+          .read(saveSystemProvider)
+          .saves
+          .singleWhere((save) => save.id == 'save')
+          .folderId,
+      'harmony-folder',
+    );
   });
 
   testWidgets('managed folder controls stay locked and linked rename routes', (
@@ -81,6 +159,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.lock_outline), findsOneWidget);
     await tester.tap(find.text('Verse'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Harmony'));
     await tester.pumpAndSettle();
     expect(
       find.byType(TextField),
@@ -170,6 +250,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Verse'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Harmony'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
 
@@ -225,6 +307,15 @@ SaveSystemState _stateWithSectionSave() {
     order: 0,
     writerSectionId: 'section',
   );
+  const laneFolder = SaveFolder(
+    id: 'harmony-folder',
+    name: 'Harmony',
+    parentId: 'section-folder',
+    createdAt: 3,
+    order: 0,
+    writerSectionId: 'section',
+    writerLaneKind: SongLaneKind.harmony,
+  );
   const block = WriterBlockSnapshot(
     laneKind: SongLaneKind.harmony,
     chordSymbol: 'Am7',
@@ -233,7 +324,7 @@ SaveSystemState _stateWithSectionSave() {
   const save = SaveEntry(
     id: 'save',
     name: 'Shared chord',
-    folderId: 'section-folder',
+    folderId: 'harmony-folder',
     snapshot: block,
     createdAt: 3,
     updatedAt: 3,
@@ -243,12 +334,12 @@ SaveSystemState _stateWithSectionSave() {
   const link = WriterSaveLink(
     blockId: 'block',
     sectionId: 'section',
-    folderId: 'section-folder',
+    folderId: 'harmony-folder',
     saveId: 'save',
     laneKind: SongLaneKind.harmony,
   );
   return const SaveSystemState(
-    folders: [project, sectionFolder],
+    folders: [project, sectionFolder, laneFolder],
     saves: [save],
     writerLinks: [link],
     hydrated: true,

@@ -24,12 +24,39 @@ ProviderContainer _container() {
   return container;
 }
 
+ProviderContainer _containerWithState(SaveSystemState state) {
+  final container = ProviderContainer(
+    overrides: [
+      saveSystemProvider.overrideWith(() => _SeededSaveSystemNotifier(state)),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container;
+}
+
 Future<String> _selectedProject(ProviderContainer container) async {
   final saves = container.read(saveSystemProvider.notifier);
   await saves.hydrate();
   final id = saves.createProject('Writer project', const ProjectConfig())!;
   saves.selectProject(id);
   return id;
+}
+
+SaveFolder _laneFolder(
+  SaveSystemState state, {
+  required String projectId,
+  required SaveFolder sectionFolder,
+  required String sectionId,
+  required SongLaneKind laneKind,
+}) {
+  final staged = state.copyWith(folders: [...state.folders, sectionFolder]);
+  return getOrCreateWriterLaneFolder(
+    staged,
+    projectId: projectId,
+    sectionId: sectionId,
+    laneKind: laneKind,
+    sectionFolder: sectionFolder,
+  );
 }
 
 void main() {
@@ -48,15 +75,22 @@ void main() {
         name: 'Verse',
         order: 0,
       );
+      final laneFolder = _laneFolder(
+        container.read(saveSystemProvider),
+        projectId: projectId,
+        sectionFolder: sectionFolder,
+        sectionId: 'section',
+        laneKind: SongLaneKind.save,
+      );
       final saveId = saves.saveSnapshot('Shared idea', projectId, _snapshot())!;
       final current = container.read(saveSystemProvider);
       final next = current.copyWith(
-        folders: [...current.folders, sectionFolder],
+        folders: [...current.folders, sectionFolder, laneFolder],
         writerLinks: [
           WriterSaveLink(
             blockId: 'block',
             sectionId: 'section',
-            folderId: sectionFolder.id,
+            folderId: laneFolder.id,
             saveId: saveId,
             laneKind: SongLaneKind.save,
           ),
@@ -79,6 +113,7 @@ void main() {
       expect(saves.lastMutationError, contains('Writer'));
       expect(saves.deleteFolder(sectionFolder.id), isFalse);
       expect(saves.lastMutationError, contains('Writer'));
+      expect(saves.renameFolder(laneFolder.id, 'Changed'), isFalse);
       expect(saves.renameFolder(sectionFolder.id, 'Changed'), isFalse);
       expect(saves.createSaveFolder('Manual child', sectionFolder.id), isNull);
       expect(
@@ -91,6 +126,14 @@ void main() {
             .saves
             .any((save) => save.id == saveId),
         isTrue,
+      );
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((save) => save.id == saveId)
+            .folderId,
+        projectId,
       );
     },
   );
@@ -115,13 +158,20 @@ void main() {
         name: 'Verse',
         order: 0,
       );
+      final laneFolder = _laneFolder(
+        current,
+        projectId: projectId,
+        sectionFolder: sectionFolder,
+        sectionId: 'verse',
+        laneKind: SongLaneKind.harmony,
+      );
       final next = current.copyWith(
-        folders: [...current.folders, sectionFolder],
+        folders: [...current.folders, sectionFolder, laneFolder],
         writerLinks: [
           WriterSaveLink(
             blockId: 'linked-block',
             sectionId: 'verse',
-            folderId: sectionFolder.id,
+            folderId: laneFolder.id,
             saveId: saveId,
             laneKind: SongLaneKind.harmony,
           ),
@@ -138,11 +188,164 @@ void main() {
             .any((folder) => folder.id == ordinaryFolder),
         isTrue,
       );
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((save) => save.id == saveId)
+            .folderId,
+        ordinaryFolder,
+      );
     },
   );
 
   test(
-    'Writer-origin saves move to their earliest link and return to root',
+    'Writer-origin saves retain their source folder and rehome after owner deletion',
+    () async {
+      final container = _container();
+      final projectId = await _selectedProject(container);
+      final saves = container.read(saveSystemProvider.notifier);
+      final current = container.read(saveSystemProvider);
+      final sourceSection = createWriterSectionFolder(
+        current,
+        projectId: projectId,
+        sectionId: 'later-section',
+        name: 'Chorus',
+        order: 1,
+      );
+      final sourceLane = _laneFolder(
+        current,
+        projectId: projectId,
+        sectionFolder: sourceSection,
+        sectionId: 'later-section',
+        laneKind: SongLaneKind.harmony,
+      );
+      final earlierSection = createWriterSectionFolder(
+        current,
+        projectId: projectId,
+        sectionId: 'earlier-section',
+        name: 'Verse',
+        order: 0,
+      );
+      final earlierLane = _laneFolder(
+        current,
+        projectId: projectId,
+        sectionFolder: earlierSection,
+        sectionId: 'earlier-section',
+        laneKind: SongLaneKind.harmony,
+      );
+      final folders = [
+        ...current.folders,
+        sourceSection,
+        sourceLane,
+        earlierSection,
+        earlierLane,
+      ];
+      final entry = createWriterSaveEntry(
+        'Writer idea',
+        sourceLane.id,
+        _snapshot(),
+        0,
+      );
+      final sourceLink = WriterSaveLink(
+        blockId: 'writer-block',
+        sectionId: 'later-section',
+        folderId: sourceLane.id,
+        saveId: entry.id,
+        laneKind: SongLaneKind.harmony,
+      );
+      final earlierLink = WriterSaveLink(
+        blockId: 'earlier-writer-block',
+        sectionId: 'earlier-section',
+        folderId: earlierLane.id,
+        saveId: entry.id,
+        laneKind: SongLaneKind.harmony,
+      );
+      final linked = current.copyWith(
+        folders: folders,
+        saves: [...current.saves, entry],
+        writerLinks: [sourceLink],
+      );
+      expect(
+        saves.commitWriterStructure(projectId, linked),
+        isTrue,
+        reason: saves.lastMutationError,
+      );
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .firstWhere((save) => save.id == entry.id)
+            .folderId,
+        sourceLane.id,
+      );
+
+      final sourceState = container.read(saveSystemProvider);
+      final reversedLinks = sourceState.copyWith(
+        writerLinks: [earlierLink, sourceLink],
+      );
+      expect(
+        saves.commitWriterStructure(projectId, reversedLinks),
+        isTrue,
+        reason: saves.lastMutationError,
+      );
+      var retained = container
+          .read(saveSystemProvider)
+          .saves
+          .singleWhere((save) => save.id == entry.id);
+      expect(retained.id, entry.id);
+      expect(retained.folderId, sourceLane.id);
+
+      final linkedState = container.read(saveSystemProvider);
+      final sourceSubtreeIds = getSubtreeFolderIds(
+        linkedState.folders,
+        sourceSection.id,
+      );
+      final removedOwner = linkedState.copyWith(
+        folders: linkedState.folders
+            .where((folder) => !sourceSubtreeIds.contains(folder.id))
+            .toList(),
+        writerLinks: [earlierLink],
+      );
+      expect(
+        saves.commitWriterStructure(projectId, removedOwner),
+        isTrue,
+        reason: saves.lastMutationError,
+      );
+      retained = container
+          .read(saveSystemProvider)
+          .saves
+          .singleWhere((save) => save.id == entry.id);
+      expect(retained.id, entry.id);
+      expect(retained.folderId, earlierLane.id);
+
+      final rehomedState = container.read(saveSystemProvider);
+      final earlierSubtreeIds = getSubtreeFolderIds(
+        rehomedState.folders,
+        earlierSection.id,
+      );
+      final noOwnerNoLinks = rehomedState.copyWith(
+        folders: rehomedState.folders
+            .where((folder) => !earlierSubtreeIds.contains(folder.id))
+            .toList(),
+        writerLinks: const [],
+      );
+      expect(
+        saves.commitWriterStructure(projectId, noOwnerNoLinks),
+        isTrue,
+        reason: saves.lastMutationError,
+      );
+      retained = container
+          .read(saveSystemProvider)
+          .saves
+          .singleWhere((save) => save.id == entry.id);
+      expect(retained.id, entry.id);
+      expect(retained.folderId, projectId);
+    },
+  );
+
+  test(
+    'Writer links require their direct matching section lane category',
     () async {
       final container = _container();
       final projectId = await _selectedProject(container);
@@ -155,47 +358,153 @@ void main() {
         name: 'Verse',
         order: 0,
       );
-      final entry = createWriterSaveEntry(
-        'Writer idea',
-        sectionFolder.id,
-        _snapshot(),
-        0,
-      );
-      final link = WriterSaveLink(
-        blockId: 'writer-block',
+      final laneFolder = _laneFolder(
+        current,
+        projectId: projectId,
+        sectionFolder: sectionFolder,
         sectionId: 'section',
-        folderId: sectionFolder.id,
-        saveId: entry.id,
         laneKind: SongLaneKind.harmony,
       );
-      final linked = current.copyWith(
-        folders: [...current.folders, sectionFolder],
-        saves: [...current.saves, entry],
-        writerLinks: [link],
+      final saveId = saves.saveSnapshot('Idea', projectId, _snapshot())!;
+      final next = current.copyWith(
+        folders: [...current.folders, sectionFolder, laneFolder],
+        writerLinks: [
+          WriterSaveLink(
+            blockId: 'block',
+            sectionId: 'section',
+            folderId: laneFolder.id,
+            saveId: saveId,
+            laneKind: SongLaneKind.save,
+          ),
+        ],
       );
-      expect(saves.commitWriterStructure(projectId, linked), isTrue);
+
+      expect(saves.buildWriterStructure(projectId, next), isNull);
+      expect(saves.lastMutationError, contains('invalid'));
+      expect(container.read(saveSystemProvider).writerLinks, isEmpty);
+
+      final nestedFolder = createFolder('Nested', laneFolder.id, 0);
+      final nestedTarget = current.copyWith(
+        folders: [...current.folders, sectionFolder, laneFolder, nestedFolder],
+        writerLinks: [
+          WriterSaveLink(
+            blockId: 'nested-block',
+            sectionId: 'section',
+            folderId: nestedFolder.id,
+            saveId: saveId,
+            laneKind: SongLaneKind.harmony,
+          ),
+        ],
+      );
+      expect(saves.buildWriterStructure(projectId, nestedTarget), isNull);
+      expect(saves.lastMutationError, contains('invalid'));
+    },
+  );
+
+  test(
+    'manual saves stay put on link changes and rehome when a managed ancestor is deleted',
+    () async {
+      const projectId = 'project';
+      const project = SaveFolder(
+        id: projectId,
+        name: 'Project',
+        createdAt: 1,
+        order: 0,
+        kind: SaveFolderKind.project,
+        projectConfig: ProjectConfig(),
+      );
+      const sectionFolder = SaveFolder(
+        id: 'section-folder',
+        name: 'Verse',
+        parentId: projectId,
+        createdAt: 2,
+        order: 0,
+        writerSectionId: 'section',
+      );
+      const laneFolder = SaveFolder(
+        id: 'harmony-category',
+        name: 'Harmony',
+        parentId: 'section-folder',
+        createdAt: 3,
+        order: 0,
+        writerSectionId: 'section',
+        writerLaneKind: SongLaneKind.harmony,
+      );
+      const nested = SaveFolder(
+        id: 'nested-folder',
+        name: 'Nested',
+        parentId: 'harmony-category',
+        createdAt: 4,
+        order: 0,
+      );
+      final snapshot = _snapshot();
+      final manualSave = SaveEntry(
+        id: 'manual-save',
+        name: 'Keep this idea',
+        folderId: nested.id,
+        snapshot: snapshot,
+        createdAt: 5,
+        updatedAt: 5,
+        order: 0,
+      );
+      final link = WriterSaveLink(
+        blockId: 'block',
+        sectionId: 'section',
+        folderId: laneFolder.id,
+        saveId: manualSave.id,
+        laneKind: SongLaneKind.harmony,
+      );
+      final seed = SaveSystemState(
+        folders: const [project, sectionFolder, laneFolder, nested],
+        saves: [manualSave],
+        writerLinks: [link],
+        hydrated: true,
+        selectedProjectId: projectId,
+      );
+      final container = _containerWithState(seed);
+      final saves = container.read(saveSystemProvider.notifier);
+      final unlinkOnly = seed.copyWith(writerLinks: const []);
+      expect(
+        saves.commitWriterStructure(projectId, unlinkOnly, persist: false),
+        isTrue,
+      );
       expect(
         container
             .read(saveSystemProvider)
             .saves
-            .firstWhere((save) => save.id == entry.id)
+            .singleWhere((save) => save.id == manualSave.id)
             .folderId,
-        sectionFolder.id,
+        nested.id,
       );
 
-      final linkedState = container.read(saveSystemProvider);
-      final removedSection = linkedState.copyWith(
-        folders: linkedState.folders
-            .where((folder) => folder.id != sectionFolder.id)
-            .toList(),
-        writerLinks: const [],
+      final unlinkedState = container.read(saveSystemProvider);
+      final categorySubtreeIds = getSubtreeFolderIds(
+        unlinkedState.folders,
+        laneFolder.id,
       );
-      expect(saves.commitWriterStructure(projectId, removedSection), isTrue);
+      final deleteCategory = unlinkedState.copyWith(
+        folders: unlinkedState.folders
+            .where((folder) => !categorySubtreeIds.contains(folder.id))
+            .toList(),
+      );
+
+      final removeCategory = seed.copyWith(
+        folders: deleteCategory.folders,
+        saves: deleteCategory.saves,
+        writerLinks: deleteCategory.writerLinks,
+      );
+      expect(
+        saves.commitWriterStructure(projectId, removeCategory, persist: false),
+        isTrue,
+      );
       final rehomed = container
           .read(saveSystemProvider)
           .saves
-          .firstWhere((save) => save.id == entry.id);
+          .singleWhere((save) => save.id == manualSave.id);
       expect(rehomed.folderId, projectId);
+      expect(rehomed.id, manualSave.id);
+      expect(rehomed.name, manualSave.name);
+      expect(rehomed.snapshot, same(manualSave.snapshot));
     },
   );
 
@@ -221,13 +530,20 @@ void main() {
       name: 'Verse',
       order: 0,
     );
+    final laneFolder = _laneFolder(
+      current,
+      projectId: projectId,
+      sectionFolder: sectionFolder,
+      sectionId: 'section',
+      laneKind: SongLaneKind.save,
+    );
     final next = current.copyWith(
-      folders: [...current.folders, sectionFolder],
+      folders: [...current.folders, sectionFolder, laneFolder],
       writerLinks: [
         WriterSaveLink(
           blockId: 'block',
           sectionId: 'section',
-          folderId: sectionFolder.id,
+          folderId: laneFolder.id,
           saveId: foreignSaveId,
           laneKind: SongLaneKind.save,
         ),
@@ -238,4 +554,13 @@ void main() {
     expect(saves.lastMutationError, contains('invalid'));
     expect(container.read(saveSystemProvider).writerLinks, isEmpty);
   });
+}
+
+class _SeededSaveSystemNotifier extends SaveSystemNotifier {
+  final SaveSystemState seed;
+
+  _SeededSaveSystemNotifier(this.seed);
+
+  @override
+  SaveSystemState build() => seed;
 }

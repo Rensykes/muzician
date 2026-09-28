@@ -171,13 +171,14 @@ SongProject songFromSongwriter(
   }
 
   SongLane? strumHarmonyLane(SongSection section, SongLane lane) {
+    if (lane.anchorLaneId == null) return primaryHarmonyLane(section);
     for (final candidate in section.lanes) {
       if (candidate.id == lane.anchorLaneId &&
           candidate.kind == SongLaneKind.harmony) {
         return candidate;
       }
     }
-    return primaryHarmonyLane(section);
+    return null;
   }
 
   List<int> harmonyAtTick(

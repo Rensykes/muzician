@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
+import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/save_system_store.dart';
@@ -24,8 +27,13 @@ void main() {
     final n = c.read(songwriterProvider.notifier);
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
-    n.addLane(sectionId: s, kind: SongLaneKind.harmony);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    final l = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     n.addHarmonyBlock(
       sectionId: s,
       laneId: l,
@@ -127,6 +135,77 @@ void main() {
       1,
       reason: 'overlap rejection is silent; only the first block lands',
     );
+  });
+
+  test(
+    'library placement rejects a voicing for the wrong Harmony instrument',
+    () {
+      final c = freshContainer();
+      final saves = c.read(saveSystemProvider.notifier);
+      final projectId = saves.createProject(
+        'Library compatibility',
+        const ProjectConfig(
+          defaultHarmonyInstrument: HarmonyLaneInstrument.fretboard,
+        ),
+      )!;
+      saves.selectProject(projectId);
+      final ids = seedSong(c);
+      final pianoSaveId = saves.saveSnapshot(
+        'Piano C',
+        projectId,
+        PianoSnapshot(
+          currentRange: PianoRangeName.key61,
+          selectedKeys: const [],
+          selectedNotes: const ['C4', 'E4', 'G4'],
+          viewMode: PianoViewMode.exact,
+        ),
+      )!;
+      final before = c.read(songwriterProvider);
+      final linksBefore = c.read(saveSystemProvider).writerLinks;
+
+      c
+          .read(songwriterProvider.notifier)
+          .acceptLibraryMatch(
+            sectionId: ids.sectionId,
+            harmonyBlockId: ids.harmonyBlockId,
+            saveId: pianoSaveId,
+          );
+
+      expect(identical(c.read(songwriterProvider), before), isTrue);
+      expect(c.read(saveSystemProvider).writerLinks, linksBefore);
+      expect(
+        c
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .where((lane) => lane.kind == SongLaneKind.save),
+        isEmpty,
+      );
+    },
+  );
+
+  test('missing library save does not create an orphan Save lane', () {
+    final c = freshContainer();
+    final saves = c.read(saveSystemProvider.notifier);
+    final projectId = saves.createProject(
+      'Missing save',
+      const ProjectConfig(),
+    )!;
+    saves.selectProject(projectId);
+    final ids = seedSong(c);
+    final before = c.read(songwriterProvider);
+
+    c
+        .read(songwriterProvider.notifier)
+        .addLibraryBlockAt(
+          sectionId: ids.sectionId,
+          saveId: 'missing-save',
+          startBar: 4,
+          anchorLaneId: ids.harmonyLaneId,
+        );
+
+    expect(identical(c.read(songwriterProvider), before), isTrue);
   });
 
   test('missing harmony block: silent no-op', () {

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
@@ -32,12 +33,7 @@ void main() {
       // (the diatonic chord wheel is a CustomPaint and is not key-tappable).
       n.setKey(null, null);
       n.addSection(label: 'Verse', lengthBars: 8);
-      final section = container.read(songwriterProvider).sections.first;
-      n.addLane(
-        sectionId: section.id,
-        kind: SongLaneKind.harmony,
-        label: 'Harmony',
-      );
+      final sectionId = container.read(songwriterProvider).sections.first.id;
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -76,6 +72,16 @@ void main() {
           .firstWhere((l) => l.kind == SongLaneKind.harmony);
       expect(lane.blocks, hasLength(1));
       expect(lane.blocks.first.startBar, 0);
+      expect(lane.harmonyInstrument, isNotNull);
+      expect(
+        container
+            .read(songwriterProvider)
+            .sections
+            .first
+            .lanes
+            .where((candidate) => candidate.kind == SongLaneKind.save),
+        isEmpty,
+      );
 
       final createdBlock = lane.blocks.single;
       final saveId = createdBlock.saveId!;
@@ -84,9 +90,15 @@ void main() {
           .saves
           .singleWhere((save) => save.id == saveId);
       expect(initialSave.name, 'C');
+      expect(initialSave.snapshot, isA<HarmonyChordSnapshot>());
+      expect(container.read(saveSystemProvider).saves, hasLength(1));
       expect(
         container.read(saveSystemProvider).writerLinks.single.saveId,
         saveId,
+      );
+      expect(
+        container.read(saveSystemProvider).writerLinks.single.laneKind,
+        SongLaneKind.harmony,
       );
       expect(find.text('C'), findsOneWidget);
 
@@ -117,9 +129,14 @@ void main() {
 
       await tester.tap(find.text('C'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('barActionMakeBlockUnique')));
+      expect(
+        find.byKey(const Key('barActionCreateStandaloneSave')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('barActionMakeBlockUnique')), findsNothing);
+      await tester.tap(find.byKey(const Key('barActionCreateStandaloneSave')));
       await tester.pumpAndSettle();
-      expect(find.text('Make block unique'), findsOneWidget);
+      expect(find.text('Create standalone Save'), findsOneWidget);
       await tester.enterText(
         find.byKey(const Key('writerBlockNameField')),
         'Verse tag copy',
@@ -127,7 +144,7 @@ void main() {
       await tester.tap(find.byKey(const Key('writerBlockNameSave')));
       await tester.pumpAndSettle();
 
-      final uniqueBlock = container
+      final unchangedBlock = container
           .read(songwriterProvider)
           .sections
           .single
@@ -135,23 +152,23 @@ void main() {
           .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
           .blocks
           .single;
-      expect(uniqueBlock.saveId, isNot(saveId));
-      expect(
-        container
-            .read(saveSystemProvider)
-            .saves
-            .singleWhere((save) => save.id == uniqueBlock.saveId)
-            .name,
-        'Verse tag copy',
-      );
+      expect(unchangedBlock.id, createdBlock.id);
+      expect(unchangedBlock.saveId, saveId);
+      final standalone = container
+          .read(saveSystemProvider)
+          .saves
+          .singleWhere((save) => save.id != saveId);
+      expect(standalone.name, 'Verse tag copy');
+      expect(standalone.origin, SaveOrigin.manual);
+      expect(standalone.folderId, projectId);
       expect(
         container.read(saveSystemProvider).writerLinks.single.saveId,
-        uniqueBlock.saveId,
+        saveId,
       );
 
       final notifier = container.read(songwriterProvider.notifier);
       notifier.addSilentBlock(
-        sectionId: section.id,
+        sectionId: sectionId,
         laneId: lane.id,
         startBar: 1,
         spanBars: 1,
@@ -165,14 +182,16 @@ void main() {
           .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
           .blocks
           .singleWhere((block) => block.isSilent);
-      expect(silentBlock.saveId, isNotNull);
+      expect(silentBlock.saveId, isNull);
       await tester.ensureVisible(
         find.byKey(Key('silentCell_${silentBlock.id}_0')),
       );
       await tester.tap(find.byKey(Key('silentCell_${silentBlock.id}_0')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('barActionRenameBlock')), findsOneWidget);
-      expect(find.byKey(const Key('barActionMakeBlockUnique')), findsOneWidget);
+      expect(find.byKey(const Key('barActionRenameBlock')), findsNothing);
+      expect(find.byKey(const Key('barActionMakeBlockUnique')), findsNothing);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
     },
   );
 

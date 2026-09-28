@@ -253,10 +253,13 @@ void main() {
     final writerNotifier = container.read(songwriterProvider.notifier);
     writerNotifier.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.single.id;
-    final laneId = writerNotifier.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-    );
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     writerNotifier.addHarmonyBlock(
       sectionId: sectionId,
       laneId: laneId,
@@ -264,7 +267,7 @@ void main() {
         startBar: 0,
         spanBars: 4,
         chordSymbol: 'C',
-        chordQuality: 'major',
+        chordQuality: '',
         chordRootPc: 0,
         chordNotes: const ['C', 'E', 'G'],
       ),

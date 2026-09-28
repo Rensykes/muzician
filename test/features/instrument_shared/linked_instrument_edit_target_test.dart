@@ -5,6 +5,7 @@ import 'package:muzician/main.dart';
 import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
+import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -92,7 +93,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.kind == SongLaneKind.save)
           .blocks
           .single;
       await tester.pumpAndSettle();
@@ -192,7 +193,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.kind == SongLaneKind.save)
           .blocks
           .single;
       final lane = container
@@ -200,7 +201,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single;
+          .singleWhere((lane) => lane.kind == SongLaneKind.save);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(Key('saveCell_${block.id}_0')));
       await tester.pumpAndSettle();
@@ -237,7 +238,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.kind == SongLaneKind.save)
           .blocks
           .single;
       expect(block.saveId, saveId);
