@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart'
@@ -156,7 +157,27 @@ void main() {
     () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(saveSystemProvider.notifier).hydrate();
+      final saveSystem = container.read(saveSystemProvider.notifier);
+      await saveSystem.hydrate();
+      final projectId = saveSystem.createProject(
+        'Writer project',
+        const ProjectConfig(),
+      )!;
+      saveSystem.selectProject(projectId);
+      final originalSnapshot = PianoSnapshot(
+        currentRange: PianoRangeName.key61,
+        selectedKeys: const [
+          PianoCoordinate(keyIndex: 24, midiNote: 60, noteName: 'C'),
+          PianoCoordinate(keyIndex: 28, midiNote: 64, noteName: 'E'),
+        ],
+        selectedNotes: const ['C', 'E'],
+        viewMode: PianoViewMode.exact,
+      );
+      final originalSaveId = saveSystem.saveSnapshot(
+        'Original piano voicing',
+        projectId,
+        originalSnapshot,
+      )!;
       final writer = container.read(songwriterProvider.notifier);
       writer.addSection(label: 'Chorus', lengthBars: 8);
       final sectionId = container.read(songwriterProvider).sections.single.id;
@@ -174,13 +195,20 @@ void main() {
       writer.addSaveBlock(
         sectionId: sectionId,
         laneId: laneId,
-        saveId: 'linked-piano',
+        saveId: originalSaveId,
         startBar: 1,
         spanBars: 1,
       );
       final initialSection = container.read(songwriterProvider).sections.single;
       final initialLane = initialSection.lanes.single;
       final source = initialLane.blocks.single;
+      writer.setBlockLyric(
+        sectionId: sectionId,
+        laneId: initialLane.id,
+        blockId: source.id,
+        verseIndex: 0,
+        text: 'Keep this lyric',
+      );
       writer.setLaneRepeat(
         sectionId: sectionId,
         laneId: initialLane.id,
@@ -203,7 +231,8 @@ void main() {
       expect(updatedSource.id, source.id);
       expect(updatedSource.startBar, source.startBar);
       expect(updatedSource.spanBars, source.spanBars);
-      expect(updatedSource.saveId, isNull);
+      expect(updatedSource.lyrics, ['Keep this lyric']);
+      expect(updatedSource.saveId, isNotNull);
       expect(updatedSource.chordSymbol, isNull);
       expect(updatedSource.chordQuality, isNull);
       expect(updatedSource.chordRootPc, isNull);
@@ -214,9 +243,32 @@ void main() {
         sectionLengthBars: section.lengthBars,
       );
       expect(expanded.map((block) => block.startBar), [1, 3, 5]);
+      expect(
+        expanded.map((block) => block.saveId),
+        everyElement(updatedSource.saveId),
+      );
       for (final block in expanded) {
         expect(block.embedded?.toJson(), equals(newSnapshot.toJson()));
       }
+
+      final saveState = container.read(saveSystemProvider);
+      final link = saveState.writerLinks.singleWhere(
+        (link) => link.blockId == updatedSource.id,
+      );
+      final canonicalSave = saveState.saves.singleWhere(
+        (save) => save.id == updatedSource.saveId,
+      );
+      final sectionFolder = saveState.folders.singleWhere(
+        (folder) => folder.id == link.folderId,
+      );
+      expect(updatedSource.saveId, originalSaveId);
+      expect(link.saveId, originalSaveId);
+      expect(link.sectionId, sectionId);
+      expect(canonicalSave.snapshot.toJson(), newSnapshot.toJson());
+      expect(canonicalSave.folderId, projectId);
+      expect(canonicalSave.origin, SaveOrigin.manual);
+      expect(sectionFolder.writerSectionId, sectionId);
+      expect(sectionFolder.parentId, projectId);
     },
   );
 }

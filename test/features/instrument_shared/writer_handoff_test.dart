@@ -60,6 +60,18 @@ Future<void> _chooseChord(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _confirmImportName(WidgetTester tester, {String? name}) async {
+  expect(find.byKey(const Key('writerImportNameField')), findsOneWidget);
+  if (name != null) {
+    await tester.enterText(
+      find.byKey(const Key('writerImportNameField')),
+      name,
+    );
+  }
+  await tester.tap(find.byKey(const Key('confirmWriterImportName')));
+  await tester.pumpAndSettle();
+}
+
 Future<void> _mountHandoffApp(
   WidgetTester tester,
   ProviderContainer container,
@@ -80,7 +92,9 @@ void main() {
     (name: 'compact portrait', size: Size(390, 844)),
     (name: 'wide landscape', size: Size(1180, 820)),
   ]) {
-    testWidgets('handoff picker fits ${viewport.name}', (tester) async {
+    testWidgets('handoff picker and name prompt fit ${viewport.name}', (
+      tester,
+    ) async {
       tester.view.physicalSize = viewport.size;
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -102,7 +116,12 @@ void main() {
         find.byKey(Key('writerHandoffBar_${sectionId}_0')),
         findsOneWidget,
       );
+      await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('writerImportNameField')), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const Key('cancelWriterImportName')));
+      await tester.pumpAndSettle();
       await container.read(songwriterSessionsProvider.notifier).flush();
     });
   }
@@ -126,6 +145,30 @@ void main() {
     expect(identical(container.read(songwriterProvider), before), isTrue);
   });
 
+  testWidgets('canceling the import name leaves no block or save', (
+    tester,
+  ) async {
+    final container = await _newContainer();
+    addTearDown(container.dispose);
+    await _createProject(container, 'Named handoff project');
+    container
+        .read(songwriterProvider.notifier)
+        .addSection(label: 'Verse', lengthBars: 4);
+    final before = container.read(songwriterProvider);
+    await _mountHandoffApp(tester, container);
+
+    await _chooseChord(tester);
+    final sectionId = container.read(songwriterProvider).sections.single.id;
+    await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('cancelWriterImportName')));
+    await tester.pumpAndSettle();
+
+    expect(identical(container.read(songwriterProvider), before), isTrue);
+    expect(container.read(saveSystemProvider).writerLinks, isEmpty);
+    expect(container.read(saveSystemProvider).saves, isEmpty);
+  });
+
   testWidgets(
     'no-project choice is retained through project and section pickers',
     (tester) async {
@@ -145,6 +188,7 @@ void main() {
       final sectionId = container.read(songwriterProvider).sections.single.id;
       await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
       await tester.pumpAndSettle();
+      await _confirmImportName(tester, name: 'Verse entry');
       final block = container
           .read(songwriterProvider)
           .sections
@@ -155,6 +199,15 @@ void main() {
           .single;
       expect(block.chordSymbol, 'C');
       expect(block.startBar, 0);
+      expect(block.saveId, isNotNull);
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((save) => save.id == block.saveId)
+            .name,
+        'Verse entry',
+      );
       await container.read(songwriterSessionsProvider.notifier).flush();
     },
   );
@@ -202,6 +255,7 @@ void main() {
     expect(find.text('Replace the whole block?'), findsOneWidget);
     await tester.tap(find.text('Replace block'));
     await tester.pumpAndSettle();
+    await _confirmImportName(tester);
 
     final block = container
         .read(songwriterProvider)
@@ -250,6 +304,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_1')));
     await tester.pumpAndSettle();
+    await _confirmImportName(tester);
 
     final blocks = container
         .read(songwriterProvider)
@@ -353,6 +408,7 @@ void main() {
     );
     await tester.tap(find.text('Replace block'));
     await tester.pumpAndSettle();
+    await _confirmImportName(tester);
 
     final section = container.read(songwriterProvider).sections.single;
     final lane = section.lanes.single;

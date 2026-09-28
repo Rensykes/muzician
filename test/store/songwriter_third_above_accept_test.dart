@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_third_above_rules.dart';
 import 'package:muzician/schema/rules/songwriter_voicing_rules.dart';
@@ -15,7 +16,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   // Accept actions are project-scoped: they save into the selected
-  // project's folder, so every test runs with a real project selected.
+  // section's Writer folder, so every test runs with a real project selected.
   ProviderContainer freshContainer() {
     final c = ProviderContainer();
     addTearDown(c.dispose);
@@ -60,44 +61,52 @@ void main() {
     keyScaleName: 'major',
   )!;
 
-  test('accept creates SaveEntry in auto-created "Untitled song" '
-      'folder + save lane + block', () async {
-    final c = freshContainer();
-    final ids = seedSongWithHarmonyBlock(c);
+  test(
+    'accept creates SaveEntry in the Writer section folder + save lane + block',
+    () async {
+      final c = freshContainer();
+      final ids = seedSongWithHarmonyBlock(c);
 
-    await c
-        .read(songwriterProvider.notifier)
-        .acceptThirdAboveSuggestion(
-          sectionId: ids.sectionId,
-          harmonyBlockId: ids.harmonyBlockId,
-          suggestion: freshSuggestion(),
-        );
+      await c
+          .read(songwriterProvider.notifier)
+          .acceptThirdAboveSuggestion(
+            sectionId: ids.sectionId,
+            harmonyBlockId: ids.harmonyBlockId,
+            suggestion: freshSuggestion(),
+          );
 
-    final saves = c.read(saveSystemProvider);
-    final folder = saves.folders
-        .where((f) => f.name == 'Untitled song')
-        .toList();
-    expect(folder.length, 1);
-    expect(folder.single.parentId, isNull);
-    final newSave = saves.saves.firstWhere(
-      (s) => s.folderId == folder.single.id,
-    );
-    expect(newSave.name, contains('C'));
-    expect(newSave.name, contains('3rd above'));
-
-    final section = c
-        .read(songwriterProvider)
-        .sections
-        .firstWhere((s) => s.id == ids.sectionId);
-    final saveLane = section.lanes.firstWhere(
-      (l) => l.kind == SongLaneKind.save,
-    );
-    expect(saveLane.anchorLaneId, isNull);
-    final block = saveLane.blocks.single;
-    expect(block.saveId, newSave.id);
-    expect(block.startBar, 0);
-    expect(block.spanBars, 2);
-  });
+      final section = c
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == ids.sectionId);
+      final saveLane = section.lanes.firstWhere(
+        (l) => l.kind == SongLaneKind.save,
+      );
+      expect(saveLane.anchorLaneId, isNull);
+      final block = saveLane.blocks.single;
+      final saves = c.read(saveSystemProvider);
+      final link = saves.writerLinks.singleWhere(
+        (link) => link.blockId == block.id,
+      );
+      final sectionFolder = saves.folders.singleWhere(
+        (folder) => folder.id == link.folderId,
+      );
+      final newSave = saves.saves.singleWhere(
+        (save) => save.id == block.saveId,
+      );
+      expect(newSave.name, contains('C'));
+      expect(newSave.name, contains('3rd above'));
+      expect(newSave.origin, SaveOrigin.writer);
+      expect(newSave.folderId, sectionFolder.id);
+      expect(sectionFolder.writerSectionId, ids.sectionId);
+      expect(sectionFolder.parentId, saves.selectedProjectId);
+      expect(link.sectionId, ids.sectionId);
+      expect(link.saveId, newSave.id);
+      expect(block.saveId, newSave.id);
+      expect(block.startBar, 0);
+      expect(block.spanBars, 2);
+    },
+  );
 
   test('second accept reuses both folder and save lane', () async {
     final c = freshContainer();
@@ -146,7 +155,7 @@ void main() {
     final folders = c
         .read(saveSystemProvider)
         .folders
-        .where((f) => f.name == 'Untitled song')
+        .where((folder) => folder.writerSectionId == ids.sectionId)
         .toList();
     expect(folders.length, 1, reason: 'folder must not duplicate');
     final section = c
@@ -161,7 +170,7 @@ void main() {
   });
 
   test(
-    'voicing accept + 3rd-above accept both land in the project folder',
+    'voicing accept + 3rd-above accept both land in the section folder',
     () async {
       final c = freshContainer();
       final ids = seedSongWithHarmonyBlock(c);
@@ -206,22 +215,52 @@ void main() {
             suggestion: freshSuggestion(),
           );
 
-      final folders = c
-          .read(saveSystemProvider)
-          .folders
-          .where((f) => f.name == 'Untitled song')
+      final saveState = c.read(saveSystemProvider);
+      final folders = saveState.folders
+          .where((folder) => folder.writerSectionId == ids.sectionId)
+          .toList();
+      expect(folders.length, 1, reason: 'section folder must be unique');
+      final section = c
+          .read(songwriterProvider)
+          .sections
+          .singleWhere((section) => section.id == ids.sectionId);
+      final suggestionBlocks = section.lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.save)
+          .blocks;
+      expect(
+        suggestionBlocks,
+        hasLength(2),
+        reason: 'the voicing and 3rd-above suggestions each have a block',
+      );
+      final suggestionSaves = suggestionBlocks
+          .map(
+            (block) =>
+                saveState.saves.singleWhere((save) => save.id == block.saveId),
+          )
           .toList();
       expect(
-        folders.length,
-        1,
-        reason: 'project folder must be a single folder',
+        suggestionSaves.map((save) => save.folderId),
+        everyElement(folders.single.id),
       );
-      final saveCount = c
-          .read(saveSystemProvider)
-          .saves
-          .where((s) => s.folderId == folders.single.id)
-          .length;
-      expect(saveCount, 2, reason: 'one voicing + one 3rd-above in the folder');
+      expect(
+        suggestionSaves.where((save) => save.name.contains('3rd above')),
+        hasLength(1),
+      );
+      expect(
+        saveState.writerLinks
+            .where(
+              (link) =>
+                  suggestionBlocks.any((block) => block.id == link.blockId),
+            )
+            .map((link) => link.folderId),
+        everyElement(folders.single.id),
+      );
+      expect(
+        saveState.writerLinks.where(
+          (link) => suggestionBlocks.any((block) => block.id == link.blockId),
+        ),
+        hasLength(2),
+      );
     },
   );
 

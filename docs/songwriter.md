@@ -2,8 +2,11 @@
 
 Writer is Muzician's section, chord, and lyric sketch. A song is a list of
 **sections** (verse, chorus, … — free, optional labels); each section stacks
-parallel **lanes** for harmony, saved or embedded voicings, drums, melody,
-guitar strum, and audio.
+parallel **lanes** for harmony, saved voicings, drums, melody, guitar strum,
+and audio. Recoverable block content links to a canonical save in the selected
+project's Save System; placement and lyrics stay with the Writer block. If a
+save and its fallback content are both unavailable, Writer keeps the block
+visible as broken rather than inventing replacement content.
 Use Writer to shape the song's sections, then move to **Song** when you want to
 arrange note, drum, or audio clips on a timeline.
 
@@ -21,12 +24,44 @@ Settings does not change that preference.
 | `SongwriterConfig` | `tempo`, `beatsPerBar`, `beatUnit`, optional `keyRoot` (pitch class) + `keyScaleName`. |
 | `SongSection` | `id`, optional `label`, `lengthBars`, `order`, `repeat`, `lanes`. |
 | `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; strum lanes may select an `anchorLaneId` harmony lane. |
-| `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter); a `saveId` live reference **or** an `embedded` snapshot; pattern lanes reference their pattern id; harmony extras: `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, `romanNumeral`. |
+| `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter), canonical `saveId`, and local lyrics/placement; pattern lanes reference their pattern id; legacy content fields and `embedded` snapshot are fallback data. Harmony extras include `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, and `romanNumeral`. |
 | `NotePattern` / `GuitarStrumPattern` | Melody pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. |
 
-All types are immutable (`copyWith` / `toJson` / `fromJson`). A block resolves to a
-snapshot as: `embedded` if set (Made Unique), else the live `SaveEntry` for `saveId`,
-else broken (the referenced save was deleted).
+All types are immutable (`copyWith` / `toJson` / `fromJson`). A block resolves to
+its valid same-project `SaveEntry` first, then to retained fallback content if
+the save is missing or corrupt. An unrecoverable reference remains visibly
+broken.
+
+### Block saves, sharing, and section folders
+
+Each Writer section has a managed folder directly under the selected project;
+folder identity follows the section ID, so same-named sections remain separate
+and section repeats do not create extra folders. Each recoverable source block,
+in every lane, has one canonical `SaveEntry` and one section link. Repeated
+renderings of the same source block reuse that link. The Save browser shows
+linked entries inside each section folder while retaining one canonical save
+record.
+
+Editing a shared save updates the musical content in every Writer placement
+that uses it. Lyrics, bar position, span, and section-specific placement remain
+local. Pattern and clip edits also update every block that references the
+edited pattern or clip. **Make Unique** copies the save for the selected block;
+Writer-native patterns and clips receive independent IDs, while audio source
+files can remain shared. The copied save can then be renamed independently.
+
+Fretboard and Piano saves made outside Writer stay in the project root as free
+ideas. **Use in Writer** explicitly links a selected root idea without moving or
+copying it; all placements share edits until one is made unique. Writer-created
+saves live in a section folder while linked. Removing their last block moves
+them to the project root. Manually created saves keep their original folder.
+Managed section folders cannot be directly renamed, moved, or deleted in the
+instrument Save browser. The Writer Section blocks view and instrument save
+browser can rename a linked save; the new name applies to every placement that
+uses it. Remove or reposition its Writer block through Writer. Using a saved
+Writer-native block restores its pattern or clip data and copies its default
+lyrics into the new placement once; later lyric edits remain local.
+`WriterBlockSnapshot.defaultLyrics` stores that initial seed, so edits to one
+placement do not change what another new placement receives.
 
 ## Rules (`lib/schema/rules/songwriter_rules.dart`)
 
@@ -78,8 +113,9 @@ tick-indexed event list the transport walks:
   boundary inside the block, clipped to the section). Pitches come from
   `chordNotes` stacked ascending from octave 4, falling back to
   `chordRootPc` + `chordQuality` intervals. Silent blocks stay silent.
-- **Save blocks** resolve their snapshot (embedded → live save → broken) and sound
-  the voicing the same way: piano keys use `PianoCoordinate.midiNote`, fretboard
+- **Save blocks** resolve their canonical save first, then retained fallback
+  content, and sound the voicing the same way: piano keys use
+  `PianoCoordinate.midiNote`, fretboard
   cells map string+fret through the tuning. Broken blocks are silent.
 - **Drum lane blocks** fire their referenced `DrumPattern` hits at native tick
   resolution, tiled across the block's bar span.
@@ -129,25 +165,38 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
 | `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit looped note and strum patterns. |
 | `setBlockPlacement(...)` | Move or resize a block while preserving its pattern link and data; rejects same-lane overlaps. |
-| `insertInstrumentSelectionAtBar(...)` | Adds a detected chord to a harmony lane or embeds an exact Fretboard/Piano snapshot in a save lane; no library save is required. |
-| `makeBlockUnique(...)` | Detach a block from its live save by embedding a snapshot. |
-| `loadProject(project)` | Replace the whole project (named-save load). |
+| `insertInstrumentSelectionAtBar(...)` | Adds a named, saved chord or exact Fretboard/Piano snapshot to a Writer lane after section/bar selection and a name prompt. |
+| `makeBlockUnique(...)` | Copy the canonical save and detach the selected placement; one Writer history step. |
+| `loadProject(project)` | Replace the active Writer session from a named Song version, materializing its retained block content when shared saves have since changed. |
+
+Writer's **Add chord** action creates a named canonical save, using the chord
+symbol as its default name. Block actions can rename the save, make the block
+unique, or open a linked voicing in Fretboard/Piano for an explicit **Update
+linked save**. Updating a linked save refreshes all its Writer placements.
 
 The notifier no longer exposes a public `hydrate()`. Instead, `build()` listens
 to `saveSystemProvider.selectedProjectId` changes. When the project changes the
 outgoing session is immediately persisted via `songwriterSessionsProvider.put`
-and the incoming session is loaded via `.get`. If no session exists for the new
-project, `_defaultFor(next)` creates one seeded from the folder's
-`ProjectConfig`.
+when its folder still exists, and the incoming session is loaded via `.get`. If
+no session exists for the new project, `_defaultFor(next)` creates one seeded
+from the folder's `ProjectConfig`. Deleting a project removes its Writer draft
+and named-save binding in the same recoverable transaction as its Save System
+tree, so selection changes cannot restore a deleted draft.
 
 ### Session auto-save
 
 Sessions live in `@muzician/songwriter_sessions/v1` — a per-project map of
-`Map<String, SongwriterProjectSnapshot>` keyed by project ID, debounced ~500 ms
-(state captured at schedule time). On project switch the outgoing session is
-persisted immediately and the incoming session is loaded from the map (or
-seeded via `_defaultFor` when no session exists yet); leaving the project
-clears to empty.
+`Map<String, SongwriterProjectSnapshot>` keyed by project ID. On project switch
+the outgoing session is persisted immediately and the incoming session is
+loaded from the map (or seeded via `_defaultFor` when no session exists yet);
+leaving the project clears to empty. Startup reconciles Writer blocks with
+their section folders and canonical saves before exposing the workspace.
+If a linked save and its retained Writer fallback differ during startup,
+reconciliation keeps both: the block uses a new section save made from the
+fallback, and the prior canonical save remains in its folder or moves to the
+project root when it was Writer-owned and has no remaining links. A recovery
+banner stays visible until **Review both versions** opens **Section blocks**, where both
+versions can be inspected.
 
 ## Undo / Redo
 
@@ -180,11 +229,39 @@ the symbol/name. Example in C major: a saved F-major voicing shows `IV`.
 
 ## Save / Load
 
-Songwriter projects save as a `SaveEntry` (`InstrumentSnapshot` filter
-`'songwriter'`) through the shared `SaveBrowserPanel`. The panel is scoped to
-the selected project's folder via `rootFolderId: selected.id`, keeping the
-save/load view confined to the project subtree. `songwriterCaptureForTest`
-exposes the current snapshot for widget tests.
+The Writer save panel has two views:
+
+- **Song versions** save and load a whole `SongwriterProjectSnapshot`. Saving
+  captures current canonical content for every resolvable block, including
+  patterns, clips, and required audio metadata. Loading restores that version's
+  recoverable musical content without overwriting shared root saves or changing
+  the stored version.
+  If a referenced save has changed since the version was captured, Writer
+  creates a new Writer-owned save for that older content and keeps blocks that
+  shared the same save linked together. A load starts clean against the
+  materialized version.
+- **Section blocks** browse, rename, and use individual linked block saves.
+  A same-project Writer-native save in the project root or a managed section
+  folder can be placed with **Use in Writer**, restoring its pattern or clip
+  and seeding local lyrics. Reusing a save in another section adds a link to
+  the same canonical save. The destination picker asks for a section, one of
+  that section's matching lanes, and a bar; when the section has no matching
+  lane, Writer creates one. Guitar-strum placements keep the selected lane's
+  harmony anchor. An invalid start bar shows an inline error and keeps the
+  entered value available for correction. A Writer block save is not offered
+  as a whole-project load.
+
+The panel is scoped to the selected project's folder, keeping both views inside
+the project subtree. If a Song version records different tempo, meter, or key,
+Writer summarizes the difference before loading and applies the current
+project config to the active session. The saved version remains unchanged.
+Project config retrofits do not rewrite named Song versions.
+
+The Writer save sheet keeps its title and tabs fixed while each Save Browser
+scrolls its own contents, so saves remain reachable on short screens.
+Its top-right Close action has a screen-reader label.
+
+`songwriterCaptureForTest` exposes the current snapshot for widget tests.
 
 ## Project Config
 
@@ -197,8 +274,9 @@ there is no project selected or Dump is active.
 `projectConfigSyncProvider` (`lib/store/project_config_sync.dart`) pushes the
 active project's tempo, meter, and key into the songwriter and Song stores
 whenever a project is selected or its config changes. Changed master config
-clears stale local undo history; an equal sync keeps current history. When
-loading a project that has no session yet,
+clears stale local undo history; an equal sync keeps current history. A named
+Song version load keeps the active project config after showing any differences
+from that version. When loading a project that has no session yet,
 `_defaultFor` seeds a new `SongwriterProjectSnapshot` from the project folder's
 `ProjectConfig` (name, tempo, beatsPerBar, beatUnit, keyRoot, keyScaleName).
 
@@ -206,14 +284,14 @@ Library-match scope is `getSavesInSubtree(folders, saves, selectedProjectId)`.
 
 ## Fretboard and Piano handoff
 
-In either instrument's detection panel, choose **Add to Writer** and then
-select a detected chord or the exact selected voicing. A chord is added to a
-harmony lane with its symbol, root, quality, and selected pitch names. An exact
-selection is stored as an embedded `InstrumentSnapshot` in a save lane, so the
-transfer does not need a named library save. Choose a section and bar; if the
-active project changes while the picker is open, Writer cancels the transfer
-and explains why. Occupied bars are labeled for assistive technology and offer
-replace-with-confirmation, choose-another-bar, or cancel.
+In either instrument's detection panel, choose **Add to Writer**, select a
+detected chord or the exact selected voicing, then choose a section and bar.
+Writer prompts for an editable save name before committing; the chord symbol is
+the default for a chord. A detected chord keeps its symbol, root, quality, and
+selected pitch names. An exact selection keeps the full instrument snapshot.
+If the active project changes while the picker is open, Writer cancels the
+transfer and explains why. Occupied bars are labeled for assistive technology
+and offer replace-with-confirmation, choose-another-bar, or cancel.
 Occupied bars include expanded lane repeats. Replacing one of those copies
 updates the source block in place, preserving its ID, start, span, and repeat
 offsets so every copy receives the new chord or snapshot together.
@@ -222,4 +300,5 @@ If no project is selected, the existing project picker opens before placement;
 dismissing it leaves the instrument selection and Writer unchanged. If the
 project has no Writer section, Writer offers to create its default eight-bar
 section. The blank Writer state also has a visible **Start an 8-bar section**
-action.
+action. A separately saved Fretboard/Piano idea can be linked from the project
+root with **Use in Writer**; a fresh instrument selection creates a new save.

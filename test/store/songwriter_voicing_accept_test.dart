@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_voicing_rules.dart';
 import 'package:muzician/store/save_system_store.dart';
@@ -12,7 +13,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   // Voicing accepts are project-scoped: they save into the selected
-  // project's folder, so every test runs with a real project selected.
+  // section's Writer folder, so every test runs with a real project selected.
   ProviderContainer freshContainer() {
     final c = ProviderContainer();
     addTearDown(c.dispose);
@@ -50,7 +51,7 @@ void main() {
   }
 
   test(
-    'accept creates SaveEntry in auto-created folder + save lane + block',
+    'accept creates SaveEntry in the Writer section folder + save lane + block',
     () async {
       final c = freshContainer();
       final ids = seedSongWithHarmonyBlock(c);
@@ -65,16 +66,6 @@ void main() {
           );
 
       final saves = c.read(saveSystemProvider);
-      expect(saves.folders.any((f) => f.name == 'Untitled song'), isTrue);
-      final projectFolder = saves.folders.firstWhere(
-        (f) => f.name == 'Untitled song',
-      );
-      expect(projectFolder.parentId, isNull);
-      final newSave = saves.saves.firstWhere(
-        (s) => s.folderId == projectFolder.id,
-      );
-      expect(newSave.name, contains('C'));
-
       final section = c
           .read(songwriterProvider)
           .sections
@@ -84,6 +75,22 @@ void main() {
       );
       expect(saveLane.anchorLaneId, isNull);
       final block = saveLane.blocks.single;
+      final link = saves.writerLinks.singleWhere(
+        (link) => link.blockId == block.id,
+      );
+      final sectionFolder = saves.folders.singleWhere(
+        (folder) => folder.id == link.folderId,
+      );
+      final newSave = saves.saves.singleWhere(
+        (save) => save.id == block.saveId,
+      );
+      expect(newSave.name, contains('C'));
+      expect(newSave.origin, SaveOrigin.writer);
+      expect(newSave.folderId, sectionFolder.id);
+      expect(sectionFolder.writerSectionId, ids.sectionId);
+      expect(sectionFolder.parentId, saves.selectedProjectId);
+      expect(link.sectionId, ids.sectionId);
+      expect(link.saveId, newSave.id);
       expect(block.saveId, newSave.id);
       expect(block.startBar, 0);
       expect(block.spanBars, 2);
@@ -137,7 +144,7 @@ void main() {
     final folders = c
         .read(saveSystemProvider)
         .folders
-        .where((f) => f.name == 'Untitled song')
+        .where((folder) => folder.writerSectionId == ids.sectionId)
         .toList();
     expect(folders.length, 1, reason: 'folder must not be duplicated');
 

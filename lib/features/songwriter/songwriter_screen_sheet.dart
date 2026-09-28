@@ -46,7 +46,9 @@ import 'songwriter_section_ruler.dart';
 import 'songwriter_melody_pattern_editor.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
-  const SongwriterScreenSheet({super.key});
+  const SongwriterScreenSheet({super.key, this.onEditInstrumentSave});
+
+  final ValueChanged<SaveEntry>? onEditInstrumentSave;
 
   @override
   ConsumerState<SongwriterScreenSheet> createState() =>
@@ -56,11 +58,12 @@ class SongwriterScreenSheet extends ConsumerStatefulWidget {
 class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
   final _coachKeys = WriterCoachKeys();
 
-  void _openSaveLoad(BuildContext context) {
+  void _openSaveLoad(BuildContext context, {int initialTabIndex = 0}) {
     showWidgetSheet(
       context: context,
       title: 'Browse saves',
-      child: const SongwriterSavePanel(),
+      scrollBody: false,
+      child: SongwriterSavePanel(initialTabIndex: initialTabIndex),
     );
   }
 
@@ -83,7 +86,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
       return;
     }
     if (binding!.alwaysOverwrite) {
-      _overwrite(entry);
+      await _overwrite(entry);
       return;
     }
     final choice = await showWriterSaveChoiceDialog(ctx, saveName: entry.name);
@@ -99,13 +102,20 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
           .read(writerSaveBindingProvider.notifier)
           .setAlwaysOverwrite(projectId, true);
     }
-    _overwrite(entry);
+    await _overwrite(entry);
   }
 
-  void _overwrite(SaveEntry entry) {
-    ref
-        .read(saveSystemProvider.notifier)
-        .updateSnapshot(entry.id, ref.read(songwriterProvider));
+  Future<void> _overwrite(SaveEntry entry) async {
+    final saved = await ref
+        .read(songwriterProvider.notifier)
+        .overwriteNamedSave(entry.id);
+    if (!mounted) return;
+    if (!saved) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Could not save this Song version.')),
+      );
+      return;
+    }
     HapticFeedback.mediumImpact();
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(
@@ -127,6 +137,13 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
     ref.watch(songwriterStretchTempoWatcherProvider);
     final project = ref.watch(songwriterProvider);
     final notifier = ref.read(songwriterProvider.notifier);
+    final selectedProjectId = ref.watch(
+      saveSystemProvider.select((saveState) => saveState.selectedProjectId),
+    );
+    final reconciliationConflicts = ref
+        .watch(writerReconciliationConflictsProvider)
+        .where((conflict) => conflict.projectId == selectedProjectId)
+        .toList();
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -150,6 +167,31 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                 onSave: () => _saveProject(context),
               ),
             ),
+            if (reconciliationConflicts.isNotEmpty && selectedProjectId != null)
+              MaterialBanner(
+                key: const Key('writerReconciliationConflictBanner'),
+                backgroundColor: MuzicianTheme.orange.withValues(alpha: 0.10),
+                forceActionsBelow: true,
+                content: Text(
+                  reconciliationConflicts.length == 1
+                      ? 'A Writer block had two saved versions. Both were kept, and the arrangement uses the recovered version.'
+                      : '${reconciliationConflicts.length} Writer blocks had two saved versions. Both were kept, and the arrangement uses the recovered versions.',
+                  style: const TextStyle(color: MuzicianTheme.textPrimary),
+                ),
+                actions: [
+                  TextButton(
+                    key: const Key('writerReconciliationReviewSaves'),
+                    onPressed: () async {
+                      await notifier.acknowledgeWriterReconciliationConflicts(
+                        selectedProjectId,
+                      );
+                      if (!context.mounted) return;
+                      _openSaveLoad(context, initialTabIndex: 1);
+                    },
+                    child: const Text('Review both versions'),
+                  ),
+                ],
+              ),
             Expanded(
               child: KeyedSubtree(
                 key: _coachKeys.body,
@@ -177,7 +219,11 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                               for (final section in project.sections)
                                 SizedBox(
                                   width: columnWidth,
-                                  child: _SectionSheet(sectionId: section.id),
+                                  child: _SectionSheet(
+                                    sectionId: section.id,
+                                    onEditInstrumentSave:
+                                        widget.onEditInstrumentSave,
+                                  ),
                                 ),
                             ],
                           )
@@ -185,7 +231,11 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                           for (final section in project.sections)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 36),
-                              child: _SectionSheet(sectionId: section.id),
+                              child: _SectionSheet(
+                                sectionId: section.id,
+                                onEditInstrumentSave:
+                                    widget.onEditInstrumentSave,
+                              ),
                             ),
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
@@ -214,8 +264,9 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
 }
 
 class _SectionSheet extends ConsumerWidget {
-  const _SectionSheet({required this.sectionId});
+  const _SectionSheet({required this.sectionId, this.onEditInstrumentSave});
   final String sectionId;
+  final ValueChanged<SaveEntry>? onEditInstrumentSave;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -253,6 +304,7 @@ class _SectionSheet extends ConsumerWidget {
             child: _SectionInstance(
               key: Key('sectionInstance_${section.id}_$i'),
               section: section,
+              onEditInstrumentSave: onEditInstrumentSave,
               harmonyLanes: harmonyLanes,
               instanceIndex: i,
               keyRoot: config.keyRoot,
@@ -275,6 +327,7 @@ class _SectionInstance extends ConsumerWidget {
   const _SectionInstance({
     super.key,
     required this.section,
+    this.onEditInstrumentSave,
     required this.harmonyLanes,
     required this.instanceIndex,
     required this.keyRoot,
@@ -283,6 +336,7 @@ class _SectionInstance extends ConsumerWidget {
   });
 
   final SongSection section;
+  final ValueChanged<SaveEntry>? onEditInstrumentSave;
   final List<SongLane> harmonyLanes;
   final int instanceIndex;
   final int? keyRoot;
@@ -338,6 +392,7 @@ class _SectionInstance extends ConsumerWidget {
             ),
             child: _BarRow(
               section: section,
+              onEditInstrumentSave: onEditInstrumentSave,
               lane: harmonyLanes[li],
               instanceIndex: instanceIndex,
               keyRoot: keyRoot,
@@ -1060,6 +1115,7 @@ class _HarmonyLaneHeader extends ConsumerWidget {
 class _BarRow extends ConsumerWidget {
   const _BarRow({
     required this.section,
+    this.onEditInstrumentSave,
     required this.lane,
     required this.instanceIndex,
     required this.keyRoot,
@@ -1068,6 +1124,7 @@ class _BarRow extends ConsumerWidget {
     this.isPrimary = true,
   });
   final SongSection section;
+  final ValueChanged<SaveEntry>? onEditInstrumentSave;
   final SongLane lane;
   final int instanceIndex;
   final int? keyRoot;
@@ -1082,6 +1139,7 @@ class _BarRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
+    final saveState = ref.watch(saveSystemProvider);
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
     final activeBar = ref.watch(
       songwriterActivePositionProvider.select(
@@ -1138,7 +1196,24 @@ class _BarRow extends ConsumerWidget {
                   key: activeKey(i, span),
                   flex: span,
                   block: owner,
+                  blockName: writerSaveEntryForBlock(saveState, owner)?.name,
+                  brokenReference:
+                      owner.saveId != null &&
+                      writerSaveEntryForBlock(saveState, owner) == null,
+                  semanticsLabel: _barCellSemanticsLabel(
+                    owner,
+                    writerSaveEntryForBlock(saveState, owner)?.name,
+                    i,
+                  ),
+                  onBrokenDelete: () => notifier.removeBlock(
+                    sectionId: section.id,
+                    laneId: lane.id,
+                    blockId: owner.id,
+                  ),
                   saveBlock: save,
+                  saveName: save == null
+                      ? null
+                      : writerSaveEntryForBlock(saveState, save)?.name,
                   saveIcon: save == null
                       ? Icons.bookmark
                       : _saveIcon(ref, save),
@@ -1147,7 +1222,12 @@ class _BarRow extends ConsumerWidget {
                   onTap: () => _onTapBlock(context, ref, owner),
                   onSaveTap: save == null
                       ? null
-                      : () => _onTapSave(context, ref, save),
+                      : () => _onTapSave(
+                          context,
+                          ref,
+                          save,
+                          onEditInstrumentSave: onEditInstrumentSave,
+                        ),
                   onLongPress: () => _removeBlock(context, notifier, owner),
                 ),
               );
@@ -1166,12 +1246,28 @@ class _BarRow extends ConsumerWidget {
                     flex: span,
                     block: null,
                     saveBlock: save,
-                    saveName: _saveName(ref, save),
+                    saveName:
+                        writerSaveEntryForBlock(saveState, save)?.name ??
+                        _saveName(ref, save),
+                    brokenReference:
+                        save.saveId != null &&
+                        writerSaveEntryForBlock(saveState, save) == null,
+                    semanticsLabel: _barCellSemanticsLabel(
+                      save,
+                      writerSaveEntryForBlock(saveState, save)?.name,
+                      i,
+                    ),
+                    onBrokenDelete: () => _removeSave(context, ref, save),
                     saveIcon: _saveIcon(ref, save),
                     saveRoman: _saveRoman(ref, save),
                     instanceIndex: instanceIndex,
                     isActive: isActiveCell(i, span),
-                    onTap: () => _onTapSave(context, ref, save),
+                    onTap: () => _onTapSave(
+                      context,
+                      ref,
+                      save,
+                      onEditInstrumentSave: onEditInstrumentSave,
+                    ),
                     onLongPress: () => _removeSave(context, ref, save),
                   ),
                 );
@@ -1191,6 +1287,7 @@ class _BarRow extends ConsumerWidget {
                   block: null,
                   instanceIndex: instanceIndex,
                   isActive: isActiveCell(bar, 1),
+                  semanticsLabel: 'Empty bar ${bar + 1}',
                   onTap: () => _onTapEmpty(context, ref, bar),
                 ),
               );
@@ -1342,6 +1439,7 @@ class _BarRow extends ConsumerWidget {
           sectionId: section.id,
           laneId: laneId,
           block: block,
+          saveName: block.chordSymbol,
         );
         if (isPrimary && block.lyrics.isNotEmpty) {
           notifier.setBlockLyric(
@@ -1359,6 +1457,7 @@ class _BarRow extends ConsumerWidget {
   /// Tap on a placed block → unified, non-destructive action sheet.
   void _onTapBlock(BuildContext context, WidgetRef ref, SongBlock block) {
     final notifier = ref.read(songwriterProvider.notifier);
+    final entry = writerSaveEntryForBlock(ref.read(saveSystemProvider), block);
     final isChord =
         !block.isSilent &&
         block.chordRootPc != null &&
@@ -1398,6 +1497,41 @@ class _BarRow extends ConsumerWidget {
             label: 'Lyrics — Verse ${instanceIndex + 1}',
             icon: Icons.lyrics_outlined,
             onTap: () => _editVerseLyric(context, ref, block),
+          ),
+        if (entry != null) ...[
+          BarAction(
+            key: const Key('barActionRenameBlock'),
+            label: 'Rename',
+            icon: Icons.drive_file_rename_outline,
+            onTap: () => renameWriterBlockSave(context, ref, entry),
+          ),
+          BarAction(
+            key: const Key('barActionMakeBlockUnique'),
+            label: 'Make Unique',
+            icon: Icons.copy_all_outlined,
+            onTap: () => makeWriterBlockUnique(
+              context,
+              ref,
+              section: section,
+              lane: lane,
+              block: block,
+              entry: entry,
+            ),
+          ),
+        ],
+        if (block.saveId != null && entry == null)
+          BarAction(
+            key: const Key('barActionBrokenReference'),
+            label: 'Broken save reference',
+            icon: Icons.link_off,
+            onTap: () => showBrokenReferenceSheet(
+              context,
+              onDelete: () => notifier.removeBlock(
+                sectionId: section.id,
+                laneId: lane.id,
+                blockId: block.id,
+              ),
+            ),
           ),
         if (save != null)
           BarAction(
@@ -1536,31 +1670,13 @@ class _BarRow extends ConsumerWidget {
     if (next == null) return;
     HapticFeedback.selectionClick();
     final notifier = ref.read(songwriterProvider.notifier);
-    notifier.runHistoryGroup(() {
-      // Write the lyric for this instance (primary lane only).
-      if (isPrimary) {
-        notifier.setBlockLyric(
-          sectionId: section.id,
-          laneId: lane.id,
-          blockId: block.id,
-          verseIndex: instanceIndex,
-          text: next.lyrics.isNotEmpty ? next.lyrics.first : null,
-        );
-      }
-      // If chord state changed (non-silent), replace the block.
-      if (!next.isSilent) {
-        notifier.removeBlock(
-          sectionId: section.id,
-          laneId: lane.id,
-          blockId: block.id,
-        );
-        notifier.addHarmonyBlock(
-          sectionId: section.id,
-          laneId: lane.id,
-          block: next,
-        );
-      }
-    });
+    notifier.updateHarmonyBlock(
+      sectionId: section.id,
+      laneId: lane.id,
+      blockId: block.id,
+      content: next,
+      lyricVerseIndex: isPrimary ? instanceIndex : null,
+    );
   }
 
   /// Edits the per-verse lyric of [block]. [laneId] defaults to this row's
@@ -1627,23 +1743,28 @@ class _BarRow extends ConsumerWidget {
   /// Display name for a save block, resolved from the save system; falls back
   /// to 'Save' when the referenced entry is missing.
   String _saveName(WidgetRef ref, SongBlock save) {
-    final id = save.saveId;
-    if (id == null) return 'Save';
-    final entry = ref
-        .read(saveSystemProvider)
-        .saves
-        .where((s) => s.id == id)
-        .firstOrNull;
-    return entry?.name ?? 'Save';
+    return writerSaveEntryForBlock(ref.read(saveSystemProvider), save)?.name ??
+        'Save';
   }
+
+  SongLane? _saveLane(SongBlock save) => section.lanes
+      .where(
+        (candidate) =>
+            candidate.kind == SongLaneKind.save &&
+            candidate.blocks.any((block) => block.id == save.id),
+      )
+      .firstOrNull;
 
   /// Instrument icon for a save block: piano for a piano save, guitar
   /// (music note) for a fretboard save. Falls back to a bookmark when the
   /// referenced save can't be resolved.
   IconData _saveIcon(WidgetRef ref, SongBlock save) {
+    final saveState = ref.read(saveSystemProvider);
     final snapshot = resolveBlockSnapshot(
       save,
-      ref.read(saveSystemProvider).saves,
+      saveState.saves,
+      projectId: saveState.selectedProjectId,
+      folders: saveState.folders,
     );
     if (snapshot == null) return Icons.bookmark;
     return saveInstrumentIcon(snapshot.instrument);
@@ -1653,14 +1774,24 @@ class _BarRow extends ConsumerWidget {
   /// (explicit pending chord or detected from its notes) and maps it to the
   /// project key. Null when no chord resolves or it is non-diatonic.
   String? _saveRoman(WidgetRef ref, SongBlock save) {
+    final saveState = ref.read(saveSystemProvider);
     final snapshot = resolveBlockSnapshot(
       save,
-      ref.read(saveSystemProvider).saves,
+      saveState.saves,
+      projectId: saveState.selectedProjectId,
+      folders: saveState.folders,
     );
     return saveBlockRomanNumeral(snapshot, keyRoot, keyScaleName);
   }
 
-  void _onTapSave(BuildContext context, WidgetRef ref, SongBlock save) {
+  void _onTapSave(
+    BuildContext context,
+    WidgetRef ref,
+    SongBlock save, {
+    ValueChanged<SaveEntry>? onEditInstrumentSave,
+  }) {
+    final entry = writerSaveEntryForBlock(ref.read(saveSystemProvider), save);
+    final saveLane = _saveLane(save);
     // Replace-from-library is intentionally omitted for now: addLibraryBlockAt
     // rejects a placement that overlaps the existing save, so a "replace" would
     // silently no-op. It belongs with the upcoming forced-save flow. Tap stays
@@ -1676,6 +1807,49 @@ class _BarRow extends ConsumerWidget {
           onTap: () =>
               _editVerseLyric(context, ref, save, laneId: _saveLaneId(save)),
         ),
+        if (entry != null &&
+            (entry.snapshot is FretboardSnapshot ||
+                entry.snapshot is PianoSnapshot) &&
+            onEditInstrumentSave != null)
+          BarAction(
+            key: const Key('barActionEditInstrument'),
+            label: entry.snapshot is PianoSnapshot
+                ? 'Edit in Piano'
+                : 'Edit in Fretboard',
+            icon: Icons.open_in_new,
+            onTap: () => onEditInstrumentSave(entry),
+          ),
+        if (entry != null)
+          BarAction(
+            key: const Key('barActionRenameBlock'),
+            label: 'Rename',
+            icon: Icons.drive_file_rename_outline,
+            onTap: () => renameWriterBlockSave(context, ref, entry),
+          ),
+        if (entry != null && saveLane != null)
+          BarAction(
+            key: const Key('barActionMakeBlockUnique'),
+            label: 'Make Unique',
+            icon: Icons.copy_all_outlined,
+            onTap: () => makeWriterBlockUnique(
+              context,
+              ref,
+              section: section,
+              lane: saveLane,
+              block: save,
+              entry: entry,
+            ),
+          ),
+        if (save.saveId != null && entry == null)
+          BarAction(
+            key: const Key('barActionBrokenReference'),
+            label: 'Broken save reference',
+            icon: Icons.link_off,
+            onTap: () => showBrokenReferenceSheet(
+              context,
+              onDelete: () => _removeSave(context, ref, save),
+            ),
+          ),
         BarAction(
           key: const Key('barActionRemoveSave'),
           label: 'Remove save',
@@ -1717,6 +1891,10 @@ class _BarCell extends StatelessWidget {
     required this.block,
     required this.instanceIndex,
     required this.onTap,
+    required this.semanticsLabel,
+    this.blockName,
+    this.brokenReference = false,
+    this.onBrokenDelete,
     this.saveBlock,
     this.saveName,
     this.saveIcon = Icons.bookmark,
@@ -1727,12 +1905,16 @@ class _BarCell extends StatelessWidget {
   });
   final int flex;
   final SongBlock? block;
+  final String? blockName;
+  final bool brokenReference;
+  final VoidCallback? onBrokenDelete;
   final SongBlock? saveBlock;
   final String? saveName;
   final IconData saveIcon;
   final String? saveRoman;
   final int instanceIndex;
   final VoidCallback onTap;
+  final String semanticsLabel;
   final VoidCallback? onSaveTap;
   final VoidCallback? onLongPress;
   final bool isActive;
@@ -1743,61 +1925,90 @@ class _BarCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       flex: flex,
-      child: GestureDetector(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: 64,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            color: isActive
-                ? MuzicianTheme.violet.withValues(alpha: 0.34)
-                : (block != null
-                      ? MuzicianTheme.violet.withValues(alpha: 0.18)
+      child: Semantics(
+        button: true,
+        explicitChildNodes: true,
+        label: semanticsLabel,
+        hint: 'Open block actions',
+        child: GestureDetector(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            height: 64,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? MuzicianTheme.violet.withValues(alpha: 0.34)
+                  : (block != null
+                        ? MuzicianTheme.violet.withValues(alpha: 0.18)
+                        : _isSaveOnly
+                        ? MuzicianTheme.sky.withValues(alpha: 0.14)
+                        : Colors.transparent),
+              border: Border(
+                left: BorderSide(
+                  color: isActive
+                      ? MuzicianTheme.violet
                       : _isSaveOnly
-                      ? MuzicianTheme.sky.withValues(alpha: 0.14)
-                      : Colors.transparent),
-            border: Border(
-              left: BorderSide(
-                color: isActive
-                    ? MuzicianTheme.violet
-                    : _isSaveOnly
-                    ? MuzicianTheme.sky.withValues(alpha: 0.5)
-                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
-                width: 1.5,
-              ),
-              right: BorderSide(
-                color: isActive
-                    ? MuzicianTheme.violet
-                    : _isSaveOnly
-                    ? MuzicianTheme.sky.withValues(alpha: 0.5)
-                    : MuzicianTheme.textMuted.withValues(alpha: 0.4),
-                width: 1.5,
+                      ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                      : MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                  width: 1.5,
+                ),
+                right: BorderSide(
+                  color: isActive
+                      ? MuzicianTheme.violet
+                      : _isSaveOnly
+                      ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                      : MuzicianTheme.textMuted.withValues(alpha: 0.4),
+                  width: 1.5,
+                ),
               ),
             ),
-          ),
-          child: Stack(
-            children: [
-              Positioned.fill(child: _content()),
-              // Badge marking a save that shares the bar with a chord. Its own
-              // tap target so it opens the save action menu directly, instead of
-              // the chord's menu.
-              if (block != null && saveBlock != null)
-                Positioned(
-                  top: 2,
-                  right: 2,
-                  child: GestureDetector(
-                    onTap: onSaveTap,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
+            child: Stack(
+              children: [
+                Positioned.fill(child: _content()),
+                // Badge marking a save that shares the bar with a chord. Its own
+                // tap target so it opens the save action menu directly, instead of
+                // the chord's menu.
+                if (block != null && saveBlock != null)
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: IconButton(
                       key: Key('saveBadge_${saveBlock!.id}_$instanceIndex'),
-                      padding: const EdgeInsets.all(2),
-                      child: Icon(saveIcon, size: 13, color: MuzicianTheme.sky),
+                      tooltip:
+                          'Open actions for ${saveName ?? 'attached save'}',
+                      constraints: const BoxConstraints.tightFor(
+                        width: 44,
+                        height: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      onPressed: onSaveTap,
+                      icon: Icon(saveIcon, size: 16, color: MuzicianTheme.sky),
                     ),
                   ),
-                ),
-            ],
+                if (brokenReference && block != null)
+                  Positioned(
+                    top: 2,
+                    left: 2,
+                    child: writerBrokenReferenceAction(
+                      context,
+                      block: block!,
+                      onDelete: onBrokenDelete ?? onTap,
+                    ),
+                  ),
+                if (brokenReference && block == null && saveBlock != null)
+                  Positioned(
+                    top: 2,
+                    left: 2,
+                    child: writerBrokenReferenceAction(
+                      context,
+                      block: saveBlock!,
+                      onDelete: onBrokenDelete ?? onTap,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1874,17 +2085,36 @@ class _BarCell extends StatelessWidget {
             ),
           )
         else if (block!.isSilent)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Container(
-              key: Key('silentCell_${block!.id}_$instanceIndex'),
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: MuzicianTheme.textMuted,
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                key: Key('silentCell_${block!.id}_$instanceIndex'),
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: MuzicianTheme.textMuted,
+                ),
               ),
-            ),
+              if (blockName != null && blockName!.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Text(
+                    blockName!,
+                    key: Key('writerBlockName_${block!.id}_$instanceIndex'),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 9,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           )
         else ...[
           const Spacer(),
@@ -1896,6 +2126,26 @@ class _BarCell extends StatelessWidget {
               fontSize: 18,
             ),
           ),
+          if (blockName != null &&
+              blockName!.isNotEmpty &&
+              blockName != block!.chordSymbol) ...[
+            const SizedBox(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                blockName!,
+                key: Key('writerBlockName_${block!.id}_$instanceIndex'),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MuzicianTheme.textSecondary,
+                  fontSize: 9,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ],
           if ((block!.romanNumeral ?? '').isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
@@ -1931,6 +2181,15 @@ class _BarCell extends StatelessWidget {
   }
 }
 
+String _barCellSemanticsLabel(SongBlock block, String? name, int startBar) {
+  final label =
+      name ?? block.chordSymbol ?? (block.isSilent ? 'Silence' : 'Block');
+  final broken = block.saveId != null && name == null
+      ? ', broken save reference'
+      : '';
+  return '$label, bar ${startBar + 1}$broken';
+}
+
 class _DrumLaneRow extends ConsumerWidget {
   const _DrumLaneRow({
     super.key,
@@ -1946,6 +2205,7 @@ class _DrumLaneRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
+    final saveState = ref.watch(saveSystemProvider);
     final ownerByBar = <int, SongBlock>{};
     for (final b in lane.blocks) {
       for (var i = b.startBar; i < b.endBar; i++) {
@@ -1956,8 +2216,9 @@ class _DrumLaneRow extends ConsumerWidget {
       for (final p in ref.read(songwriterProvider).drumPatterns) p.id: p,
     };
     return LayoutBuilder(
-      builder: (context, _) {
+      builder: (context, constraints) {
         const perRow = 4;
+        final narrowCells = constraints.maxWidth / perRow < 90;
         final rows = <List<Widget>>[];
         for (var start = 0; start < bars; start += perRow) {
           final end = (start + perRow).clamp(0, bars);
@@ -1970,53 +2231,90 @@ class _DrumLaneRow extends ConsumerWidget {
               final pattern = owner.patternId == null
                   ? null
                   : patternsById[owner.patternId];
+              final saveEntry = writerSaveEntryForBlock(saveState, owner);
+              final displayName =
+                  saveEntry?.name ?? pattern?.name ?? 'pattern?';
+              final hasBrokenReference =
+                  owner.saveId != null && saveEntry == null;
               cells.add(
                 Expanded(
                   flex: span,
-                  child: GestureDetector(
-                    key: Key('sheetDrumTile_${owner.patternId ?? owner.id}'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (owner.patternId == null) return;
-                      showSongwriterDrumPatternSheet(
-                        context: context,
-                        patternId: owner.patternId!,
-                        sectionId: section.id,
-                      );
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: MuzicianTheme.orange.withValues(alpha: 0.18),
-                        border: Border.all(
-                          color: MuzicianTheme.orange.withValues(alpha: 0.5),
+                  child: Semantics(
+                    button: true,
+                    explicitChildNodes: true,
+                    label: 'Edit drum pattern $displayName',
+                    hint: 'Open block actions',
+                    child: GestureDetector(
+                      key: Key('sheetDrumTile_${owner.patternId ?? owner.id}'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (owner.patternId == null) return;
+                        showSongwriterDrumPatternSheet(
+                          context: context,
+                          patternId: owner.patternId!,
+                          sectionId: section.id,
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
                         ),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.graphic_eq,
-                            size: 14,
-                            color: MuzicianTheme.textPrimary,
+                        decoration: BoxDecoration(
+                          color: MuzicianTheme.orange.withValues(alpha: 0.18),
+                          border: Border.all(
+                            color: MuzicianTheme.orange.withValues(alpha: 0.5),
                           ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              pattern?.name ?? 'pattern?',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!narrowCells) ...[
+                              const Icon(
+                                Icons.graphic_eq,
+                                size: 14,
                                 color: MuzicianTheme.textPrimary,
                               ),
+                              const SizedBox(width: 6),
+                            ],
+                            Flexible(
+                              child: Text(
+                                displayName,
+                                key: Key(
+                                  'writerBlockName_${owner.id}_$instanceIndex',
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: MuzicianTheme.textPrimary,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                            if (saveEntry != null)
+                              writerLinkedBlockActionsMenu(
+                                context,
+                                ref,
+                                section: section,
+                                lane: lane,
+                                block: owner,
+                                entry: saveEntry,
+                              ),
+                            if (hasBrokenReference)
+                              writerBrokenReferenceAction(
+                                context,
+                                block: owner,
+                                onDelete: () => ref
+                                    .read(songwriterProvider.notifier)
+                                    .removeBlock(
+                                      sectionId: section.id,
+                                      laneId: lane.id,
+                                      blockId: owner.id,
+                                    ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -2090,6 +2388,7 @@ class _PatternLaneRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(songwriterProvider);
+    final saveState = ref.watch(saveSystemProvider);
     final patternNames = isMelody
         ? {
             for (final pattern in project.melodyPatterns)
@@ -2225,6 +2524,7 @@ class _PatternLaneRow extends ConsumerWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             const perRow = 4;
+            final narrowCells = constraints.maxWidth / perRow < 90;
             final rows = <List<Widget>>[];
             final bars = section.lengthBars.clamp(1, 64);
             for (var start = 0; start < bars; start += perRow) {
@@ -2238,13 +2538,19 @@ class _PatternLaneRow extends ConsumerWidget {
                   final patternName = owner.patternId == null
                       ? null
                       : patternNames[owner.patternId];
+                  final saveEntry = writerSaveEntryForBlock(saveState, owner);
+                  final displayName =
+                      saveEntry?.name ?? patternName ?? 'pattern?';
+                  final hasBrokenReference =
+                      owner.saveId != null && saveEntry == null;
                   cells.add(
                     Expanded(
                       flex: span,
                       child: Semantics(
                         button: true,
+                        explicitChildNodes: true,
                         label:
-                            'Edit ${isMelody ? 'melody' : 'guitar strum'} pattern ${patternName ?? ''}',
+                            'Edit ${isMelody ? 'melody' : 'guitar strum'} pattern $displayName',
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
@@ -2277,17 +2583,22 @@ class _PatternLaneRow extends ConsumerWidget {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    isMelody
-                                        ? Icons.edit_note
-                                        : Icons.music_note_outlined,
-                                    size: 14,
-                                    color: MuzicianTheme.textPrimary,
-                                  ),
-                                  const SizedBox(width: 6),
+                                  if (!narrowCells) ...[
+                                    Icon(
+                                      isMelody
+                                          ? Icons.edit_note
+                                          : Icons.music_note_outlined,
+                                      size: 14,
+                                      color: MuzicianTheme.textPrimary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                  ],
                                   Flexible(
                                     child: Text(
-                                      patternName ?? 'pattern?',
+                                      displayName,
+                                      key: Key(
+                                        'writerBlockName_${owner.id}_$instanceIndex',
+                                      ),
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 12,
@@ -2295,6 +2606,27 @@ class _PatternLaneRow extends ConsumerWidget {
                                       ),
                                     ),
                                   ),
+                                  if (saveEntry != null)
+                                    writerLinkedBlockActionsMenu(
+                                      context,
+                                      ref,
+                                      section: section,
+                                      lane: lane,
+                                      block: owner,
+                                      entry: saveEntry,
+                                    ),
+                                  if (hasBrokenReference)
+                                    writerBrokenReferenceAction(
+                                      context,
+                                      block: owner,
+                                      onDelete: () => ref
+                                          .read(songwriterProvider.notifier)
+                                          .removeBlock(
+                                            sectionId: section.id,
+                                            laneId: lane.id,
+                                            blockId: owner.id,
+                                          ),
+                                    ),
                                 ],
                               ),
                             ),

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/save_system.dart';
 import '../models/song_project.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
@@ -13,7 +14,13 @@ import 'save_system_store.dart';
 import 'settings_store.dart';
 import 'song_sessions_store.dart';
 import 'songwriter_sessions_store.dart';
+import 'songwriter_store.dart';
 import 'writer_save_binding_store.dart';
+import 'writer_save_sync_store.dart'
+    show
+        isValidWriterSaveSyncJournal,
+        writerSaveSyncJournalStorageKey,
+        writerSaveSyncProvider;
 
 /// A reader compatible with both [WidgetRef.read] and [ProviderContainer.read],
 /// so the bootstrap can run from the app shell and from tests.
@@ -53,6 +60,35 @@ Future<void> hydrateStores(ProviderReader read) async {
     prefs = await SharedPreferences.getInstance();
   } catch (error) {
     throw StartupStorageFailure('Could not read saved workspaces.', error);
+  }
+
+  // A complete Writer transaction is authoritative over its older individual
+  // keys. Roll it forward before validating or hydrating any workspace store.
+  final String? pendingJournal;
+  try {
+    pendingJournal = prefs.getString(writerSaveSyncJournalStorageKey);
+  } catch (error) {
+    throw StartupStorageFailure('Could not read saved Writer data.', error);
+  }
+  if (pendingJournal != null) {
+    try {
+      _validateStoredPayload(writerSaveSyncJournalStorageKey, pendingJournal);
+    } catch (_) {
+      throw StartupRecoveryRequired([
+        MalformedPersistedPayload(
+          storageKey: writerSaveSyncJournalStorageKey,
+          raw: pendingJournal,
+        ),
+      ]);
+    }
+    try {
+      await read(writerSaveSyncProvider.notifier).replayPendingTransaction();
+    } catch (error) {
+      throw StartupStorageFailure(
+        'Could not recover the pending Writer save transaction.',
+        error,
+      );
+    }
   }
 
   final malformed = <MalformedPersistedPayload>[];
@@ -116,6 +152,17 @@ Future<void> hydrateStores(ProviderReader read) async {
   // saves freely on Fretboard / Piano / Roll without a forced project modal.
   // Song / Songwriter still prompt when entered because Dump is not a project.
   notifier.selectProject(selected ?? notifier.ensureDumpFolder());
+
+  final activeSaveState = read(saveSystemProvider);
+  final selectedFolder = activeSaveState.folders
+      .where((folder) => folder.id == activeSaveState.selectedProjectId)
+      .firstOrNull;
+  if (selectedFolder?.kind == SaveFolderKind.project) {
+    // Reconcile only after persisted Save System, Writer draft, and binding
+    // stores have all hydrated. Await completion so linked block saves exist
+    // before a workspace can render.
+    await read(songwriterProvider.notifier).reconcileCurrentProject();
+  }
 }
 
 void _validateStoredPayload(String key, String raw) {
@@ -148,6 +195,12 @@ void _validateStoredPayload(String key, String raw) {
         final binding = value as Map<String, dynamic>;
         binding['activeSaveId'] as String?;
         binding['alwaysOverwrite'] as bool?;
+        binding['materializedBaselineJson'] as String?;
+      }
+      return;
+    case writerSaveSyncJournalStorageKey:
+      if (!isValidWriterSaveSyncJournal(raw)) {
+        throw const FormatException('Invalid Writer save transaction journal.');
       }
       return;
     case '@muzician/save-system/v2':

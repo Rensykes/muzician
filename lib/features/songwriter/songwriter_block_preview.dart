@@ -1,13 +1,211 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../theme/muzician_theme.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
+import '../../schema/rules/save_system_rules.dart';
 import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
+import '../../store/songwriter_store.dart';
+import '../../ui/core/muzician_dialog.dart';
 import '../../ui/save_card_label.dart';
 import '../../ui/save_previews/save_preview_thumbnail.dart';
 import '../_mockup_shell.dart';
+
+SaveEntry? writerSaveEntryForBlock(SaveSystemState state, SongBlock block) {
+  final projectId = state.selectedProjectId;
+  final saveId = block.saveId;
+  if (projectId == null || saveId == null) return null;
+  return resolveSaveInProject(state, projectId, saveId);
+}
+
+Future<String?> showWriterSaveNameDialog(
+  BuildContext context, {
+  required String initialName,
+  required String title,
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _WriterSaveNameDialog(initialName: initialName, title: title),
+);
+
+Future<void> renameWriterBlockSave(
+  BuildContext context,
+  WidgetRef ref,
+  SaveEntry entry,
+) async {
+  final name = await showWriterSaveNameDialog(
+    context,
+    initialName: entry.name,
+    title: 'Rename save',
+  );
+  if (name == null || !context.mounted) return;
+  if (!isValidSaveName(name)) {
+    _showWriterSaveFeedback(context, 'Enter a name of up to 80 characters.');
+    return;
+  }
+  if (!ref
+      .read(songwriterProvider.notifier)
+      .renameLinkedSave(saveId: entry.id, name: name)) {
+    _showWriterSaveFeedback(context, 'This Writer save could not be renamed.');
+  }
+}
+
+Future<void> makeWriterBlockUnique(
+  BuildContext context,
+  WidgetRef ref, {
+  required SongSection section,
+  required SongLane lane,
+  required SongBlock block,
+  required SaveEntry entry,
+}) async {
+  final initialName = _copyName(entry.name);
+  final name = await showWriterSaveNameDialog(
+    context,
+    initialName: initialName,
+    title: 'Make block unique',
+  );
+  if (name == null || !context.mounted) return;
+  if (!isValidSaveName(name)) {
+    _showWriterSaveFeedback(context, 'Enter a name of up to 80 characters.');
+    return;
+  }
+  final madeUnique = ref
+      .read(songwriterProvider.notifier)
+      .makeBlockUnique(
+        sectionId: section.id,
+        laneId: lane.id,
+        blockId: block.id,
+        snapshot: entry.snapshot,
+        saveName: name,
+      );
+  if (!madeUnique) {
+    _showWriterSaveFeedback(context, 'This block could not be made unique.');
+  }
+}
+
+Widget writerLinkedBlockActionsMenu(
+  BuildContext context,
+  WidgetRef ref, {
+  required SongSection section,
+  required SongLane lane,
+  required SongBlock block,
+  required SaveEntry entry,
+}) => Semantics(
+  label: 'Actions for ${entry.name}',
+  explicitChildNodes: true,
+  child: PopupMenuButton<String>(
+    key: Key('writerBlockActions_${block.id}'),
+    tooltip: 'Actions for ${entry.name}',
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+    iconSize: 16,
+    icon: const Icon(Icons.more_vert, color: MuzicianTheme.textPrimary),
+    onSelected: (action) {
+      if (action == 'rename') {
+        renameWriterBlockSave(context, ref, entry);
+      } else if (action == 'unique') {
+        makeWriterBlockUnique(
+          context,
+          ref,
+          section: section,
+          lane: lane,
+          block: block,
+          entry: entry,
+        );
+      }
+    },
+    itemBuilder: (_) => [
+      PopupMenuItem(
+        key: Key('writerRename_${block.id}'),
+        value: 'rename',
+        child: const Text('Rename'),
+      ),
+      PopupMenuItem(
+        key: Key('writerMakeUnique_${block.id}'),
+        value: 'unique',
+        child: const Text('Make Unique'),
+      ),
+    ],
+  ),
+);
+
+Widget writerBrokenReferenceAction(
+  BuildContext context, {
+  required SongBlock block,
+  required VoidCallback onDelete,
+}) => IconButton(
+  key: Key('writerBrokenReference_${block.id}'),
+  tooltip: 'Broken save reference',
+  visualDensity: VisualDensity.compact,
+  padding: EdgeInsets.zero,
+  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+  iconSize: 15,
+  color: MuzicianTheme.red,
+  icon: const Icon(Icons.link_off),
+  onPressed: () => showBrokenReferenceSheet(context, onDelete: onDelete),
+);
+
+String _copyName(String name) {
+  const suffix = ' copy';
+  final maxLength = 80 - suffix.length;
+  return '${name.substring(0, name.length.clamp(0, maxLength))}$suffix';
+}
+
+void _showWriterSaveFeedback(BuildContext context, String message) {
+  ScaffoldMessenger.maybeOf(context)
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
+}
+
+class _WriterSaveNameDialog extends StatefulWidget {
+  const _WriterSaveNameDialog({required this.initialName, required this.title});
+
+  final String initialName;
+  final String title;
+
+  @override
+  State<_WriterSaveNameDialog> createState() => _WriterSaveNameDialogState();
+}
+
+class _WriterSaveNameDialogState extends State<_WriterSaveNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MuzicianDialog(
+    title: widget.title,
+    content: TextField(
+      key: const Key('writerBlockNameField'),
+      controller: _controller,
+      autofocus: true,
+      maxLength: 80,
+      style: const TextStyle(color: MuzicianTheme.textPrimary),
+      decoration: const InputDecoration(labelText: 'Save name'),
+    ),
+    actions: [
+      MuzicianDialogButton(
+        'Cancel',
+        buttonKey: const Key('writerBlockNameCancel'),
+        onPressed: () => Navigator.pop(context),
+      ),
+      MuzicianDialogButton(
+        'Save',
+        buttonKey: const Key('writerBlockNameSave'),
+        emphasis: MuzicianDialogEmphasis.primary,
+        onPressed: () => Navigator.pop(context, _controller.text.trim()),
+      ),
+    ],
+  );
+}
 
 void showBlockPreviewSheet(BuildContext context, InstrumentSnapshot snapshot) {
   final label = saveCardLabel(snapshot);

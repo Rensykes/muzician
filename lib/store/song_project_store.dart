@@ -830,8 +830,13 @@ class SongProjectNotifier extends Notifier<SongProject> {
   void importFromSongwriter() {
     runHistoryGroup(() {
       final writer = ref.read(songwriterProvider);
-      final saves = ref.read(saveSystemProvider).saves;
-      state = songFromSongwriter(writer, saves);
+      final saveState = ref.read(saveSystemProvider);
+      state = songFromSongwriter(
+        writer,
+        saveState.saves,
+        projectId: saveState.selectedProjectId,
+        folders: saveState.folders,
+      );
     });
   }
 
@@ -1149,8 +1154,13 @@ final songProjectProvider = NotifierProvider<SongProjectNotifier, SongProject>(
 
 final songFromWriterPreviewProvider = Provider<SongProject>((ref) {
   final writer = ref.watch(songwriterProvider);
-  final saves = ref.watch(saveSystemProvider.select((s) => s.saves));
-  return songFromSongwriter(writer, saves);
+  final saveState = ref.watch(saveSystemProvider);
+  return songFromSongwriter(
+    writer,
+    saveState.saves,
+    projectId: saveState.selectedProjectId,
+    folders: saveState.folders,
+  );
 });
 
 final songSelectedTrackIdProvider = StateProvider<String?>((_) => null);

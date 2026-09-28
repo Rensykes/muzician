@@ -44,87 +44,108 @@ class SongwriterHeader extends ConsumerWidget {
         if (!compact)
           SizedBox(
             height: 52,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => _showOverflowMenu(context, ref),
-                    child: const Text(
-                      'Writer',
-                      style: TextStyle(
-                        color: MuzicianTheme.textPrimary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = constraints.maxWidth < 420;
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    narrow ? 12 : 20,
+                    0,
+                    narrow ? 8 : 12,
+                    0,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _editProjectName(
-                        context,
-                        ref,
-                        ref.read(songwriterProvider).name,
-                      ),
-                      child: Text(
-                        project.name,
-                        style: const TextStyle(
-                          color: MuzicianTheme.textMuted,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                  if (dirty)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Row(
-                        key: const Key('writerUnsavedBadge'),
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(
-                            Icons.circle,
-                            size: 8,
-                            color: MuzicianTheme.orange,
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => _showOverflowMenu(context, ref),
+                        child: const Text(
+                          'Writer',
+                          style: TextStyle(
+                            color: MuzicianTheme.textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
                           ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Unsaved',
-                            style: TextStyle(
-                              color: MuzicianTheme.orange,
-                              fontSize: 11,
+                        ),
+                      ),
+                      SizedBox(width: narrow ? 8 : 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _editProjectName(
+                            context,
+                            ref,
+                            ref.read(songwriterProvider).name,
+                          ),
+                          child: Text(
+                            project.name,
+                            style: const TextStyle(
+                              color: MuzicianTheme.textMuted,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  if (onSave != null)
-                    IconBtn(
-                      key: const Key('writerSaveButton'),
-                      icon: Icons.save_rounded,
-                      color: dirty
-                          ? MuzicianTheme.orange
-                          : MuzicianTheme.textDim,
-                      onTap: onSave!,
-                    ),
-                  if (onStartTour != null)
-                    IconBtn(
-                      key: const Key('writerHelpButton'),
-                      icon: Icons.help_outline_rounded,
-                      onTap: onStartTour!,
-                    ),
-                  IconBtn(
-                    icon: Icons.more_vert,
-                    onTap: () => _showOverflowMenu(context, ref),
+                      if (dirty)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Semantics(
+                            label: 'Unsaved changes',
+                            child: Container(
+                              key: const Key('writerUnsavedBadge'),
+                              child: narrow
+                                  ? const Icon(
+                                      Icons.circle,
+                                      size: 8,
+                                      color: MuzicianTheme.orange,
+                                    )
+                                  : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(
+                                          Icons.circle,
+                                          size: 8,
+                                          color: MuzicianTheme.orange,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Unsaved',
+                                          style: TextStyle(
+                                            color: MuzicianTheme.orange,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ),
+                      if (onSave != null)
+                        IconBtn(
+                          key: const Key('writerSaveButton'),
+                          icon: Icons.save_rounded,
+                          color: dirty
+                              ? MuzicianTheme.orange
+                              : MuzicianTheme.textDim,
+                          onTap: onSave!,
+                        ),
+                      if (onStartTour != null)
+                        IconBtn(
+                          key: const Key('writerHelpButton'),
+                          icon: Icons.help_outline_rounded,
+                          onTap: onStartTour!,
+                        ),
+                      IconBtn(
+                        icon: Icons.more_vert,
+                        onTap: () => _showOverflowMenu(context, ref),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         if (!compact) const SizedBox(height: 4),

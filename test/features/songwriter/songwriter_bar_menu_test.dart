@@ -4,8 +4,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
+import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
+
+String _createPianoSave(ProviderContainer container) {
+  final saves = container.read(saveSystemProvider.notifier);
+  final projectId = saves.createProject('Test project', const ProjectConfig())!;
+  saves.selectProject(projectId);
+  return saves.saveSnapshot(
+    'Piano idea',
+    projectId,
+    PianoSnapshot(
+      currentRange: PianoRangeName.key61,
+      selectedKeys: const [],
+      selectedNotes: const ['C4', 'E4', 'G4'],
+      viewMode: PianoViewMode.exact,
+    ),
+  )!;
+}
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -188,6 +208,137 @@ void main() {
     );
   });
 
+  testWidgets('Change chord keeps shared placement links and lyrics', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final saves = container.read(saveSystemProvider.notifier);
+    final projectId = saves.createProject(
+      'Shared Writer chord',
+      const ProjectConfig(),
+    )!;
+    saves.selectProject(projectId);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final verseId = container.read(songwriterProvider).sections.single.id;
+    final verseLaneId = writer.addLane(
+      sectionId: verseId,
+      kind: SongLaneKind.harmony,
+    );
+    writer.addHarmonyBlock(
+      sectionId: verseId,
+      laneId: verseLaneId,
+      block: const SongBlock(
+        id: 'shared-chord',
+        startBar: 1,
+        spanBars: 2,
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
+        chordNotes: ['C', 'E', 'G'],
+        lyrics: ['Verse lyric'],
+      ),
+    );
+    final source = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    final saveId = source.saveId!;
+
+    writer.addSection(label: 'Chorus', lengthBars: 8);
+    final chorusId = container.read(songwriterProvider).sections.last.id;
+    final chorusLaneId = writer.addLane(
+      sectionId: chorusId,
+      kind: SongLaneKind.harmony,
+    );
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: chorusId,
+        laneKind: SongLaneKind.harmony,
+        startBar: 3,
+        spanBars: 2,
+        laneId: chorusLaneId,
+      ),
+      isTrue,
+    );
+    final chorus = container
+        .read(songwriterProvider)
+        .sections
+        .last
+        .lanes
+        .single
+        .blocks
+        .single;
+    writer.setBlockLyric(
+      sectionId: chorusId,
+      laneId: chorusLaneId,
+      blockId: chorus.id,
+      verseIndex: 0,
+      text: 'Chorus lyric',
+    );
+    final child = UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+    );
+    await tester.pumpWidget(child);
+    await tester.pumpAndSettle();
+
+    final undoCount = writer.undoCount;
+    await tester.tap(find.text('C').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('barActionChangeChord')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('harmonyRoot_2')));
+    await tester.pumpAndSettle();
+    final minorSeven = find.byKey(const Key('harmonyQuality_m7'));
+    await tester.ensureVisible(minorSeven);
+    await tester.tap(minorSeven);
+    await tester.pumpAndSettle();
+
+    final sections = container.read(songwriterProvider).sections;
+    final updatedVerse = sections
+        .singleWhere((section) => section.id == verseId)
+        .lanes
+        .single
+        .blocks
+        .single;
+    final updatedChorus = sections
+        .singleWhere((section) => section.id == chorusId)
+        .lanes
+        .single
+        .blocks
+        .single;
+    expect(writer.undoCount, undoCount + 1);
+    expect(updatedVerse.id, source.id);
+    expect(updatedVerse.saveId, saveId);
+    expect(updatedVerse.startBar, 1);
+    expect(updatedVerse.spanBars, 2);
+    expect(updatedVerse.chordSymbol, 'Dm7');
+    expect(updatedVerse.lyrics, ['Verse lyric']);
+    expect(updatedChorus.saveId, saveId);
+    expect(updatedChorus.startBar, 3);
+    expect(updatedChorus.spanBars, 2);
+    expect(updatedChorus.chordSymbol, 'Dm7');
+    expect(updatedChorus.lyrics, ['Chorus lyric']);
+    expect(
+      (container
+                  .read(saveSystemProvider)
+                  .saves
+                  .singleWhere((save) => save.id == saveId)
+                  .snapshot
+              as WriterBlockSnapshot)
+          .chordSymbol,
+      'Dm7',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tapping an empty bar opens an add menu', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -214,6 +365,7 @@ void main() {
   ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
+    final saveId = _createPianoSave(container);
     final n = container.read(songwriterProvider.notifier);
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
@@ -228,7 +380,7 @@ void main() {
     n.addSaveBlock(
       sectionId: sectionId,
       laneId: saveLaneId,
-      saveId: 'save-xyz',
+      saveId: saveId,
       startBar: 0,
       spanBars: 1,
     );
@@ -333,6 +485,7 @@ void main() {
   ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
+    final saveId = _createPianoSave(container);
     final n = container.read(songwriterProvider.notifier);
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
@@ -347,7 +500,7 @@ void main() {
     n.addSaveBlock(
       sectionId: sectionId,
       laneId: saveLaneId,
-      saveId: 'save-xyz',
+      saveId: saveId,
       startBar: 0,
       spanBars: 1,
     );

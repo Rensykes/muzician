@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart' show AudioAsset;
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart' show laneKindFallbackLabel;
+import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
 import '../song/song_audio_clip_body.dart';
+import 'songwriter_block_preview.dart';
 import 'songwriter_audio_actions.dart';
 import 'songwriter_audio_clip_sheet.dart';
 import 'songwriter_playhead.dart';
@@ -37,6 +39,7 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
+    final saveState = ref.watch(saveSystemProvider);
     final ownerByBar = <int, SongBlock>{};
     for (final b in lane.blocks) {
       for (var i = b.startBar; i < b.endBar; i++) {
@@ -53,90 +56,148 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
             ? null
             : clipsById[owner.audioClipId];
         final asset = clip == null ? null : assetsById[clip.assetId];
+        final saveEntry = writerSaveEntryForBlock(saveState, owner);
+        final hasBrokenReference = owner.saveId != null && saveEntry == null;
         cells.add(
           Expanded(
             flex: span,
-            child: GestureDetector(
-              key: Key('sheetAudioTile_${owner.audioClipId ?? owner.id}'),
-              behavior: HitTestBehavior.opaque,
-              // A block with a null audioClipId (legacy/corrupt save) still
-              // renders a placeholder tile; leave it un-tappable rather than
-              // force-unwrapping into a crash — every other read here guards it.
-              onTap: owner.audioClipId == null
-                  ? null
-                  : () => showSongwriterAudioClipSheet(
-                      context: context,
+            child: Semantics(
+              button: true,
+              explicitChildNodes: true,
+              label:
+                  'Audio block ${saveEntry?.name ?? asset?.sourceLabel ?? 'clip'}${hasBrokenReference ? ', broken save reference' : ''}',
+              hint: 'Open audio clip editor',
+              child: GestureDetector(
+                key: Key('sheetAudioTile_${owner.audioClipId ?? owner.id}'),
+                behavior: HitTestBehavior.opaque,
+                // A block with a null audioClipId (legacy/corrupt save) still
+                // renders a placeholder tile; leave it un-tappable rather than
+                // force-unwrapping into a crash — every other read here guards it.
+                onTap: owner.audioClipId == null
+                    ? null
+                    : () => showSongwriterAudioClipSheet(
+                        context: context,
+                        sectionId: section.id,
+                        laneId: lane.id,
+                        clipId: owner.audioClipId!,
+                      ),
+                onLongPress: () => ref
+                    .read(songwriterProvider.notifier)
+                    .removeAudioBlock(
                       sectionId: section.id,
                       laneId: lane.id,
-                      clipId: owner.audioClipId!,
+                      blockId: owner.id,
                     ),
-              onLongPress: () => ref
-                  .read(songwriterProvider.notifier)
-                  .removeAudioBlock(
-                    sectionId: section.id,
-                    laneId: lane.id,
-                    blockId: owner.id,
-                  ),
-              child: Container(
-                height: 40,
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: asset == null
-                          ? Container(color: const Color(0xFF13314A))
-                          : AudioClipBody(
-                              name: asset.sourceLabel,
-                              durationMs:
-                                  (clip!.trimEndMs == 0
-                                      ? asset.durationMs
-                                      : clip.trimEndMs) -
-                                  clip.trimStartMs,
-                              format: asset.format,
-                              peaks: asset.peaks,
-                              isBroken: false,
-                            ),
-                    ),
-                    if (clip != null)
-                      Positioned(
-                        right: 4,
-                        top: 2,
-                        child: Icon(
-                          fitGlyph(clip.fitMode),
-                          size: 12,
-                          color: MuzicianTheme.textPrimary,
-                        ),
+                child: Container(
+                  height: 44,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: asset == null
+                            ? Container(color: const Color(0xFF13314A))
+                            : AudioClipBody(
+                                name: saveEntry?.name ?? asset.sourceLabel,
+                                durationMs:
+                                    (clip!.trimEndMs == 0
+                                        ? asset.durationMs
+                                        : clip.trimEndMs) -
+                                    clip.trimStartMs,
+                                format: asset.format,
+                                peaks: asset.peaks,
+                                isBroken: false,
+                              ),
                       ),
-                    if (ref
-                        .watch(songwriterStretchProcessingProvider)
-                        .contains(owner.audioClipId))
-                      const Positioned(
-                        left: 4,
-                        top: 2,
-                        child: SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 1.6),
-                        ),
-                      ),
-                    if (clip != null && clip.segments.isNotEmpty)
-                      Positioned(
-                        left: 4,
-                        right: 4,
-                        bottom: 2,
-                        child: Text(
-                          clip.segments
-                              .map((s) => s.chordSymbol ?? '◆')
-                              .join('  '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MuzicianTheme.textPrimary,
-                            fontSize: 9,
+                      if (clip != null || saveEntry != null)
+                        Positioned(
+                          right: 4,
+                          top: 2,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (clip != null)
+                                Icon(
+                                  fitGlyph(clip.fitMode),
+                                  size: 12,
+                                  color: MuzicianTheme.textPrimary,
+                                ),
+                              if (saveEntry != null)
+                                writerLinkedBlockActionsMenu(
+                                  context,
+                                  ref,
+                                  section: section,
+                                  lane: lane,
+                                  block: owner,
+                                  entry: saveEntry,
+                                ),
+                            ],
                           ),
                         ),
-                      ),
-                  ],
+                      if (hasBrokenReference)
+                        Positioned(
+                          right: 4,
+                          top: 2,
+                          child: writerBrokenReferenceAction(
+                            context,
+                            block: owner,
+                            onDelete: () => ref
+                                .read(songwriterProvider.notifier)
+                                .removeAudioBlock(
+                                  sectionId: section.id,
+                                  laneId: lane.id,
+                                  blockId: owner.id,
+                                ),
+                          ),
+                        ),
+                      if (saveEntry != null && asset == null)
+                        Positioned(
+                          left: 4,
+                          bottom: 2,
+                          child: Text(
+                            saveEntry.name,
+                            key: Key(
+                              'writerBlockName_${owner.id}_$instanceIndex',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: MuzicianTheme.textPrimary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      if (ref
+                          .watch(songwriterStretchProcessingProvider)
+                          .contains(owner.audioClipId))
+                        const Positioned(
+                          left: 4,
+                          top: 2,
+                          child: SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 1.6),
+                          ),
+                        ),
+                      if (clip != null && clip.segments.isNotEmpty)
+                        Positioned(
+                          left: 4,
+                          right: 4,
+                          bottom: 2,
+                          child: Text(
+                            clip.segments
+                                .map((s) => s.chordSymbol ?? '◆')
+                                .join('  '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: MuzicianTheme.textPrimary,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,8 +40,9 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('badge shows when dirty and overwrite updates the bound save',
-      (tester) async {
+  testWidgets('badge shows when dirty and overwrite updates the bound save', (
+    tester,
+  ) async {
     final (c, _, saveId) = seedDirtyBound();
     await pump(tester, c);
     expect(find.byKey(const Key('writerUnsavedBadge')), findsOneWidget);
@@ -46,14 +50,56 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('writerSaveOverwrite')));
     await tester.pumpAndSettle();
-    final entry =
-        c.read(saveSystemProvider).saves.firstWhere((s) => s.id == saveId);
+    final entry = c
+        .read(saveSystemProvider)
+        .saves
+        .firstWhere((s) => s.id == saveId);
     expect((entry.snapshot as SongwriterProjectSnapshot).config.tempo, 200);
     expect(c.read(writerDirtyProvider), false);
   });
 
-  testWidgets('checkbox sets always-overwrite and next save skips the dialog',
-      (tester) async {
+  testWidgets('overwrite rebases the loaded named Song version', (
+    tester,
+  ) async {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final saveSystem = c.read(saveSystemProvider.notifier);
+    final projectId = saveSystem.createProject('Proj', const ProjectConfig())!;
+    saveSystem.selectProject(projectId);
+    final writer = c.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final savedVersion = writer.materializeCurrentContent();
+    final saveId = saveSystem.saveSnapshot(
+      'First version',
+      projectId,
+      savedVersion,
+    )!;
+    await writer.loadProject(savedVersion, saveId: saveId);
+    writer.setTempo(200);
+    expect(c.read(writerDirtyProvider), true);
+
+    await pump(tester, c);
+    await tester.tap(find.byKey(const Key('writerSaveButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('writerSaveOverwrite')));
+    await tester.pumpAndSettle();
+
+    final entry = c
+        .read(saveSystemProvider)
+        .saves
+        .singleWhere((save) => save.id == saveId);
+    expect((entry.snapshot as SongwriterProjectSnapshot).config.tempo, 200);
+    final binding = c.read(writerSaveBindingProvider)[projectId]!;
+    expect(
+      binding.materializedBaselineJson,
+      jsonEncode(writer.materializeCurrentContent().toJson()),
+    );
+    expect(c.read(writerDirtyProvider), false);
+  });
+
+  testWidgets('checkbox sets always-overwrite and next save skips the dialog', (
+    tester,
+  ) async {
     final (c, pid, _) = seedDirtyBound();
     await pump(tester, c);
     await tester.tap(find.byKey(const Key('writerSaveButton')));
@@ -81,8 +127,9 @@ void main() {
     expect(find.byKey(const Key('writerUnsavedBadge')), findsNothing);
   });
 
-  testWidgets('unbound dirty project opens the Save/Load panel on save',
-      (tester) async {
+  testWidgets('unbound dirty project opens the Save/Load panel on save', (
+    tester,
+  ) async {
     final c = ProviderContainer();
     addTearDown(c.dispose);
     final ss = c.read(saveSystemProvider.notifier);
@@ -98,6 +145,7 @@ void main() {
   });
 
   testWidgets('save-as-new opens the Save/Load panel', (tester) async {
+    final semantics = tester.ensureSemantics();
     final (c, _, _) = seedDirtyBound();
     await pump(tester, c);
     await tester.tap(find.byKey(const Key('writerSaveButton')));
@@ -105,5 +153,15 @@ void main() {
     await tester.tap(find.byKey(const Key('writerSaveAsNew')));
     await tester.pumpAndSettle();
     expect(find.text('Browse saves'), findsOneWidget);
+    expect(find.bySemanticsLabel('Close'), findsOneWidget);
+    final closeSemantics = tester
+        .getSemantics(find.bySemanticsLabel('Close'))
+        .getSemanticsData();
+    expect(closeSemantics.flagsCollection.isButton, isTrue);
+    expect(closeSemantics.hasAction(SemanticsAction.tap), isTrue);
+    await tester.tap(find.bySemanticsLabel('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Browse saves'), findsNothing);
+    semantics.dispose();
   });
 }

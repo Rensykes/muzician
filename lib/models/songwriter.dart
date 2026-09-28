@@ -515,6 +515,114 @@ class SongLane {
   );
 }
 
+/// Placement-free content for a Writer-native block.
+///
+/// Bar placement and subsequent lyric edits belong to the block placement.
+/// [defaultLyrics] is only the initial lyric seed copied when the save is used
+/// to create a new placement. Audio source bytes stay in SongAudioRepository;
+/// this snapshot keeps the complete clip and asset metadata needed to restore
+/// the reference.
+class WriterBlockSnapshot extends InstrumentSnapshot {
+  final SongLaneKind laneKind;
+  final bool isSilent;
+  final String? chordSymbol;
+  final String? chordQuality;
+  final int? chordRootPc;
+  final List<String> chordNotes;
+  final String? romanNumeral;
+  final List<String> defaultLyrics;
+  final DrumPattern? drumPattern;
+  final NotePattern? melodyPattern;
+  final GuitarStrumPattern? guitarStrumPattern;
+  final AudioClip? audioClip;
+  final AudioAsset? audioAsset;
+  final AudioAsset? stretchedAudioAsset;
+
+  const WriterBlockSnapshot({
+    required this.laneKind,
+    this.isSilent = false,
+    this.chordSymbol,
+    this.chordQuality,
+    this.chordRootPc,
+    this.chordNotes = const [],
+    this.romanNumeral,
+    this.defaultLyrics = const [],
+    this.drumPattern,
+    this.melodyPattern,
+    this.guitarStrumPattern,
+    this.audioClip,
+    this.audioAsset,
+    this.stretchedAudioAsset,
+  });
+
+  @override
+  String get instrument => 'writer_block';
+
+  @override
+  List<String> get selectedNotes => chordNotes;
+
+  @override
+  PendingChord? get pendingChord => null;
+
+  @override
+  PendingScale? get pendingScale => null;
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'writer_block',
+    'instrument': instrument,
+    'laneKind': laneKind.name,
+    'isSilent': isSilent,
+    'chordSymbol': chordSymbol,
+    'chordQuality': chordQuality,
+    'chordRootPc': chordRootPc,
+    'chordNotes': chordNotes,
+    'romanNumeral': romanNumeral,
+    'defaultLyrics': defaultLyrics,
+    'drumPattern': drumPattern?.toJson(),
+    'melodyPattern': melodyPattern?.toJson(),
+    'guitarStrumPattern': guitarStrumPattern?.toJson(),
+    'audioClip': audioClip?.toJson(),
+    'audioAsset': audioAsset?.toJson(),
+    'stretchedAudioAsset': stretchedAudioAsset?.toJson(),
+  };
+
+  factory WriterBlockSnapshot.fromJson(
+    Map<String, dynamic> json,
+  ) => WriterBlockSnapshot(
+    laneKind: _laneKindFromName(json['laneKind'] as String?),
+    isSilent: json['isSilent'] as bool? ?? false,
+    chordSymbol: json['chordSymbol'] as String?,
+    chordQuality: json['chordQuality'] as String?,
+    chordRootPc: json['chordRootPc'] as int?,
+    chordNotes: (json['chordNotes'] as List?)?.cast<String>() ?? const [],
+    romanNumeral: json['romanNumeral'] as String?,
+    defaultLyrics: (json['defaultLyrics'] as List?)?.cast<String>() ?? const [],
+    drumPattern: json['drumPattern'] == null
+        ? null
+        : DrumPattern.fromJson(json['drumPattern'] as Map<String, dynamic>),
+    melodyPattern: json['melodyPattern'] == null
+        ? null
+        : NotePattern.fromJson(json['melodyPattern'] as Map<String, dynamic>),
+    guitarStrumPattern: json['guitarStrumPattern'] == null
+        ? null
+        : GuitarStrumPattern.fromJson(
+            json['guitarStrumPattern'] as Map<String, dynamic>,
+          ),
+    audioClip: json['audioClip'] == null
+        ? null
+        : AudioClip.fromJson(json['audioClip'] as Map<String, dynamic>),
+    audioAsset: json['audioAsset'] == null
+        ? null
+        : AudioAsset.fromJson(json['audioAsset'] as Map<String, dynamic>),
+    stretchedAudioAsset: json['stretchedAudioAsset'] == null
+        ? null
+        : AudioAsset.fromJson(
+            json['stretchedAudioAsset'] as Map<String, dynamic>,
+          ),
+  );
+}
+
 class SongwriterProjectSnapshot extends InstrumentSnapshot {
   final String name;
   final SongwriterConfig config;
