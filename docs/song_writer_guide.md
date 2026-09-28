@@ -26,6 +26,13 @@ keeps workspaces closed and offers Retry or Start fresh. Start fresh first
 preserves the original stored strings in **Settings → Data Recovery**, where
 each backup can be read, copied, exported, or deleted after confirmation.
 
+Before the first project is created, choose Piano or Fretboard for its Harmony
+lanes. The choice is also saved in Settings for future projects. Each new
+section starts with a primary Harmony lane using the project's default;
+additional Harmony lanes ask for their instrument when created. An empty
+Harmony lane with no anchored Save/Voicing lane can change instruments while
+keeping its lane identity.
+
 ---
 
 ## 1. Writer playback
@@ -199,13 +206,13 @@ rendering.
 
 **Fretboard/Piano handoff** — in the instrument detection panel, choose
 *Add to Writer*, select a detected chord or the exact instrument voicing, then
-choose a Writer section and bar. Writer asks for an editable save name after
-the destination is chosen, defaulting a chord's name to its chord symbol.
-Chords keep their symbol, root, quality, and selected pitch names; exact
-voicings keep the full instrument snapshot. Every placed block links to its
-canonical save. A saved root idea can also be explicitly linked with **Use in
-Writer**, preserving its root save and sharing later musical edits across
-placements. **Make Unique** gives one placement independent content and name.
+choose a Writer section and bar. A chord placement belongs to a Harmony lane
+with the same instrument; its symbol and native Piano/Fretboard realization
+stay together in one Harmony Save. An exact voicing remains a separate
+placement in a Save/Voicing lane anchored to a compatible Harmony lane. A
+native handoff offers a compatible Save/Voicing lane or stages one when none
+exists. A saved root idea can also be explicitly linked with **Use in Writer**,
+preserving its root save and sharing later edits across placements.
 
 If there is no selected project, the project picker opens; canceling it leaves
 the selection and Writer untouched. An empty Writer project can create its
@@ -217,18 +224,29 @@ Replacing a repeated placement updates its stored source block in place, so
 every copy gets the new chord or voicing at the same offsets; the confirmation
 explains that all copies change together.
 
-Writer voicing blocks can be opened in Fretboard/Piano and written back with
-**Update linked save**, updating every placement that shares the save. Section
-folders are managed by Writer; deleting a block removes its link and keeps the
-canonical work recoverable. Named Song versions retain the block content as
-saved. Loading an older version forks content whose shared save has since
-changed, while keeping the current project's tempo, meter, and key after
-showing any differences.
-
-Changing a linked harmony block's chord updates its canonical save and every
-placement that shares it. Each placement keeps its own lyrics, bar position,
-and span; choose **Make Unique** before editing when one placement should
-change independently.
+Tap a Harmony block and choose **Edit in Piano** or **Edit in Fretboard** to
+open its native instrument representation. When a Save is used in multiple
+Writer placements, updating it offers **Update all placements** or **Create
+standalone Save**. The standalone choice leaves Writer unchanged. Use
+**Replace chord** on a Writer block to apply that Save to one placement; its
+bar, duration, repeats, and local lyrics stay in place. The Save must match the
+Harmony lane's instrument. The Harmony block action **Create standalone Save**
+copies the complete chord Save to the project root and leaves all existing
+placement links alone; **Make Unique** keeps its detach behavior for other
+block kinds. Deleting a Harmony lane removes its dependent Save/Voicing lanes
+in the same undoable change, as the confirmation explains. A Save/Voicing lane
+with a stale explicit anchor stays visible in its own unresolved row and can
+only be reanchored to a compatible Harmony lane; it never falls back to
+primary. Tap one of its Save blocks to open the native editor when available,
+or choose **Remove save**. If no Harmony lane can accept the blocks, choose
+**Remove lane** from the unresolved row. An explicitly anchored Guitar Strum
+lane keeps its missing anchor unresolved until you choose another lane; an
+unset anchor follows the primary Harmony lane. Section category folders are
+managed by Writer; deleting a block
+removes its link while keeping recoverable content. Named Song versions retain
+the block content as saved. Loading an older version forks content whose shared
+save has since changed, while keeping the current project's tempo, meter, and
+key after showing any differences.
 
 **Record an audio take** — in Song, tap an empty audio lane and choose *Record
 audio*. After count-in, stop to open the take review. **Audition** plays the

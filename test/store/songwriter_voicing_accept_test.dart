@@ -31,8 +31,13 @@ void main() {
     final n = c.read(songwriterProvider.notifier);
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
-    n.addLane(sectionId: s, kind: SongLaneKind.harmony);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    final l = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     n.addHarmonyBlock(
       sectionId: s,
       laneId: l,
@@ -88,7 +93,14 @@ void main() {
       expect(newSave.origin, SaveOrigin.writer);
       expect(newSave.folderId, sectionFolder.id);
       expect(sectionFolder.writerSectionId, ids.sectionId);
-      expect(sectionFolder.parentId, saves.selectedProjectId);
+      expect(sectionFolder.writerLaneKind, SongLaneKind.save);
+      final sectionRoot = saves.folders.singleWhere(
+        (folder) =>
+            folder.writerSectionId == ids.sectionId &&
+            folder.writerLaneKind == null,
+      );
+      expect(sectionFolder.parentId, sectionRoot.id);
+      expect(sectionRoot.parentId, saves.selectedProjectId);
       expect(link.sectionId, ids.sectionId);
       expect(link.saveId, newSave.id);
       expect(block.saveId, newSave.id);
@@ -144,7 +156,11 @@ void main() {
     final folders = c
         .read(saveSystemProvider)
         .folders
-        .where((folder) => folder.writerSectionId == ids.sectionId)
+        .where(
+          (folder) =>
+              folder.writerSectionId == ids.sectionId &&
+              folder.writerLaneKind == SongLaneKind.save,
+        )
         .toList();
     expect(folders.length, 1, reason: 'folder must not be duplicated');
 

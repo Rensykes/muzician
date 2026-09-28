@@ -14,6 +14,14 @@ Muzician is a songwriting workspace that connects guitar and piano exploration, 
 
 This is the initial product context inferred from the existing app and the user's stated focus. Treat it as the working direction for planning and implementation, and revise it when product intent changes.
 
+Writer Harmony lanes are instrument-bound to Piano or Fretboard. A new project
+uses the app's configured default, prompting for the first choice if needed;
+each new section starts with a primary lane using that project's default. An
+authored chord has one canonical Save containing both its Writer chord and
+native instrument realization. Shared-save edits offer an explicit all-uses
+update or a standalone Save; replacing a Writer chord is a separate action
+that preserves its placement and lyrics.
+
 Writer supports section-level melody and guitar-strum patterns that can move
 into Song as note tracks. Writer audio lanes remain part of the section sketch
 and are not included in that import. Both Writer and Song provide bounded,

@@ -2,6 +2,7 @@
 library;
 
 import 'piano_roll.dart' show ticksPerBeatForUnit;
+import 'harmony_lane_instrument.dart';
 import 'save_system.dart';
 import 'song_project.dart';
 
@@ -444,6 +445,9 @@ class SongLane {
   /// lane. Null resolves to the section's primary harmony lane.
   final String? anchorLaneId;
 
+  /// Instrument used by a Harmony Lane; null for other lane kinds.
+  final HarmonyLaneInstrument? harmonyInstrument;
+
   const SongLane({
     required this.id,
     required this.kind,
@@ -455,6 +459,7 @@ class SongLane {
     this.pan = 0.0,
     this.muted = false,
     this.anchorLaneId,
+    this.harmonyInstrument,
   });
 
   SongLane copyWith({
@@ -467,8 +472,10 @@ class SongLane {
     double? pan,
     bool? muted,
     String? anchorLaneId,
+    HarmonyLaneInstrument? harmonyInstrument,
     bool clearLabel = false,
     bool clearAnchorLaneId = false,
+    bool clearHarmonyInstrument = false,
   }) => SongLane(
     id: id,
     kind: kind ?? this.kind,
@@ -482,6 +489,9 @@ class SongLane {
     anchorLaneId: clearAnchorLaneId
         ? null
         : (anchorLaneId ?? this.anchorLaneId),
+    harmonyInstrument: clearHarmonyInstrument
+        ? null
+        : (harmonyInstrument ?? this.harmonyInstrument),
   );
 
   Map<String, dynamic> toJson() => {
@@ -495,6 +505,7 @@ class SongLane {
     'pan': pan,
     'muted': muted,
     'anchorLaneId': anchorLaneId,
+    'harmonyInstrument': harmonyInstrument?.name,
   };
 
   factory SongLane.fromJson(Map<String, dynamic> json) => SongLane(
@@ -512,6 +523,9 @@ class SongLane {
     pan: (json['pan'] as num?)?.toDouble() ?? 0.0,
     muted: json['muted'] as bool? ?? false,
     anchorLaneId: json['anchorLaneId'] as String?,
+    harmonyInstrument: HarmonyLaneInstrument.fromJson(
+      json['harmonyInstrument'] as String?,
+    ),
   );
 }
 

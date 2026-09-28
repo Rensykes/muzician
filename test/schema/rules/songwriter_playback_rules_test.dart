@@ -448,6 +448,70 @@ void main() {
       },
     );
 
+    test(
+      'null strum anchor uses primary harmony but stale explicit anchor is silent',
+      () {
+        const primary = SongLane(
+          id: 'primary',
+          kind: SongLaneKind.harmony,
+          order: 0,
+          blocks: [
+            SongBlock(
+              id: 'chord',
+              startBar: 0,
+              spanBars: 1,
+              chordNotes: ['C', 'E', 'G'],
+            ),
+          ],
+        );
+        const pattern = GuitarStrumPattern(
+          id: 'pattern',
+          name: 'Down',
+          lengthTicks: 16,
+          events: [
+            GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down),
+          ],
+        );
+
+        for (final (anchorLaneId, shouldStrum) in [
+          (null, true),
+          ('deleted-harmony', false),
+        ]) {
+          final section = SongSection(
+            id: 'section',
+            lengthBars: 1,
+            order: 0,
+            lanes: [
+              primary,
+              SongLane(
+                id: 'strum',
+                kind: SongLaneKind.guitarStrum,
+                order: 1,
+                anchorLaneId: anchorLaneId,
+                blocks: const [
+                  SongBlock(
+                    id: 'strum-block',
+                    startBar: 0,
+                    spanBars: 1,
+                    patternId: 'pattern',
+                  ),
+                ],
+              ),
+            ],
+          );
+          final events = flattenPlaybackEvents(
+            projectWith(sections: [section], guitarStrumPatterns: [pattern]),
+            const [],
+          );
+          final sequencedNotes = [
+            for (final event in events)
+              for (final group in event.sequencedNoteGroups) ...group.notes,
+          ];
+          expect(sequencedNotes, shouldStrum ? hasLength(3) : isEmpty);
+        }
+      },
+    );
+
     test('delayed voices shorten at the melody and strum block boundary', () {
       const section = SongSection(
         id: 'boundary-section',

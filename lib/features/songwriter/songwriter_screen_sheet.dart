@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
+import '../../models/harmony_lane_instrument.dart';
+import '../../schema/rules/save_system_rules.dart' show resolveSaveInProject;
 import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../schema/rules/songwriter_rules.dart';
@@ -23,13 +25,11 @@ import 'writer_save_choice_dialog.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/coach_overlay.dart';
 import '../../ui/glass_snackbar.dart';
-import '../../ui/save_browser_panel.dart';
 import '../../utils/note_utils.dart';
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_coach_steps.dart';
 import 'songwriter_playhead.dart';
-import 'songwriter_save_lane_filter.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import 'drum_pattern_sheet.dart';
@@ -380,12 +380,11 @@ class _SectionInstance extends ConsumerWidget {
         SongwriterSectionRuler(section: section, instanceIndex: instanceIndex),
         const SizedBox(height: 6),
         for (var li = 0; li < harmonyLanes.length; li++) ...[
-          if (harmonyLanes.length > 1)
-            _HarmonyLaneHeader(
-              section: section,
-              lane: harmonyLanes[li],
-              laneIndex: li,
-            ),
+          _HarmonyLaneHeader(
+            section: section,
+            lane: harmonyLanes[li],
+            laneIndex: li,
+          ),
           Padding(
             padding: EdgeInsets.only(
               bottom: li == harmonyLanes.length - 1 ? 0 : 8,
@@ -400,6 +399,21 @@ class _SectionInstance extends ConsumerWidget {
               onEnsureLane: onEnsureLane,
               isPrimary: li == 0,
             ),
+          ),
+        ],
+        for (final lane in section.lanes.where(
+          (candidate) =>
+              candidate.kind == SongLaneKind.save &&
+              candidate.anchorLaneId != null &&
+              saveAnchorLane(section, candidate) == null,
+        )) ...[
+          const SizedBox(height: 8),
+          _UnresolvedSaveLaneRow(
+            key: Key('unresolvedSaveLane_${lane.id}_$instanceIndex'),
+            section: section,
+            lane: lane,
+            instanceIndex: instanceIndex,
+            onEditInstrumentSave: onEditInstrumentSave,
           ),
         ],
         // Drum lanes (one strip per drum lane on this section).
@@ -467,6 +481,258 @@ class _SectionInstance extends ConsumerWidget {
         const SizedBox(height: 8),
         _SectionLyrics(section: section, instanceIndex: instanceIndex),
       ],
+    );
+  }
+}
+
+class _UnresolvedSaveLaneRow extends ConsumerWidget {
+  const _UnresolvedSaveLaneRow({
+    super.key,
+    required this.section,
+    required this.lane,
+    required this.instanceIndex,
+    this.onEditInstrumentSave,
+  });
+
+  final SongSection section;
+  final SongLane lane;
+  final int instanceIndex;
+  final ValueChanged<SaveEntry>? onEditInstrumentSave;
+
+  void _showSaveBlockActions(
+    BuildContext context,
+    WidgetRef ref,
+    SongBlock block,
+  ) {
+    final entry = writerSaveEntryForBlock(ref.read(saveSystemProvider), block);
+    final canEditInstrumentSave =
+        entry != null &&
+        onEditInstrumentSave != null &&
+        (entry.snapshot is FretboardSnapshot ||
+            entry.snapshot is PianoSnapshot);
+    showBarActionSheet(
+      context: context,
+      title: entry?.name ?? 'Missing Save',
+      actions: [
+        if (canEditInstrumentSave)
+          BarAction(
+            key: Key('unresolvedSaveEdit_${block.id}'),
+            label: entry.snapshot is PianoSnapshot
+                ? 'Edit in Piano'
+                : 'Edit in Fretboard',
+            icon: Icons.open_in_new,
+            onTap: () => onEditInstrumentSave!(entry),
+          ),
+        BarAction(
+          key: Key('unresolvedSaveRemove_${block.id}'),
+          label: 'Remove save',
+          icon: Icons.bookmark_remove,
+          destructive: true,
+          onTap: () => _removeSaveBlock(context, ref, block),
+        ),
+      ],
+    );
+  }
+
+  void _removeSaveBlock(BuildContext context, WidgetRef ref, SongBlock block) {
+    final notifier = ref.read(songwriterProvider.notifier);
+    HapticFeedback.lightImpact();
+    notifier.removeBlock(
+      sectionId: section.id,
+      laneId: lane.id,
+      blockId: block.id,
+    );
+    final revision = notifier.historyRevision;
+    showUndoSnack(
+      context,
+      'Save removed',
+      historyRevision: notifier.historyRevisionListenable,
+      expectedRevision: revision,
+      onUndo: () => notifier.undo(ifRevision: revision),
+    );
+  }
+
+  void _confirmRemoveLane(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => MuzicianDialog(
+        title: 'Remove Save / Voicing lane?',
+        content: const Text(
+          'This removes the lane and its placements. The saved ideas remain in the project.',
+          style: TextStyle(color: MuzicianTheme.textSecondary),
+        ),
+        actions: [
+          MuzicianDialogButton(
+            'Cancel',
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+          MuzicianDialogButton(
+            'Remove lane',
+            key: Key('confirmRemoveUnresolvedSaveLane_${lane.id}'),
+            emphasis: MuzicianDialogEmphasis.destructive,
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              HapticFeedback.mediumImpact();
+              ref
+                  .read(songwriterProvider.notifier)
+                  .removeLane(sectionId: section.id, laneId: lane.id);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(songwriterProvider.notifier);
+    final saveState = ref.watch(saveSystemProvider);
+    final allHarmonyLanes = section.lanes
+        .where((candidate) => candidate.kind == SongLaneKind.harmony)
+        .toList();
+    final compatibleHarmonyLanes = allHarmonyLanes
+        .where(
+          (candidate) => notifier.canSetSaveLaneAnchorLane(
+            sectionId: section.id,
+            laneId: lane.id,
+            harmonyLaneId: candidate.id,
+          ),
+        )
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      decoration: BoxDecoration(
+        color: MuzicianTheme.orange.withValues(alpha: 0.07),
+        border: Border.all(color: MuzicianTheme.orange.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.link_off, size: 13, color: MuzicianTheme.orange),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  '${lane.label ?? 'Save / Voicing'} · Unresolved Harmony anchor',
+                  key: Key('unresolvedSaveLaneLabel_${lane.id}_$instanceIndex'),
+                  style: const TextStyle(
+                    color: MuzicianTheme.textMuted,
+                    fontSize: 11,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ),
+              if (compatibleHarmonyLanes.isNotEmpty)
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: Key('repairSaveAnchor_${lane.id}_$instanceIndex'),
+                    value: null,
+                    hint: const Text('Reanchor'),
+                    isDense: true,
+                    iconSize: 16,
+                    dropdownColor: MuzicianTheme.surface,
+                    style: const TextStyle(
+                      color: MuzicianTheme.textSecondary,
+                      fontSize: 10,
+                    ),
+                    items: [
+                      for (
+                        var index = 0;
+                        index < allHarmonyLanes.length;
+                        index++
+                      )
+                        if (compatibleHarmonyLanes.contains(
+                          allHarmonyLanes[index],
+                        ))
+                          DropdownMenuItem(
+                            key: Key(
+                              'repairSaveAnchorOption_${lane.id}_${allHarmonyLanes[index].id}_$instanceIndex',
+                            ),
+                            value: allHarmonyLanes[index].id,
+                            child: Text(
+                              allHarmonyLanes[index].label ??
+                                  harmonyLaneFallbackLabel(index),
+                            ),
+                          ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      final primaryId = primaryHarmonyLane(section)?.id;
+                      notifier.setLaneAnchorLane(
+                        sectionId: section.id,
+                        laneId: lane.id,
+                        harmonyLaneId: value == primaryId ? null : value,
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+          if (compatibleHarmonyLanes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 18, top: 4),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'No compatible Harmony lane',
+                      style: TextStyle(
+                        color: MuzicianTheme.textMuted,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    key: Key(
+                      'removeUnresolvedSaveLane_${lane.id}_$instanceIndex',
+                    ),
+                    onPressed: () => _confirmRemoveLane(context, ref),
+                    icon: const Icon(Icons.delete_outline, size: 14),
+                    label: const Text('Remove lane'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: MuzicianTheme.red,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (lane.blocks.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(left: 18, top: 4),
+              child: Text(
+                'No Save blocks',
+                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 10),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(left: 18, top: 4),
+              child: Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children: [
+                  for (final block in lane.blocks)
+                    ActionChip(
+                      key: Key(
+                        'unresolvedSaveBlock_${block.id}_$instanceIndex',
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () =>
+                          _showSaveBlockActions(context, ref, block),
+                      label: Text(
+                        'Bar ${block.startBar + 1} · ${writerSaveEntryForBlock(saveState, block)?.name ?? 'Missing Save'}',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -747,6 +1013,10 @@ class _SectionHeading extends ConsumerWidget {
               ),
               onSelected: (value) async {
                 if (value == 'addHarmonyLane') {
+                  final instrument = await _promptHarmonyLaneInstrument(
+                    context,
+                  );
+                  if (instrument == null || !context.mounted) return;
                   final harmonyCount = ref
                       .read(songwriterProvider)
                       .sections
@@ -756,9 +1026,9 @@ class _SectionHeading extends ConsumerWidget {
                       .length;
                   ref
                       .read(songwriterProvider.notifier)
-                      .addLane(
+                      .addHarmonyLane(
                         sectionId: section.id,
-                        kind: SongLaneKind.harmony,
+                        harmonyInstrument: instrument,
                         label: harmonyLaneFallbackLabel(harmonyCount),
                       );
                 }
@@ -1036,11 +1306,29 @@ class _HarmonyLaneHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final label = lane.label ?? harmonyLaneFallbackLabel(laneIndex);
+    final instrument = lane.id.isEmpty
+        ? ref
+              .read(songwriterProvider.notifier)
+              .projectDefaultHarmonyInstrumentForSelectedProject
+        : lane.harmonyInstrument;
+    final instrumentLabel = switch (instrument) {
+      HarmonyLaneInstrument.fretboard => 'Fretboard',
+      HarmonyLaneInstrument.piano => 'Piano',
+      null => 'Instrument needed',
+    };
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 2),
       child: Row(
         children: [
-          const Icon(Icons.piano, size: 12, color: MuzicianTheme.textMuted),
+          Icon(
+            switch (instrument) {
+              HarmonyLaneInstrument.piano => Icons.piano,
+              HarmonyLaneInstrument.fretboard => Icons.music_note,
+              null => Icons.help_outline,
+            },
+            size: 12,
+            color: MuzicianTheme.textMuted,
+          ),
           const SizedBox(width: 5),
           GestureDetector(
             key: Key('renameHarmonyLane_${lane.id}'),
@@ -1063,10 +1351,75 @@ class _HarmonyLaneHeader extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(width: 6),
+          Semantics(
+            key: Key('harmonyLaneInstrument_${lane.id}'),
+            label: '$instrumentLabel Harmony instrument',
+            child: Text(
+              instrumentLabel,
+              style: const TextStyle(
+                color: MuzicianTheme.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           const Spacer(),
+          if (lane.id.isNotEmpty &&
+              ref
+                  .read(songwriterProvider.notifier)
+                  .canChangeHarmonyLaneInstrument(
+                    sectionId: section.id,
+                    laneId: lane.id,
+                  ))
+            IconButton(
+              key: Key('changeHarmonyLaneInstrument_${lane.id}'),
+              tooltip: 'Change Harmony instrument',
+              visualDensity: VisualDensity.compact,
+              iconSize: 15,
+              icon: const Icon(
+                Icons.swap_horiz,
+                color: MuzicianTheme.textMuted,
+              ),
+              onPressed: () async {
+                final instrument = await _promptHarmonyLaneInstrument(context);
+                if (instrument == null || !context.mounted) return;
+                final changed = ref
+                    .read(songwriterProvider.notifier)
+                    .setHarmonyLaneInstrument(
+                      sectionId: section.id,
+                      laneId: lane.id,
+                      instrument: instrument,
+                    );
+                if (!changed) {
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'This lane or one of its linked voicings changed.',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+          if (lane.id.isNotEmpty)
+            IconButton(
+              key: Key('duplicateHarmonyLane_${lane.id}'),
+              tooltip: 'Duplicate Harmony lane',
+              visualDensity: VisualDensity.compact,
+              iconSize: 15,
+              icon: const Icon(
+                Icons.copy_all_outlined,
+                color: MuzicianTheme.textMuted,
+              ),
+              onPressed: () => ref
+                  .read(songwriterProvider.notifier)
+                  .duplicateHarmonyLane(sectionId: section.id, laneId: lane.id),
+            ),
           if (lane.id.isNotEmpty && laneIndex > 0)
             IconButton(
               key: Key('deleteHarmonyLane_${lane.id}'),
+              tooltip: 'Delete Harmony lane',
               visualDensity: VisualDensity.compact,
               iconSize: 15,
               icon: const Icon(
@@ -1086,7 +1439,8 @@ class _HarmonyLaneHeader extends ConsumerWidget {
       builder: (dialogContext) => MuzicianDialog(
         title: 'Delete $label?',
         content: const Text(
-          'The chords in this lane are removed.',
+          'The chords in this lane and any Save / Voicing lanes anchored to it are removed.',
+          key: Key('deleteHarmonyLaneImpact'),
           style: TextStyle(color: MuzicianTheme.textSecondary),
         ),
         actions: [
@@ -1111,6 +1465,55 @@ class _HarmonyLaneHeader extends ConsumerWidget {
     );
   }
 }
+
+Future<HarmonyLaneInstrument?> _promptHarmonyLaneInstrument(
+  BuildContext context,
+) => showModalBottomSheet<HarmonyLaneInstrument>(
+  context: context,
+  backgroundColor: MuzicianTheme.surface,
+  builder: (context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Choose a Harmony instrument',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'All chords in this lane will use the selected instrument.',
+            style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          for (final instrument in HarmonyLaneInstrument.values)
+            ListTile(
+              key: Key('harmonyInstrumentOption_${instrument.name}'),
+              leading: Icon(
+                instrument == HarmonyLaneInstrument.piano
+                    ? Icons.piano
+                    : Icons.music_note,
+                color: MuzicianTheme.sky,
+              ),
+              title: Text(
+                instrument == HarmonyLaneInstrument.piano
+                    ? 'Piano'
+                    : 'Fretboard',
+              ),
+              onTap: () => Navigator.of(context).pop(instrument),
+            ),
+          TextButton(
+            key: const Key('harmonyInstrumentCancel'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    ),
+  ),
+);
 
 class _BarRow extends ConsumerWidget {
   const _BarRow({
@@ -1322,16 +1725,16 @@ class _BarRow extends ConsumerWidget {
     );
   }
 
-  /// Save lanes whose voicings belong to this row's harmony lane. Legacy
-  /// anchor-less save lanes (and lanes whose anchor is gone) resolve to the
-  /// primary lane; the placeholder empty lane collects saves in sections
-  /// that have no harmony lane at all.
+  /// Save lanes whose voicings belong to this row's harmony lane. Anchor-less
+  /// save lanes follow the primary lane; stale explicit anchors stay in their
+  /// own unresolved row instead of falling back to primary.
   List<SongLane> _anchoredSaveLanes() {
     final out = <SongLane>[];
     for (final l in section.lanes) {
       if (l.kind != SongLaneKind.save) continue;
-      final anchorId = saveAnchorLane(section, l)?.id;
-      final belongsHere = anchorId == null ? isPrimary : anchorId == lane.id;
+      final anchor = saveAnchorLane(section, l);
+      if (l.anchorLaneId != null && anchor == null) continue;
+      final belongsHere = anchor == null ? isPrimary : anchor.id == lane.id;
       if (belongsHere) out.add(l);
     }
     return out;
@@ -1394,7 +1797,7 @@ class _BarRow extends ConsumerWidget {
     HapticFeedback.selectionClick();
     final notifier = ref.read(songwriterProvider.notifier);
     notifier.runHistoryGroup(() {
-      if (lane.id.isEmpty) onEnsureLane();
+      if (block.isSilent && lane.id.isEmpty) onEnsureLane();
       final laneId = lane.id.isNotEmpty
           ? lane.id
           : ref
@@ -1405,9 +1808,8 @@ class _BarRow extends ConsumerWidget {
                 .where((l) => l.kind == SongLaneKind.harmony)
                 .firstOrNull
                 ?.id;
-      if (laneId == null || laneId.isEmpty) return;
-
       if (block.isSilent) {
+        if (laneId == null || laneId.isEmpty) return;
         notifier.addSilentBlock(
           sectionId: section.id,
           laneId: laneId,
@@ -1435,17 +1837,39 @@ class _BarRow extends ConsumerWidget {
           );
         }
       } else {
-        notifier.addHarmonyBlock(
+        final result = notifier.addHarmonyChord(
           sectionId: section.id,
-          laneId: laneId,
+          laneId: lane.id.isEmpty ? null : lane.id,
           block: block,
           saveName: block.chordSymbol,
         );
+        if (!result.success) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(
+              content: Text(
+                result.errorMessage ?? 'Could not add this Harmony chord.',
+              ),
+            ),
+          );
+          return;
+        }
         if (isPrimary && block.lyrics.isNotEmpty) {
+          final placedLaneId = ref
+              .read(songwriterProvider)
+              .sections
+              .where((candidate) => candidate.id == section.id)
+              .expand((candidate) => candidate.lanes)
+              .where((candidate) => candidate.kind == SongLaneKind.harmony)
+              .firstWhere(
+                (candidate) => candidate.blocks.any(
+                  (candidateBlock) => candidateBlock.id == result.blockId,
+                ),
+              )
+              .id;
           notifier.setBlockLyric(
             sectionId: section.id,
-            laneId: laneId,
-            blockId: block.id,
+            laneId: placedLaneId,
+            blockId: result.blockId!,
             verseIndex: instanceIndex,
             text: block.lyrics.first,
           );
@@ -1462,6 +1886,7 @@ class _BarRow extends ConsumerWidget {
         !block.isSilent &&
         block.chordRootPc != null &&
         block.chordQuality != null;
+    final harmonySave = entry?.snapshot;
     final save = _anchoredSaveLanes()
         .expand((l) => l.blocks)
         .where((b) => b.startBar < block.endBar && block.startBar < b.endBar)
@@ -1491,6 +1916,22 @@ class _BarRow extends ConsumerWidget {
             icon: Icons.library_music,
             onTap: () => _openHarmonyTools(context, ref, block),
           ),
+        if (isChord)
+          BarAction(
+            key: const Key('barActionReplaceChord'),
+            label: 'Replace chord',
+            icon: Icons.swap_horiz,
+            onTap: () => _replaceChord(context, ref, block),
+          ),
+        if (harmonySave is HarmonyChordSnapshot && onEditInstrumentSave != null)
+          BarAction(
+            key: const Key('barActionEditInstrument'),
+            label: harmonySave.harmonyInstrument == HarmonyLaneInstrument.piano
+                ? 'Edit in Piano'
+                : 'Edit in Fretboard',
+            icon: Icons.open_in_new,
+            onTap: () => onEditInstrumentSave!(entry!),
+          ),
         if (isPrimary)
           BarAction(
             key: const Key('barActionLyrics'),
@@ -1505,19 +1946,28 @@ class _BarRow extends ConsumerWidget {
             icon: Icons.drive_file_rename_outline,
             onTap: () => renameWriterBlockSave(context, ref, entry),
           ),
-          BarAction(
-            key: const Key('barActionMakeBlockUnique'),
-            label: 'Make Unique',
-            icon: Icons.copy_all_outlined,
-            onTap: () => makeWriterBlockUnique(
-              context,
-              ref,
-              section: section,
-              lane: lane,
-              block: block,
-              entry: entry,
+          if (harmonySave is HarmonyChordSnapshot)
+            BarAction(
+              key: const Key('barActionCreateStandaloneSave'),
+              label: 'Create standalone Save',
+              icon: Icons.copy_all_outlined,
+              onTap: () =>
+                  createStandaloneHarmonySaveFromBlock(context, ref, entry),
+            )
+          else if (lane.kind != SongLaneKind.harmony)
+            BarAction(
+              key: const Key('barActionMakeBlockUnique'),
+              label: 'Make Unique',
+              icon: Icons.copy_all_outlined,
+              onTap: () => makeWriterBlockUnique(
+                context,
+                ref,
+                section: section,
+                lane: lane,
+                block: block,
+                entry: entry,
+              ),
             ),
-          ),
         ],
         if (block.saveId != null && entry == null)
           BarAction(
@@ -1557,10 +2007,16 @@ class _BarRow extends ConsumerWidget {
   void _openHarmonyTools(BuildContext context, WidgetRef ref, SongBlock block) {
     final cfg = ref.read(songwriterProvider).config;
     final notifier = ref.read(songwriterProvider.notifier);
-    final voicings = suggestVoicings(
-      chordRootPc: block.chordRootPc!,
-      quality: block.chordQuality!,
+    final harmonyInstrument = notifier.harmonyInstrumentForLane(
+      sectionId: section.id,
+      laneId: lane.id,
     );
+    final voicings = harmonyInstrument == HarmonyLaneInstrument.fretboard
+        ? suggestVoicings(
+            chordRootPc: block.chordRootPc!,
+            quality: block.chordQuality!,
+          )
+        : const <VoicingSuggestion>[];
     final thirdAbove = suggestThirdAbove(
       chordRootPc: block.chordRootPc!,
       chordQuality: block.chordQuality!,
@@ -1568,9 +2024,18 @@ class _BarRow extends ConsumerWidget {
       keyRootPc: cfg.keyRoot,
       keyScaleName: cfg.keyScaleName,
     );
+    final compatibleThirdAbove =
+        harmonyInstrument == HarmonyLaneInstrument.piano ? thirdAbove : null;
     final matches = matchLibrary(
       harmonyBlock: block,
-      searchableSaves: notifier.searchableSavesForLibraryMatch(),
+      searchableSaves: notifier
+          .searchableSavesForLibraryMatch()
+          .where(
+            (save) =>
+                save.snapshot is! HarmonyChordSnapshot &&
+                save.snapshot.instrument == harmonyInstrument?.name,
+          )
+          .toList(),
       keyRootPc: cfg.keyRoot,
       keyScaleName: cfg.keyScaleName,
     );
@@ -1579,7 +2044,7 @@ class _BarRow extends ConsumerWidget {
       context,
       block: block,
       voicings: voicings,
-      thirdAbove: thirdAbove,
+      thirdAbove: compatibleThirdAbove,
       chordMatches: matches.chordMatches,
       onAcceptVoicing: (v) => notifier.acceptVoicingSuggestion(
         sectionId: section.id,
@@ -1623,27 +2088,145 @@ class _BarRow extends ConsumerWidget {
       );
       return;
     }
+    final harmonyInstrument = ref
+        .read(songwriterProvider.notifier)
+        .harmonyInstrumentForLane(
+          sectionId: section.id,
+          laneId: lane.id.isEmpty ? null : lane.id,
+        );
+    if (harmonyInstrument == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Choose an instrument for this lane.')),
+      );
+      return;
+    }
+    _showCompatibleHarmonySaves(
+      context: context,
+      ref: ref,
+      title: 'Harmony library',
+      instrument: harmonyInstrument,
+      onPick: (entry) {
+        HapticFeedback.selectionClick();
+        final inserted = ref
+            .read(songwriterProvider.notifier)
+            .insertWriterBlockFromSave(
+              saveId: entry.id,
+              sectionId: section.id,
+              laneKind: SongLaneKind.harmony,
+              laneId: lane.id.isEmpty ? null : lane.id,
+              startBar: bar,
+            );
+        if (!inserted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(content: Text('Could not add this Harmony save.')),
+          );
+        }
+      },
+    );
+  }
+
+  void _replaceChord(BuildContext context, WidgetRef ref, SongBlock block) {
+    final instrument = ref
+        .read(songwriterProvider.notifier)
+        .harmonyInstrumentForLane(sectionId: section.id, laneId: lane.id);
+    if (instrument == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Choose an instrument for this lane.')),
+      );
+      return;
+    }
+    _showCompatibleHarmonySaves(
+      context: context,
+      ref: ref,
+      title: 'Replace chord',
+      instrument: instrument,
+      onPick: (entry) {
+        final replaced = ref
+            .read(songwriterProvider.notifier)
+            .replaceHarmonyBlockWithSave(
+              sectionId: section.id,
+              laneId: lane.id,
+              blockId: block.id,
+              saveId: entry.id,
+            );
+        if (!replaced) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(
+              content: Text('Choose a Harmony save made for this instrument.'),
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  void _showCompatibleHarmonySaves({
+    required BuildContext context,
+    required WidgetRef ref,
+    required String title,
+    required HarmonyLaneInstrument instrument,
+    required ValueChanged<SaveEntry> onPick,
+  }) {
+    final saveState = ref.read(saveSystemProvider);
+    final projectId = saveState.selectedProjectId;
+    if (projectId == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Select a project to browse Harmony saves.'),
+        ),
+      );
+      return;
+    }
+    final entries =
+        saveState.saves
+            .where(
+              (entry) =>
+                  entry.snapshot is HarmonyChordSnapshot &&
+                  (entry.snapshot as HarmonyChordSnapshot).harmonyInstrument ==
+                      instrument &&
+                  resolveSaveInProject(saveState, projectId, entry.id) != null,
+            )
+            .toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     showWidgetSheet(
       context: context,
-      title: 'From library',
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.6,
-        child: SaveBrowserPanel(
-          rootFolderId: selId,
-          allowedInstruments: songwriterSaveLaneAllowedInstruments,
-          onPick: (entry) {
-            Navigator.of(context).pop();
-            HapticFeedback.selectionClick();
-            ref
-                .read(songwriterProvider.notifier)
-                .addLibraryBlockAt(
-                  sectionId: section.id,
-                  saveId: entry.id,
-                  startBar: bar,
-                  anchorLaneId: lane.id.isEmpty ? null : lane.id,
-                );
-          },
-        ),
+      title: title,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (entries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                'No ${instrument.name == 'piano' ? 'Piano' : 'Fretboard'} Harmony saves yet.',
+                style: const TextStyle(color: MuzicianTheme.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            for (final entry in entries)
+              ListTile(
+                key: Key('harmonyLibrarySave_${entry.id}'),
+                leading: Icon(
+                  instrument == HarmonyLaneInstrument.piano
+                      ? Icons.piano
+                      : Icons.music_note,
+                  color: MuzicianTheme.violet,
+                ),
+                title: Text(entry.name),
+                subtitle: Text(
+                  (entry.snapshot as HarmonyChordSnapshot)
+                          .writerBlock
+                          .chordSymbol ??
+                      'Harmony chord',
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  onPick(entry);
+                },
+              ),
+        ],
       ),
     );
   }
@@ -1670,13 +2253,23 @@ class _BarRow extends ConsumerWidget {
     if (next == null) return;
     HapticFeedback.selectionClick();
     final notifier = ref.read(songwriterProvider.notifier);
-    notifier.updateHarmonyBlock(
+    final updated = notifier.updateHarmonyBlock(
       sectionId: section.id,
       laneId: lane.id,
       blockId: block.id,
       content: next,
       lyricVerseIndex: isPrimary ? instanceIndex : null,
     );
+    if (!updated && context.mounted) {
+      showGlassSnackbar(
+        context,
+        title: 'Chord not updated',
+        message:
+            notifier.lastHarmonyMutationError ??
+            'Could not update this chord. Change the Fretboard tuning, capo, or fret range and try again.',
+        contentType: ContentType.warning,
+      );
+    }
   }
 
   /// Edits the per-verse lyric of [block]. [laneId] defaults to this row's
@@ -2402,11 +2995,11 @@ class _PatternLaneRow extends ConsumerWidget {
         .where((candidate) => candidate.kind == SongLaneKind.harmony)
         .toList();
     final primaryHarmonyId = harmonyLanes.firstOrNull?.id;
-    final resolvedAnchor =
-        lane.anchorLaneId != null &&
-            harmonyLanes.any((candidate) => candidate.id == lane.anchorLaneId)
+    final resolvedAnchor = lane.anchorLaneId == null
+        ? primaryHarmonyId
+        : harmonyLanes.any((candidate) => candidate.id == lane.anchorLaneId)
         ? lane.anchorLaneId
-        : primaryHarmonyId;
+        : null;
     final ownerByBar = <int, SongBlock>{};
     for (final block in lane.blocks) {
       for (var bar = block.startBar; bar < block.endBar; bar++) {
@@ -2484,6 +3077,9 @@ class _PatternLaneRow extends ConsumerWidget {
                   child: DropdownButton<String>(
                     key: Key('strumAnchor_${lane.id}_$instanceIndex'),
                     value: resolvedAnchor,
+                    hint: lane.anchorLaneId != null && resolvedAnchor == null
+                        ? const Text('Unresolved')
+                        : null,
                     isDense: true,
                     iconSize: 16,
                     dropdownColor: MuzicianTheme.surface,

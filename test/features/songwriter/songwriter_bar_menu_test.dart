@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
 import 'package:muzician/models/piano.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
@@ -13,7 +14,10 @@ import 'package:muzician/store/songwriter_store.dart';
 
 String _createPianoSave(ProviderContainer container) {
   final saves = container.read(saveSystemProvider.notifier);
-  final projectId = saves.createProject('Test project', const ProjectConfig())!;
+  final projectId = saves.createProject(
+    'Test project',
+    const ProjectConfig(defaultHarmonyInstrument: HarmonyLaneInstrument.piano),
+  )!;
   saves.selectProject(projectId);
   return saves.saveSnapshot(
     'Piano idea',
@@ -87,11 +91,6 @@ void main() {
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
     n.setSectionRepeat(sectionId, 2);
-    n.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-      label: 'Harmony',
-    );
     final laneId = container
         .read(songwriterProvider)
         .sections
@@ -107,7 +106,7 @@ void main() {
         startBar: 0,
         spanBars: 1,
         chordSymbol: 'C',
-        chordQuality: 'maj',
+        chordQuality: '',
         chordRootPc: 0,
         chordNotes: ['C', 'E', 'G'],
       ),
@@ -155,11 +154,6 @@ void main() {
     final n = container.read(songwriterProvider.notifier);
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
-    n.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-      label: 'Harmony',
-    );
     final laneId = container
         .read(songwriterProvider)
         .sections
@@ -175,7 +169,7 @@ void main() {
         startBar: 0,
         spanBars: 1,
         chordSymbol: 'C',
-        chordQuality: 'maj',
+        chordQuality: '',
         chordRootPc: 0,
         chordNotes: ['C', 'E', 'G'],
       ),
@@ -222,10 +216,13 @@ void main() {
     final writer = container.read(songwriterProvider.notifier);
     writer.addSection(label: 'Verse', lengthBars: 4);
     final verseId = container.read(songwriterProvider).sections.single.id;
-    final verseLaneId = writer.addLane(
-      sectionId: verseId,
-      kind: SongLaneKind.harmony,
-    );
+    final verseLaneId = container
+        .read(songwriterProvider)
+        .sections
+        .singleWhere((section) => section.id == verseId)
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     writer.addHarmonyBlock(
       sectionId: verseId,
       laneId: verseLaneId,
@@ -245,17 +242,20 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == verseLaneId)
         .blocks
         .single;
     final saveId = source.saveId!;
 
     writer.addSection(label: 'Chorus', lengthBars: 8);
     final chorusId = container.read(songwriterProvider).sections.last.id;
-    final chorusLaneId = writer.addLane(
-      sectionId: chorusId,
-      kind: SongLaneKind.harmony,
-    );
+    final chorusLaneId = container
+        .read(songwriterProvider)
+        .sections
+        .singleWhere((section) => section.id == chorusId)
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     expect(
       writer.insertWriterBlockFromSave(
         saveId: saveId,
@@ -272,7 +272,7 @@ void main() {
         .sections
         .last
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == chorusLaneId)
         .blocks
         .single;
     writer.setBlockLyric(
@@ -305,13 +305,13 @@ void main() {
     final updatedVerse = sections
         .singleWhere((section) => section.id == verseId)
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == verseLaneId)
         .blocks
         .single;
     final updatedChorus = sections
         .singleWhere((section) => section.id == chorusId)
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == chorusLaneId)
         .blocks
         .single;
     expect(writer.undoCount, undoCount + 1);
@@ -332,7 +332,8 @@ void main() {
                   .saves
                   .singleWhere((save) => save.id == saveId)
                   .snapshot
-              as WriterBlockSnapshot)
+              as HarmonyChordSnapshot)
+          .writerBlock
           .chordSymbol,
       'Dm7',
     );
@@ -425,11 +426,6 @@ void main() {
     final n = container.read(songwriterProvider.notifier);
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
-    n.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-      label: 'Harmony',
-    );
     final laneId = container
         .read(songwriterProvider)
         .sections
@@ -445,7 +441,7 @@ void main() {
         startBar: 0,
         spanBars: 1,
         chordSymbol: 'C',
-        chordQuality: 'maj',
+        chordQuality: '',
         chordRootPc: 0,
         chordNotes: ['C', 'E', 'G'],
       ),

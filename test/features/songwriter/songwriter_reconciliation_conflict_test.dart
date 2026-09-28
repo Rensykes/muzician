@@ -37,10 +37,13 @@ void main() {
       final writer = container.read(songwriterProvider.notifier);
       writer.addSection(label: 'Verse', lengthBars: 4);
       final sectionId = container.read(songwriterProvider).sections.single.id;
-      final laneId = writer.addLane(
-        sectionId: sectionId,
-        kind: SongLaneKind.harmony,
-      );
+      final laneId = container
+          .read(songwriterProvider)
+          .sections
+          .singleWhere((section) => section.id == sectionId)
+          .lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+          .id;
       writer.addHarmonyBlock(
         sectionId: sectionId,
         laneId: laneId,
@@ -68,7 +71,7 @@ void main() {
               .sections
               .single
               .lanes
-              .single
+              .singleWhere((lane) => lane.id == laneId)
               .blocks
               .single
               .saveId!,

@@ -25,9 +25,9 @@ Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESI
 | **Fretboard** | Interactive guitar fretboard with tunings, capo, chord voicing, scale highlighting | [docs/fretboard.md](docs/fretboard.md) |
 | **Piano** | Piano keyboard (49 / 61 / 88 keys) with chord and scale highlighting | [docs/piano.md](docs/piano.md) |
 | **Piano Roll** | Quantized timeline note editor with four tool modes, pinch-zoom, beat snapping, hum-to-MIDI, metronome | [docs/piano_roll.md](docs/piano_roll.md) |
-| **Writer** | Section, chord, lyric, melody, drum, guitar-strum, and audio sketch with playback, linked block saves with validated section placement, shared edits, Make Unique, and project-scoped undo/redo; named Song versions preserve block content, while Writer audio lanes stay in Writer on Song import | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Writer** | Section sketch with instrument-bound Harmony lanes, one composite Save per authored chord, lane-category folders, shared-save choices, explicit chord replacement, playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Song** | Clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
-| **Save System** | Project-scoped saves with Writer-managed section folders, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
+| **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
 
 ## Project Structure
 

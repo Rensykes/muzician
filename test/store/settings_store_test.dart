@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/store/settings_store.dart';
 
 void main() {
@@ -12,5 +13,19 @@ void main() {
 
     await container.read(settingsProvider.notifier).setSaveBrowserGrid(true);
     expect(container.read(settingsProvider).saveBrowserGrid, true);
+  });
+
+  test('setDefaultNewProjectHarmonyInstrument persists the choice', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await container
+        .read(settingsProvider.notifier)
+        .setDefaultNewProjectHarmonyInstrument(HarmonyLaneInstrument.piano);
+
+    expect(
+      container.read(settingsProvider).defaultNewProjectHarmonyInstrument,
+      HarmonyLaneInstrument.piano,
+    );
   });
 }

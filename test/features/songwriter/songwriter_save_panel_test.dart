@@ -10,6 +10,17 @@ import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/features/songwriter/songwriter_save_panel.dart';
 import 'package:muzician/features/_mockup_shell.dart';
 
+const _testStrumPattern = GuitarStrumPattern(
+  id: 'test-strum-pattern',
+  name: 'Down-up pattern',
+  lengthTicks: 16,
+  events: [GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down)],
+);
+const _testStrumSnapshot = WriterBlockSnapshot(
+  laneKind: SongLaneKind.guitarStrum,
+  guitarStrumPattern: _testStrumPattern,
+);
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -66,15 +77,15 @@ void main() {
     expect(find.text('Song versions'), findsOneWidget);
     expect(find.text('Section blocks'), findsOneWidget);
     expect(find.text('Saved song'), findsOneWidget);
-    expect(find.text('Free chord'), findsNothing);
+    expect(find.text('Free strum'), findsNothing);
 
     await tester.tap(find.text('Section blocks'));
     await tester.pumpAndSettle();
-    expect(find.text('Free chord'), findsOneWidget);
+    expect(find.text('Free strum'), findsOneWidget);
     expect(find.text('Free idea'), findsOneWidget);
     expect(find.text('Saved song'), findsNothing);
 
-    await tester.tap(find.text('Free chord'));
+    await tester.tap(find.text('Free strum'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('useWriterSaveButton')));
     await tester.tap(find.byKey(const Key('useWriterSaveButton')));
@@ -209,15 +220,9 @@ void main() {
         .addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.single.id;
     final saveId = saveSystem.saveSnapshot(
-      'Free chord',
+      'Free strum',
       projectId,
-      const WriterBlockSnapshot(
-        laneKind: SongLaneKind.harmony,
-        chordSymbol: 'Am7',
-        chordQuality: 'm7',
-        chordRootPc: 9,
-        chordNotes: ['A', 'C', 'E', 'G'],
-      ),
+      _testStrumSnapshot,
     )!;
 
     await tester.pumpWidget(
@@ -229,7 +234,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Section blocks'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Free chord'));
+    await tester.tap(find.text('Free strum'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('useWriterSaveButton')));
     await tester.tap(find.byKey(const Key('useWriterSaveButton')));
@@ -238,7 +243,7 @@ void main() {
       find.byKey(const Key('writerSaveDestinationSection')),
       findsOneWidget,
     );
-    expect(find.text('New Harmony lane will be created'), findsOneWidget);
+    expect(find.text('New Guitar strum lane will be created'), findsOneWidget);
     await tester.tap(find.byKey(const Key('confirmUseWriterSave')));
     await tester.pumpAndSettle();
 
@@ -246,7 +251,10 @@ void main() {
         .read(songwriterProvider)
         .sections
         .singleWhere((section) => section.id == sectionId);
-    final block = section.lanes.single.blocks.single;
+    final lane = section.lanes.singleWhere(
+      (candidate) => candidate.kind == SongLaneKind.guitarStrum,
+    );
+    final block = lane.blocks.single;
     expect(block.startBar, 0);
     expect(block.saveId, saveId);
     expect(
@@ -256,9 +264,9 @@ void main() {
 
     await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Free chord'));
+    await tester.tap(find.text('Free strum'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Renamed free chord');
+    await tester.enterText(find.byType(TextField), 'Renamed free strum');
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
     expect(
@@ -267,7 +275,41 @@ void main() {
           .saves
           .singleWhere((save) => save.id == saveId)
           .name,
-      'Renamed free chord',
+      'Renamed free strum',
+    );
+  });
+
+  testWidgets('legacy raw Harmony saves cannot be used in Writer', (
+    tester,
+  ) async {
+    final fixture = _writerUseFixture(includeLegacyHarmony: true);
+    addTearDown(fixture.container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: fixture.container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterSavePanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Section blocks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Legacy chord'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('useWriterSaveButton')), findsNothing);
+    final project = fixture.container.read(songwriterProvider);
+    expect(
+      project.sections
+          .expand((section) => section.lanes)
+          .expand((lane) => lane.blocks),
+      isEmpty,
+    );
+    expect(
+      fixture.container
+          .read(saveSystemProvider)
+          .writerLinks
+          .where((link) => link.saveId == 'legacy-harmony-block'),
+      isEmpty,
     );
   });
 
@@ -293,7 +335,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Section blocks'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Free chord'));
+        await tester.tap(find.text('Free strum'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(
           find.byKey(const Key('useWriterSaveButton')),
@@ -363,7 +405,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Verse'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Shared chord'));
+        await tester.tap(find.text('Shared strum'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(
           find.byKey(const Key('useWriterSaveButton')),
@@ -385,7 +427,10 @@ void main() {
         final chorus = writer.sections.singleWhere(
           (section) => section.id == fixture.chorusSectionId,
         );
-        expect(chorus.lanes.single.blocks.single.saveId, fixture.saveId);
+        final strumLane = chorus.lanes.singleWhere(
+          (lane) => lane.id == fixture.chorusStrumLaneId,
+        );
+        expect(strumLane.blocks.single.saveId, fixture.saveId);
 
         final saveState = fixture.container.read(saveSystemProvider);
         final links = saveState.writerLinks
@@ -403,9 +448,9 @@ void main() {
 
         await tester.tap(find.text('Edit'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Shared chord'));
+        await tester.tap(find.text('Shared strum'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Shared chord renamed');
+        await tester.enterText(find.byType(TextField), 'Shared strum renamed');
         await tester.tap(find.text('OK'));
         await tester.pumpAndSettle();
         expect(
@@ -414,7 +459,7 @@ void main() {
               .saves
               .singleWhere((save) => save.id == fixture.saveId)
               .name,
-          'Shared chord renamed',
+          'Shared strum renamed',
         );
         expect(
           fixture.container
@@ -507,7 +552,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Section blocks'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Free chord'));
+        await tester.tap(find.text('Free strum'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(
           find.byKey(const Key('useWriterSaveButton')),
@@ -555,13 +600,13 @@ void main() {
             .read(songwriterProvider)
             .sections
             .singleWhere((section) => section.id == fixture.verseSectionId);
-        final harmonyLanes = verse.lanes
-            .where((lane) => lane.kind == SongLaneKind.harmony)
+        final strumLanes = verse.lanes
+            .where((lane) => lane.kind == SongLaneKind.guitarStrum)
             .toList();
-        expect(harmonyLanes[0].id, fixture.primaryLaneId);
-        expect(harmonyLanes[0].blocks, isEmpty);
-        expect(harmonyLanes[1].id, fixture.overlayLaneId);
-        expect(harmonyLanes[1].blocks.single.saveId, fixture.saveId);
+        expect(strumLanes[0].id, fixture.primaryLaneId);
+        expect(strumLanes[0].blocks, isEmpty);
+        expect(strumLanes[1].id, fixture.overlayLaneId);
+        expect(strumLanes[1].blocks.single.saveId, fixture.saveId);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       }
@@ -571,14 +616,17 @@ void main() {
   );
 }
 
-_WriterUseFixture _writerUseFixture() {
+_WriterUseFixture _writerUseFixture({bool includeLegacyHarmony = false}) {
   const verseSectionId = 'verse';
   const chorusSectionId = 'chorus';
   const primaryLaneId = 'verse-primary';
   const overlayLaneId = 'verse-overlay';
   const saveId = 'free-block';
+  const verseHarmonyLaneId = 'verse-harmony';
+  const chorusHarmonyLaneId = 'chorus-harmony';
   const writerState = SongwriterProjectSnapshot(
     config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+    guitarStrumPatterns: [_testStrumPattern],
     sections: [
       SongSection(
         id: verseSectionId,
@@ -587,16 +635,24 @@ _WriterUseFixture _writerUseFixture() {
         order: 0,
         lanes: [
           SongLane(
-            id: primaryLaneId,
+            id: verseHarmonyLaneId,
             kind: SongLaneKind.harmony,
-            label: 'Verse primary',
+            label: 'Verse harmony',
             order: 0,
           ),
           SongLane(
-            id: overlayLaneId,
-            kind: SongLaneKind.harmony,
-            label: 'Verse overlay',
+            id: primaryLaneId,
+            kind: SongLaneKind.guitarStrum,
+            label: 'Verse primary',
             order: 1,
+            anchorLaneId: verseHarmonyLaneId,
+          ),
+          SongLane(
+            id: overlayLaneId,
+            kind: SongLaneKind.guitarStrum,
+            label: 'Verse overlay',
+            order: 2,
+            anchorLaneId: verseHarmonyLaneId,
           ),
         ],
       ),
@@ -607,10 +663,17 @@ _WriterUseFixture _writerUseFixture() {
         order: 1,
         lanes: [
           SongLane(
-            id: 'chorus-lead',
+            id: chorusHarmonyLaneId,
             kind: SongLaneKind.harmony,
-            label: 'Chorus lead',
+            label: 'Chorus harmony',
             order: 0,
+          ),
+          SongLane(
+            id: 'chorus-lead',
+            kind: SongLaneKind.guitarStrum,
+            label: 'Chorus lead',
+            order: 1,
+            anchorLaneId: chorusHarmonyLaneId,
           ),
         ],
       ),
@@ -619,7 +682,9 @@ _WriterUseFixture _writerUseFixture() {
   final container = ProviderContainer(
     overrides: [
       saveSystemProvider.overrideWith(
-        () => _SeededSaveSystemNotifier(_writerPanelSaveState()),
+        () => _SeededSaveSystemNotifier(
+          _writerPanelSaveState(includeLegacyHarmony: includeLegacyHarmony),
+        ),
       ),
       songwriterProvider.overrideWith(
         () => _SeededSongwriterNotifier(writerState),
@@ -658,16 +723,22 @@ class _WriterUseFixture {
 _SectionReuseFixture _sectionReuseFixture() {
   const verseSectionId = 'verse';
   const chorusSectionId = 'chorus';
-  const saveId = 'shared-writer-chord';
+  const saveId = 'shared-writer-strum';
+  const strumLaneId = 'verse-strum';
+  const chorusStrumLaneId = 'chorus-strum';
+  const writerPattern = GuitarStrumPattern(
+    id: 'shared-strum-pattern',
+    name: 'Down-up groove',
+    lengthTicks: 16,
+    events: [GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down)],
+  );
   const writerSnapshot = WriterBlockSnapshot(
-    laneKind: SongLaneKind.harmony,
-    chordSymbol: 'Am7',
-    chordQuality: 'm7',
-    chordRootPc: 9,
-    chordNotes: ['A', 'C', 'E', 'G'],
+    laneKind: SongLaneKind.guitarStrum,
+    guitarStrumPattern: writerPattern,
   );
   const writerState = SongwriterProjectSnapshot(
     config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+    guitarStrumPatterns: [writerPattern],
     sections: [
       SongSection(
         id: verseSectionId,
@@ -680,17 +751,21 @@ _SectionReuseFixture _sectionReuseFixture() {
             kind: SongLaneKind.harmony,
             label: 'Verse harmony',
             order: 0,
+          ),
+          SongLane(
+            id: strumLaneId,
+            kind: SongLaneKind.guitarStrum,
+            label: 'Verse strum',
+            order: 1,
+            anchorLaneId: 'verse-harmony',
             blocks: [
               SongBlock(
-                id: 'verse-chord',
+                id: 'verse-strum-block',
                 startBar: 0,
                 spanBars: 1,
                 saveId: saveId,
                 embedded: writerSnapshot,
-                chordSymbol: 'Am7',
-                chordQuality: 'm7',
-                chordRootPc: 9,
-                chordNotes: ['A', 'C', 'E', 'G'],
+                patternId: 'shared-strum-pattern',
               ),
             ],
           ),
@@ -707,6 +782,13 @@ _SectionReuseFixture _sectionReuseFixture() {
             kind: SongLaneKind.harmony,
             label: 'Chorus harmony',
             order: 0,
+          ),
+          SongLane(
+            id: chorusStrumLaneId,
+            kind: SongLaneKind.guitarStrum,
+            label: 'Chorus strum',
+            order: 1,
+            anchorLaneId: 'chorus-harmony',
           ),
         ],
       ),
@@ -737,7 +819,7 @@ _SectionReuseFixture _sectionReuseFixture() {
   );
   const save = SaveEntry(
     id: saveId,
-    name: 'Shared chord',
+    name: 'Shared strum',
     folderId: 'verse-folder',
     snapshot: writerSnapshot,
     createdAt: 4,
@@ -754,11 +836,11 @@ _SectionReuseFixture _sectionReuseFixture() {
             saves: [save],
             writerLinks: [
               WriterSaveLink(
-                blockId: 'verse-chord',
+                blockId: 'verse-strum-block',
                 sectionId: verseSectionId,
                 folderId: 'verse-folder',
                 saveId: saveId,
-                laneKind: SongLaneKind.harmony,
+                laneKind: SongLaneKind.guitarStrum,
               ),
             ],
             hydrated: true,
@@ -775,6 +857,7 @@ _SectionReuseFixture _sectionReuseFixture() {
     container: container,
     verseSectionId: verseSectionId,
     chorusSectionId: chorusSectionId,
+    chorusStrumLaneId: chorusStrumLaneId,
     saveId: saveId,
   );
 }
@@ -783,12 +866,14 @@ class _SectionReuseFixture {
   final ProviderContainer container;
   final String verseSectionId;
   final String chorusSectionId;
+  final String chorusStrumLaneId;
   final String saveId;
 
   const _SectionReuseFixture({
     required this.container,
     required this.verseSectionId,
     required this.chorusSectionId,
+    required this.chorusStrumLaneId,
     required this.saveId,
   });
 }
@@ -914,7 +999,7 @@ ProviderContainer _writerPanelContainer() {
   );
 }
 
-SaveSystemState _writerPanelSaveState() {
+SaveSystemState _writerPanelSaveState({bool includeLegacyHarmony = false}) {
   const project = SaveFolder(
     id: 'project',
     name: 'Project',
@@ -935,19 +1020,35 @@ SaveSystemState _writerPanelSaveState() {
   );
   const freeBlock = SaveEntry(
     id: 'free-block',
-    name: 'Free chord',
+    name: 'Free strum',
     folderId: 'project',
-    snapshot: WriterBlockSnapshot(
-      laneKind: SongLaneKind.harmony,
-      chordSymbol: 'Am7',
-    ),
+    snapshot: _testStrumSnapshot,
     createdAt: 3,
     updatedAt: 3,
     order: 1,
   );
-  return const SaveSystemState(
-    folders: [project],
-    saves: [version, freeBlock],
+  const legacyHarmonyBlock = SaveEntry(
+    id: 'legacy-harmony-block',
+    name: 'Legacy chord',
+    folderId: 'project',
+    snapshot: WriterBlockSnapshot(
+      laneKind: SongLaneKind.harmony,
+      chordSymbol: 'C',
+      chordQuality: '',
+      chordRootPc: 0,
+      chordNotes: ['C', 'E', 'G'],
+    ),
+    createdAt: 4,
+    updatedAt: 4,
+    order: 2,
+  );
+  return SaveSystemState(
+    folders: const [project],
+    saves: [
+      version,
+      if (!includeLegacyHarmony) freeBlock,
+      if (includeLegacyHarmony) legacyHarmonyBlock,
+    ],
     hydrated: true,
     selectedProjectId: 'project',
   );

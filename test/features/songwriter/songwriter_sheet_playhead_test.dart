@@ -15,31 +15,34 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('active bar cell shows the playhead highlight key',
-      (tester) async {
+  testWidgets('active bar cell shows the playhead highlight key', (
+    tester,
+  ) async {
     String? sectionId;
-    final container = ProviderContainer(overrides: [
-      songwriterActivePositionProvider.overrideWith(
-        (ref) => SongwriterActivePosition(
-          sectionId: sectionId!,
-          instanceIndex: 0,
-          localBar: 0,
+    final container = ProviderContainer(
+      overrides: [
+        songwriterActivePositionProvider.overrideWith(
+          (ref) => SongwriterActivePosition(
+            sectionId: sectionId!,
+            instanceIndex: 0,
+            localBar: 0,
+          ),
         ),
-      ),
-    ]);
+      ],
+    );
     addTearDown(container.dispose);
     final n = container.read(songwriterProvider.notifier);
 
     n.addSection(label: 'Verse', lengthBars: 4);
     final section = container.read(songwriterProvider).sections.first;
     sectionId = section.id;
-    n.addLane(
-      sectionId: section.id,
-      kind: SongLaneKind.harmony,
-      label: 'Harmony',
-    );
-    final laneId =
-        container.read(songwriterProvider).sections.first.lanes.first.id;
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     n.addHarmonyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -56,22 +59,14 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          home: Scaffold(body: SongwriterScreenSheet()),
-        ),
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(
-      find.byKey(Key('activeBarCell_${section.id}_0_0')),
-      findsOneWidget,
-    );
+    expect(find.byKey(Key('activeBarCell_${section.id}_0_0')), findsOneWidget);
     // Bar 1 (and instance) not active.
-    expect(
-      find.byKey(Key('activeBarCell_${section.id}_0_1')),
-      findsNothing,
-    );
+    expect(find.byKey(Key('activeBarCell_${section.id}_0_1')), findsNothing);
   });
 
   testWidgets('no highlight when transport idle', (tester) async {
@@ -84,16 +79,11 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          home: Scaffold(body: SongwriterScreenSheet()),
-        ),
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(
-      find.byKey(Key('activeBarCell_${section.id}_0_0')),
-      findsNothing,
-    );
+    expect(find.byKey(Key('activeBarCell_${section.id}_0_0')), findsNothing);
   });
 }

@@ -2,10 +2,12 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/harmony_lane_instrument.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
+import '../store/settings_store.dart';
 import '../theme/muzician_theme.dart';
 import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
@@ -98,10 +100,23 @@ class ProjectPickerSheet extends ConsumerWidget {
                 accent: MuzicianTheme.sky,
                 onTap: () async {
                   final name = await _promptName(context, title: 'New project');
-                  if (name == null || name.isEmpty) return;
+                  if (name == null || name.isEmpty || !context.mounted) return;
+                  var instrument = ref
+                      .read(settingsProvider)
+                      .defaultNewProjectHarmonyInstrument;
+                  if (instrument == null) {
+                    instrument = await _promptHarmonyInstrument(context);
+                    if (instrument == null || !context.mounted) return;
+                    await ref
+                        .read(settingsProvider.notifier)
+                        .setDefaultNewProjectHarmonyInstrument(instrument);
+                  }
                   final id = ref
                       .read(saveSystemProvider.notifier)
-                      .createProject(name, const ProjectConfig());
+                      .createProject(
+                        name,
+                        ProjectConfig(defaultHarmonyInstrument: instrument),
+                      );
                   if (id != null) {
                     ref.read(saveSystemProvider.notifier).selectProject(id);
                   }
@@ -156,6 +171,53 @@ class ProjectPickerSheet extends ConsumerWidget {
     );
   }
 }
+
+Future<HarmonyLaneInstrument?> _promptHarmonyInstrument(
+  BuildContext context,
+) => showModalBottomSheet<HarmonyLaneInstrument>(
+  context: context,
+  backgroundColor: const Color(0xFF141826),
+  builder: (context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Choose your first instrument',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'New sections in this project will start with this Harmony instrument.',
+            style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          for (final instrument in HarmonyLaneInstrument.values)
+            ListTile(
+              leading: Icon(
+                instrument == HarmonyLaneInstrument.fretboard
+                    ? Icons.music_note
+                    : Icons.piano,
+                color: MuzicianTheme.sky,
+              ),
+              title: Text(
+                instrument == HarmonyLaneInstrument.fretboard
+                    ? 'Fretboard'
+                    : 'Piano',
+              ),
+              onTap: () => Navigator.of(context).pop(instrument),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    ),
+  ),
+);
 
 class _DragHandle extends StatelessWidget {
   @override

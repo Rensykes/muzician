@@ -179,14 +179,13 @@ void main() {
   });
 
   group('save lanes follow the primary harmony lane mix', () {
-    SongwriterProjectSnapshot project({
-      required List<SongLane> lanes,
-    }) => SongwriterProjectSnapshot(
-      config: cfg,
-      sections: [
-        SongSection(id: 's1', lengthBars: 1, order: 0, lanes: lanes),
-      ],
-    );
+    SongwriterProjectSnapshot project({required List<SongLane> lanes}) =>
+        SongwriterProjectSnapshot(
+          config: cfg,
+          sections: [
+            SongSection(id: 's1', lengthBars: 1, order: 0, lanes: lanes),
+          ],
+        );
 
     // A save block resolvable without the save system: embedded piano snapshot.
     SongLane saveLane({
@@ -194,31 +193,30 @@ void main() {
       double pan = 0.0,
       bool muted = false,
       String? anchorLaneId,
-    }) =>
-        SongLane(
-          id: 'lsave',
-          kind: SongLaneKind.save,
-          order: 2,
-          volume: volume,
-          pan: pan,
-          muted: muted,
-          anchorLaneId: anchorLaneId,
-          blocks: [
-            SongBlock(
-              id: 'bs',
-              startBar: 0,
-              spanBars: 1,
-              embedded: PianoSnapshot(
-                currentRange: PianoRangeName.key61,
-                selectedKeys: const [
-                  PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
-                ],
-                selectedNotes: const ['C'],
-                viewMode: PianoViewMode.exact,
-              ),
-            ),
-          ],
-        );
+    }) => SongLane(
+      id: 'lsave',
+      kind: SongLaneKind.save,
+      order: 2,
+      volume: volume,
+      pan: pan,
+      muted: muted,
+      anchorLaneId: anchorLaneId,
+      blocks: [
+        SongBlock(
+          id: 'bs',
+          startBar: 0,
+          spanBars: 1,
+          embedded: PianoSnapshot(
+            currentRange: PianoRangeName.key61,
+            selectedKeys: const [
+              PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+            ],
+            selectedNotes: const ['C'],
+            viewMode: PianoViewMode.exact,
+          ),
+        ),
+      ],
+    );
 
     test('save group uses the harmony lane volume/pan, not its own', () {
       final events = flattenPlaybackEvents(
@@ -289,7 +287,7 @@ void main() {
       expect(g.pan, 0.5);
     });
 
-    test('save lane with a dangling anchor falls back to the primary lane', () {
+    test('save lane with a dangling anchor keeps its own mix', () {
       final events = flattenPlaybackEvents(
         project(
           lanes: [
@@ -304,7 +302,8 @@ void main() {
         ),
         const [],
       );
-      expect(events.single.noteGroups.single.volume, 0.3);
+      expect(events.single.noteGroups.single.volume, 1.0);
+      expect(events.single.noteGroups.single.pan, 0.0);
     });
 
     test('without a harmony lane the save lane keeps its own mix', () {
@@ -337,7 +336,12 @@ void main() {
           order: 1,
           muted: true,
           blocks: [
-            const SongBlock(id: 'b2', startBar: 0, spanBars: 1, patternId: 'p1'),
+            const SongBlock(
+              id: 'b2',
+              startBar: 0,
+              spanBars: 1,
+              patternId: 'p1',
+            ),
           ],
         ),
       ],

@@ -22,11 +22,13 @@ void main() {
     final n = container.read(songwriterProvider.notifier);
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.single.id;
-    final h = n.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-      label: 'Harmony',
-    );
+    final h = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+        .id;
     final d = n.addLane(
       sectionId: sectionId,
       kind: SongLaneKind.drum,
@@ -66,11 +68,13 @@ void main() {
   ) async {
     final (container, sectionId, _) = await pumpMixer(tester);
     // pumpMixer's section already has a harmony lane; add a save lane.
-    container.read(songwriterProvider.notifier).addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.save,
-      label: 'Save lane',
-    );
+    container
+        .read(songwriterProvider.notifier)
+        .addLane(
+          sectionId: sectionId,
+          kind: SongLaneKind.save,
+          label: 'Save lane',
+        );
     await tester.pumpAndSettle();
     expect(find.text('Save lane'), findsNothing);
     expect(find.text('Harmony'), findsOneWidget);

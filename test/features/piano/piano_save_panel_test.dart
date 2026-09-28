@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/piano/piano_save_panel.dart';
+import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/save_system.dart';
+import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/piano_store.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/songwriter_sessions_store.dart';
+import 'package:muzician/schema/rules/songwriter_rules.dart'
+    show makeHarmonyBlock;
 import 'package:muzician/models/project_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -85,6 +90,140 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Harmony piano saves are filtered, selectable, and load native state',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final saveSystem = container.read(saveSystemProvider.notifier);
+      await saveSystem.hydrate();
+      final projectId = saveSystem.createProject(
+        'Piano project',
+        const ProjectConfig(),
+      )!;
+      saveSystem.selectProject(projectId);
+
+      saveSystem.saveSnapshot(
+        'Piano Harmony',
+        projectId,
+        _pianoHarmonySnapshot(
+          currentRange: PianoRangeName.key88,
+          selectedNotes: const ['C', 'E', 'G'],
+          pendingChord: const PendingChord(
+            root: 'C',
+            quality: 'major',
+            symbol: 'C',
+          ),
+          pendingScale: const PendingScale(root: 'D', scaleName: 'dorian'),
+        ),
+      );
+      saveSystem.saveSnapshot(
+        'Fretboard Harmony',
+        projectId,
+        _fretboardHarmonySnapshot(),
+      );
+
+      await tester.pumpWidget(_wrap(container));
+      await tester.pumpAndSettle();
+      expect(find.text('Piano Harmony'), findsOneWidget);
+      expect(find.text('Fretboard Harmony'), findsNothing);
+
+      await tester.tap(find.text('Piano Harmony'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('useWriterSaveButton')), findsOneWidget);
+      await tester.tap(find.text('Load'));
+      await tester.pumpAndSettle();
+
+      expect(container.read(pianoProvider).currentRange, PianoRangeName.key88);
+      expect(container.read(pianoProvider).selectedNotes, ['C', 'E', 'G']);
+      expect(container.read(pianoPendingChordProvider), (
+        root: 'C',
+        quality: 'major',
+      ));
+      expect(container.read(pianoPendingScaleProvider), (
+        root: 'D',
+        scaleName: 'dorian',
+      ));
+      expect(container.read(pianoActiveScaleProvider), (
+        root: 'D',
+        scaleName: 'dorian',
+      ));
+    },
+  );
+
+  testWidgets('shared Harmony piano edits can create a standalone Save', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final saveSystem = container.read(saveSystemProvider.notifier);
+    await saveSystem.hydrate();
+    final projectId = saveSystem.createProject(
+      'Piano project',
+      const ProjectConfig(
+        defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+      ),
+    )!;
+    saveSystem.selectProject(projectId);
+    final saveId = _addHarmonyChordSave(container, addSecondPlacement: true);
+    container.read(pianoProvider.notifier).loadExactMidis([60, 64, 67]);
+    container.read(pianoProvider.notifier).setRange(PianoRangeName.key88);
+
+    await tester.pumpWidget(_wrap(container, linkedEditSaveId: saveId));
+    await tester.pumpAndSettle();
+    expect(
+      container
+          .read(saveSystemProvider)
+          .writerLinks
+          .where((link) => link.saveId == saveId),
+      hasLength(2),
+    );
+    expect(find.byKey(const Key('updateLinkedSaveButton')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('updateLinkedSaveButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('This chord is used in multiple places'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('createStandaloneHarmonySave')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('standaloneHarmonySaveNameField')),
+      'C independent',
+    );
+    await tester.tap(find.byKey(const Key('confirmStandaloneHarmonySave')));
+    await tester.pumpAndSettle();
+
+    final saveState = container.read(saveSystemProvider);
+    final canonical = saveState.saves.singleWhere((save) => save.id == saveId);
+    expect(canonical.snapshot, isA<HarmonyChordSnapshot>());
+    final updated = canonical.snapshot as HarmonyChordSnapshot;
+    expect(updated.instrumentState, isA<PianoSnapshot>());
+    expect(
+      (updated.instrumentState as PianoSnapshot).currentRange,
+      PianoRangeName.key61,
+    );
+    expect(updated.writerBlock.laneKind, SongLaneKind.harmony);
+    final standalone = saveState.saves.singleWhere(
+      (save) => save.name == 'C independent',
+    );
+    expect(standalone.origin, SaveOrigin.manual);
+    expect(standalone.folderId, projectId);
+    expect(standalone.snapshot, isA<HarmonyChordSnapshot>());
+    final standaloneHarmony = standalone.snapshot as HarmonyChordSnapshot;
+    expect(standaloneHarmony.writerBlock.laneKind, SongLaneKind.harmony);
+    expect(standaloneHarmony.instrumentState, isA<PianoSnapshot>());
+    expect(
+      (standaloneHarmony.instrumentState as PianoSnapshot).currentRange,
+      PianoRangeName.key88,
+    );
+    expect(
+      saveState.writerLinks.where((link) => link.saveId == saveId),
+      hasLength(2),
+    );
+    expect(saveState.saves, hasLength(2));
+    await container.read(songwriterSessionsProvider.notifier).flush();
+  });
+
   testWidgets('Dump root ideas do not offer Use in Writer', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -157,7 +296,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single;
+        .singleWhere((candidate) => candidate.kind == SongLaneKind.save);
     final block = lane.blocks.single;
 
     await tester.pumpWidget(_wrap(container, linkedEditSaveId: saveId));
@@ -206,17 +345,16 @@ void main() {
     await tester.tap(find.byKey(const Key('useWriterSaveButton')));
     await tester.pumpAndSettle();
     final sectionId = container.read(songwriterProvider).sections.single.id;
+    await tester.tap(find.byKey(Key('writerHandoffNewSaveLane_$sectionId')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('confirmWriterImportName')));
-    await tester.pumpAndSettle();
-
     final block = container
         .read(songwriterProvider)
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
         .blocks
         .single;
     expect(block.saveId, saveId);
@@ -244,7 +382,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
           .blocks
           .single
           .saveId,
@@ -304,9 +442,9 @@ void main() {
       await tester.tap(find.byKey(const Key('useWriterSaveButton')));
       await tester.pumpAndSettle();
       final sectionId = container.read(songwriterProvider).sections.single.id;
-      await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
+      await tester.tap(find.byKey(Key('writerHandoffNewSaveLane_$sectionId')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('confirmWriterImportName')));
+      await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
       await tester.pumpAndSettle();
 
       final block = container
@@ -314,7 +452,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
           .blocks
           .single;
       expect(block.saveId, saveId);
@@ -340,4 +478,87 @@ void main() {
       await tester.pumpAndSettle();
     }
   });
+}
+
+HarmonyChordSnapshot _pianoHarmonySnapshot({
+  PianoRangeName currentRange = PianoRangeName.key61,
+  List<String> selectedNotes = const [],
+  PendingChord? pendingChord,
+  PendingScale? pendingScale,
+}) => HarmonyChordSnapshot(
+  harmonyInstrument: HarmonyLaneInstrument.piano,
+  writerBlock: WriterBlockSnapshot(
+    laneKind: SongLaneKind.harmony,
+    chordNotes: selectedNotes,
+  ),
+  instrumentState: PianoSnapshot(
+    currentRange: currentRange,
+    selectedKeys: const [],
+    selectedNotes: selectedNotes,
+    viewMode: PianoViewMode.exact,
+    pendingChord: pendingChord,
+    pendingScale: pendingScale,
+  ),
+);
+
+HarmonyChordSnapshot _fretboardHarmonySnapshot() => HarmonyChordSnapshot(
+  harmonyInstrument: HarmonyLaneInstrument.fretboard,
+  writerBlock: const WriterBlockSnapshot(laneKind: SongLaneKind.harmony),
+  instrumentState: FretboardSnapshot(
+    tuning: TuningName.standard,
+    numFrets: 12,
+    capo: 0,
+    selectedCells: const [],
+    selectedNotes: const [],
+    viewMode: FretboardViewMode.exact,
+  ),
+);
+
+String _addHarmonyChordSave(
+  ProviderContainer container, {
+  bool addSecondPlacement = false,
+}) {
+  final writer = container.read(songwriterProvider.notifier);
+  writer.addSection(label: 'Verse', lengthBars: 4);
+  final section = container.read(songwriterProvider).sections.single;
+  final lane = section.lanes.singleWhere(
+    (candidate) => candidate.kind == SongLaneKind.harmony,
+  );
+  final result = writer.addHarmonyChord(
+    sectionId: section.id,
+    laneId: lane.id,
+    saveName: 'C major',
+    block: makeHarmonyBlock(
+      startBar: 0,
+      spanBars: 1,
+      chordSymbol: 'C',
+      chordQuality: '',
+      chordRootPc: 0,
+      chordNotes: const ['C', 'E', 'G'],
+    ),
+  );
+  if (!result.success || result.blockId == null) {
+    throw StateError(result.errorMessage ?? 'Could not add the test chord.');
+  }
+  final block = container
+      .read(songwriterProvider)
+      .sections
+      .single
+      .lanes
+      .singleWhere((candidate) => candidate.id == lane.id)
+      .blocks
+      .singleWhere((candidate) => candidate.id == result.blockId);
+  final saveId = block.saveId;
+  if (saveId == null) throw StateError('The test chord has no canonical Save.');
+  if (addSecondPlacement &&
+      !writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: section.id,
+        laneKind: SongLaneKind.harmony,
+        startBar: 1,
+        laneId: lane.id,
+      )) {
+    throw StateError('Could not add the second test placement.');
+  }
+  return saveId;
 }

@@ -6,6 +6,7 @@ import '../schema/rules/mono_pitch_rules.dart';
 import '../schema/rules/piano_roll_rules.dart' as pr_rules;
 import '../utils/note_utils.dart';
 import 'fretboard.dart';
+import 'harmony_lane_instrument.dart';
 import 'piano.dart';
 import 'project_config.dart';
 import 'song_project.dart';
@@ -66,6 +67,9 @@ abstract class InstrumentSnapshot {
   static InstrumentSnapshot fromJson(Map<String, dynamic> json) {
     final type = json['type'] as String?;
     final instrument = json['instrument'] as String? ?? 'fretboard';
+    if (type == 'harmony_chord') {
+      return HarmonyChordSnapshot.fromJson(json);
+    }
     if (type == 'songwriter' || instrument == 'songwriter') {
       return SongwriterProjectSnapshot.fromJson(json);
     }
@@ -85,6 +89,102 @@ abstract class InstrumentSnapshot {
       return DrumLoopSnapshot.fromJson(json);
     }
     return FretboardSnapshot.fromJson(json);
+  }
+}
+
+/// A Writer harmony chord and its native Piano or Fretboard realization,
+/// stored together as one reusable save.
+class HarmonyChordSnapshot extends InstrumentSnapshot {
+  final HarmonyLaneInstrument harmonyInstrument;
+  final WriterBlockSnapshot writerBlock;
+  final InstrumentSnapshot instrumentState;
+
+  HarmonyChordSnapshot({
+    required this.harmonyInstrument,
+    required this.writerBlock,
+    required this.instrumentState,
+  }) {
+    _validateContents();
+  }
+
+  @override
+  String get instrument => harmonyInstrument.name;
+
+  @override
+  List<String> get selectedNotes => instrumentState.selectedNotes;
+
+  @override
+  PendingChord? get pendingChord => instrumentState.pendingChord;
+
+  @override
+  PendingScale? get pendingScale => instrumentState.pendingScale;
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'harmony_chord',
+    'instrument': harmonyInstrument.name,
+    'harmonyInstrument': harmonyInstrument.name,
+    'writerBlock': writerBlock.toJson(),
+    'instrumentState': instrumentState.toJson(),
+  };
+
+  factory HarmonyChordSnapshot.fromJson(Map<String, dynamic> json) {
+    final rawHarmonyInstrument = json['harmonyInstrument'] as String?;
+    final rawInstrument = json['instrument'] as String?;
+    if (rawHarmonyInstrument != null &&
+        rawInstrument != null &&
+        rawHarmonyInstrument != rawInstrument) {
+      throw const FormatException(
+        'Harmony chord snapshot has conflicting instrument identities.',
+      );
+    }
+    final harmonyInstrument = HarmonyLaneInstrument.fromJson(
+      rawHarmonyInstrument ?? rawInstrument,
+    );
+    if (harmonyInstrument == null) {
+      throw const FormatException(
+        'Harmony chord snapshot has an unknown harmony instrument.',
+      );
+    }
+    final rawWriterBlock = json['writerBlock'];
+    if (rawWriterBlock is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Harmony chord snapshot must contain a Writer block.',
+      );
+    }
+    final rawInstrumentState = json['instrumentState'];
+    if (rawInstrumentState is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Harmony chord snapshot must contain a native instrument state.',
+      );
+    }
+    return HarmonyChordSnapshot(
+      harmonyInstrument: harmonyInstrument,
+      writerBlock: WriterBlockSnapshot.fromJson(rawWriterBlock),
+      instrumentState: InstrumentSnapshot.fromJson(rawInstrumentState),
+    );
+  }
+
+  void _validateContents() {
+    final matchesInstrument = switch (harmonyInstrument) {
+      HarmonyLaneInstrument.fretboard => instrumentState is FretboardSnapshot,
+      HarmonyLaneInstrument.piano => instrumentState is PianoSnapshot,
+    };
+    if (!matchesInstrument) {
+      throw ArgumentError.value(
+        instrumentState,
+        'instrumentState',
+        'Must match the selected Harmony Lane instrument '
+            '(${harmonyInstrument.name}).',
+      );
+    }
+    if (writerBlock.laneKind != SongLaneKind.harmony) {
+      throw ArgumentError.value(
+        writerBlock.laneKind,
+        'writerBlock.laneKind',
+        'Harmony chord snapshots require a Harmony Writer block.',
+      );
+    }
   }
 }
 
@@ -522,6 +622,9 @@ class SaveFolder {
   final SaveFolderKind kind;
   final ProjectConfig? projectConfig;
 
+  /// Writer lane category represented by this folder, when it is a category.
+  final SongLaneKind? writerLaneKind;
+
   /// The Writer section whose managed folder this represents, if any.
   final String? writerSectionId;
 
@@ -534,6 +637,7 @@ class SaveFolder {
     this.progressionMeta,
     this.kind = SaveFolderKind.normal,
     this.projectConfig,
+    this.writerLaneKind,
     this.writerSectionId,
   });
 
@@ -542,7 +646,9 @@ class SaveFolder {
     int? order,
     SaveFolderKind? kind,
     ProjectConfig? projectConfig,
+    SongLaneKind? writerLaneKind,
     bool clearProjectConfig = false,
+    bool clearWriterLaneKind = false,
     String? writerSectionId,
     bool clearWriterSectionId = false,
   }) => SaveFolder(
@@ -556,6 +662,9 @@ class SaveFolder {
     projectConfig: clearProjectConfig
         ? null
         : (projectConfig ?? this.projectConfig),
+    writerLaneKind: clearWriterLaneKind
+        ? null
+        : (writerLaneKind ?? this.writerLaneKind),
     writerSectionId: clearWriterSectionId
         ? null
         : (writerSectionId ?? this.writerSectionId),
@@ -570,6 +679,7 @@ class SaveFolder {
     'progressionMeta': progressionMeta?.toJson(),
     'kind': kind.toJson(),
     'projectConfig': projectConfig?.toJson(),
+    'writerLaneKind': writerLaneKind?.name,
     'writerSectionId': writerSectionId,
   };
 
@@ -588,6 +698,7 @@ class SaveFolder {
     projectConfig: json['projectConfig'] != null
         ? ProjectConfig.fromJson(json['projectConfig'] as Map<String, dynamic>)
         : null,
+    writerLaneKind: _writerLaneKindFromName(json['writerLaneKind'] as String?),
     writerSectionId: json['writerSectionId'] as String?,
   );
 }
@@ -806,6 +917,7 @@ class AppSettings {
 
   /// Last content workspace; Settings is deliberately not persisted here.
   final String? lastContentWorkspace;
+  final HarmonyLaneInstrument? defaultNewProjectHarmonyInstrument;
 
   const AppSettings({
     this.suppressOutOfKeyAlert = false,
@@ -818,6 +930,7 @@ class AppSettings {
     this.recordMonitorMetronome = false,
     this.recordCountIn = false,
     this.lastContentWorkspace,
+    this.defaultNewProjectHarmonyInstrument,
   });
 
   AppSettings copyWith({
@@ -831,6 +944,7 @@ class AppSettings {
     bool? recordMonitorMetronome,
     bool? recordCountIn,
     String? Function()? lastContentWorkspace,
+    HarmonyLaneInstrument? Function()? defaultNewProjectHarmonyInstrument,
   }) => AppSettings(
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
@@ -845,6 +959,10 @@ class AppSettings {
     lastContentWorkspace: lastContentWorkspace != null
         ? lastContentWorkspace()
         : this.lastContentWorkspace,
+    defaultNewProjectHarmonyInstrument:
+        defaultNewProjectHarmonyInstrument != null
+        ? defaultNewProjectHarmonyInstrument()
+        : this.defaultNewProjectHarmonyInstrument,
   );
 
   Map<String, dynamic> toJson() => {
@@ -858,6 +976,8 @@ class AppSettings {
     'recordMonitorMetronome': recordMonitorMetronome,
     'recordCountIn': recordCountIn,
     'lastContentWorkspace': lastContentWorkspace,
+    'defaultNewProjectHarmonyInstrument':
+        defaultNewProjectHarmonyInstrument?.name,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -871,7 +991,17 @@ class AppSettings {
     recordMonitorMetronome: json['recordMonitorMetronome'] as bool? ?? false,
     recordCountIn: json['recordCountIn'] as bool? ?? false,
     lastContentWorkspace: json['lastContentWorkspace'] as String?,
+    defaultNewProjectHarmonyInstrument: HarmonyLaneInstrument.fromJson(
+      json['defaultNewProjectHarmonyInstrument'] as String?,
+    ),
   );
+}
+
+SongLaneKind? _writerLaneKindFromName(String? raw) {
+  for (final value in SongLaneKind.values) {
+    if (value.name == raw) return value;
+  }
+  return null;
 }
 
 HumSensitivity _humSensitivityFromName(String? raw) {

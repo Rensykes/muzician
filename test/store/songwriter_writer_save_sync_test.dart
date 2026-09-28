@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
@@ -10,6 +12,7 @@ import 'package:muzician/schema/rules/save_system_rules.dart'
     show deserialiseState, saveSystemStorageKey, serialiseSaveSystemState;
 import 'package:muzician/schema/rules/songwriter_audio_rules.dart'
     show songwriterSchedulableAudioClips;
+import 'package:muzician/schema/rules/fretboard_rules.dart' show tunings;
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/app_bootstrap.dart' show hydrateStores;
 import 'package:muzician/store/songwriter_sessions_store.dart';
@@ -24,6 +27,8 @@ import 'package:muzician/store/writer_save_sync_store.dart'
         writerSaveSyncProvider,
         writerSaveSyncStorageProvider;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:muzician/utils/note_utils.dart'
+    show chromaticNotes, noteToPC, toSharp;
 
 class _InterruptedNewStorage implements WriterSaveSyncStorage {
   final values = <String, String>{};
@@ -47,6 +52,77 @@ class _InterruptedNewStorage implements WriterSaveSyncStorage {
     values.remove(key);
     return true;
   }
+}
+
+HarmonyChordSnapshot chord(
+  String symbol,
+  int rootPc, {
+  String quality = '',
+  List<String>? notes,
+  List<String> defaultLyrics = const [],
+}) {
+  final chordNotes =
+      notes ??
+      switch ((symbol, quality)) {
+        ('C', '') => const ['C', 'E', 'G'],
+        ('D', '') => const ['D', 'F#', 'A'],
+        ('Am7', 'm7') => const ['A', 'C', 'E', 'G'],
+        ('Dm7', 'm7') => const ['D', 'F', 'A', 'C'],
+        _ => throw ArgumentError('Unsupported test chord: $symbol$quality'),
+      };
+  final writerBlock = WriterBlockSnapshot(
+    laneKind: SongLaneKind.harmony,
+    chordSymbol: symbol,
+    chordQuality: quality,
+    chordRootPc: rootPc,
+    chordNotes: chordNotes,
+    defaultLyrics: defaultLyrics,
+  );
+  final pitchClasses = <int>{
+    for (final note in chordNotes) noteToPC[toSharp(note)]!,
+  };
+  final usedStrings = <int>{};
+  final selectedCells = <FretCoordinate>[];
+  for (final pitchClass in pitchClasses) {
+    final match = <(int, int)>[];
+    for (var stringIndex = 0; stringIndex < 6; stringIndex++) {
+      if (usedStrings.contains(stringIndex)) continue;
+      final openMidi =
+          tunings[TuningName.standard]!.strings[stringIndex].midiNote;
+      for (var fret = 0; fret <= 12; fret++) {
+        if (((openMidi + fret) % 12) == pitchClass) {
+          match.add((stringIndex, fret));
+          break;
+        }
+      }
+    }
+    if (match.isEmpty) throw StateError('No test fretboard realization.');
+    final (stringIndex, fret) = match.first;
+    usedStrings.add(stringIndex);
+    final note = chordNotes.firstWhere(
+      (candidate) => noteToPC[toSharp(candidate)] == pitchClass,
+    );
+    selectedCells.add(
+      FretCoordinate(stringIndex: stringIndex, fret: fret, noteName: note),
+    );
+  }
+  return HarmonyChordSnapshot(
+    harmonyInstrument: HarmonyLaneInstrument.fretboard,
+    writerBlock: writerBlock,
+    instrumentState: FretboardSnapshot(
+      tuning: TuningName.standard,
+      numFrets: 12,
+      capo: 0,
+      selectedCells: selectedCells,
+      selectedNotes: chordNotes,
+      viewMode: FretboardViewMode.exact,
+      pendingChord: PendingChord(
+        root: chromaticNotes[rootPc % 12],
+        quality: quality,
+        symbol: symbol,
+      ),
+    ),
+  );
 }
 
 void main() {
@@ -96,21 +172,23 @@ void main() {
         const canonicalSaveId = 'conflict-canonical-save';
         final canonicalRootPc = scenario.canonical == 'Am7' ? 9 : 2;
         final fallbackRootPc = scenario.fallback == 'Am7' ? 9 : 2;
-        final canonical = WriterBlockSnapshot(
-          laneKind: SongLaneKind.harmony,
-          chordSymbol: scenario.canonical,
-          chordQuality: 'm7',
-          chordRootPc: canonicalRootPc,
-          chordNotes: [scenario.canonical, 'E', 'G'],
-          defaultLyrics: ['canonical seed'],
+        final canonical = chord(
+          scenario.canonical,
+          canonicalRootPc,
+          quality: 'm7',
+          notes: scenario.canonical == 'Am7'
+              ? const ['A', 'C', 'E', 'G']
+              : const ['D', 'F', 'A', 'C'],
+          defaultLyrics: const ['canonical seed'],
         );
-        final fallback = WriterBlockSnapshot(
-          laneKind: SongLaneKind.harmony,
-          chordSymbol: scenario.fallback,
-          chordQuality: 'm7',
-          chordRootPc: fallbackRootPc,
-          chordNotes: [scenario.fallback, 'E', 'G'],
-          defaultLyrics: ['fallback seed'],
+        final fallback = chord(
+          scenario.fallback,
+          fallbackRootPc,
+          quality: 'm7',
+          notes: scenario.fallback == 'Am7'
+              ? const ['A', 'C', 'E', 'G']
+              : const ['D', 'F', 'A', 'C'],
+          defaultLyrics: const ['fallback seed'],
         );
         final draft = SongwriterProjectSnapshot(
           config: const SongwriterConfig(
@@ -139,7 +217,9 @@ void main() {
                       chordSymbol: scenario.fallback,
                       chordQuality: 'm7',
                       chordRootPc: fallbackRootPc,
-                      chordNotes: [scenario.fallback, 'E', 'G'],
+                      chordNotes: scenario.fallback == 'Am7'
+                          ? const ['A', 'C', 'E', 'G']
+                          : const ['D', 'F', 'A', 'C'],
                       lyrics: scenario.hasEmbeddedFallback
                           ? const []
                           : const ['local placement lyric'],
@@ -224,8 +304,6 @@ void main() {
             expect(recoveredBlock.chordSymbol, scenario.fallback);
             expect(recoveredBlock.embedded?.toJson(), fallback.toJson());
             expect(originalSave.snapshot.toJson(), canonical.toJson());
-            expect(originalSave.folderId, projectId);
-            expect(recoveredSave.folderId, sectionFolderId);
             expect(recoveredSave.snapshot.toJson(), fallback.toJson());
             expect(recoveredSave.recoveredFromSaveId, canonicalSaveId);
             expect(firstSaveState.writerLinks, hasLength(1));
@@ -323,14 +401,6 @@ void main() {
     },
   );
 
-  WriterBlockSnapshot chord(String symbol, int rootPc) => WriterBlockSnapshot(
-    laneKind: SongLaneKind.harmony,
-    chordSymbol: symbol,
-    chordQuality: '',
-    chordRootPc: rootPc,
-    chordNotes: [symbol, 'E', 'G'],
-  );
-
   test('every Writer block is linked into its section folder', () async {
     final (container, projectId, writer) = await makeProject();
     addTearDown(container.dispose);
@@ -360,7 +430,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == laneId)
         .blocks
         .single;
     final link = saveState.writerLinks.single;
@@ -373,7 +443,10 @@ void main() {
     expect(folder.writerSectionId, section.id);
     expect(save.folderId, folder.id);
     expect(save.origin, SaveOrigin.writer);
-    expect((save.snapshot as WriterBlockSnapshot).chordSymbol, 'C');
+    expect(
+      (save.snapshot as HarmonyChordSnapshot).writerBlock.chordSymbol,
+      'C',
+    );
     expect(save.folderId, isNot(projectId));
   });
 
@@ -457,11 +530,13 @@ void main() {
       sectionId: sectionId,
       laneId: harmonyLane,
       block: const SongBlock(
-        id: 'silent-block',
+        id: 'harmony-block',
         startBar: 0,
         spanBars: 1,
-        isSilent: true,
-        lyrics: ['line'],
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
+        chordNotes: ['C', 'E', 'G'],
       ),
     );
 
@@ -557,6 +632,9 @@ void main() {
           .snapshot;
       if (link.laneKind == SongLaneKind.save) {
         expect(snapshot, isA<PianoRollSnapshot>());
+      } else if (link.laneKind == SongLaneKind.harmony &&
+          (snapshot is HarmonyChordSnapshot)) {
+        expect(snapshot.writerBlock.laneKind, SongLaneKind.harmony);
       } else {
         expect(snapshot, isA<WriterBlockSnapshot>());
         expect((snapshot as WriterBlockSnapshot).laneKind, link.laneKind);
@@ -587,7 +665,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
         .blocks
         .single;
     expect(block.saveId, saveId);
@@ -612,14 +690,7 @@ void main() {
           .saveSnapshot(
             'C idea',
             projectId,
-            WriterBlockSnapshot(
-              laneKind: SongLaneKind.harmony,
-              chordSymbol: 'C',
-              chordQuality: '',
-              chordRootPc: 0,
-              chordNotes: const ['C', 'E', 'G'],
-              defaultLyrics: const ['Saved default'],
-            ),
+            chord('C', 0, defaultLyrics: const ['Saved default']),
           )!;
       writer.addSection(label: 'Verse', lengthBars: 4);
       writer.addSection(label: 'Chorus', lengthBars: 4);
@@ -640,8 +711,12 @@ void main() {
       var project = container.read(songwriterProvider);
       final verse = project.sections[0];
       final chorus = project.sections[1];
-      final verseLane = verse.lanes.single;
-      final chorusLane = chorus.lanes.single;
+      final verseLane = verse.lanes.singleWhere(
+        (lane) => lane.kind == SongLaneKind.harmony,
+      );
+      final chorusLane = chorus.lanes.singleWhere(
+        (lane) => lane.kind == SongLaneKind.harmony,
+      );
       final verseBlock = verseLane.blocks.single;
       final chorusBlock = chorusLane.blocks.single;
       expect(verseBlock.lyrics, ['Saved default']);
@@ -668,20 +743,40 @@ void main() {
       );
 
       project = container.read(songwriterProvider);
-      final updatedVerseBlock = project.sections[0].lanes.single.blocks.single;
-      final unchangedChorusBlock =
-          project.sections[1].lanes.single.blocks.single;
+      final updatedVerseBlock = project.sections[0].lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+          .blocks
+          .single;
+      final unchangedChorusBlock = project.sections[1].lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.harmony)
+          .blocks
+          .single;
       expect(updatedVerseBlock.chordSymbol, 'D');
       expect(updatedVerseBlock.lyrics, ['Local verse lyric']);
-      expect(unchangedChorusBlock.chordSymbol, 'D');
+      expect(updatedVerseBlock.saveId, isNot(saveId));
+      expect(unchangedChorusBlock.chordSymbol, 'C');
       expect(unchangedChorusBlock.lyrics, ['Saved default']);
       final updatedSave = container
           .read(saveSystemProvider)
           .saves
           .singleWhere((save) => save.id == saveId);
-      expect((updatedSave.snapshot as WriterBlockSnapshot).defaultLyrics, [
-        'Saved default',
-      ]);
+      expect(
+        (updatedSave.snapshot as HarmonyChordSnapshot)
+            .writerBlock
+            .defaultLyrics,
+        ['Saved default'],
+      );
+      expect(
+        (container
+                    .read(saveSystemProvider)
+                    .saves
+                    .singleWhere((save) => save.id == updatedVerseBlock.saveId)
+                    .snapshot
+                as HarmonyChordSnapshot)
+            .writerBlock
+            .chordSymbol,
+        'D',
+      );
     },
   );
 
@@ -738,7 +833,9 @@ void main() {
         isTrue,
       );
       final before = container.read(songwriterProvider);
-      final lane = before.sections.single.lanes.single;
+      final lane = before.sections.single.lanes.singleWhere(
+        (lane) => lane.kind == SongLaneKind.audio,
+      );
       final block = lane.blocks.single;
       final oldClipId = block.audioClipId;
 
@@ -752,7 +849,10 @@ void main() {
       );
 
       final after = container.read(songwriterProvider);
-      final uniqueBlock = after.sections.single.lanes.single.blocks.single;
+      final uniqueBlock = after.sections.single.lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.audio)
+          .blocks
+          .single;
       final uniqueSave = container
           .read(saveSystemProvider)
           .saves
@@ -836,7 +936,9 @@ void main() {
         isTrue,
       );
       final beforeUnique = container.read(songwriterProvider);
-      final lane = beforeUnique.sections.single.lanes.single;
+      final lane = beforeUnique.sections.single.lanes.singleWhere(
+        (lane) => lane.kind == SongLaneKind.audio,
+      );
       final blockToMakeUnique = lane.blocks.last;
       expect(
         beforeUnique.audioClips,
@@ -857,7 +959,10 @@ void main() {
       );
 
       final uniqueState = container.read(songwriterProvider);
-      final uniqueBlock = uniqueState.sections.single.lanes.single.blocks.last;
+      final uniqueBlock = uniqueState.sections.single.lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.audio)
+          .blocks
+          .last;
       final liveClipIds = uniqueState.audioClips.map((clip) => clip.id).toSet();
       expect(liveClipIds, hasLength(2));
       expect(uniqueState.audioClips, hasLength(2));
@@ -1061,75 +1166,97 @@ void main() {
     }
   });
 
-  test('later shared placement edits refresh earlier fallbacks', () async {
-    final (container, projectId, writer) = await makeProject();
-    addTearDown(container.dispose);
-    final saveId = container
-        .read(saveSystemProvider.notifier)
-        .saveSnapshot('Shared chord', projectId, chord('C', 0))!;
-    writer.addSection(label: 'Shared', lengthBars: 4);
-    final sectionId = container.read(songwriterProvider).sections.single.id;
-    final laneId = writer.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-    );
-    for (final (blockId, bar) in [
-      ('first-placement', 0),
-      ('second-placement', 1),
-    ]) {
-      writer.addHarmonyBlock(
+  test(
+    'replacing one shared Harmony placement leaves its Save unchanged',
+    () async {
+      final (container, projectId, writer) = await makeProject();
+      addTearDown(container.dispose);
+      final saveId = container
+          .read(saveSystemProvider.notifier)
+          .saveSnapshot('Shared chord', projectId, chord('C', 0))!;
+      writer.addSection(label: 'Shared', lengthBars: 4);
+      final sectionId = container.read(songwriterProvider).sections.single.id;
+      final laneId = writer.addLane(
         sectionId: sectionId,
-        laneId: laneId,
-        block: SongBlock(
-          id: blockId,
-          startBar: bar,
-          spanBars: 1,
-          saveId: saveId,
-          embedded: chord('C', 0),
-        ),
+        kind: SongLaneKind.harmony,
       );
-    }
+      for (final bar in [0, 1]) {
+        expect(
+          writer.insertWriterBlockFromSave(
+            saveId: saveId,
+            sectionId: sectionId,
+            laneKind: SongLaneKind.harmony,
+            startBar: bar,
+            laneId: laneId,
+          ),
+          isTrue,
+        );
+      }
+      final initialBlocks = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks;
+      final firstPlacement = initialBlocks.singleWhere(
+        (block) => block.startBar == 0,
+      );
+      final secondPlacement = initialBlocks.singleWhere(
+        (block) => block.startBar == 1,
+      );
 
-    expect(
-      writer.insertInstrumentSelectionAtBar(
-        sectionId: sectionId,
-        startBar: 1,
-        chordSymbol: 'D',
-        chordQuality: '',
-        chordRootPc: 2,
-        chordNotes: const ['D', 'F#', 'A'],
-        replaceBlockId: 'second-placement',
-      ),
-      isTrue,
-    );
-    final blocks = container
-        .read(songwriterProvider)
-        .sections
-        .single
-        .lanes
-        .single
-        .blocks;
-    expect(blocks.map((block) => block.saveId), everyElement(saveId));
-    expect(
-      blocks.map(
-        (block) => (block.embedded as WriterBlockSnapshot).chordSymbol,
-      ),
-      everyElement('D'),
-    );
-    expect(
-      (container
-                  .read(saveSystemProvider)
-                  .saves
-                  .singleWhere((save) => save.id == saveId)
-                  .snapshot
-              as WriterBlockSnapshot)
-          .chordSymbol,
-      'D',
-    );
-  });
+      expect(
+        writer.insertInstrumentSelectionAtBar(
+          sectionId: sectionId,
+          startBar: secondPlacement.startBar,
+          chordSymbol: 'D',
+          chordQuality: '',
+          chordRootPc: 2,
+          chordNotes: const ['D', 'F#', 'A'],
+          replaceBlockId: secondPlacement.id,
+        ),
+        isTrue,
+      );
+      final blocks = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks;
+      final unchanged = blocks.singleWhere(
+        (block) => block.id == firstPlacement.id,
+      );
+      expect(unchanged.saveId, saveId);
+      final updated = blocks.singleWhere(
+        (block) => block.id == secondPlacement.id,
+      );
+      expect(updated.saveId, isNot(saveId));
+      expect(
+        (updated.embedded as HarmonyChordSnapshot).writerBlock.chordSymbol,
+        'D',
+      );
+      expect(
+        (unchanged.embedded as HarmonyChordSnapshot).writerBlock.chordSymbol,
+        'C',
+      );
+      expect(
+        (container
+                    .read(saveSystemProvider)
+                    .saves
+                    .singleWhere((save) => save.id == saveId)
+                    .snapshot
+                as HarmonyChordSnapshot)
+            .writerBlock
+            .chordSymbol,
+        'C',
+      );
+    },
+  );
 
   test(
-    'loading an older named version forks changed canonical content',
+    'loading an older named version keeps its unchanged canonical Save',
     () async {
       final (container, _, writer) = await makeProject();
       addTearDown(container.dispose);
@@ -1158,7 +1285,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == laneId)
           .blocks
           .single;
       final originalId = originalBlock.saveId!;
@@ -1180,17 +1307,23 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == laneId)
           .blocks
           .single;
-      expect(restoredBlock.saveId, isNot(originalId));
+      expect(restoredBlock.saveId, originalId);
       final saves = container.read(saveSystemProvider).saves;
       final restored = saves.singleWhere(
         (save) => save.id == restoredBlock.saveId,
       );
       final original = saves.singleWhere((save) => save.id == originalId);
-      expect((restored.snapshot as WriterBlockSnapshot).chordSymbol, 'C');
-      expect((original.snapshot as WriterBlockSnapshot).chordSymbol, 'D');
+      expect(
+        (restored.snapshot as HarmonyChordSnapshot).writerBlock.chordSymbol,
+        'C',
+      );
+      expect(
+        (original.snapshot as HarmonyChordSnapshot).writerBlock.chordSymbol,
+        'C',
+      );
     },
   );
 
@@ -1233,7 +1366,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == laneId)
           .blocks
           .single;
       writer.insertInstrumentSelectionAtBar(
@@ -1278,7 +1411,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == laneId)
           .blocks
           .single;
       expect(
@@ -1292,7 +1425,11 @@ void main() {
         persistedDrafts[projectId] as Map<String, dynamic>,
       );
       expect(
-        persistedDraft.sections.single.lanes.single.blocks.single.saveId,
+        persistedDraft.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .blocks
+            .single
+            .saveId,
         restoredBlock.saveId,
       );
 
@@ -1339,7 +1476,7 @@ void main() {
           .sections
           .single
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == verseLaneId)
           .blocks
           .single;
       final saveId = original.saveId!;
@@ -1366,7 +1503,7 @@ void main() {
           .sections
           .last
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == chorusLaneId)
           .blocks
           .single;
       writer.setBlockLyric(
@@ -1402,13 +1539,13 @@ void main() {
       final updatedVerse = updatedSections
           .singleWhere((section) => section.id == verseId)
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == verseLaneId)
           .blocks
           .single;
       final updatedChorus = updatedSections
           .singleWhere((section) => section.id == chorusId)
           .lanes
-          .single
+          .singleWhere((lane) => lane.id == chorusLaneId)
           .blocks
           .single;
       expect(writer.undoCount, undoCount + 1);
@@ -1429,7 +1566,8 @@ void main() {
                     .saves
                     .singleWhere((save) => save.id == saveId)
                     .snapshot
-                as WriterBlockSnapshot)
+                as HarmonyChordSnapshot)
+            .writerBlock
             .chordSymbol,
         'Dm7',
       );
@@ -1440,7 +1578,7 @@ void main() {
         undoneSections
             .singleWhere((section) => section.id == verseId)
             .lanes
-            .single
+            .singleWhere((lane) => lane.id == verseLaneId)
             .blocks
             .single
             .chordSymbol,
@@ -1450,7 +1588,7 @@ void main() {
         undoneSections
             .singleWhere((section) => section.id == chorusId)
             .lanes
-            .single
+            .singleWhere((lane) => lane.id == chorusLaneId)
             .blocks
             .single
             .chordSymbol,
@@ -1460,7 +1598,7 @@ void main() {
         undoneSections
             .singleWhere((section) => section.id == verseId)
             .lanes
-            .single
+            .singleWhere((lane) => lane.id == verseLaneId)
             .blocks
             .single
             .lyrics,
@@ -1470,7 +1608,7 @@ void main() {
         undoneSections
             .singleWhere((section) => section.id == chorusId)
             .lanes
-            .single
+            .singleWhere((lane) => lane.id == chorusLaneId)
             .blocks
             .single
             .lyrics,
@@ -1625,7 +1763,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == laneId)
         .blocks;
 
     writer.removeAudioBlock(

@@ -295,9 +295,14 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   bool commitWriterStructure(
     String projectId,
     SaveSystemState next, {
+    Map<String, (String, int)> restoredWriterSaveLocations = const {},
     bool persist = true,
   }) {
-    final prepared = buildWriterStructure(projectId, next);
+    final prepared = buildWriterStructure(
+      projectId,
+      next,
+      restoredWriterSaveLocations: restoredWriterSaveLocations,
+    );
     if (prepared == null) return false;
     state = prepared;
     if (persist) _persist();
@@ -309,8 +314,9 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   /// the exact payload before it writes its pending journal.
   SaveSystemState? buildWriterStructure(
     String projectId,
-    SaveSystemState next,
-  ) {
+    SaveSystemState next, {
+    Map<String, (String, int)> restoredWriterSaveLocations = const {},
+  }) {
     lastMutationError = null;
     final project = state.folders
         .where(
@@ -343,13 +349,13 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     }).toList();
     final seenBlockIds = <String>{};
     for (final link in desiredLinks) {
-      final sectionFolder = next.folders
-          .where((folder) => folder.id == link.folderId)
-          .firstOrNull;
-      if (sectionFolder == null ||
-          sectionFolder.parentId != projectId ||
-          sectionFolder.writerSectionId != link.sectionId ||
-          resolveSaveInProject(next, projectId, link.saveId) == null ||
+      if (!isWriterSaveLinkCategoryValid(
+            next.folders,
+            link,
+            projectId: projectId,
+          ) ||
+          (resolveSaveInProject(next, projectId, link.saveId) == null &&
+              resolveSaveInProject(state, projectId, link.saveId) == null) ||
           !seenBlockIds.add(link.blockId)) {
         lastMutationError =
             'Writer sync contains an invalid or duplicate link.';
@@ -358,15 +364,49 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     }
     final nextProjectFolderIds = getSubtreeFolderIds(next.folders, projectId);
     final sectionIds = <String>{};
+    final laneCategories = <String>{};
     for (final folder in next.folders.where(
       (folder) =>
           nextProjectFolderIds.contains(folder.id) &&
-          folder.writerSectionId != null,
+          folder.writerSectionId != null &&
+          folder.writerLaneKind == null,
     )) {
       if (folder.parentId != projectId ||
+          folder.kind != SaveFolderKind.normal ||
           !sectionIds.add(folder.writerSectionId!)) {
-        lastMutationError = 'Writer sync contains duplicate section folders.';
+        lastMutationError =
+            'Writer sync contains invalid or duplicate section folders.';
         return null;
+      }
+    }
+    for (final folder in next.folders.where(
+      (folder) =>
+          nextProjectFolderIds.contains(folder.id) &&
+          folder.writerLaneKind != null,
+    )) {
+      final laneKey =
+          '${folder.writerSectionId}/${folder.writerLaneKind!.name}';
+      if (!isWriterLaneCategoryFolder(
+            next.folders,
+            folder,
+            projectId: projectId,
+          ) ||
+          !sectionIds.contains(folder.writerSectionId) ||
+          !laneCategories.add(laneKey)) {
+        lastMutationError =
+            'Writer sync contains invalid or duplicate lane category folders.';
+        return null;
+      }
+    }
+
+    final deletedManagedFolderIds = <String>{};
+    for (final folder in state.folders) {
+      if (isFolderInProject(state.folders, folder.id, projectId) &&
+          isWriterManagedFolderOrDescendant(state.folders, folder.id) &&
+          !nextProjectFolderIds.contains(folder.id)) {
+        deletedManagedFolderIds.addAll(
+          getSubtreeFolderIds(state.folders, folder.id),
+        );
       }
     }
 
@@ -410,13 +450,38 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
         (save) => !currentProjectSaveIds.contains(save.id),
       ),
     ];
-    for (final save in projectSaves) {
+    for (var saveIndex = 0; saveIndex < projectSaves.length; saveIndex++) {
+      var save = projectSaves[saveIndex];
       final existing = existingSavesById[save.id];
+      final manualRehomeAllowed =
+          existing?.origin == SaveOrigin.manual &&
+          isFolderInProject(state.folders, existing!.folderId, projectId) &&
+          deletedManagedFolderIds.contains(existing.folderId) &&
+          save.folderId == projectId;
       if (existing?.origin == SaveOrigin.manual &&
           isFolderInProject(state.folders, existing!.folderId, projectId) &&
-          existing.folderId != save.folderId) {
+          existing.folderId != save.folderId &&
+          !manualRehomeAllowed) {
         lastMutationError = 'Writer sync cannot move a manual save.';
         return null;
+      }
+      if (existing?.origin == SaveOrigin.manual &&
+          isFolderInProject(state.folders, existing!.folderId, projectId) &&
+          !isFolderInProject(projectFolders, existing.folderId, projectId)) {
+        if (!deletedManagedFolderIds.contains(existing.folderId)) {
+          lastMutationError =
+              'Writer sync cannot remove a folder containing a manual save.';
+          return null;
+        }
+        final rootOrder = projectSaves
+            .where(
+              (candidate) =>
+                  candidate.id != existing.id &&
+                  candidate.folderId == projectId,
+            )
+            .length;
+        save = existing.copyWith(folderId: projectId, order: rootOrder);
+        projectSaves[saveIndex] = save;
       }
       if (existing?.origin == SaveOrigin.writer &&
           next.folders.any(
@@ -451,6 +516,7 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
     );
     final saves = <SaveEntry>[];
     for (final save in projectSaves) {
+      final existing = existingSavesById[save.id];
       final wasInProject =
           existingSavesById[save.id] != null &&
           isFolderInProject(
@@ -472,15 +538,20 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
         projectId: projectId,
         save: save,
         links: desiredLinks,
+        originalFolderId:
+            restoredWriterSaveLocations[save.id]?.$1 ??
+            (existing?.origin == SaveOrigin.writer ? existing!.folderId : null),
       );
       if (destination == null || destination == save.folderId) {
         saves.add(save);
         continue;
       }
-      final order = getSavesInFolder(
-        saves.where((candidate) => candidate.id != save.id).toList(),
-        destination,
-      ).length;
+      final order =
+          restoredWriterSaveLocations[save.id]?.$2 ??
+          getSavesInFolder(
+            saves.where((candidate) => candidate.id != save.id).toList(),
+            destination,
+          ).length;
       saves.add(save.copyWith(folderId: destination, order: order));
     }
 
@@ -513,7 +584,12 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
           .where(
             (link) =>
                 link.blockId == blockId &&
-                isFolderInProject(state.folders, link.folderId, projectId),
+                resolveSaveInProject(state, projectId, link.saveId) != null &&
+                isWriterSaveLinkCategoryValid(
+                  state.folders,
+                  link,
+                  projectId: projectId,
+                ),
           )
           .firstOrNull;
 

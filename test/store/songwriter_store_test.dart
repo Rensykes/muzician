@@ -16,17 +16,27 @@ void main() {
     n.addSection(label: 'Verse', lengthBars: 8);
     final sectionId = c.read(songwriterProvider).sections.single.id;
 
-    n.addLane(sectionId: sectionId, kind: SongLaneKind.save, label: 'Guitar');
-    final laneId =
-        c.read(songwriterProvider).sections.single.lanes.single.id;
+    final laneId = n.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.save,
+      label: 'Guitar',
+    );
 
     n.addSaveBlock(
-        sectionId: sectionId, laneId: laneId, saveId: 'save-1',
-        startBar: 0, spanBars: 4);
+      sectionId: sectionId,
+      laneId: laneId,
+      saveId: 'save-1',
+      startBar: 0,
+      spanBars: 4,
+    );
 
-    final block = c
+    final lane = c
         .read(songwriterProvider)
-        .sections.single.lanes.single.blocks.single;
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId);
+    final block = lane.blocks.single;
     expect(block.saveId, 'save-1');
     expect(block.spanBars, 4);
   });
@@ -37,12 +47,32 @@ void main() {
     final n = c.read(songwriterProvider.notifier);
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
-    n.addLane(sectionId: s, kind: SongLaneKind.save);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
-    n.addSaveBlock(sectionId: s, laneId: l, saveId: 'a', startBar: 0, spanBars: 4);
-    n.addSaveBlock(sectionId: s, laneId: l, saveId: 'b', startBar: 2, spanBars: 4);
+    final l = n.addLane(sectionId: s, kind: SongLaneKind.save);
+    n.addSaveBlock(
+      sectionId: s,
+      laneId: l,
+      saveId: 'a',
+      startBar: 0,
+      spanBars: 4,
+    );
+    n.addSaveBlock(
+      sectionId: s,
+      laneId: l,
+      saveId: 'b',
+      startBar: 2,
+      spanBars: 4,
+    );
     expect(
-        c.read(songwriterProvider).sections.single.lanes.single.blocks.length, 1);
+      c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == l)
+          .blocks
+          .length,
+      1,
+    );
   });
 
   test('rejected overlap insert is a no-op: no notify, same state instance', () {
@@ -51,9 +81,14 @@ void main() {
     final n = c.read(songwriterProvider.notifier);
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
-    n.addLane(sectionId: s, kind: SongLaneKind.save);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
-    n.addSaveBlock(sectionId: s, laneId: l, saveId: 'a', startBar: 0, spanBars: 4);
+    final l = n.addLane(sectionId: s, kind: SongLaneKind.save);
+    n.addSaveBlock(
+      sectionId: s,
+      laneId: l,
+      saveId: 'a',
+      startBar: 0,
+      spanBars: 4,
+    );
 
     final before = c.read(songwriterProvider);
     var notifications = 0;
@@ -61,7 +96,13 @@ void main() {
     addTearDown(sub.close);
 
     // Overlapping insert -> rejected by blocksOverlap -> must not touch state.
-    n.addSaveBlock(sectionId: s, laneId: l, saveId: 'b', startBar: 2, spanBars: 4);
+    n.addSaveBlock(
+      sectionId: s,
+      laneId: l,
+      saveId: 'b',
+      startBar: 2,
+      spanBars: 4,
+    );
 
     expect(notifications, 0);
     expect(identical(c.read(songwriterProvider), before), isTrue);
@@ -75,8 +116,7 @@ void main() {
     n.setKey(0, 'major'); // C major
     n.addSection(label: 'V', lengthBars: 4);
     final s = c.read(songwriterProvider).sections.single.id;
-    n.addLane(sectionId: s, kind: SongLaneKind.harmony);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    final l = n.addLane(sectionId: s, kind: SongLaneKind.harmony);
 
     // Add a harmony block for C (I in C major) with a precomputed numeral.
     n.addHarmonyBlock(
@@ -96,14 +136,30 @@ void main() {
     // Recompute under the current key should keep 'I'.
     n.setKey(0, 'major');
     expect(
-      c.read(songwriterProvider).sections.single.lanes.single.blocks.single.romanNumeral,
+      c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == l)
+          .blocks
+          .single
+          .romanNumeral,
       'I',
     );
 
     // Clearing the key should null out the numeral.
     n.setKey(null, null);
     expect(
-      c.read(songwriterProvider).sections.single.lanes.single.blocks.single.romanNumeral,
+      c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == l)
+          .blocks
+          .single
+          .romanNumeral,
       isNull,
     );
   });

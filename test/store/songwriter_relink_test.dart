@@ -14,15 +14,26 @@ void main() {
     n.addSection(label: 'V', lengthBars: 8);
     final s = c.read(songwriterProvider).sections.single.id;
     n.addLane(sectionId: s, kind: SongLaneKind.save);
-    final l = c.read(songwriterProvider).sections.single.lanes.single.id;
+    final l = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.save)
+        .id;
     n.addSaveBlock(
-        sectionId: s, laneId: l, saveId: 'old', startBar: 0, spanBars: 2);
+      sectionId: s,
+      laneId: l,
+      saveId: 'old',
+      startBar: 0,
+      spanBars: 2,
+    );
     final bId = c
         .read(songwriterProvider)
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == l)
         .blocks
         .single
         .id;
@@ -33,7 +44,7 @@ void main() {
         .sections
         .single
         .lanes
-        .single
+        .singleWhere((lane) => lane.id == l)
         .blocks
         .single;
     expect(b.saveId, 'new');

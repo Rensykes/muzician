@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/instrument_shared/writer_handoff.dart';
 import 'package:muzician/models/harmonic_analysis.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 import 'package:muzician/store/fretboard_store.dart';
@@ -15,7 +17,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _chord = ChordDetectionResult(root: 'C', quality: '');
 
 class _HandoffTestApp extends StatelessWidget {
-  const _HandoffTestApp();
+  const _HandoffTestApp({this.reuseSave});
+
+  final SaveEntry? reuseSave;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -30,6 +34,7 @@ class _HandoffTestApp extends StatelessWidget {
               binding: fretboardBinding,
               chordResults: const [_chord],
               onTransferComplete: () {},
+              reuseSave: reuseSave,
             ),
             child: const Text('Start handoff'),
           ),
@@ -53,7 +58,14 @@ Future<String> _createProject(ProviderContainer container, String name) async {
   return id;
 }
 
-Future<void> _chooseChord(WidgetTester tester) async {
+Future<void> _chooseChord(
+  WidgetTester tester,
+  ProviderContainer container,
+) async {
+  final fretboard = container.read(fretboardProvider.notifier);
+  fretboard.toggleCell(4, 3, 'C');
+  fretboard.toggleCell(3, 2, 'E');
+  fretboard.toggleCell(2, 0, 'G');
   await tester.tap(find.byKey(const Key('startHandoff')));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Add C as harmony'));
@@ -108,7 +120,7 @@ void main() {
           .addSection(label: 'Verse', lengthBars: 4);
       await _mountHandoffApp(tester, container);
 
-      await _chooseChord(tester);
+      await _chooseChord(tester, container);
 
       final sectionId = container.read(songwriterProvider).sections.single.id;
       expect(find.text('Choose a Writer section and bar'), findsOneWidget);
@@ -126,6 +138,79 @@ void main() {
     });
   }
 
+  testWidgets(
+    'native handoff skips incompatible Save lanes and stages a matching one',
+    (tester) async {
+      final container = await _newContainer();
+      addTearDown(container.dispose);
+      await _createProject(container, 'Instrument-specific handoff');
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final pianoHarmonyId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.harmony,
+        harmonyInstrument: HarmonyLaneInstrument.piano,
+      );
+      final pianoSaveLaneId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.save,
+      );
+      writer.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: pianoSaveLaneId,
+        harmonyLaneId: pianoHarmonyId,
+      );
+      await _mountHandoffApp(tester, container);
+
+      final fretboard = container.read(fretboardProvider.notifier);
+      fretboard.toggleCell(4, 3, 'C');
+      fretboard.toggleCell(3, 2, 'E');
+      fretboard.toggleCell(2, 0, 'G');
+      await tester.tap(find.byKey(const Key('startHandoff')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add exact voicing'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(Key('writerHandoffLane_${section.id}_$pianoSaveLaneId')),
+        findsNothing,
+      );
+      final stagedLane = find.byKey(
+        Key('writerHandoffNewSaveLane_${section.id}'),
+      );
+      expect(stagedLane, findsOneWidget);
+      expect(find.text('Create Fretboard Voicing lane'), findsOneWidget);
+      await tester.tap(stagedLane);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('writerHandoffBar_${section.id}_0')));
+      await tester.pumpAndSettle();
+      await _confirmImportName(tester, name: 'Fretboard C');
+
+      final currentSection = container.read(songwriterProvider).sections.single;
+      final pianoSaveLane = currentSection.lanes.singleWhere(
+        (lane) => lane.id == pianoSaveLaneId,
+      );
+      expect(pianoSaveLane.blocks, isEmpty);
+      final fretboardSaveLane = currentSection.lanes.singleWhere(
+        (lane) => lane.kind == SongLaneKind.save && lane.blocks.isNotEmpty,
+      );
+      expect(fretboardSaveLane.anchorLaneId, isNull);
+      expect(fretboardSaveLane.blocks.single.startBar, 0);
+      final saveId = fretboardSaveLane.blocks.single.saveId;
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((save) => save.id == saveId)
+            .snapshot
+            .instrument,
+        'fretboard',
+      );
+      await container.read(songwriterSessionsProvider.notifier).flush();
+    },
+  );
+
   testWidgets('no-project picker cancel leaves both workspaces untouched', (
     tester,
   ) async {
@@ -136,7 +221,7 @@ void main() {
     final before = container.read(songwriterProvider);
     await _mountHandoffApp(tester, container);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     expect(find.text('PROJECTS'), findsOneWidget);
     await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
@@ -157,7 +242,7 @@ void main() {
     final before = container.read(songwriterProvider);
     await _mountHandoffApp(tester, container);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     final sectionId = container.read(songwriterProvider).sections.single.id;
     await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
     await tester.pumpAndSettle();
@@ -169,6 +254,119 @@ void main() {
     expect(container.read(saveSystemProvider).saves, isEmpty);
   });
 
+  testWidgets('canceling a staged first section leaves no empty section', (
+    tester,
+  ) async {
+    final container = await _newContainer();
+    addTearDown(container.dispose);
+    await _createProject(container, 'First section project');
+    await _mountHandoffApp(tester, container);
+
+    await _chooseChord(tester, container);
+    await tester.tap(find.text('Create section'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('writerHandoffBar_new_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('cancelWriterImportName')));
+    await tester.pumpAndSettle();
+
+    expect(container.read(songwriterProvider).sections, isEmpty);
+    expect(container.read(saveSystemProvider).writerLinks, isEmpty);
+    expect(container.read(saveSystemProvider).saves, isEmpty);
+  });
+
+  testWidgets('Use in Writer reuses a Harmony Save from its section folder', (
+    tester,
+  ) async {
+    final container = await _newContainer();
+    addTearDown(container.dispose);
+    final projectId = await _createProject(
+      container,
+      'Harmony library project',
+    );
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final sourceLane = section.lanes.single;
+    final result = writer.addHarmonyChord(
+      sectionId: section.id,
+      laneId: sourceLane.id,
+      block: makeHarmonyBlock(
+        startBar: 0,
+        spanBars: 1,
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
+        chordNotes: const ['C', 'E', 'G'],
+      ),
+      saveName: 'C major',
+    );
+    expect(result.success, isTrue);
+    final sourceBlock = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    final sourceSave = container
+        .read(saveSystemProvider)
+        .saves
+        .singleWhere((save) => save.id == sourceBlock.saveId);
+    expect(sourceSave.folderId, isNot(projectId));
+
+    writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.harmony,
+      label: 'Second Fretboard lane',
+      harmonyInstrument: HarmonyLaneInstrument.fretboard,
+    );
+    final destinationLane = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .last;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: _HandoffTestApp(reuseSave: sourceSave),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('startHandoff')));
+    await tester.pumpAndSettle();
+    final destinationLaneKey = Key(
+      'writerHandoffLane_${section.id}_${destinationLane.id}',
+    );
+    expect(find.byKey(destinationLaneKey), findsOneWidget);
+    await tester.tap(find.byKey(destinationLaneKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('writerHandoffBar_${section.id}_1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('writerImportNameField')), findsNothing);
+    final destinationBlock = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == destinationLane.id)
+        .blocks
+        .single;
+    expect(destinationBlock.startBar, 1);
+    expect(destinationBlock.saveId, sourceSave.id);
+    expect(
+      container
+          .read(saveSystemProvider)
+          .saves
+          .where((save) => save.id == sourceSave.id),
+      hasLength(1),
+    );
+  });
+
   testWidgets(
     'no-project choice is retained through project and section pickers',
     (tester) async {
@@ -178,15 +376,14 @@ void main() {
       container.read(saveSystemProvider.notifier).selectProject(null);
       await _mountHandoffApp(tester, container);
 
-      await _chooseChord(tester);
+      await _chooseChord(tester, container);
       await tester.tap(find.text('New Project'));
       await tester.pumpAndSettle();
       expect(container.read(saveSystemProvider).selectedProjectId, projectId);
       await tester.tap(find.text('Create section'));
       await tester.pumpAndSettle();
       expect(find.text('Choose a Writer section and bar'), findsOneWidget);
-      final sectionId = container.read(songwriterProvider).sections.single.id;
-      await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
+      await tester.tap(find.byKey(const Key('writerHandoffBar_new_0')));
       await tester.pumpAndSettle();
       await _confirmImportName(tester, name: 'Verse entry');
       final block = container
@@ -221,13 +418,12 @@ void main() {
     final writer = container.read(songwriterProvider.notifier);
     writer.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.single.id;
-    writer.addLane(sectionId: sectionId, kind: SongLaneKind.harmony);
     final laneId = container
         .read(songwriterProvider)
         .sections
         .single
         .lanes
-        .single
+        .first
         .id;
     writer.addHarmonyBlock(
       sectionId: sectionId,
@@ -243,7 +439,7 @@ void main() {
     );
     await _mountHandoffApp(tester, container);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     final semantics = tester.ensureSemantics();
     expect(find.bySemanticsLabel('Verse, bar 1, Occupied'), findsOneWidget);
     semantics.dispose();
@@ -266,7 +462,7 @@ void main() {
         .blocks
         .single;
     expect(block.chordSymbol, 'C');
-    expect(block.chordNotes, isEmpty);
+    expect(block.chordNotes, ['C', 'E', 'G']);
     await container.read(songwriterSessionsProvider.notifier).flush();
   });
 
@@ -279,10 +475,13 @@ void main() {
     final writer = container.read(songwriterProvider.notifier);
     writer.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.single.id;
-    final laneId = writer.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-    );
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .first
+        .id;
     writer.addHarmonyBlock(
       sectionId: sectionId,
       laneId: laneId,
@@ -297,7 +496,7 @@ void main() {
     );
     await _mountHandoffApp(tester, container);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Choose another bar'));
@@ -328,10 +527,13 @@ void main() {
     final writer = container.read(songwriterProvider.notifier);
     writer.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.single.id;
-    final laneId = writer.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-    );
+    final laneId = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .first
+        .id;
     writer.addHarmonyBlock(
       sectionId: sectionId,
       laneId: laneId,
@@ -347,14 +549,14 @@ void main() {
     final before = container.read(songwriterProvider);
     await _mountHandoffApp(tester, container);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(identical(container.read(songwriterProvider), before), isTrue);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Replace…'));
@@ -394,7 +596,7 @@ void main() {
     );
     await _mountHandoffApp(tester, container);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     final semantics = tester.ensureSemantics();
     expect(find.bySemanticsLabel('Verse, bar 3, Occupied'), findsOneWidget);
     semantics.dispose();
@@ -442,7 +644,7 @@ void main() {
         .id;
     await _mountHandoffApp(tester, container);
 
-    await _chooseChord(tester);
+    await _chooseChord(tester, container);
     final secondProjectId = await _createProject(container, 'Second project');
     container.read(saveSystemProvider.notifier).selectProject(secondProjectId);
     container
@@ -460,7 +662,9 @@ void main() {
     expect(find.text('Destination changed'), findsOneWidget);
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
-    expect(container.read(songwriterProvider).sections.single.lanes, isEmpty);
+    final secondSection = container.read(songwriterProvider).sections.single;
+    expect(secondSection.lanes, hasLength(1));
+    expect(secondSection.lanes.single.blocks, isEmpty);
     expect(
       container.read(songwriterSessionsProvider).containsKey(firstProjectId),
       isTrue,

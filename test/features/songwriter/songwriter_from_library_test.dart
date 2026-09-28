@@ -97,10 +97,13 @@ void main() {
     n.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.first.id;
 
-    final harmonyLaneId = n.addLane(
-      sectionId: sectionId,
-      kind: SongLaneKind.harmony,
-    );
+    final harmonyLaneId = container
+        .read(songwriterProvider)
+        .sections
+        .first
+        .lanes
+        .first
+        .id;
     n.addHarmonyBlock(
       sectionId: sectionId,
       laneId: harmonyLaneId,
@@ -108,7 +111,7 @@ void main() {
         startBar: 0,
         spanBars: 1,
         chordSymbol: 'C',
-        chordQuality: 'maj',
+        chordQuality: '',
         chordRootPc: 0,
         chordNotes: const ['C', 'E', 'G'],
       ),
