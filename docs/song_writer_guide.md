@@ -26,12 +26,29 @@ keeps workspaces closed and offers Retry or Start fresh. Start fresh first
 preserves the original stored strings in **Settings → Data Recovery**, where
 each backup can be read, copied, exported, or deleted after confirmation.
 
-Before the first project is created, choose Piano or Fretboard for its Harmony
-lanes. The choice is also saved in Settings for future projects. Each new
-section starts with a primary Harmony lane using the project's default;
-additional Harmony lanes ask for their instrument when created. An empty
-Harmony lane with no anchored Save/Voicing lane can change instruments while
-keeping its lane identity.
+Projects created through the usual project flow use the configured default
+Harmony instrument, prompting for the first choice if that default is unset;
+the choice is saved in Settings for future projects. **New project** in Writer
+asks for Piano or Fretboard on every creation and stores that choice on the new
+project without changing the app-wide default. Each new section starts with a
+primary Harmony lane using its project's default; additional Harmony lanes ask
+for their instrument when created. An empty Harmony lane with no anchored
+Save/Voicing lane can change instruments while keeping its lane identity.
+
+### Create a separate project from Writer
+
+Writer's **New project** creates and selects a new Save System project with an
+empty Writer session. If the current Writer session differs from its bound
+active named Writer Save (or from the full project-default session when no
+Save is bound), choose **Keep**, **Discard**, or **Cancel** before switching.
+**Keep** retains the outgoing project's session. **Discard** restores its
+bound active Writer Save through the normal canonical block reconciliation
+path, keeping the current project config and forking changed linked block
+content when needed. If no valid Writer Save is bound, Discard clears that
+project's Writer session and binding. Either Discard path preserves every
+named Save entry. **Cancel** leaves the current project and session in place
+and creates no project. The new project's Piano/Fretboard choice belongs to its project
+config and does not update the Settings default.
 
 ---
 
@@ -51,12 +68,19 @@ clicked. It now plays the whole arrangement.
   saved item was deleted stays silent.
 - **Drum lanes** play their pattern hits at native (16th-note) resolution, tiled
   across the bars the block covers.
-- **Melody lanes** play duration-aware notes from the existing Piano Roll
-  editor. A block loops its pattern from local tick zero; notes and voices stop
-  at the block or section edge.
-- **Guitar-strum lanes** play down/up steps from a 16th-note grid. Choose the
-  harmony lane that supplies the chord, or leave the lane on its primary
-  harmony anchor. An anchor with no chord stays silent. Chord tones are
+- **Melody lanes** play duration-aware notes from reusable patterns edited in
+  Piano Roll. Tiles show the pattern's exact musical duration and its block
+  placement against the section timeline. A block longer than its pattern
+  repeats it from the block start; a shorter block clips it at the placement
+  edge. Notes and voices also stop at the section edge.
+- **Guitar-strum lanes** play down/up steps from a 16th-note grid against one
+  explicitly selected Fretboard Harmony lane. Source selection offers Guitar
+  Harmony lanes only, and a strum lane is available only when one exists.
+  Multiple strum lanes may share a source. If its saved source becomes invalid,
+  the lane shows **Unresolved** and stays silent until repaired; a truly
+  unassigned lane shows **Unassigned** and never follows the primary Harmony
+  lane. Each pattern tile
+  previews its ordered down/up events on the tick grid. Chord tones are
   staggered by 12 ms and gated for half a beat; delayed voices shorten at a
   block edge so they release inside it. Each 44×44 step shows down, up, or off
   and supports keyboard focus and Enter/Space activation.
@@ -78,14 +102,38 @@ keep the current section in view. Press play/stop from the Writer header.
 1. Open **Writer**, add a section, tap a bar, pick a chord from the wheel.
 2. Optionally add a drum lane (section menu → *Add drum lane*) and tap in some
    hits.
-3. Add a melody lane to edit notes in Piano Roll, or a guitar-strum lane to
-   program down/up steps and choose its harmony anchor.
+3. Add a melody lane to create or reuse a pattern, or a guitar-strum lane to
+   program down/up steps and choose its Guitar Harmony source.
 4. Press play — chords stab, melody sustains for its note lengths, strums voice
    the anchored chords, drums groove, and the playhead sweeps.
 
 **Code:** `lib/schema/rules/songwriter_playback_rules.dart`
 (`flattenPlaybackEvents`, `chordMidiNotes`, `snapshotMidiNotes`,
 `activePositionForBar`), driven by `lib/store/songwriter_playback_store.dart`.
+
+### Melody pattern duration, reuse, and instrument performance
+
+At an empty bar, choose **Use existing pattern** to place another block linked
+to that pattern, or **Create new pattern** to start one in Piano Roll. Reuse
+keeps the same notes and Piano/Fretboard mapping, so arrangements such as
+A–B–A–B can share pattern A. A new block defaults to the pattern's full duration
+when the following bars are free; its placement can be shortened or extended
+within the section and around neighboring blocks. The pattern duration comes
+from its actual note-pattern length, shown in bars plus any remaining beats and
+ticks; the block placement is shown separately in bars against the section's
+total length. A longer placement repeats the pattern; a shorter placement
+clips notes at the block edge. Editing a reused pattern's duration does not
+resize existing blocks, so their repeat or clip behavior remains visible.
+
+Each pattern has one Piano or Fretboard performance target. Piano uses each
+note's MIDI key; Fretboard stores a playable string and physical fret for each note and
+preserves those positions when the Writer session is reopened or the pattern is
+reused from a canonical Writer Save. A fret position must match the note's pitch
+under the current tuning, capo, and fret count. The selected
+instrument performance view and its position editing are unavailable while
+any note is outside that instrument's current playable range; the Piano Roll
+remains available for correcting the notes. The target controls the physical
+view and mapping; Writer keeps its existing synthesized playback sound.
 
 ---
 
@@ -239,10 +287,11 @@ with a stale explicit anchor stays visible in its own unresolved row and can
 only be reanchored to a compatible Harmony lane; it never falls back to
 primary. Tap one of its Save blocks to open the native editor when available,
 or choose **Remove save**. If no Harmony lane can accept the blocks, choose
-**Remove lane** from the unresolved row. An explicitly anchored Guitar Strum
-lane keeps its missing anchor unresolved until you choose another lane; an
-unset anchor follows the primary Harmony lane. Section category folders are
-managed by Writer; deleting a block
+**Remove lane** from the unresolved row. If a Guitar Strum source is removed or
+changed to Piano, its saved anchor shows **Unresolved** and stays silent until
+you choose another Guitar Harmony lane. An unassigned anchor shows
+**Unassigned** and never follows the primary Harmony lane. Section category
+folders are managed by Writer; deleting a block
 removes its link while keeping recoverable content. Named Song versions retain
 the block content as saved. Loading an older version forks content whose shared
 save has since changed, while keeping the current project's tempo, meter, and

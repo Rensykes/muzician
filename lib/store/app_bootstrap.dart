@@ -157,6 +157,7 @@ Future<void> hydrateStores(ProviderReader read) async {
   final selectedFolder = activeSaveState.folders
       .where((folder) => folder.id == activeSaveState.selectedProjectId)
       .firstOrNull;
+  await read(songwriterProvider.notifier).migratePersistedStrumAnchors();
   if (selectedFolder?.kind == SaveFolderKind.project) {
     // Reconcile only after persisted Save System, Writer draft, and binding
     // stores have all hydrated. Await completion so linked block saves exist

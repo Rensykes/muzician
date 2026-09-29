@@ -44,7 +44,16 @@ class PianoKeyboard extends ConsumerStatefulWidget {
   /// renders an equivalent segmented control above the canvas.
   final bool hideToolbar;
 
-  const PianoKeyboard({super.key, this.hideToolbar = false});
+  /// When non-null, render these MIDI keys as a controlled, read-only overlay.
+  /// This is used by Writer so inspecting a melody never changes the user's
+  /// Piano selection or detection state. An empty set is still controlled mode.
+  final Set<int>? controlledMidiNotes;
+
+  const PianoKeyboard({
+    super.key,
+    this.hideToolbar = false,
+    this.controlledMidiNotes,
+  });
 
   @override
   ConsumerState<PianoKeyboard> createState() => _PianoKeyboardState();
@@ -78,11 +87,13 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     final notifier = ref.read(pianoProvider.notifier);
     final keys = notifier.getKeys();
 
-    ref.listen(pianoScrollToMidiProvider, (_, next) {
-      if (next == null) return;
-      _animateToMidi(next);
-      ref.read(pianoScrollToMidiProvider.notifier).state = null;
-    });
+    if (widget.controlledMidiNotes == null) {
+      ref.listen(pianoScrollToMidiProvider, (_, next) {
+        if (next == null) return;
+        _animateToMidi(next);
+        ref.read(pianoScrollToMidiProvider.notifier).state = null;
+      });
+    }
 
     // Position keys
     final positioned = <_PosKey>[];
@@ -133,16 +144,22 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
 
   Widget _buildKey(_PosKey pk, PianoState state, PianoNotifier notifier) {
     final key = pk.key;
+    final controlledNotes = widget.controlledMidiNotes;
+    final isControlled = controlledNotes != null;
     final selectedExact = state.selectedKeys.any(
       (k) => k.midiNote == key.midiNote,
     );
-    final isSelected = selectedExact;
+    final isSelected = isControlled
+        ? controlledNotes.contains(key.midiNote)
+        : selectedExact;
 
     // focusedNotes: pitch classes tapped in the detection panel.
-    final isFocusedPitchClass = state.focusedNotes.contains(key.noteName);
+    final isFocusedPitchClass =
+        !isControlled && state.focusedNotes.contains(key.noteName);
 
     // In Solo mode, hide keys that are neither selected nor focused.
     final inExactFocusMode =
+        !isControlled &&
         state.viewMode == PianoViewMode.exactFocus &&
         state.selectedKeys.isNotEmpty;
     if (inExactFocusMode && !selectedExact && !isFocusedPitchClass) {
@@ -153,7 +170,9 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         state.highlightedNotes.isNotEmpty &&
         state.highlightedNotes.contains(key.noteName);
 
-    final opacity = (isSelected || isFocusedPitchClass)
+    final opacity = isControlled
+        ? (isSelected ? 1.0 : 0.72)
+        : (isSelected || isFocusedPitchClass)
         ? 1.0
         : (state.focusedNotes.isNotEmpty)
         ? 0.25
@@ -168,58 +187,70 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         ? MuzicianTheme.sky
         : const Color(0xFFC084FC);
     final bgColor = (isSelected || isFocusedPitchClass) ? accentBg : baseBg;
+    final keyContent = Container(
+      width: key.isBlack ? _blackKeyW : _whiteKeyW,
+      height: key.isBlack ? _blackKeyH : _whiteKeyH,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(key.isBlack ? 6 : 8),
+          bottomRight: Radius.circular(key.isBlack ? 6 : 8),
+        ),
+        border: Border.all(
+          color: isSelected
+              ? Colors.white.withValues(alpha: 0.8)
+              : key.isBlack
+              ? Colors.white.withValues(alpha: 0.2)
+              : const Color(0x330F172A),
+          width: 1,
+        ),
+      ),
+      alignment: Alignment.bottomCenter,
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        '${key.noteName}${key.octave}',
+        style: TextStyle(
+          color: isSelected
+              ? Colors.white
+              : key.isBlack
+              ? const Color(0xFFE2E8F0)
+              : const Color(0xFF0F172A),
+          fontSize: key.isBlack ? 9 : 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
 
     return Positioned(
       left: pk.x,
       top: 0,
       child: Opacity(
         opacity: opacity,
-        child: GestureDetector(
-          onTap: () {
-            NotePlayer.instance.previewNote(
-              key.midiNote,
-              volume: ref.read(settingsProvider).noteVolume,
-            );
-            _guardOutOfKey(
-              noteName: key.noteName,
-              onConfirmed: () =>
-                  notifier.toggleKey(key.keyIndex, key.midiNote, key.noteName),
-              notifier: notifier,
-            );
-          },
-          child: Container(
-            width: key.isBlack ? _blackKeyW : _whiteKeyW,
-            height: key.isBlack ? _blackKeyH : _whiteKeyH,
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(key.isBlack ? 6 : 8),
-                bottomRight: Radius.circular(key.isBlack ? 6 : 8),
-              ),
-              border: Border.all(
-                color: isSelected
-                    ? Colors.white.withValues(alpha: 0.8)
-                    : key.isBlack
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : const Color(0x330F172A),
-                width: 1,
-              ),
-            ),
-            alignment: Alignment.bottomCenter,
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              '${key.noteName}${key.octave}',
-              style: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : key.isBlack
-                    ? const Color(0xFFE2E8F0)
-                    : const Color(0xFF0F172A),
-                fontSize: key.isBlack ? 9 : 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-              ),
-            ),
+        child: Semantics(
+          label:
+              '${key.noteWithOctave}, MIDI ${key.midiNote}'
+              '${isSelected ? ', melody note' : ''}',
+          selected: isSelected,
+          child: GestureDetector(
+            onTap: isControlled
+                ? null
+                : () {
+                    NotePlayer.instance.previewNote(
+                      key.midiNote,
+                      volume: ref.read(settingsProvider).noteVolume,
+                    );
+                    _guardOutOfKey(
+                      noteName: key.noteName,
+                      onConfirmed: () => notifier.toggleKey(
+                        key.keyIndex,
+                        key.midiNote,
+                        key.noteName,
+                      ),
+                      notifier: notifier,
+                    );
+                  },
+            child: keyContent,
           ),
         ),
       ),
@@ -249,9 +280,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         ),
       );
       if (decision != ProjectOffScaleDecision.switchToDump) return;
-      final dumpId = ref
-          .read(saveSystemProvider.notifier)
-          .ensureDumpFolder();
+      final dumpId = ref.read(saveSystemProvider.notifier).ensureDumpFolder();
       ref.read(saveSystemProvider.notifier).selectProject(dumpId);
       notifier.setHighlightedNotes([]);
       onConfirmed();

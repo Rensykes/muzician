@@ -1157,13 +1157,98 @@ void main() {
         ],
       ),
     );
+    expect(
+      writer.setMelodyPerformanceInstrument(
+        patternId: patternId,
+        instrument: HarmonyLaneInstrument.fretboard,
+      ),
+      isTrue,
+    );
+    const position = FretboardNotePosition(stringIndex: 0, fret: 3);
+    expect(
+      writer.setMelodyNoteFretboardPosition(
+        patternId: patternId,
+        noteId: 'note-one',
+        position: position,
+      ),
+      isTrue,
+    );
+    writer.updateMelodyPattern(
+      container
+          .read(songwriterProvider)
+          .melodyPatterns
+          .single
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'note-one',
+                midiNote: 67,
+                startTick: 1,
+                durationTicks: 3,
+              ),
+            ],
+          ),
+    );
     final saves = container.read(saveSystemProvider).saves;
     for (final link in before) {
       final snapshot =
           saves.singleWhere((save) => save.id == link.saveId).snapshot
               as WriterBlockSnapshot;
       expect(snapshot.melodyPattern?.notes.single.midiNote, 67);
+      expect(
+        snapshot.melodyPerformance?.fretboardPositionsByNoteId['note-one'],
+        position,
+      );
     }
+
+    final link = before.first;
+    final section = container
+        .read(songwriterProvider)
+        .sections
+        .singleWhere((candidate) => candidate.id == link.sectionId);
+    final lane = section.lanes.singleWhere(
+      (candidate) => candidate.kind == SongLaneKind.melody,
+    );
+    expect(
+      writer.makeBlockUnique(
+        sectionId: section.id,
+        laneId: lane.id,
+        blockId: link.blockId,
+      ),
+      isTrue,
+    );
+    final uniqueState = container.read(songwriterProvider);
+    final uniqueBlock = uniqueState.sections
+        .singleWhere((candidate) => candidate.id == section.id)
+        .lanes
+        .singleWhere((candidate) => candidate.id == lane.id)
+        .blocks
+        .singleWhere((candidate) => candidate.id == link.blockId);
+    final uniqueSnapshot =
+        container
+                .read(saveSystemProvider)
+                .saves
+                .singleWhere((save) => save.id == uniqueBlock.saveId)
+                .snapshot
+            as WriterBlockSnapshot;
+    expect(uniqueBlock.patternId, isNot(patternId));
+    expect(uniqueSnapshot.melodyPattern?.id, uniqueBlock.patternId);
+    expect(
+      uniqueSnapshot.melodyPerformance?.fretboardPositionsByNoteId['note-one'],
+      position,
+    );
+    expect(
+      uniqueState
+          .melodyPerformancesByPatternId[uniqueBlock.patternId]!
+          .fretboardPositionsByNoteId['note-one'],
+      position,
+    );
+    expect(
+      (uniqueBlock.embedded as WriterBlockSnapshot)
+          .melodyPerformance
+          ?.fretboardPositionsByNoteId['note-one'],
+      position,
+    );
   });
 
   test(

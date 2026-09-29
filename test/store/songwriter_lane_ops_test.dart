@@ -3,8 +3,6 @@ import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/schema/rules/songwriter_rules.dart'
-    show saveAnchorLane;
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
@@ -43,7 +41,7 @@ void main() {
   });
 
   test(
-    'deleting Harmony removes its Save lanes and preserves stale strum anchor',
+    'deleting a Harmony source removes linked Save lanes and clears strum source',
     () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
@@ -53,7 +51,7 @@ void main() {
       final secondaryHarmonyId = n.addLane(
         sectionId: sectionId,
         kind: SongLaneKind.harmony,
-        harmonyInstrument: HarmonyLaneInstrument.piano,
+        harmonyInstrument: HarmonyLaneInstrument.fretboard,
       );
       final saveLaneId = n.addLane(
         sectionId: sectionId,
@@ -82,8 +80,7 @@ void main() {
       );
       expect(section.lanes.any((lane) => lane.id == saveLaneId), isFalse);
       final strum = section.lanes.singleWhere((lane) => lane.id == strumLaneId);
-      expect(strum.anchorLaneId, secondaryHarmonyId);
-      expect(saveAnchorLane(section, strum), isNull);
+      expect(strum.anchorLaneId, isNull);
 
       expect(n.undo(), isTrue);
       section = c.read(songwriterProvider).sections.single;
@@ -114,6 +111,15 @@ void main() {
         kind: SongLaneKind.harmony,
         harmonyInstrument: HarmonyLaneInstrument.fretboard,
       );
+      final strumLaneId = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.guitarStrum,
+      );
+      n.setLaneAnchorLane(
+        sectionId: sectionId,
+        laneId: strumLaneId,
+        harmonyLaneId: editableLaneId,
+      );
 
       expect(
         n.setHarmonyLaneInstrument(
@@ -131,6 +137,16 @@ void main() {
           .singleWhere((candidate) => candidate.id == editableLaneId);
       expect(lane.id, editableLaneId);
       expect(lane.harmonyInstrument, HarmonyLaneInstrument.piano);
+      expect(
+        c
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .singleWhere((candidate) => candidate.id == strumLaneId)
+            .anchorLaneId,
+        isNull,
+      );
 
       final blockedByBlockId = n.addLane(
         sectionId: sectionId,

@@ -17,6 +17,7 @@ import '../schema/rules/save_system_rules.dart';
 import '../schema/rules/fretboard_rules.dart' show tunings;
 import '../schema/rules/piano_rules.dart' as piano_rules;
 import '../schema/rules/songwriter_rules.dart';
+import '../schema/rules/songwriter_melody_instrument_rules.dart';
 import '../schema/rules/songwriter_segment_rules.dart';
 import '../schema/rules/songwriter_slice_rules.dart';
 import '../schema/rules/songwriter_third_above_rules.dart';
@@ -89,6 +90,33 @@ class HarmonyInstrumentEditResult {
   final String? errorMessage;
 }
 
+enum WriterProjectCreationDisposition { keep, discard, cancel }
+
+enum WriterProjectCreationStatus {
+  created,
+  cancelled,
+  dispositionRequired,
+  invalidName,
+  noSelectedProject,
+  busy,
+  storageFailure,
+  recoveryRequired,
+}
+
+class WriterProjectCreationResult {
+  const WriterProjectCreationResult({
+    required this.status,
+    this.projectId,
+    this.error,
+  });
+
+  final WriterProjectCreationStatus status;
+  final String? projectId;
+  final Object? error;
+
+  bool get succeeded => status == WriterProjectCreationStatus.created;
+}
+
 class _RemovedWriterFolderSubtree {
   const _RemovedWriterFolderSubtree({
     required this.folders,
@@ -102,6 +130,7 @@ class _RemovedWriterFolderSubtree {
 class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   bool _hydrating = false;
   bool _suppressHistory = false;
+  bool _suppressNextProjectSelectionSideEffects = false;
   SongwriterProjectSnapshot? _trackedState;
   final Map<String, _RemovedWriterFolderSubtree> _removedWriterFolderSubtrees =
       {};
@@ -109,6 +138,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       ProjectSnapshotHistory();
 
   String? lastHarmonyMutationError;
+  WriterProjectCreationResult? lastProjectCreationResult;
 
   bool get canUndo => _history.canUndo;
   bool get canRedo => _history.canRedo;
@@ -126,8 +156,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       prev,
       next,
     ) {
+      final stagedSwitch =
+          prev != next && _suppressNextProjectSelectionSideEffects;
+      if (stagedSwitch) _suppressNextProjectSelectionSideEffects = false;
       // Persist outgoing immediately.
-      if (prev != null && prev != next) {
+      if (prev != null && prev != next && !stagedSwitch) {
         final projectStillExists = ref
             .read(saveSystemProvider)
             .folders
@@ -151,7 +184,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         state = _defaultFor(next);
       }
       _hydrating = false;
-      unawaited(reconcileCurrentProject().catchError(_reportWriterSyncFailure));
+      if (!stagedSwitch) {
+        unawaited(
+          reconcileCurrentProject().catchError(_reportWriterSyncFailure),
+        );
+      }
     });
 
     // Cold start: the listener above only fires on project *changes*. When a
@@ -172,6 +209,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
   @override
   set state(SongwriterProjectSnapshot value) {
+    if (ref.read(writerProjectWriteFenceProvider) && !_hydrating) return;
     final previous = _trackedState;
     if (!_hydrating && !_suppressHistory && previous != null) {
       _history.recordChange(previous, value);
@@ -197,6 +235,31 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         keyScaleName: cfg.keyScaleName,
       ),
     );
+  }
+
+  /// Complete project default used as the dirty baseline while no valid named
+  /// Writer Save is bound.
+  SongwriterProjectSnapshot defaultProjectSnapshot(String projectId) =>
+      _defaultFor(projectId);
+
+  /// Compares the selected live Writer draft with its complete named-save
+  /// materialization or project default. Shared by staged project creation and
+  /// the UI-facing dirty provider without a provider self-dependency.
+  bool isProjectDirty(String projectId) {
+    final binding = ref.read(writerSaveBindingProvider)[projectId];
+    final saveState = ref.read(saveSystemProvider);
+    final saveId = binding?.activeSaveId;
+    final entry = saveId == null
+        ? null
+        : resolveSaveInProject(saveState, projectId, saveId);
+    if (entry?.snapshot is! SongwriterProjectSnapshot) {
+      return jsonEncode(state.toJson()) !=
+          jsonEncode(defaultProjectSnapshot(projectId).toJson());
+    }
+    final materialized = materializeCurrentContent();
+    final baseline = binding?.materializedBaselineJson;
+    return jsonEncode(materialized.toJson()) !=
+        (baseline ?? jsonEncode(entry!.snapshot.toJson()));
   }
 
   HarmonyLaneInstrument get projectDefaultHarmonyInstrumentForSelectedProject {
@@ -594,7 +657,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   void _schedulePersist(SongwriterProjectSnapshot project) {
-    if (_hydrating) return;
+    if (_hydrating || ref.read(writerProjectWriteFenceProvider)) return;
     final id = ref.read(saveSystemProvider).selectedProjectId;
     if (id != null) {
       ref.read(songwriterSessionsProvider.notifier).put(id, project);
@@ -615,6 +678,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     String? bindSaveId,
     bool resetBinding = false,
   }) {
+    if (ref.read(writerProjectWriteFenceProvider)) return;
     unawaited(
       _commitWriterState(
         next,
@@ -638,6 +702,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   void _applyState(SongwriterProjectSnapshot next, {bool persistDraft = true}) {
+    if (ref.read(writerProjectWriteFenceProvider) && !_hydrating) return;
     final previous = _trackedState;
     if (!_hydrating && !_suppressHistory && previous != null) {
       _history.recordChange(previous, next);
@@ -657,6 +722,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     bool detectReconciliationConflicts = false,
     bool clearReconciliationMarkers = false,
   }) {
+    if (ref.read(writerProjectWriteFenceProvider)) return Future<void>.value();
     lastHarmonyMutationError = null;
     final projectId = ref.read(saveSystemProvider).selectedProjectId;
     final saveNotifier = ref.read(saveSystemProvider.notifier);
@@ -1614,6 +1680,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   ) {
     var drumPatterns = [...project.drumPatterns];
     var melodyPatterns = [...project.melodyPatterns];
+    var melodyPerformances = {...project.melodyPerformancesByPatternId};
     var guitarPatterns = [...project.guitarStrumPatterns];
     var audioClips = [...project.audioClips];
     var audioAssets = [...project.audioAssets];
@@ -1671,6 +1738,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         );
       } else if (writerBlock.melodyPattern case final pattern?) {
         upsert(melodyPatterns, pattern.id, pattern, (item) => item.id);
+        if (writerBlock.melodyPerformance case final performance?) {
+          melodyPerformances[pattern.id] = performance;
+        } else {
+          melodyPerformances.remove(pattern.id);
+        }
         updated = updated.copyWith(
           patternId: pattern.id,
           clearAudioClipId: true,
@@ -1708,6 +1780,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       ],
       drumPatterns: drumPatterns,
       melodyPatterns: melodyPatterns,
+      melodyPerformancesByPatternId: melodyPerformances,
       guitarStrumPatterns: guitarPatterns,
       audioClips: audioClips,
       audioAssets: audioAssets,
@@ -1755,6 +1828,217 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
     if (id != null) {
       ref.read(songwriterSessionsProvider.notifier).remove(id);
+    }
+  }
+
+  /// Creates and opens an independent Save System project as one staged
+  /// Writer transaction. The prompt itself belongs to the UI; [disposition]
+  /// captures the user's Keep / Discard / Cancel choice. Keep is also the
+  /// default behavior when the current session is clean.
+  Future<WriterProjectCreationResult> createSaveProject({
+    required String name,
+    required HarmonyLaneInstrument defaultHarmonyInstrument,
+    WriterProjectCreationDisposition? disposition,
+  }) async {
+    WriterProjectCreationResult finish(WriterProjectCreationResult result) {
+      lastProjectCreationResult = result;
+      return result;
+    }
+
+    if (disposition == WriterProjectCreationDisposition.cancel) {
+      return finish(
+        const WriterProjectCreationResult(
+          status: WriterProjectCreationStatus.cancelled,
+        ),
+      );
+    }
+    if (!isValidFolderName(name)) {
+      return finish(
+        const WriterProjectCreationResult(
+          status: WriterProjectCreationStatus.invalidName,
+        ),
+      );
+    }
+
+    final fence = ref.read(writerProjectWriteFenceProvider.notifier);
+    final sync = ref.read(writerSaveSyncProvider.notifier);
+    if (fence.state) {
+      return finish(
+        WriterProjectCreationResult(
+          status: sync.state
+              ? WriterProjectCreationStatus.recoveryRequired
+              : WriterProjectCreationStatus.busy,
+        ),
+      );
+    }
+    final initialSaveState = ref.read(saveSystemProvider);
+    final oldProjectId = initialSaveState.selectedProjectId;
+    final outgoingProject = oldProjectId == null
+        ? null
+        : initialSaveState.folders
+              .where((folder) => folder.id == oldProjectId)
+              .firstOrNull;
+    if (oldProjectId == null ||
+        outgoingProject?.kind != SaveFolderKind.project) {
+      return finish(
+        const WriterProjectCreationResult(
+          status: WriterProjectCreationStatus.noSelectedProject,
+        ),
+      );
+    }
+
+    final effectiveDisposition =
+        disposition ??
+        (isProjectDirty(oldProjectId)
+            ? null
+            : WriterProjectCreationDisposition.keep);
+    if (effectiveDisposition == null) {
+      return finish(
+        const WriterProjectCreationResult(
+          status: WriterProjectCreationStatus.dispositionRequired,
+        ),
+      );
+    }
+
+    final sessions = ref.read(songwriterSessionsProvider.notifier);
+    final bindings = ref.read(writerSaveBindingProvider.notifier);
+    final saveNotifier = ref.read(saveSystemProvider.notifier);
+    fence.state = true;
+    sessions.pauseProjectWrites();
+    bindings.pauseProjectWrites();
+    var published = false;
+    try {
+      if (sync.state) {
+        // An earlier accepted journal still owns recovery. Keep the project
+        // lock until startup recovery or an explicit replay has reconciled it.
+        return finish(
+          const WriterProjectCreationResult(
+            status: WriterProjectCreationStatus.recoveryRequired,
+          ),
+        );
+      }
+      await sync.drain();
+
+      final saveState = ref.read(saveSystemProvider);
+      if (saveState.selectedProjectId != oldProjectId) {
+        throw StateError('The selected project changed before preparation.');
+      }
+      final rootCount = saveState.folders
+          .where((folder) => folder.parentId == null)
+          .length;
+      final folder = createProjectFolder(
+        name,
+        ProjectConfig(defaultHarmonyInstrument: defaultHarmonyInstrument),
+        rootCount,
+      );
+      var nextSaveState = saveState.copyWith(
+        folders: [...saveState.folders, folder],
+        selectedProjectId: () => folder.id,
+      );
+      final nextDrafts = {...sessions.state};
+      final nextBindings = {...bindings.state};
+
+      if (effectiveDisposition == WriterProjectCreationDisposition.keep) {
+        nextDrafts[oldProjectId] = state;
+      } else {
+        final binding = nextBindings[oldProjectId];
+        final boundSaveId = binding?.activeSaveId;
+        final boundEntry = boundSaveId == null
+            ? null
+            : resolveSaveInProject(saveState, oldProjectId, boundSaveId);
+        if (boundEntry?.snapshot case final SongwriterProjectSnapshot named?) {
+          final loadable = named.copyWith(config: state.config);
+          final forked = _forkChangedNamedVersion(oldProjectId, loadable);
+          final prepared = _prepareWriterStructure(
+            oldProjectId,
+            state,
+            forked.project,
+            adoptSaves: forked.saves,
+          );
+          if (prepared == null) {
+            throw StateError(
+              lastHarmonyMutationError ??
+                  'Could not prepare the bound Writer Save for restore.',
+            );
+          }
+          final restored = prepared.project;
+          nextSaveState = prepared.saveSystem.copyWith(
+            folders: [...prepared.saveSystem.folders, folder],
+            selectedProjectId: () => folder.id,
+          );
+          nextDrafts[oldProjectId] = restored;
+          nextBindings[oldProjectId] = WriterSaveBinding(
+            activeSaveId: boundSaveId,
+            materializedBaselineJson: jsonEncode(restored.toJson()),
+          );
+        } else {
+          nextDrafts.remove(oldProjectId);
+          nextBindings.remove(oldProjectId);
+        }
+      }
+
+      final projectConfig = folder.projectConfig!;
+      final newProject = SongwriterProjectSnapshot(
+        name: folder.name,
+        config: SongwriterConfig(
+          tempo: projectConfig.tempo,
+          beatsPerBar: projectConfig.beatsPerBar,
+          beatUnit: projectConfig.beatUnit,
+          keyRoot: projectConfig.keyRootPc,
+          keyScaleName: projectConfig.keyScaleName,
+        ),
+      );
+      nextDrafts[folder.id] = newProject;
+      nextBindings.remove(folder.id);
+
+      await sync.commitWriterTransactionAfterPersist(
+        projectId: folder.id,
+        saveSystemState: nextSaveState,
+        writerDrafts: nextDrafts,
+        writerBindings: {
+          for (final entry in nextBindings.entries)
+            entry.key: entry.value.toJson(),
+        },
+        commitMemory: () {
+          sessions.commitState(nextDrafts);
+          bindings.commitState(nextBindings);
+          _suppressNextProjectSelectionSideEffects = true;
+          _history.clear();
+          saveNotifier.publishPreparedWriterProjectSwitch(nextSaveState);
+          published = true;
+        },
+      );
+      fence.state = false;
+      sessions.resumeProjectWrites(persistCurrent: false);
+      bindings.resumeProjectWrites(persistCurrent: false);
+      return finish(
+        WriterProjectCreationResult(
+          status: WriterProjectCreationStatus.created,
+          projectId: folder.id,
+        ),
+      );
+    } catch (error) {
+      if (sync.state) {
+        // The journal was accepted but could not be replayed. Preserve the
+        // recovery fence and paused debounce stores until it is resolved.
+        return finish(
+          WriterProjectCreationResult(
+            status: WriterProjectCreationStatus.recoveryRequired,
+            error: error,
+          ),
+        );
+      }
+      if (!published) {
+        fence.state = false;
+        sessions.resumeProjectWrites();
+        bindings.resumeProjectWrites();
+      }
+      return finish(
+        WriterProjectCreationResult(
+          status: WriterProjectCreationStatus.storageFailure,
+          error: error,
+        ),
+      );
     }
   }
 
@@ -1955,6 +2239,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         'Only Harmony lanes can select a Harmony instrument.',
       );
     }
+    if (kind == SongLaneKind.guitarStrum && !canAddGuitarStrumLane(sectionId)) {
+      return '';
+    }
     final lane = makeLane(
       kind: kind,
       label: label,
@@ -1969,6 +2256,19 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       return s.copyWith(lanes: [...s.lanes, positioned]);
     });
     return lane.id;
+  }
+
+  bool canAddGuitarStrumLane(String sectionId) {
+    final section = state.sections
+        .where((candidate) => candidate.id == sectionId)
+        .firstOrNull;
+    return section != null &&
+        section.lanes.any(
+          (lane) =>
+              lane.kind == SongLaneKind.harmony &&
+              _instrumentForHarmonyLane(lane) ==
+                  HarmonyLaneInstrument.fretboard,
+        );
   }
 
   /// Duplicates a Harmony lane and its chord placements. The copied blocks get
@@ -2124,6 +2424,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .where((candidate) => candidate.id == laneId)
         .firstOrNull;
     if (section == null || lane == null) return;
+    if (lane.kind == SongLaneKind.guitarStrum && harmonyLaneId != null) {
+      final anchor = section.lanes
+          .where(
+            (candidate) =>
+                candidate.id == harmonyLaneId &&
+                candidate.kind == SongLaneKind.harmony,
+          )
+          .firstOrNull;
+      if (anchor == null ||
+          _instrumentForHarmonyLane(anchor) !=
+              HarmonyLaneInstrument.fretboard) {
+        return;
+      }
+    }
     if (lane.kind == SongLaneKind.save &&
         !_saveLaneBlocksMatchAnchor(
           section,
@@ -2212,11 +2526,21 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       (candidate) => candidate.id == laneId,
     );
     if (lane.harmonyInstrument == instrument) return true;
-    _replaceLane(
-      sectionId,
-      laneId,
-      (current) => current.copyWith(harmonyInstrument: instrument),
-    );
+    _replaceSection(sectionId, (currentSection) {
+      return currentSection.copyWith(
+        lanes: [
+          for (final current in currentSection.lanes)
+            if (current.id == laneId)
+              current.copyWith(harmonyInstrument: instrument)
+            else if (instrument == HarmonyLaneInstrument.piano &&
+                current.kind == SongLaneKind.guitarStrum &&
+                current.anchorLaneId == laneId)
+              current.copyWith(clearAnchorLaneId: true)
+            else
+              current,
+        ],
+      );
+    });
     return true;
   }
 
@@ -2233,7 +2557,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                 !(removed.kind == SongLaneKind.harmony &&
                     lane.kind == SongLaneKind.save &&
                     saveAnchorLane(section, lane)?.id == laneId))
-              lane,
+              if (removed.kind == SongLaneKind.harmony &&
+                  lane.kind == SongLaneKind.guitarStrum &&
+                  lane.anchorLaneId == laneId)
+                lane.copyWith(clearAnchorLaneId: true)
+              else
+                lane,
         ],
       );
     });
@@ -3113,13 +3442,175 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   void updateMelodyPattern(NotePattern updated) {
+    saveMelodyPattern(updated);
+  }
+
+  /// Saves a Piano Roll melody edit and, for a newly-created pattern only,
+  /// expands the explicitly supplied first block to the pattern's full bar
+  /// duration when that complete placement fits the section and lane.
+  void saveMelodyPattern(
+    NotePattern updated, {
+    ({String sectionId, String laneId, String blockId})? initialPlacement,
+  }) {
+    final existing = state.melodyPerformancesByPatternId[updated.id];
+    final performances = {...state.melodyPerformancesByPatternId};
+    if (existing != null) {
+      performances[updated.id] = existing.copyWith(
+        fretboardPositionsByNoteId: reconcileFretboardPositions(
+          pattern: updated,
+          positions: existing.fretboardPositionsByNoteId,
+          state: ref.read(fretboardProvider),
+        ),
+      );
+    }
+    var sections = state.sections;
+    if (initialPlacement != null && updated.lengthTicks > 0) {
+      final sectionIndex = sections.indexWhere(
+        (section) => section.id == initialPlacement.sectionId,
+      );
+      if (sectionIndex >= 0) {
+        final section = sections[sectionIndex];
+        final lane = section.lanes
+            .where(
+              (candidate) =>
+                  candidate.id == initialPlacement.laneId &&
+                  candidate.kind == SongLaneKind.melody,
+            )
+            .firstOrNull;
+        final block = lane?.blocks
+            .where(
+              (candidate) =>
+                  candidate.id == initialPlacement.blockId &&
+                  candidate.patternId == updated.id,
+            )
+            .firstOrNull;
+        if (lane != null && block != null) {
+          final desiredSpan =
+              (updated.lengthTicks + state.config.measureTicks - 1) ~/
+              state.config.measureTicks;
+          final expanded = block.copyWith(spanBars: desiredSpan);
+          if (desiredSpan > block.spanBars &&
+              isValidBlockPlacement(
+                section: section,
+                lane: lane,
+                candidate: expanded,
+              )) {
+            sections = [
+              for (var i = 0; i < sections.length; i++)
+                if (i == sectionIndex)
+                  section.copyWith(
+                    lanes: [
+                      for (final currentLane in section.lanes)
+                        if (currentLane.id != lane.id)
+                          currentLane
+                        else
+                          currentLane.copyWith(
+                            blocks: [
+                              for (final currentBlock in currentLane.blocks)
+                                if (currentBlock.id == block.id)
+                                  expanded
+                                else
+                                  currentBlock,
+                            ],
+                          ),
+                    ],
+                  )
+                else
+                  sections[i],
+            ];
+          }
+        }
+      }
+    }
     _set(
       state.copyWith(
+        sections: sections,
         melodyPatterns: state.melodyPatterns
             .map((pattern) => pattern.id == updated.id ? updated : pattern)
             .toList(),
+        melodyPerformancesByPatternId: performances,
       ),
     );
+  }
+
+  /// Sets the saved Piano/Fretboard target for [patternId]. Every note must be
+  /// playable on the target under the currently selected instrument config.
+  bool setMelodyPerformanceInstrument({
+    required String patternId,
+    required HarmonyLaneInstrument instrument,
+  }) {
+    final pattern = state.melodyPatterns
+        .where((candidate) => candidate.id == patternId)
+        .firstOrNull;
+    if (pattern == null ||
+        !canOpenOnInstrument(
+          pattern: pattern,
+          instrument: instrument,
+          pianoRange: ref.read(pianoProvider).currentRange,
+          fretboard: ref.read(fretboardProvider),
+        )) {
+      return false;
+    }
+    final previous = state.melodyPerformancesByPatternId[patternId];
+    final fretboard = ref.read(fretboardProvider);
+    final positions = instrument == HarmonyLaneInstrument.fretboard
+        ? reconcileFretboardPositions(
+            pattern: pattern,
+            positions: previous?.fretboardPositionsByNoteId ?? const {},
+            state: fretboard,
+          )
+        : const <String, FretboardNotePosition>{};
+    _set(
+      state.copyWith(
+        melodyPerformancesByPatternId: {
+          ...state.melodyPerformancesByPatternId,
+          patternId: WriterMelodyPerformance(
+            instrument: instrument,
+            fretboardPositionsByNoteId: positions,
+          ),
+        },
+      ),
+    );
+    return true;
+  }
+
+  /// Assigns one valid physical fret position to a pattern note.
+  bool setMelodyNoteFretboardPosition({
+    required String patternId,
+    required String noteId,
+    required FretboardNotePosition position,
+  }) {
+    final pattern = state.melodyPatterns
+        .where((candidate) => candidate.id == patternId)
+        .firstOrNull;
+    final performance = state.melodyPerformancesByPatternId[patternId];
+    final note = pattern?.notes
+        .where((candidate) => candidate.id == noteId)
+        .firstOrNull;
+    final fretboard = ref.read(fretboardProvider);
+    if (performance?.instrument != HarmonyLaneInstrument.fretboard ||
+        note == null ||
+        !isValidFretboardNotePosition(
+          midiNote: note.midiNote,
+          position: position,
+          state: fretboard,
+        )) {
+      return false;
+    }
+    _set(
+      state.copyWith(
+        melodyPerformancesByPatternId: {
+          ...state.melodyPerformancesByPatternId,
+          patternId: performance!.copyWith(
+            fretboardPositionsByNoteId: {
+              ...performance.fretboardPositionsByNoteId,
+              noteId: position,
+            },
+          ),
+        },
+      ),
+    );
+    return true;
   }
 
   void removeMelodyPattern(String patternId) {
@@ -3143,6 +3634,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         melodyPatterns: state.melodyPatterns
             .where((pattern) => pattern.id != patternId)
             .toList(),
+        melodyPerformancesByPatternId: {
+          for (final entry in state.melodyPerformancesByPatternId.entries)
+            if (entry.key != patternId) entry.key: entry.value,
+        },
         sections: sections,
       ),
     );
@@ -3236,6 +3731,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required int startBar,
     required int spanBars,
   }) {
+    final section = state.sections
+        .where((candidate) => candidate.id == sectionId)
+        .firstOrNull;
+    if (section == null) return;
     _replaceLane(sectionId, laneId, (lane) {
       if (lane.kind != kind) return lane;
       final block = makePatternBlock(
@@ -3243,7 +3742,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         startBar: startBar,
         spanBars: spanBars,
       );
-      if (blocksOverlap(lane.blocks, block)) return lane;
+      if (!isValidBlockPlacement(
+        section: section,
+        lane: lane,
+        candidate: block,
+      )) {
+        return lane;
+      }
       return lane.copyWith(blocks: [...lane.blocks, block]);
     });
   }
@@ -3631,8 +4136,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     return newClipIds;
   }
 
-  /// Move/resize a block. Clamps to valid bounds; rejects (no-op) if the new
-  /// placement would overlap another block in the same lane.
+  /// Move/resize a block. Rejects (no-op) if it falls outside the section or
+  /// overlaps another block in the same lane.
   void setBlockPlacement({
     required String sectionId,
     required String laneId,
@@ -3640,19 +4145,34 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required int startBar,
     required int spanBars,
   }) {
-    _replaceLane(sectionId, laneId, (l) {
-      final current = l.blocks.where((b) => b.id == blockId).firstOrNull;
-      if (current == null) return l;
-      final moved = current.copyWith(
-        startBar: startBar < 0 ? 0 : startBar,
-        spanBars: spanBars < 1 ? 1 : spanBars,
-      );
-      final others = l.blocks.where((b) => b.id != blockId).toList();
-      if (blocksOverlap(others, moved)) return l; // reject overlap
-      return l.copyWith(
-        blocks: l.blocks.map((b) => b.id == blockId ? moved : b).toList(),
-      );
-    });
+    final section = state.sections
+        .where((candidate) => candidate.id == sectionId)
+        .firstOrNull;
+    final lane = section?.lanes
+        .where((candidate) => candidate.id == laneId)
+        .firstOrNull;
+    if (section == null || lane == null) return;
+    final current = lane.blocks
+        .where((block) => block.id == blockId)
+        .firstOrNull;
+    if (current == null) return;
+    final moved = current.copyWith(startBar: startBar, spanBars: spanBars);
+    if (!isValidBlockPlacement(
+      section: section,
+      lane: lane,
+      candidate: moved,
+    )) {
+      return;
+    }
+    _replaceLane(
+      sectionId,
+      laneId,
+      (currentLane) => currentLane.copyWith(
+        blocks: currentLane.blocks
+            .map((block) => block.id == blockId ? moved : block)
+            .toList(),
+      ),
+    );
   }
 
   /// Make Unique: detach a block from its live save by embedding a snapshot.
@@ -3695,8 +4215,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         );
       } else if (snapshot.melodyPattern case final pattern?) {
         final cloned = pattern.copyWith(id: generateId());
+        final melodyPerformances = {...project.melodyPerformancesByPatternId};
+        if (snapshot.melodyPerformance case final performance?) {
+          melodyPerformances[cloned.id] = performance;
+        }
         project = project.copyWith(
           melodyPatterns: [...project.melodyPatterns, cloned],
+          melodyPerformancesByPatternId: melodyPerformances,
         );
         patternId = cloned.id;
         uniqueSnapshot = _copyWriterBlockSnapshot(
@@ -3790,6 +4315,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     WriterBlockSnapshot snapshot, {
     DrumPattern? drumPattern,
     NotePattern? melodyPattern,
+    WriterMelodyPerformance? melodyPerformance,
     GuitarStrumPattern? guitarStrumPattern,
     AudioClip? audioClip,
     List<String>? defaultLyrics,
@@ -3804,6 +4330,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     defaultLyrics: defaultLyrics ?? snapshot.defaultLyrics,
     drumPattern: drumPattern ?? snapshot.drumPattern,
     melodyPattern: melodyPattern ?? snapshot.melodyPattern,
+    melodyPerformance: melodyPerformance ?? snapshot.melodyPerformance,
     guitarStrumPattern: guitarStrumPattern ?? snapshot.guitarStrumPattern,
     audioClip: audioClip ?? snapshot.audioClip,
     audioAsset: snapshot.audioAsset,
@@ -4030,7 +4557,23 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         lanes: lanes,
       );
     }
-    if (startBar >= section.lengthBars) return false;
+    if (startBar >= section.lengthBars ||
+        startBar + spanBars > section.lengthBars) {
+      return false;
+    }
+    if (laneKind == SongLaneKind.guitarStrum) {
+      final guitarLanes = section.lanes.where(
+        (candidate) =>
+            candidate.kind == SongLaneKind.harmony &&
+            _instrumentForHarmonyLane(candidate) ==
+                HarmonyLaneInstrument.fretboard,
+      );
+      if (guitarLanes.isEmpty) return false;
+      if (anchorLaneId != null &&
+          !guitarLanes.any((candidate) => candidate.id == anchorLaneId)) {
+        return false;
+      }
+    }
 
     SongLane? destination;
     if (laneId != null) {
@@ -4239,6 +4782,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         if (idOf(item) != idOf(value)) item,
       value,
     ];
+    final performances = {...project.melodyPerformancesByPatternId};
+    if (snapshot.melodyPattern case final pattern?) {
+      if (snapshot.melodyPerformance case final performance?) {
+        performances[pattern.id] = performance;
+      } else {
+        performances.remove(pattern.id);
+      }
+    }
     return project.copyWith(
       drumPatterns: snapshot.drumPattern == null
           ? project.drumPatterns
@@ -4254,6 +4805,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
               snapshot.melodyPattern!,
               (pattern) => pattern.id,
             ),
+      melodyPerformancesByPatternId: performances,
       guitarStrumPatterns: snapshot.guitarStrumPattern == null
           ? project.guitarStrumPatterns
           : upsert(
@@ -4853,6 +5405,114 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       state,
       detectReconciliationConflicts: true,
     );
+  }
+
+  /// Migrates every persisted Writer snapshot and binding baseline in one
+  /// shared journal transaction before the selected project becomes editable.
+  Future<void> migratePersistedStrumAnchors() async {
+    final saveNotifier = ref.read(saveSystemProvider.notifier);
+    final saveState = ref.read(saveSystemProvider);
+    final sessions = ref.read(songwriterSessionsProvider.notifier);
+    final bindings = ref.read(writerSaveBindingProvider.notifier);
+    final settingsDefault =
+        ref.read(settingsProvider).defaultNewProjectHarmonyInstrument ??
+        HarmonyLaneInstrument.fretboard;
+    final defaultsByProject = <String, HarmonyLaneInstrument>{
+      for (final folder in saveState.folders)
+        if (folder.kind == SaveFolderKind.project)
+          folder.id:
+              folder.projectConfig?.defaultHarmonyInstrument ?? settingsDefault,
+    };
+    HarmonyLaneInstrument defaultFor(String? projectId) => projectId == null
+        ? settingsDefault
+        : defaultsByProject[projectId] ?? settingsDefault;
+
+    final nextDrafts = {
+      for (final entry in sessions.state.entries)
+        entry.key: migrateLegacyStrumAnchors(
+          entry.value,
+          projectDefault: defaultFor(entry.key),
+        ),
+    };
+    final nextSaves = [
+      for (final save in saveState.saves)
+        if (save.snapshot is SongwriterProjectSnapshot)
+          save.copyWith(
+            snapshot: migrateLegacyStrumAnchors(
+              save.snapshot as SongwriterProjectSnapshot,
+              projectDefault: defaultFor(
+                getProjectIdForFolder(saveState.folders, save.folderId),
+              ),
+            ),
+          )
+        else
+          save,
+    ];
+    final nextBindings = <String, WriterSaveBinding>{};
+    var didMigrateBinding = false;
+    for (final entry in bindings.state.entries) {
+      final binding = entry.value;
+      final baselineJson = binding.materializedBaselineJson;
+      if (baselineJson == null) {
+        nextBindings[entry.key] = binding;
+        continue;
+      }
+      try {
+        final baseline = SongwriterProjectSnapshot.fromJson(
+          jsonDecode(baselineJson) as Map<String, dynamic>,
+        );
+        final migrated = migrateLegacyStrumAnchors(
+          baseline,
+          projectDefault: defaultFor(entry.key),
+        );
+        final migratedJson = jsonEncode(migrated.toJson());
+        nextBindings[entry.key] = migratedJson == baselineJson
+            ? binding
+            : binding.copyWith(materializedBaselineJson: migratedJson);
+        didMigrateBinding = didMigrateBinding || migratedJson != baselineJson;
+      } catch (_) {
+        // Leave an invalid advisory baseline untouched; the normal recovery
+        // and dirty-state paths will continue to handle it as before.
+        nextBindings[entry.key] = binding;
+      }
+    }
+    final nextSaveState = saveState.copyWith(saves: nextSaves);
+    final hasDraftChanges = !_jsonEqual(
+      sessions.state.map((key, value) => MapEntry(key, value.toJson())),
+      nextDrafts.map((key, value) => MapEntry(key, value.toJson())),
+    );
+    final hasSaveChanges = !_jsonEqual(
+      saveState.saves.map((save) => save.toJson()).toList(),
+      nextSaves.map((save) => save.toJson()).toList(),
+    );
+    if (!hasDraftChanges && !hasSaveChanges && !didMigrateBinding) return;
+
+    final journalProjectId =
+        saveState.selectedProjectId ??
+        defaultsByProject.keys.firstOrNull ??
+        'strum-anchor-migration';
+    await ref
+        .read(writerSaveSyncProvider.notifier)
+        .commitWriterTransaction(
+          projectId: journalProjectId,
+          saveSystemState: nextSaveState,
+          writerDrafts: nextDrafts,
+          writerBindings: {
+            for (final entry in nextBindings.entries)
+              entry.key: entry.value.toJson(),
+          },
+          commitMemory: () {
+            sessions.commitState(nextDrafts);
+            bindings.commitState(nextBindings);
+            saveNotifier.state = nextSaveState;
+            final selectedId = saveState.selectedProjectId;
+            if (selectedId != null && nextDrafts[selectedId] != null) {
+              _hydrating = true;
+              _applyState(nextDrafts[selectedId]!, persistDraft: false);
+              _hydrating = false;
+            }
+          },
+        );
   }
 
   Future<void> acknowledgeWriterReconciliationConflicts(

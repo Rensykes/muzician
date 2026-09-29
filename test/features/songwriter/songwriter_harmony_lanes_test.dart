@@ -458,46 +458,58 @@ void main() {
   testWidgets('stale guitar strum anchor shows unresolved instead of primary', (
     tester,
   ) async {
-    SongLane? strumLane;
     final container = await pumpSheet(
       tester,
       seed: (n) {
         n.addSection(label: 'Verse', lengthBars: 2);
         final sectionId = n.state.sections.single.id;
-        final secondaryId = n.addLane(
-          sectionId: sectionId,
-          kind: SongLaneKind.harmony,
-        );
         final strumId = n.addLane(
           sectionId: sectionId,
           kind: SongLaneKind.guitarStrum,
         );
-        n.setLaneAnchorLane(
-          sectionId: sectionId,
-          laneId: strumId,
-          harmonyLaneId: secondaryId,
-        );
-        n.removeLane(sectionId: sectionId, laneId: secondaryId);
-        strumLane = n.state.sections.single.lanes.singleWhere(
-          (lane) => lane.id == strumId,
+        final section = n.state.sections.single;
+        // A normal lane deletion clears its anchor. Seed the dangling ID
+        // directly to model a stale reference loaded from persisted data.
+        n.state = n.state.copyWith(
+          sections: [
+            section.copyWith(
+              lanes: [
+                for (final lane in section.lanes)
+                  if (lane.id == strumId)
+                    lane.copyWith(anchorLaneId: 'deleted-harmony')
+                  else
+                    lane,
+              ],
+            ),
+          ],
         );
       },
     );
 
+    final strumLane = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.guitarStrum);
     final dropdown = tester.widget<DropdownButton<String>>(
-      find.byKey(Key('strumAnchor_${strumLane!.id}_0')),
+      find.byKey(Key('strumAnchor_${strumLane.id}_0')),
     );
     expect(dropdown.value, isNull);
+    expect((dropdown.hint as Text).data, 'Unresolved');
     expect(find.text('Unresolved'), findsOneWidget);
+    expect(find.text('Unassigned'), findsNothing);
+    expect(dropdown.items!.map((item) => item.value), contains(''));
+    expect(strumLane.anchorLaneId, 'deleted-harmony');
     expect(
       container
           .read(songwriterProvider)
           .sections
           .single
           .lanes
-          .singleWhere((lane) => lane.id == strumLane!.id)
+          .singleWhere((lane) => lane.id == strumLane.id)
           .anchorLaneId,
-      strumLane!.anchorLaneId,
+      strumLane.anchorLaneId,
     );
   });
 

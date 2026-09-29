@@ -580,6 +580,7 @@ void main() {
               id: 'strum-lane',
               kind: SongLaneKind.guitarStrum,
               order: 2,
+              anchorLaneId: 'harmony',
               blocks: [
                 SongBlock(
                   id: 'strum-block',
@@ -665,81 +666,73 @@ void main() {
     expect(pcm.skip(16000).every((sample) => sample == 0), isTrue);
   });
 
-  test(
-    'strum export uses primary for null anchor and silences stale anchor',
-    () {
-      const pattern = GuitarStrumPattern(
-        id: 'strum-pattern',
-        name: 'Down',
-        lengthTicks: 16,
-        events: [
-          GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down),
-        ],
-      );
-      const harmony = SongLane(
-        id: 'primary',
-        kind: SongLaneKind.harmony,
-        order: 0,
-        blocks: [
-          SongBlock(
-            id: 'chord',
-            startBar: 0,
-            spanBars: 1,
-            chordNotes: ['C', 'E', 'G'],
+  test('strum export requires an explicit live Fretboard Harmony anchor', () {
+    const pattern = GuitarStrumPattern(
+      id: 'strum-pattern',
+      name: 'Down',
+      lengthTicks: 16,
+      events: [GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down)],
+    );
+    const harmony = SongLane(
+      id: 'primary',
+      kind: SongLaneKind.harmony,
+      order: 0,
+      blocks: [
+        SongBlock(
+          id: 'chord',
+          startBar: 0,
+          spanBars: 1,
+          chordNotes: ['C', 'E', 'G'],
+        ),
+      ],
+    );
+
+    for (final (anchorLaneId, shouldStrum) in [
+      ('primary', true),
+      (null, false),
+      ('deleted-harmony', false),
+    ]) {
+      final writer = SongwriterProjectSnapshot(
+        config: const SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+        sections: [
+          SongSection(
+            id: 'section',
+            lengthBars: 1,
+            order: 0,
+            lanes: [
+              harmony,
+              SongLane(
+                id: 'strum',
+                kind: SongLaneKind.guitarStrum,
+                order: 1,
+                anchorLaneId: anchorLaneId,
+                blocks: const [
+                  SongBlock(
+                    id: 'strum-block',
+                    startBar: 0,
+                    spanBars: 1,
+                    patternId: 'strum-pattern',
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
+        guitarStrumPatterns: const [pattern],
       );
 
-      for (final (anchorLaneId, shouldStrum) in [
-        (null, true),
-        ('deleted-harmony', false),
-      ]) {
-        final writer = SongwriterProjectSnapshot(
-          config: const SongwriterConfig(
-            tempo: 120,
-            beatsPerBar: 4,
-            beatUnit: 4,
-          ),
-          sections: [
-            SongSection(
-              id: 'section',
-              lengthBars: 1,
-              order: 0,
-              lanes: [
-                harmony,
-                SongLane(
-                  id: 'strum',
-                  kind: SongLaneKind.guitarStrum,
-                  order: 1,
-                  anchorLaneId: anchorLaneId,
-                  blocks: const [
-                    SongBlock(
-                      id: 'strum-block',
-                      startBar: 0,
-                      spanBars: 1,
-                      patternId: 'strum-pattern',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-          guitarStrumPatterns: const [pattern],
-        );
-
-        final song = songFromSongwriter(writer, const []);
-        final strumTrack = song.tracks.singleWhere(
-          (track) => track.name == 'Guitar strum',
-        );
-        final strumPatternIds = song.clips
-            .where((clip) => clip.trackId == strumTrack.id)
-            .map((clip) => clip.patternId)
-            .toSet();
-        final strumNotes = song.notePatterns
-            .where((notePattern) => strumPatternIds.contains(notePattern.id))
-            .expand((notePattern) => notePattern.notes);
-        expect(strumNotes, shouldStrum ? hasLength(3) : isEmpty);
-      }
-    },
-  );
+      final song = songFromSongwriter(writer, const []);
+      final strumTrack = song.tracks.singleWhere(
+        (track) => track.name == 'Guitar strum',
+      );
+      final strumPatternIds = song.clips
+          .where((clip) => clip.trackId == strumTrack.id)
+          .map((clip) => clip.patternId)
+          .toSet();
+      final strumNotes = song.notePatterns
+          .where((notePattern) => strumPatternIds.contains(notePattern.id))
+          .expand((notePattern) => notePattern.notes);
+      expect(strumNotes, shouldStrum ? hasLength(3) : isEmpty);
+    }
+  });
 }

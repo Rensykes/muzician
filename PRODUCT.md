@@ -14,21 +14,29 @@ Muzician is a songwriting workspace that connects guitar and piano exploration, 
 
 This is the initial product context inferred from the existing app and the user's stated focus. Treat it as the working direction for planning and implementation, and revise it when product intent changes.
 
-Writer Harmony lanes are instrument-bound to Piano or Fretboard. A new project
-uses the app's configured default, prompting for the first choice if needed;
-each new section starts with a primary lane using that project's default. An
-authored chord has one canonical Save containing both its Writer chord and
-native instrument realization. Shared-save edits offer an explicit all-uses
-update or a standalone Save; replacing a Writer chord is a separate action
-that preserves its placement and lyrics.
+Writer Harmony lanes are instrument-bound to Piano or Fretboard. Projects
+created through the usual project flow use the app's configured default,
+prompting when it has not been set; each new section starts with a primary lane
+using that project's default. **New project** in Writer asks for Piano or
+Fretboard each time and stores the choice on that project without changing the
+app-wide default. An authored chord has one canonical Save containing both
+its Writer chord and native instrument realization. Shared-save edits offer an
+explicit all-uses update or a standalone Save; replacing a Writer chord is a
+separate action that preserves its placement and lyrics.
 
-Writer supports section-level melody and guitar-strum patterns that can move
-into Song as note tracks. Writer audio lanes remain part of the section sketch
-and are not included in that import. Both Writer and Song provide bounded,
-project-scoped undo and redo so a draft can be explored and recovered. Native
-Song Bundles carry an arrangement and its referenced audio sources between
-devices; Web explains that bundle import and export are unsupported because its
-audio repository is filesystem-backed.
+Writer supports reusable section-level melody and guitar-strum patterns that
+can move into Song as note tracks. Strum patterns use an explicitly selected
+Fretboard Harmony lane and preview their down/up events on each tile. Melody
+patterns can target Piano or Fretboard, with saved note positions and a
+performance view gated when the current instrument cannot play every note.
+Writer can create a separate Save System project; Keep, Discard, and Cancel
+protect the current Writer session, and Discard restores its bound named Save
+or clears the session and binding while retaining named Saves. Writer audio
+lanes remain part of the section sketch and are not included in that import.
+Both Writer and Song provide bounded, project-scoped undo and redo so a draft
+can be explored and recovered. Native Song Bundles carry an arrangement and
+its referenced audio sources between devices; Web explains that bundle import
+and export are unsupported because its audio repository is filesystem-backed.
 
 ## Brand Personality
 

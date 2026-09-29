@@ -23,6 +23,7 @@ import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import 'writer_save_choice_dialog.dart';
 import '../../store/songwriter_store.dart';
+import '../../store/settings_store.dart';
 import '../../ui/core/coach_overlay.dart';
 import '../../ui/glass_snackbar.dart';
 import '../../utils/note_utils.dart';
@@ -46,9 +47,14 @@ import 'songwriter_section_ruler.dart';
 import 'songwriter_melody_pattern_editor.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
-  const SongwriterScreenSheet({super.key, this.onEditInstrumentSave});
+  const SongwriterScreenSheet({
+    super.key,
+    this.onEditInstrumentSave,
+    this.onEditMelodyPerformance,
+  });
 
   final ValueChanged<SaveEntry>? onEditInstrumentSave;
+  final ValueChanged<String>? onEditMelodyPerformance;
 
   @override
   ConsumerState<SongwriterScreenSheet> createState() =>
@@ -223,6 +229,8 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                                     sectionId: section.id,
                                     onEditInstrumentSave:
                                         widget.onEditInstrumentSave,
+                                    onEditMelodyPerformance:
+                                        widget.onEditMelodyPerformance,
                                   ),
                                 ),
                             ],
@@ -235,6 +243,8 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                                 sectionId: section.id,
                                 onEditInstrumentSave:
                                     widget.onEditInstrumentSave,
+                                onEditMelodyPerformance:
+                                    widget.onEditMelodyPerformance,
                               ),
                             ),
                         Padding(
@@ -264,9 +274,14 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
 }
 
 class _SectionSheet extends ConsumerWidget {
-  const _SectionSheet({required this.sectionId, this.onEditInstrumentSave});
+  const _SectionSheet({
+    required this.sectionId,
+    this.onEditInstrumentSave,
+    this.onEditMelodyPerformance,
+  });
   final String sectionId;
   final ValueChanged<SaveEntry>? onEditInstrumentSave;
+  final ValueChanged<String>? onEditMelodyPerformance;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -305,6 +320,7 @@ class _SectionSheet extends ConsumerWidget {
               key: Key('sectionInstance_${section.id}_$i'),
               section: section,
               onEditInstrumentSave: onEditInstrumentSave,
+              onEditMelodyPerformance: onEditMelodyPerformance,
               harmonyLanes: harmonyLanes,
               instanceIndex: i,
               keyRoot: config.keyRoot,
@@ -328,6 +344,7 @@ class _SectionInstance extends ConsumerWidget {
     super.key,
     required this.section,
     this.onEditInstrumentSave,
+    this.onEditMelodyPerformance,
     required this.harmonyLanes,
     required this.instanceIndex,
     required this.keyRoot,
@@ -337,6 +354,7 @@ class _SectionInstance extends ConsumerWidget {
 
   final SongSection section;
   final ValueChanged<SaveEntry>? onEditInstrumentSave;
+  final ValueChanged<String>? onEditMelodyPerformance;
   final List<SongLane> harmonyLanes;
   final int instanceIndex;
   final int? keyRoot;
@@ -438,6 +456,7 @@ class _SectionInstance extends ConsumerWidget {
             lane: lane,
             instanceIndex: instanceIndex,
             isMelody: true,
+            onEditMelodyPerformance: onEditMelodyPerformance,
           ),
         ],
         for (final lane in section.lanes.where(
@@ -920,6 +939,7 @@ class _SectionHeading extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
+    final canAddGuitarStrumLane = notifier.canAddGuitarStrumLane(section.id);
     final title = (section.label?.isNotEmpty ?? false)
         ? section.label!.toUpperCase()
         : 'SECTION';
@@ -1098,6 +1118,7 @@ class _SectionHeading extends ConsumerWidget {
                       kind: SongLaneKind.guitarStrum,
                       label: 'Guitar Strum',
                     );
+                    if (laneId.isEmpty) return;
                     final patternId = notifier.addGuitarStrumPattern(
                       name: 'Strum',
                       lengthTicks: ref
@@ -1115,8 +1136,8 @@ class _SectionHeading extends ConsumerWidget {
                   });
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(
+              itemBuilder: (_) => [
+                const PopupMenuItem(
                   key: Key('addHarmonyLaneSheetAction'),
                   value: 'addHarmonyLane',
                   child: ListTile(
@@ -1125,7 +1146,7 @@ class _SectionHeading extends ConsumerWidget {
                     dense: true,
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   key: Key('addDrumLaneSheetAction'),
                   value: 'addDrumLane',
                   child: ListTile(
@@ -1134,7 +1155,7 @@ class _SectionHeading extends ConsumerWidget {
                     dense: true,
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   key: Key('addAudioLaneSheetAction'),
                   value: 'addAudioLane',
                   child: ListTile(
@@ -1143,7 +1164,7 @@ class _SectionHeading extends ConsumerWidget {
                     dense: true,
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   key: Key('addMelodyLaneSheetAction'),
                   value: 'addMelodyLane',
                   child: ListTile(
@@ -1152,15 +1173,16 @@ class _SectionHeading extends ConsumerWidget {
                     dense: true,
                   ),
                 ),
-                PopupMenuItem(
-                  key: Key('addGuitarStrumLaneSheetAction'),
-                  value: 'addGuitarStrumLane',
-                  child: ListTile(
-                    leading: Icon(Icons.music_note_outlined),
-                    title: Text('Add guitar strum lane'),
-                    dense: true,
+                if (canAddGuitarStrumLane)
+                  const PopupMenuItem(
+                    key: Key('addGuitarStrumLaneSheetAction'),
+                    value: 'addGuitarStrumLane',
+                    child: ListTile(
+                      leading: Icon(Icons.music_note_outlined),
+                      title: Text('Add guitar strum lane'),
+                      dense: true,
+                    ),
                   ),
-                ),
               ],
             ),
             const SizedBox(width: 4),
@@ -1318,117 +1340,129 @@ class _HarmonyLaneHeader extends ConsumerWidget {
     };
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 2),
-      child: Row(
-        children: [
-          Icon(
-            switch (instrument) {
-              HarmonyLaneInstrument.piano => Icons.piano,
-              HarmonyLaneInstrument.fretboard => Icons.music_note,
-              null => Icons.help_outline,
-            },
-            size: 12,
-            color: MuzicianTheme.textMuted,
-          ),
-          const SizedBox(width: 5),
-          GestureDetector(
-            key: Key('renameHarmonyLane_${lane.id}'),
-            behavior: HitTestBehavior.opaque,
-            onTap: lane.id.isEmpty
-                ? null
-                : () => showLaneRenameDialog(
-                    context,
-                    ref,
-                    sectionId: section.id,
-                    lane: lane,
-                  ),
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Semantics(
-            key: Key('harmonyLaneInstrument_${lane.id}'),
-            label: '$instrumentLabel Harmony instrument',
-            child: Text(
-              instrumentLabel,
-              style: const TextStyle(
-                color: MuzicianTheme.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const Spacer(),
-          if (lane.id.isNotEmpty &&
-              ref
-                  .read(songwriterProvider.notifier)
-                  .canChangeHarmonyLaneInstrument(
-                    sectionId: section.id,
-                    laneId: lane.id,
-                  ))
-            IconButton(
-              key: Key('changeHarmonyLaneInstrument_${lane.id}'),
-              tooltip: 'Change Harmony instrument',
-              visualDensity: VisualDensity.compact,
-              iconSize: 15,
-              icon: const Icon(
-                Icons.swap_horiz,
-                color: MuzicianTheme.textMuted,
-              ),
-              onPressed: () async {
-                final instrument = await _promptHarmonyLaneInstrument(context);
-                if (instrument == null || !context.mounted) return;
-                final changed = ref
-                    .read(songwriterProvider.notifier)
-                    .setHarmonyLaneInstrument(
-                      sectionId: section.id,
-                      laneId: lane.id,
-                      instrument: instrument,
-                    );
-                if (!changed) {
-                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'This lane or one of its linked voicings changed.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 280;
+          return Row(
+            children: [
+              if (!compact) ...[
+                Icon(
+                  switch (instrument) {
+                    HarmonyLaneInstrument.piano => Icons.piano,
+                    HarmonyLaneInstrument.fretboard => Icons.music_note,
+                    null => Icons.help_outline,
+                  },
+                  size: 12,
+                  color: MuzicianTheme.textMuted,
+                ),
+                const SizedBox(width: 5),
+              ],
+              GestureDetector(
+                key: Key('renameHarmonyLane_${lane.id}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: lane.id.isEmpty
+                    ? null
+                    : () => showLaneRenameDialog(
+                        context,
+                        ref,
+                        sectionId: section.id,
+                        lane: lane,
                       ),
-                    ),
-                  );
-                }
-              },
-            ),
-          if (lane.id.isNotEmpty)
-            IconButton(
-              key: Key('duplicateHarmonyLane_${lane.id}'),
-              tooltip: 'Duplicate Harmony lane',
-              visualDensity: VisualDensity.compact,
-              iconSize: 15,
-              icon: const Icon(
-                Icons.copy_all_outlined,
-                color: MuzicianTheme.textMuted,
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: MuzicianTheme.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                  ),
+                ),
               ),
-              onPressed: () => ref
-                  .read(songwriterProvider.notifier)
-                  .duplicateHarmonyLane(sectionId: section.id, laneId: lane.id),
-            ),
-          if (lane.id.isNotEmpty && laneIndex > 0)
-            IconButton(
-              key: Key('deleteHarmonyLane_${lane.id}'),
-              tooltip: 'Delete Harmony lane',
-              visualDensity: VisualDensity.compact,
-              iconSize: 15,
-              icon: const Icon(
-                Icons.delete_outline,
-                color: MuzicianTheme.textMuted,
+              const SizedBox(width: 6),
+              Semantics(
+                key: Key('harmonyLaneInstrument_${lane.id}'),
+                label: '$instrumentLabel Harmony instrument',
+                child: Text(
+                  instrumentLabel,
+                  style: const TextStyle(
+                    color: MuzicianTheme.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-              onPressed: () => _confirmDelete(context, ref, label),
-            ),
-        ],
+              const Spacer(),
+              if (lane.id.isNotEmpty &&
+                  ref
+                      .read(songwriterProvider.notifier)
+                      .canChangeHarmonyLaneInstrument(
+                        sectionId: section.id,
+                        laneId: lane.id,
+                      ))
+                IconButton(
+                  key: Key('changeHarmonyLaneInstrument_${lane.id}'),
+                  tooltip: 'Change Harmony instrument',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 15,
+                  icon: const Icon(
+                    Icons.swap_horiz,
+                    color: MuzicianTheme.textMuted,
+                  ),
+                  onPressed: () async {
+                    final instrument = await _promptHarmonyLaneInstrument(
+                      context,
+                    );
+                    if (instrument == null || !context.mounted) return;
+                    final changed = ref
+                        .read(songwriterProvider.notifier)
+                        .setHarmonyLaneInstrument(
+                          sectionId: section.id,
+                          laneId: lane.id,
+                          instrument: instrument,
+                        );
+                    if (!changed) {
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'This lane or one of its linked voicings changed.',
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              if (lane.id.isNotEmpty)
+                IconButton(
+                  key: Key('duplicateHarmonyLane_${lane.id}'),
+                  tooltip: 'Duplicate Harmony lane',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 15,
+                  icon: const Icon(
+                    Icons.copy_all_outlined,
+                    color: MuzicianTheme.textMuted,
+                  ),
+                  onPressed: () => ref
+                      .read(songwriterProvider.notifier)
+                      .duplicateHarmonyLane(
+                        sectionId: section.id,
+                        laneId: lane.id,
+                      ),
+                ),
+              if (lane.id.isNotEmpty && laneIndex > 0)
+                IconButton(
+                  key: Key('deleteHarmonyLane_${lane.id}'),
+                  tooltip: 'Delete Harmony lane',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 15,
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: MuzicianTheme.textMuted,
+                  ),
+                  onPressed: () => _confirmDelete(context, ref, label),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2971,17 +3005,32 @@ class _PatternLaneRow extends ConsumerWidget {
     required this.lane,
     required this.instanceIndex,
     required this.isMelody,
+    this.onEditMelodyPerformance,
   });
 
   final SongSection section;
   final SongLane lane;
   final int instanceIndex;
   final bool isMelody;
+  final ValueChanged<String>? onEditMelodyPerformance;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(songwriterProvider);
     final saveState = ref.watch(saveSystemProvider);
+    final notifier = ref.read(songwriterProvider.notifier);
+    final settingsFallback = ref.watch(
+      settingsProvider.select(
+        (settings) => settings.defaultNewProjectHarmonyInstrument,
+      ),
+    );
+    final selectedProject = saveState.folders
+        .where((folder) => folder.id == saveState.selectedProjectId)
+        .firstOrNull;
+    final projectDefault =
+        selectedProject?.projectConfig?.defaultHarmonyInstrument ??
+        settingsFallback ??
+        HarmonyLaneInstrument.fretboard;
     final patternNames = isMelody
         ? {
             for (final pattern in project.melodyPatterns)
@@ -2992,14 +3041,22 @@ class _PatternLaneRow extends ConsumerWidget {
               pattern.id: pattern.name,
           };
     final harmonyLanes = section.lanes
-        .where((candidate) => candidate.kind == SongLaneKind.harmony)
+        .where(
+          (candidate) =>
+              candidate.kind == SongLaneKind.harmony &&
+              effectiveHarmonyInstrument(candidate, projectDefault) ==
+                  HarmonyLaneInstrument.fretboard,
+        )
         .toList();
-    final primaryHarmonyId = harmonyLanes.firstOrNull?.id;
-    final resolvedAnchor = lane.anchorLaneId == null
-        ? primaryHarmonyId
-        : harmonyLanes.any((candidate) => candidate.id == lane.anchorLaneId)
-        ? lane.anchorLaneId
-        : null;
+    final resolvedAnchor = isMelody
+        ? null
+        : guitarStrumAnchorLane(
+            section,
+            lane,
+            projectDefault: projectDefault,
+          )?.id;
+    final hasUnresolvedStrumAnchor =
+        !isMelody && lane.anchorLaneId != null && resolvedAnchor == null;
     final ownerByBar = <int, SongBlock>{};
     for (final block in lane.blocks) {
       for (var bar = block.startBar; bar < block.endBar; bar++) {
@@ -3020,33 +3077,161 @@ class _PatternLaneRow extends ConsumerWidget {
       }
     }
 
-    void createPatternAt(int bar) {
-      final notifier = ref.read(songwriterProvider.notifier);
-      final length = project.config.measureTicks;
-      if (isMelody) {
-        final patternId = notifier.addMelodyPattern(lengthTicks: length);
-        notifier.addMelodyBlock(
-          sectionId: section.id,
-          laneId: lane.id,
-          patternId: patternId,
-          startBar: bar,
-          spanBars: 1,
-        );
-        showSongwriterMelodyPatternEditor(
-          context: context,
-          patternId: patternId,
-        );
-      } else {
-        final patternId = notifier.addGuitarStrumPattern(lengthTicks: length);
-        notifier.addGuitarStrumBlock(
-          sectionId: section.id,
-          laneId: lane.id,
-          patternId: patternId,
-          startBar: bar,
-          spanBars: 1,
-        );
-        showGuitarStrumPatternSheet(context: context, patternId: patternId);
+    int availableBarsAt(int bar) {
+      var available = 0;
+      while (bar + available < section.lengthBars &&
+          !ownerByBar.containsKey(bar + available)) {
+        available++;
       }
+      return available;
+    }
+
+    int spanForPatternAt(int lengthTicks, int bar) {
+      final measureTicks = project.config.measureTicks;
+      final requiredBars = (lengthTicks + measureTicks - 1) ~/ measureTicks;
+      return requiredBars.clamp(1, availableBarsAt(bar));
+    }
+
+    Future<void> createPatternAt(int bar) async {
+      final patternId = await showModalBottomSheet<String>(
+        context: context,
+        backgroundColor: MuzicianTheme.dialogBg,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Text(
+                  'Use existing pattern',
+                  style: TextStyle(
+                    color: MuzicianTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (patternNames.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Text(
+                    'No existing patterns yet.',
+                    style: TextStyle(color: MuzicianTheme.textSecondary),
+                  ),
+                ),
+              for (final entry in patternNames.entries)
+                ListTile(
+                  key: Key('reuseWriterPattern_${entry.key}'),
+                  minTileHeight: 48,
+                  leading: Icon(
+                    isMelody ? Icons.music_note : Icons.music_note_outlined,
+                    color: isMelody ? MuzicianTheme.sky : MuzicianTheme.emerald,
+                  ),
+                  title: Text(entry.value),
+                  onTap: () => Navigator.of(sheetContext).pop(entry.key),
+                ),
+              const Divider(height: 16),
+              ListTile(
+                key: const Key('createWriterPattern'),
+                minTileHeight: 48,
+                leading: const Icon(Icons.add, color: MuzicianTheme.sky),
+                title: const Text('Create new pattern'),
+                onTap: () => Navigator.of(sheetContext).pop('__create__'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!context.mounted || patternId == null) return;
+
+      if (patternId == '__create__') {
+        String createdId = '';
+        notifier.runHistoryGroup(() {
+          if (isMelody) {
+            createdId = notifier.addMelodyPattern(
+              lengthTicks: project.config.measureTicks,
+            );
+            notifier.addMelodyBlock(
+              sectionId: section.id,
+              laneId: lane.id,
+              patternId: createdId,
+              startBar: bar,
+              spanBars: 1,
+            );
+          } else {
+            createdId = notifier.addGuitarStrumPattern(
+              lengthTicks: project.config.measureTicks,
+            );
+            notifier.addGuitarStrumBlock(
+              sectionId: section.id,
+              laneId: lane.id,
+              patternId: createdId,
+              startBar: bar,
+              spanBars: 1,
+            );
+          }
+        });
+        if (createdId.isEmpty || !context.mounted) return;
+        if (isMelody) {
+          final createdBlock = ref
+              .read(songwriterProvider)
+              .sections
+              .firstWhere((candidate) => candidate.id == section.id)
+              .lanes
+              .firstWhere((candidate) => candidate.id == lane.id)
+              .blocks
+              .firstWhere(
+                (candidate) =>
+                    candidate.patternId == createdId &&
+                    candidate.startBar == bar,
+              );
+          showSongwriterMelodyPatternEditor(
+            context: context,
+            patternId: createdId,
+            initialPlacement: SongwriterMelodyInitialPlacement(
+              sectionId: section.id,
+              laneId: lane.id,
+              blockId: createdBlock.id,
+            ),
+          );
+        } else {
+          showGuitarStrumPatternSheet(context: context, patternId: createdId);
+        }
+        return;
+      }
+
+      notifier.runHistoryGroup(() {
+        if (isMelody) {
+          final pattern = ref
+              .read(songwriterProvider)
+              .melodyPatterns
+              .where((candidate) => candidate.id == patternId)
+              .firstOrNull;
+          if (pattern == null) return;
+          notifier.addMelodyBlock(
+            sectionId: section.id,
+            laneId: lane.id,
+            patternId: patternId,
+            startBar: bar,
+            spanBars: spanForPatternAt(pattern.lengthTicks, bar),
+          );
+        } else {
+          final pattern = ref
+              .read(songwriterProvider)
+              .guitarStrumPatterns
+              .where((candidate) => candidate.id == patternId)
+              .firstOrNull;
+          if (pattern == null) return;
+          notifier.addGuitarStrumBlock(
+            sectionId: section.id,
+            laneId: lane.id,
+            patternId: patternId,
+            startBar: bar,
+            spanBars: spanForPatternAt(pattern.lengthTicks, bar),
+          );
+        }
+      });
     }
 
     return Column(
@@ -3072,46 +3257,57 @@ class _PatternLaneRow extends ConsumerWidget {
                   ),
                 ),
               ),
-              if (!isMelody && harmonyLanes.isNotEmpty)
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    key: Key('strumAnchor_${lane.id}_$instanceIndex'),
-                    value: resolvedAnchor,
-                    hint: lane.anchorLaneId != null && resolvedAnchor == null
-                        ? const Text('Unresolved')
-                        : null,
-                    isDense: true,
-                    iconSize: 16,
-                    dropdownColor: MuzicianTheme.surface,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 10,
-                    ),
-                    items: [
-                      for (var index = 0; index < harmonyLanes.length; index++)
-                        DropdownMenuItem(
-                          value: harmonyLanes[index].id,
-                          child: Text(
-                            harmonyLanes[index].label ??
-                                (index == 0
-                                    ? 'Primary harmony'
-                                    : 'Harmony ${index + 1}'),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+              if (!isMelody)
+                Semantics(
+                  label:
+                      'Select Fretboard Harmony source for ${lane.label ?? 'Guitar Strum'}',
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: Key('strumAnchor_${lane.id}_$instanceIndex'),
+                      value: hasUnresolvedStrumAnchor
+                          ? null
+                          : resolvedAnchor ?? '',
+                      hint: hasUnresolvedStrumAnchor
+                          ? const Text('Unresolved')
+                          : null,
+                      isDense: false,
+                      iconSize: 16,
+                      dropdownColor: MuzicianTheme.surface,
+                      style: const TextStyle(
+                        color: MuzicianTheme.textSecondary,
+                        fontSize: 10,
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('Unassigned'),
                         ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      ref
-                          .read(songwriterProvider.notifier)
-                          .setLaneAnchorLane(
-                            sectionId: section.id,
-                            laneId: lane.id,
-                            harmonyLaneId: value == primaryHarmonyId
-                                ? null
-                                : value,
-                          );
-                    },
+                        for (
+                          var index = 0;
+                          index < harmonyLanes.length;
+                          index++
+                        )
+                          DropdownMenuItem(
+                            value: harmonyLanes[index].id,
+                            child: Text(
+                              harmonyLanes[index].label ??
+                                  (index == 0
+                                      ? 'Primary Fretboard'
+                                      : 'Fretboard ${index + 1}'),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        notifier.setLaneAnchorLane(
+                          sectionId: section.id,
+                          laneId: lane.id,
+                          harmonyLaneId: value == null || value.isEmpty
+                              ? null
+                              : value,
+                        );
+                      },
+                    ),
                   ),
                 ),
             ],
@@ -3119,7 +3315,7 @@ class _PatternLaneRow extends ConsumerWidget {
         ),
         LayoutBuilder(
           builder: (context, constraints) {
-            const perRow = 4;
+            final perRow = constraints.maxWidth < 360 ? 2 : 4;
             final narrowCells = constraints.maxWidth / perRow < 90;
             final rows = <List<Widget>>[];
             final bars = section.lengthBars.clamp(1, 64);
@@ -3129,37 +3325,62 @@ class _PatternLaneRow extends ConsumerWidget {
               var bar = start;
               while (bar < end) {
                 final owner = ownerByBar[bar];
-                if (owner != null && owner.startBar == bar) {
-                  final span = owner.spanBars.clamp(1, end - bar);
+                if (owner != null) {
+                  final span = (owner.endBar.clamp(bar + 1, end)) - bar;
+                  final isContinuation = owner.startBar < bar;
                   final patternName = owner.patternId == null
                       ? null
                       : patternNames[owner.patternId];
-                  final saveEntry = writerSaveEntryForBlock(saveState, owner);
-                  final displayName =
-                      saveEntry?.name ?? patternName ?? 'pattern?';
-                  final hasBrokenReference =
-                      owner.saveId != null && saveEntry == null;
+                  final displayName = patternName ?? 'pattern?';
+                  final melodyPattern = isMelody
+                      ? project.melodyPatterns
+                            .where((pattern) => pattern.id == owner.patternId)
+                            .firstOrNull
+                      : null;
+                  final strumPattern = isMelody
+                      ? null
+                      : project.guitarStrumPatterns
+                            .where((pattern) => pattern.id == owner.patternId)
+                            .firstOrNull;
+                  final patternDuration = melodyPattern == null
+                      ? null
+                      : _formatMusicDuration(
+                          melodyPattern.lengthTicks,
+                          project.config,
+                        );
+                  final playbackSummary = melodyPattern == null
+                      ? null
+                      : _melodyPlacementPlaybackSummary(
+                          melodyPattern.lengthTicks,
+                          owner.spanBars,
+                          project.config,
+                        );
+                  final tileLabel = isContinuation
+                      ? 'Continue ${isMelody ? 'melody' : 'guitar strum'} pattern $displayName, bars ${owner.startBar + 1} through ${owner.endBar}'
+                      : isMelody
+                      ? 'Edit melody pattern $displayName. Pattern duration $patternDuration. Placed bars ${owner.startBar + 1} through ${owner.endBar}. $playbackSummary.'
+                      : 'Edit guitar strum pattern $displayName';
                   cells.add(
                     Expanded(
                       flex: span,
                       child: Semantics(
                         button: true,
                         explicitChildNodes: true,
-                        label:
-                            'Edit ${isMelody ? 'melody' : 'guitar strum'} pattern $displayName',
+                        label: tileLabel,
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
                             key: Key(
-                              '${isMelody ? 'sheetMelodyTile' : 'sheetGuitarStrumTile'}_${owner.patternId ?? owner.id}_$instanceIndex',
+                              '${isMelody ? 'sheetMelodyTile' : 'sheetGuitarStrumTile'}_${owner.patternId ?? owner.id}_${instanceIndex}_$bar',
                             ),
                             borderRadius: BorderRadius.circular(6),
                             onTap: () => openPattern(owner),
                             child: Container(
                               margin: const EdgeInsets.symmetric(horizontal: 2),
+                              constraints: const BoxConstraints(minHeight: 48),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 6,
+                                vertical: 5,
                               ),
                               decoration: BoxDecoration(
                                 color:
@@ -3176,52 +3397,116 @@ class _PatternLaneRow extends ConsumerWidget {
                                 ),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  if (!narrowCells) ...[
-                                    Icon(
-                                      isMelody
-                                          ? Icons.edit_note
-                                          : Icons.music_note_outlined,
-                                      size: 14,
-                                      color: MuzicianTheme.textPrimary,
-                                    ),
-                                    const SizedBox(width: 6),
-                                  ],
-                                  Flexible(
-                                    child: Text(
-                                      displayName,
-                                      key: Key(
-                                        'writerBlockName_${owner.id}_$instanceIndex',
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: MuzicianTheme.textPrimary,
-                                      ),
-                                    ),
-                                  ),
-                                  if (saveEntry != null)
-                                    writerLinkedBlockActionsMenu(
-                                      context,
-                                      ref,
-                                      section: section,
-                                      lane: lane,
-                                      block: owner,
-                                      entry: saveEntry,
-                                    ),
-                                  if (hasBrokenReference)
-                                    writerBrokenReferenceAction(
-                                      context,
-                                      block: owner,
-                                      onDelete: () => ref
-                                          .read(songwriterProvider.notifier)
-                                          .removeBlock(
-                                            sectionId: section.id,
-                                            laneId: lane.id,
-                                            blockId: owner.id,
+                                  Row(
+                                    children: [
+                                      if (!narrowCells) ...[
+                                        Icon(
+                                          isMelody
+                                              ? Icons.edit_note
+                                              : Icons.music_note_outlined,
+                                          size: 14,
+                                          color: MuzicianTheme.textPrimary,
+                                        ),
+                                        const SizedBox(width: 6),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          isContinuation
+                                              ? '$displayName · continued'
+                                              : displayName,
+                                          key: Key(
+                                            'writerBlockName_${owner.id}_${instanceIndex}_$bar',
                                           ),
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: MuzicianTheme.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isMelody && !isContinuation)
+                                        PopupMenuButton<String>(
+                                          key: Key(
+                                            'melodyBlockActions_${owner.id}_$instanceIndex',
+                                          ),
+                                          tooltip: 'Melody block actions',
+                                          padding: EdgeInsets.zero,
+                                          child: const SizedBox(
+                                            width: 44,
+                                            height: 44,
+                                            child: Icon(
+                                              Icons.more_vert,
+                                              size: 18,
+                                              color:
+                                                  MuzicianTheme.textSecondary,
+                                            ),
+                                          ),
+                                          onSelected: (action) {
+                                            if (action == 'placement') {
+                                              _showPatternPlacementDialog(
+                                                context,
+                                                ref,
+                                                section,
+                                                lane,
+                                                owner,
+                                              );
+                                            } else if (action ==
+                                                    'performance' &&
+                                                owner.patternId != null) {
+                                              onEditMelodyPerformance?.call(
+                                                owner.patternId!,
+                                              );
+                                            }
+                                          },
+                                          itemBuilder: (_) => [
+                                            const PopupMenuItem(
+                                              value: 'placement',
+                                              child: ListTile(
+                                                leading: Icon(Icons.open_with),
+                                                title: Text('Adjust placement'),
+                                                dense: true,
+                                              ),
+                                            ),
+                                            if (onEditMelodyPerformance != null)
+                                              const PopupMenuItem(
+                                                value: 'performance',
+                                                child: ListTile(
+                                                  leading: Icon(Icons.piano),
+                                                  title: Text(
+                                                    'Edit performance',
+                                                  ),
+                                                  dense: true,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                    ],
+                                  ),
+                                  if (isMelody &&
+                                      !isContinuation &&
+                                      melodyPattern != null) ...[
+                                    Text(
+                                      'Duration: $patternDuration',
+                                      style: const TextStyle(
+                                        color: MuzicianTheme.textSecondary,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Placement: bars ${owner.startBar + 1}–${owner.endBar} · $playbackSummary',
+                                      style: const TextStyle(
+                                        color: MuzicianTheme.textSecondary,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                  if (!isMelody && strumPattern != null)
+                                    _StrumPatternTimelinePreview(
+                                      pattern: strumPattern,
+                                      beatTicks: project.config.ticksPerBeat,
                                     ),
                                 ],
                               ),
@@ -3232,8 +3517,6 @@ class _PatternLaneRow extends ConsumerWidget {
                     ),
                   );
                   bar += span;
-                } else if (owner != null) {
-                  bar++;
                 } else {
                   final emptyBar = bar++;
                   cells.add(
@@ -3258,6 +3541,14 @@ class _PatternLaneRow extends ConsumerWidget {
                                   color: MuzicianTheme.glassBorder,
                                 ),
                                 borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.add_rounded,
+                                  size: 18,
+                                  color: MuzicianTheme.textMuted,
+                                  semanticLabel: 'Add pattern',
+                                ),
                               ),
                             ),
                           ),
@@ -3285,6 +3576,317 @@ class _PatternLaneRow extends ConsumerWidget {
       ],
     );
   }
+}
+
+String _formatMusicDuration(int durationTicks, SongwriterConfig config) {
+  final safeDuration = durationTicks < 0 ? 0 : durationTicks;
+  final bars = safeDuration ~/ config.measureTicks;
+  final afterBars = safeDuration % config.measureTicks;
+  final beats = afterBars ~/ config.ticksPerBeat;
+  final ticks = afterBars % config.ticksPerBeat;
+  final units = <String>[
+    if (bars > 0) '$bars ${bars == 1 ? 'bar' : 'bars'}',
+    if (beats > 0) '$beats ${beats == 1 ? 'beat' : 'beats'}',
+    if (ticks > 0) '$ticks ${ticks == 1 ? 'tick' : 'ticks'}',
+  ];
+  return units.isEmpty ? '0 ticks' : units.join(' + ');
+}
+
+String _melodyPlacementPlaybackSummary(
+  int patternLengthTicks,
+  int spanBars,
+  SongwriterConfig config,
+) {
+  final patternTicks = patternLengthTicks < 1 ? 1 : patternLengthTicks;
+  final placedTicks = spanBars * config.measureTicks;
+  if (patternTicks > placedTicks) {
+    return 'clips after ${_formatMusicDuration(placedTicks, config)}';
+  }
+  if (patternTicks == placedTicks) return 'plays once';
+  if (placedTicks % patternTicks == 0) {
+    return 'repeats ×${placedTicks ~/ patternTicks} to fill';
+  }
+  return 'repeats, then clips the final pass';
+}
+
+Future<void> _showPatternPlacementDialog(
+  BuildContext context,
+  WidgetRef ref,
+  SongSection section,
+  SongLane lane,
+  SongBlock block,
+) => showDialog<void>(
+  context: context,
+  builder: (_) => _PatternPlacementDialog(
+    section: section,
+    lane: lane,
+    block: block,
+    onApply: (startBar, spanBars) => ref
+        .read(songwriterProvider.notifier)
+        .setBlockPlacement(
+          sectionId: section.id,
+          laneId: lane.id,
+          blockId: block.id,
+          startBar: startBar,
+          spanBars: spanBars,
+        ),
+  ),
+);
+
+class _PatternPlacementDialog extends StatefulWidget {
+  const _PatternPlacementDialog({
+    required this.section,
+    required this.lane,
+    required this.block,
+    required this.onApply,
+  });
+
+  final SongSection section;
+  final SongLane lane;
+  final SongBlock block;
+  final void Function(int startBar, int spanBars) onApply;
+
+  @override
+  State<_PatternPlacementDialog> createState() =>
+      _PatternPlacementDialogState();
+}
+
+class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
+  late final _startBarController = TextEditingController(
+    text: '${widget.block.startBar + 1}',
+  );
+  late final _spanBarsController = TextEditingController(
+    text: '${widget.block.spanBars}',
+  );
+
+  @override
+  void dispose() {
+    _startBarController.dispose();
+    _spanBarsController.dispose();
+    super.dispose();
+  }
+
+  int? get _startBar => int.tryParse(_startBarController.text);
+  int? get _spanBars => int.tryParse(_spanBarsController.text);
+
+  SongBlock? get _candidate {
+    final startBar = _startBar;
+    final spanBars = _spanBars;
+    if (startBar == null || spanBars == null) return null;
+    return widget.block.copyWith(startBar: startBar - 1, spanBars: spanBars);
+  }
+
+  bool get _isValid {
+    final candidate = _candidate;
+    return candidate != null &&
+        isValidBlockPlacement(
+          section: widget.section,
+          lane: widget.lane,
+          candidate: candidate,
+        );
+  }
+
+  String _validationMessage() {
+    final startBar = _startBar;
+    final spanBars = _spanBars;
+    if (startBar == null ||
+        startBar < 1 ||
+        startBar > widget.section.lengthBars) {
+      return 'Choose a start bar from 1 to ${widget.section.lengthBars}.';
+    }
+    if (spanBars == null || spanBars < 1) {
+      return 'Placement must be at least 1 bar long.';
+    }
+    final candidate = _candidate!;
+    if (candidate.endBar > widget.section.lengthBars) {
+      return 'The block must end by bar ${widget.section.lengthBars}.';
+    }
+    if (blocksOverlap(widget.lane.blocks, candidate)) {
+      return 'This placement overlaps another block in the lane.';
+    }
+    return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: MuzicianTheme.dialogBg,
+      title: const Text('Adjust melody placement'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('melodyPlacementStartBar'),
+                  controller: _startBarController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Start bar',
+                    helperText: '1-based',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  key: const Key('melodyPlacementSpanBars'),
+                  controller: _spanBarsController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(labelText: 'Length (bars)'),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _validationMessage(),
+              style: TextStyle(
+                color: _isValid
+                    ? MuzicianTheme.textSecondary
+                    : MuzicianTheme.orange,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('applyMelodyPlacement'),
+          onPressed: _isValid
+              ? () {
+                  final candidate = _candidate!;
+                  widget.onApply(candidate.startBar, candidate.spanBars);
+                  Navigator.of(context).pop();
+                }
+              : null,
+          child: const Text('Apply'),
+        ),
+      ],
+    );
+  }
+}
+
+class _StrumPatternTimelinePreview extends StatelessWidget {
+  const _StrumPatternTimelinePreview({
+    required this.pattern,
+    required this.beatTicks,
+  });
+
+  final GuitarStrumPattern pattern;
+  final int beatTicks;
+
+  @override
+  Widget build(BuildContext context) {
+    final lengthTicks = pattern.lengthTicks < 1 ? 1 : pattern.lengthTicks;
+    final events = pattern.events.asMap().entries.toList()
+      ..sort((a, b) {
+        final tickOrder = a.value.tick.compareTo(b.value.tick);
+        return tickOrder == 0 ? a.key.compareTo(b.key) : tickOrder;
+      });
+    final eventDescription = events.isEmpty
+        ? 'no strum events'
+        : events
+              .map(
+                (entry) =>
+                    '${entry.value.direction == GuitarStrumDirection.down ? 'down' : 'up'} at tick ${entry.value.tick}',
+              )
+              .join(', ');
+    return Semantics(
+      key: Key('strumPatternPreview_${pattern.id}'),
+      label: 'Ordered strum preview: $eventDescription',
+      child: ExcludeSemantics(
+        child: SizedBox(
+          height: 26,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final availableWidth = constraints.maxWidth;
+              return Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _PatternTickGridPainter(
+                        lengthTicks: lengthTicks,
+                        beatTicks: beatTicks,
+                      ),
+                    ),
+                  ),
+                  for (final entry in events)
+                    Positioned(
+                      left: _strumEventX(
+                        entry.value.tick,
+                        lengthTicks,
+                        availableWidth,
+                      ),
+                      top: 0,
+                      bottom: 0,
+                      child: Icon(
+                        entry.value.direction == GuitarStrumDirection.down
+                            ? Icons.arrow_downward_rounded
+                            : Icons.arrow_upward_rounded,
+                        size: 14,
+                        color: MuzicianTheme.emerald,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _strumEventX(int tick, int lengthTicks, double width) {
+    final safeWidth = width > 16 ? width - 16 : 0;
+    final safeTick = tick.clamp(0, lengthTicks);
+    return (safeWidth * safeTick / lengthTicks)
+        .clamp(0.0, safeWidth)
+        .toDouble();
+  }
+}
+
+class _PatternTickGridPainter extends CustomPainter {
+  const _PatternTickGridPainter({
+    required this.lengthTicks,
+    required this.beatTicks,
+  });
+
+  final int lengthTicks;
+  final int beatTicks;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = MuzicianTheme.textMuted.withValues(alpha: 0.38)
+      ..strokeWidth = 1;
+    final ticksPerBeat = beatTicks < 1 ? 1 : beatTicks;
+    final beatCount = (lengthTicks + ticksPerBeat - 1) ~/ ticksPerBeat;
+    final lineStride = beatCount > 16 ? (beatCount / 16).ceil() : 1;
+    for (var beat = 0; beat <= beatCount; beat += lineStride) {
+      final tick = (beat * ticksPerBeat).clamp(0, lengthTicks);
+      final x = size.width * tick / lengthTicks;
+      canvas.drawLine(Offset(x, 3), Offset(x, size.height - 3), line);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PatternTickGridPainter oldDelegate) =>
+      lengthTicks != oldDelegate.lengthTicks ||
+      beatTicks != oldDelegate.beatTicks;
 }
 
 class _AddSectionRule extends StatelessWidget {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,9 @@ class _MemoryStorage implements WriterSaveSyncStorage {
   final values = <String, String>{};
   final events = <String>[];
   int? failAtOperation;
+  int? failAlsoAtOperation;
+  Completer<void>? journalGate;
+  Completer<void>? journalWriteStarted;
   int _operation = 0;
 
   @override
@@ -19,6 +23,12 @@ class _MemoryStorage implements WriterSaveSyncStorage {
   @override
   Future<bool> write(String key, String value) async {
     events.add('write:$key');
+    if (key == writerSaveSyncJournalStorageKey && journalGate != null) {
+      if (!(journalWriteStarted?.isCompleted ?? true)) {
+        journalWriteStarted!.complete();
+      }
+      await journalGate!.future;
+    }
     if (_shouldFail()) throw StateError('simulated interrupted write');
     values[key] = value;
     return true;
@@ -34,9 +44,11 @@ class _MemoryStorage implements WriterSaveSyncStorage {
 
   bool _shouldFail() {
     final operation = _operation++;
-    if (operation != failAtOperation) return false;
-    failAtOperation = null;
-    return true;
+    final shouldFail =
+        operation == failAtOperation || operation == failAlsoAtOperation;
+    if (operation == failAtOperation) failAtOperation = null;
+    if (operation == failAlsoAtOperation) failAlsoAtOperation = null;
+    return shouldFail;
   }
 }
 
@@ -141,7 +153,7 @@ void main() {
         addTearDown(interrupted.dispose);
 
         await expectLater(_commit(interrupted), throwsStateError);
-        expect(interrupted.read(writerSaveSyncProvider), isTrue);
+        expect(interrupted.read(writerSaveSyncProvider), failedOperation != 0);
 
         final relaunched = _container(storage);
         addTearDown(relaunched.dispose);
@@ -229,4 +241,135 @@ void main() {
     );
     expect(storage.events.last, 'write:$saveSystemStorageKey');
   });
+
+  test(
+    'staged transaction publishes only after its payloads are durable',
+    () async {
+      final storage = _MemoryStorage()
+        ..journalGate = Completer<void>()
+        ..journalWriteStarted = Completer<void>();
+      final container = _container(storage);
+      addTearDown(container.dispose);
+      container.read(writerProjectWriteFenceProvider.notifier).state = true;
+      var committed = false;
+
+      final completion = container
+          .read(writerSaveSyncProvider.notifier)
+          .commitWriterTransactionAfterPersist(
+            projectId: 'p',
+            saveSystemState: _saveState(selectedProjectId: 'p'),
+            writerDrafts: _drafts,
+            writerBindings: _bindings,
+            commitMemory: () => committed = true,
+          );
+      await storage.journalWriteStarted!.future;
+      expect(committed, isFalse);
+      expect(
+        storage.values.containsKey(writerSaveSyncJournalStorageKey),
+        isFalse,
+      );
+
+      storage.journalGate!.complete();
+      await completion;
+      expect(committed, isTrue);
+      expect(container.read(writerProjectWriteFenceProvider), isTrue);
+      expect(
+        deserialiseState(
+          storage.values[saveSystemStorageKey]!,
+        )!.selectedProjectId,
+        'p',
+      );
+    },
+  );
+
+  test('staged pre-acceptance failure leaves memory unpublished', () async {
+    final storage = _MemoryStorage()..failAtOperation = 0;
+    final container = _container(storage);
+    addTearDown(container.dispose);
+    container.read(writerProjectWriteFenceProvider.notifier).state = true;
+    var committed = false;
+
+    await expectLater(
+      container
+          .read(writerSaveSyncProvider.notifier)
+          .commitWriterTransactionAfterPersist(
+            projectId: 'p',
+            saveSystemState: _saveState(selectedProjectId: 'p'),
+            writerDrafts: _drafts,
+            writerBindings: _bindings,
+            commitMemory: () => committed = true,
+          ),
+      throwsStateError,
+    );
+    expect(committed, isFalse);
+    expect(container.read(writerSaveSyncProvider), isFalse);
+    expect(
+      storage.values.containsKey(writerSaveSyncJournalStorageKey),
+      isFalse,
+    );
+  });
+
+  test('staged accepted failure replays before publishing memory', () async {
+    final storage = _MemoryStorage()..failAtOperation = 2;
+    final container = _container(storage);
+    addTearDown(container.dispose);
+    container.read(writerProjectWriteFenceProvider.notifier).state = true;
+    var committed = false;
+
+    await container
+        .read(writerSaveSyncProvider.notifier)
+        .commitWriterTransactionAfterPersist(
+          projectId: 'p',
+          saveSystemState: _saveState(selectedProjectId: 'p'),
+          writerDrafts: _drafts,
+          writerBindings: _bindings,
+          commitMemory: () => committed = true,
+        );
+
+    expect(committed, isTrue);
+    expect(container.read(writerSaveSyncProvider), isFalse);
+    expect(container.read(writerProjectWriteFenceProvider), isTrue);
+    expect(
+      storage.values.containsKey(writerSaveSyncJournalStorageKey),
+      isFalse,
+    );
+    expect(
+      (jsonDecode(storage.values[songwriterSessionsStorageKey]!)
+          as Map<String, dynamic>)['p']['name'],
+      'Draft',
+    );
+  });
+
+  test(
+    'staged failed replay leaves the caller fence and memory untouched',
+    () async {
+      final storage = _MemoryStorage()
+        ..failAtOperation = 2
+        ..failAlsoAtOperation = 3;
+      final container = _container(storage);
+      addTearDown(container.dispose);
+      container.read(writerProjectWriteFenceProvider.notifier).state = true;
+      var committed = false;
+
+      await expectLater(
+        container
+            .read(writerSaveSyncProvider.notifier)
+            .commitWriterTransactionAfterPersist(
+              projectId: 'p',
+              saveSystemState: _saveState(selectedProjectId: 'p'),
+              writerDrafts: _drafts,
+              writerBindings: _bindings,
+              commitMemory: () => committed = true,
+            ),
+        throwsStateError,
+      );
+      expect(committed, isFalse);
+      expect(container.read(writerSaveSyncProvider), isTrue);
+      expect(container.read(writerProjectWriteFenceProvider), isTrue);
+      expect(
+        storage.values.containsKey(writerSaveSyncJournalStorageKey),
+        isTrue,
+      );
+    },
+  );
 }

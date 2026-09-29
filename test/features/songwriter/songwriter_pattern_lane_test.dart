@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/rendering.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
 import 'package:muzician/features/songwriter/guitar_strum_pattern_sheet.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/store/piano_roll_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
@@ -43,16 +46,198 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is Semantics &&
-            widget.properties.label == 'Edit melody pattern Melody',
+            widget.properties.label ==
+                'Edit melody pattern Melody. Pattern duration 1 bar. '
+                    'Placed bars 1 through 4. repeats ×4 to fill.',
       ),
       findsOneWidget,
     );
 
     await tester.tap(
-      find.byKey(Key('sheetMelodyTile_${lane.blocks.single.patternId}_0')),
+      find.byKey(Key('sheetMelodyTile_${lane.blocks.single.patternId}_0_0')),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('saveWriterMelodyPattern')), findsOneWidget);
+  });
+
+  testWidgets('section menu hides guitar strum without a Fretboard lane', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songwriterProvider.notifier);
+    notifier.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final harmonyLane = section.lanes.single;
+    notifier.setHarmonyLaneInstrument(
+      sectionId: section.id,
+      laneId: harmonyLane.id,
+      instrument: HarmonyLaneInstrument.piano,
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byKey(Key('sheetSectionMenu_${section.id}')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('addGuitarStrumLaneSheetAction')),
+      findsNothing,
+    );
+    expect(container.read(songwriterProvider).guitarStrumPatterns, isEmpty);
+  });
+
+  testWidgets('stale guitar strum menu action creates no orphan pattern', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songwriterProvider.notifier);
+    notifier.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final harmonyLane = section.lanes.single;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byKey(Key('sheetSectionMenu_${section.id}')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('addGuitarStrumLaneSheetAction')),
+      findsOneWidget,
+    );
+
+    notifier.removeLane(sectionId: section.id, laneId: harmonyLane.id);
+    await tester.tap(find.byKey(const Key('addGuitarStrumLaneSheetAction')));
+    await tester.pumpAndSettle();
+
+    final updatedSection = container.read(songwriterProvider).sections.single;
+    expect(
+      updatedSection.lanes.where(
+        (lane) => lane.kind == SongLaneKind.guitarStrum,
+      ),
+      isEmpty,
+    );
+    expect(container.read(songwriterProvider).guitarStrumPatterns, isEmpty);
+  });
+
+  testWidgets('compact melody tiles show the complete placement summary', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(songwriterProvider.notifier);
+    notifier.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = notifier.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+      label: 'Melody',
+    );
+    final patternId = notifier.addMelodyPattern(
+      name: 'Lead',
+      lengthTicks: container.read(songwriterProvider).config.measureTicks * 2,
+    );
+    notifier.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final tile = find.byKey(Key('sheetMelodyTile_${patternId}_0_0'));
+    final duration = find.text('Duration: 2 bars');
+    final placement = find.text('Placement: bars 1–1 · clips after 1 bar');
+    expect(tile, findsOneWidget);
+    expect(duration, findsOneWidget);
+    expect(placement, findsOneWidget);
+    expect(tester.getSize(tile).width, greaterThan(100));
+    for (final finder in [duration, placement]) {
+      final summary = tester.widget<Text>(finder);
+      expect(summary.maxLines, isNull);
+      expect(summary.overflow, isNot(TextOverflow.ellipsis));
+      expect(
+        tester.renderObject<RenderParagraph>(finder).didExceedMaxLines,
+        isFalse,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('first edit expands a newly created melody block', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+      label: 'Melody',
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byKey(Key('emptyMelodyBar_${laneId}_0_1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('createWriterPattern')));
+    await tester.pumpAndSettle();
+
+    final editorContainer = tester
+        .widgetList<UncontrolledProviderScope>(
+          find.byType(UncontrolledProviderScope),
+        )
+        .last
+        .container;
+    final pianoRoll = editorContainer.read(pianoRollProvider.notifier);
+    pianoRoll
+      ..setTotalMeasures(2)
+      ..addNote(72, 16, 4);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    final project = container.read(songwriterProvider);
+    final lane = project.sections.single.lanes.singleWhere(
+      (candidate) => candidate.id == laneId,
+    );
+    expect(project.melodyPatterns.single.lengthTicks, 20);
+    expect((lane.blocks.single.startBar, lane.blocks.single.spanBars), (1, 2));
   });
 
   testWidgets('lyrics and mixer gestures each commit one history step', (

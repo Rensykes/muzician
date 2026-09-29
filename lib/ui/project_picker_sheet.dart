@@ -8,6 +8,7 @@ import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
 import '../store/settings_store.dart';
+import '../store/songwriter_store.dart';
 import '../theme/muzician_theme.dart';
 import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
@@ -170,6 +171,262 @@ class ProjectPickerSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Runs the Writer-only project creation flow without changing the behavior of
+/// project creation from the other instrument screens.
+Future<WriterProjectCreationResult?> showWriterProjectCreationFlow(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final details = await showDialog<_WriterProjectDetails>(
+    context: context,
+    builder: (_) => const _WriterProjectDetailsDialog(),
+  );
+  if (details == null || !context.mounted) return null;
+
+  final notifier = ref.read(songwriterProvider.notifier);
+  var result = await notifier.createSaveProject(
+    name: details.name,
+    defaultHarmonyInstrument: details.instrument,
+    disposition: null,
+  );
+  if (!context.mounted) return result;
+  if (result.status == WriterProjectCreationStatus.dispositionRequired) {
+    final disposition = await showDialog<WriterProjectCreationDisposition>(
+      context: context,
+      builder: (_) => const _WriterProjectDispositionDialog(),
+    );
+    if (!context.mounted) return result;
+    result = await notifier.createSaveProject(
+      name: details.name,
+      defaultHarmonyInstrument: details.instrument,
+      disposition: disposition ?? WriterProjectCreationDisposition.cancel,
+    );
+  }
+  if (!context.mounted ||
+      result.succeeded ||
+      result.status == WriterProjectCreationStatus.cancelled) {
+    return result;
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => MuzicianDialog(
+      title: 'Could not create Writer project',
+      content: Text(_writerProjectCreationError(result.status)),
+      actions: [
+        MuzicianDialogButton(
+          'OK',
+          emphasis: MuzicianDialogEmphasis.primary,
+          onPressed: () => Navigator.pop(dialogContext),
+        ),
+      ],
+    ),
+  );
+  return result;
+}
+
+String _writerProjectCreationError(
+  WriterProjectCreationStatus status,
+) => switch (status) {
+  WriterProjectCreationStatus.created => '',
+  WriterProjectCreationStatus.cancelled => 'Creation was cancelled.',
+  WriterProjectCreationStatus.dispositionRequired =>
+    'Choose what to do with the current Writer session.',
+  WriterProjectCreationStatus.invalidName =>
+    'Enter a project name with 1 to 60 characters.',
+  WriterProjectCreationStatus.noSelectedProject =>
+    'Select a Save System project before creating a Writer project.',
+  WriterProjectCreationStatus.busy =>
+    'Another project change is in progress. Try again.',
+  WriterProjectCreationStatus.storageFailure =>
+    'The project could not be saved. Your current Writer project remains open.',
+  WriterProjectCreationStatus.recoveryRequired =>
+    'Writer save recovery is required before another project can be created.',
+};
+
+class _WriterProjectDetails {
+  const _WriterProjectDetails({required this.name, required this.instrument});
+
+  final String name;
+  final HarmonyLaneInstrument instrument;
+}
+
+class _WriterProjectDetailsDialog extends StatefulWidget {
+  const _WriterProjectDetailsDialog();
+
+  @override
+  State<_WriterProjectDetailsDialog> createState() =>
+      _WriterProjectDetailsDialogState();
+}
+
+class _WriterProjectDetailsDialogState
+    extends State<_WriterProjectDetailsDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  HarmonyLaneInstrument? _instrument;
+  bool _showInstrumentError = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    FocusScope.of(context).unfocus();
+    final validName = _formKey.currentState?.validate() ?? false;
+    if (_instrument == null) {
+      setState(() => _showInstrumentError = true);
+    }
+    if (!validName || _instrument == null) return;
+    Navigator.of(context).pop(
+      _WriterProjectDetails(
+        name: _nameController.text.trim(),
+        instrument: _instrument!,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.68;
+    return MuzicianDialog(
+      title: 'New Writer project',
+      content: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 360, maxHeight: maxHeight),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  key: const Key('writerProjectNameField'),
+                  controller: _nameController,
+                  autofocus: true,
+                  maxLength: 60,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: const TextStyle(color: MuzicianTheme.textPrimary),
+                  decoration: const InputDecoration(
+                    labelText: 'Project name',
+                    hintText: 'Name this project',
+                  ),
+                  validator: (value) => isValidFolderName(value ?? '')
+                      ? null
+                      : 'Enter a name with 1 to 60 characters.',
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Starting Harmony instrument',
+                  style: TextStyle(
+                    color: MuzicianTheme.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                RadioGroup<HarmonyLaneInstrument>(
+                  groupValue: _instrument,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _instrument = value;
+                      _showInstrumentError = false;
+                    });
+                  },
+                  child: Column(
+                    children: [
+                      for (final instrument in HarmonyLaneInstrument.values)
+                        RadioListTile<HarmonyLaneInstrument>(
+                          key: Key(
+                            'writerProjectInstrument_${instrument.name}',
+                          ),
+                          value: instrument,
+                          title: Text(
+                            instrument == HarmonyLaneInstrument.fretboard
+                                ? 'Fretboard'
+                                : 'Piano',
+                          ),
+                          secondary: Icon(
+                            instrument == HarmonyLaneInstrument.fretboard
+                                ? Icons.music_note
+                                : Icons.piano,
+                            color: MuzicianTheme.sky,
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.standard,
+                        ),
+                    ],
+                  ),
+                ),
+                if (_showInstrumentError)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12, top: 2),
+                    child: Text(
+                      'Choose Piano or Fretboard to continue.',
+                      style: TextStyle(color: MuzicianTheme.red, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        MuzicianDialogButton(
+          'Cancel',
+          buttonKey: const Key('writerProjectDetailsCancel'),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        MuzicianDialogButton(
+          'Continue',
+          buttonKey: const Key('writerProjectDetailsContinue'),
+          emphasis: MuzicianDialogEmphasis.primary,
+          onPressed: _submit,
+        ),
+      ],
+    );
+  }
+}
+
+class _WriterProjectDispositionDialog extends StatelessWidget {
+  const _WriterProjectDispositionDialog();
+
+  @override
+  Widget build(BuildContext context) => MuzicianDialog(
+    title: 'Changes in this Writer session',
+    content: const Text(
+      'Choose what to do before opening the new project. Keep saves this '
+      'Writer session. Discard restores its active Writer Save, if available, '
+      'or clears the session. Cancel stays in the current project.',
+    ),
+    actions: [
+      MuzicianDialogButton(
+        'Cancel',
+        buttonKey: const Key('writerProjectDispositionCancel'),
+        onPressed: () =>
+            Navigator.of(context).pop(WriterProjectCreationDisposition.cancel),
+      ),
+      MuzicianDialogButton(
+        'Discard',
+        buttonKey: const Key('writerProjectDispositionDiscard'),
+        emphasis: MuzicianDialogEmphasis.destructive,
+        onPressed: () =>
+            Navigator.of(context).pop(WriterProjectCreationDisposition.discard),
+      ),
+      MuzicianDialogButton(
+        'Keep',
+        buttonKey: const Key('writerProjectDispositionKeep'),
+        emphasis: MuzicianDialogEmphasis.primary,
+        onPressed: () =>
+            Navigator.of(context).pop(WriterProjectCreationDisposition.keep),
+      ),
+    ],
+  );
 }
 
 Future<HarmonyLaneInstrument?> _promptHarmonyInstrument(
