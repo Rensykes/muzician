@@ -110,4 +110,135 @@ void main() {
       expect(drum.harmonyInstrument, isNull);
     });
   });
+
+  group('legacy guitar-strum anchor migration', () {
+    SongwriterProjectSnapshot legacy({required List<SongLane> lanes}) =>
+        SongwriterProjectSnapshot.fromJson({
+          'type': 'songwriter',
+          'config': {'tempo': 120, 'beatsPerBar': 4, 'beatUnit': 4},
+          'sections': [
+            {
+              'id': 'section',
+              'lengthBars': 4,
+              'order': 0,
+              'lanes': lanes.map((lane) => lane.toJson()).toList(),
+            },
+          ],
+        });
+
+    const primary = SongLane(
+      id: 'primary',
+      kind: SongLaneKind.harmony,
+      order: 0,
+    );
+    const strum = SongLane(
+      id: 'strum',
+      kind: SongLaneKind.guitarStrum,
+      order: 1,
+    );
+
+    test('pins legacy null anchor to a Fretboard primary exactly once', () {
+      final old = legacy(lanes: const [primary, strum]);
+      final migrated = migrateLegacyStrumAnchors(
+        old,
+        projectDefault: HarmonyLaneInstrument.fretboard,
+      );
+      expect(migrated.sections.single.lanes.last.anchorLaneId, 'primary');
+      expect(
+        migrated.strumAnchorMigrationVersion,
+        strumAnchorMigrationCurrentVersion,
+      );
+
+      final later = migrated.copyWith(
+        sections: [
+          migrated.sections.single.copyWith(
+            lanes: [
+              ...migrated.sections.single.lanes,
+              const SongLane(
+                id: 'later-guitar',
+                kind: SongLaneKind.harmony,
+                order: 2,
+                harmonyInstrument: HarmonyLaneInstrument.fretboard,
+              ),
+            ],
+          ),
+        ],
+      );
+      expect(
+        migrateLegacyStrumAnchors(
+          later,
+          projectDefault: HarmonyLaneInstrument.fretboard,
+        ).sections.single.lanes[1].anchorLaneId,
+        'primary',
+      );
+    });
+
+    test('does not choose a secondary guitar when primary is Piano', () {
+      final old = legacy(
+        lanes: const [
+          SongLane(
+            id: 'primary',
+            kind: SongLaneKind.harmony,
+            order: 0,
+            harmonyInstrument: HarmonyLaneInstrument.piano,
+          ),
+          SongLane(
+            id: 'guitar',
+            kind: SongLaneKind.harmony,
+            order: 1,
+            harmonyInstrument: HarmonyLaneInstrument.fretboard,
+          ),
+          strum,
+        ],
+      );
+      final migrated = migrateLegacyStrumAnchors(
+        old,
+        projectDefault: HarmonyLaneInstrument.fretboard,
+      );
+      expect(migrated.sections.single.lanes.last.anchorLaneId, isNull);
+    });
+
+    test('marks no-source snapshots so later guitar lanes stay unassigned', () {
+      final old = legacy(
+        lanes: const [
+          SongLane(
+            id: 'primary',
+            kind: SongLaneKind.harmony,
+            order: 0,
+            harmonyInstrument: HarmonyLaneInstrument.piano,
+          ),
+          strum,
+        ],
+      );
+      final migrated = migrateLegacyStrumAnchors(
+        old,
+        projectDefault: HarmonyLaneInstrument.fretboard,
+      );
+      final withLaterGuitar = migrated.copyWith(
+        sections: [
+          migrated.sections.single.copyWith(
+            lanes: [
+              ...migrated.sections.single.lanes,
+              const SongLane(
+                id: 'guitar',
+                kind: SongLaneKind.harmony,
+                order: 2,
+                harmonyInstrument: HarmonyLaneInstrument.fretboard,
+              ),
+            ],
+          ),
+        ],
+      );
+      final reopened = SongwriterProjectSnapshot.fromJson(
+        withLaterGuitar.toJson(),
+      );
+      expect(
+        migrateLegacyStrumAnchors(
+          reopened,
+          projectDefault: HarmonyLaneInstrument.fretboard,
+        ).sections.single.lanes[1].anchorLaneId,
+        isNull,
+      );
+    });
+  });
 }

@@ -57,6 +57,7 @@ class WriterSaveBindingNotifier
     extends Notifier<Map<String, WriterSaveBinding>> {
   Timer? _debounce;
   bool _hydrated = false;
+  bool _projectWritesPaused = false;
 
   @override
   Map<String, WriterSaveBinding> build() {
@@ -99,23 +100,50 @@ class WriterSaveBindingNotifier
   /// Binds [projectId] to [saveId] and RESETS alwaysOverwrite. Called on load
   /// and on save (new or save-as-new).
   void bind(String projectId, String saveId) {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     state = {...state, projectId: WriterSaveBinding(activeSaveId: saveId)};
     _schedulePersist();
   }
 
   void setAlwaysOverwrite(String projectId, bool value) {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     final cur = state[projectId] ?? const WriterSaveBinding();
     state = {...state, projectId: cur.copyWith(alwaysOverwrite: value)};
     _schedulePersist();
   }
 
   void clear(String projectId) {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     final next = {...state}..remove(projectId);
     state = next;
     _schedulePersist();
   }
 
+  void pauseProjectWrites() {
+    _projectWritesPaused = true;
+    _debounce?.cancel();
+    _debounce = null;
+  }
+
+  void resumeProjectWrites({bool persistCurrent = true}) {
+    _projectWritesPaused = false;
+    if (persistCurrent) _schedulePersist();
+  }
+
   void _schedulePersist() {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     _debounce?.cancel();
     final snapshot = state;
     _debounce = Timer(_kDebounce, () {
@@ -135,35 +163,15 @@ final writerSaveBindingProvider =
       WriterSaveBindingNotifier.new,
     );
 
-/// True when the live Writer project differs from the named save it is bound
-/// to. When unbound (or the bound save is missing), dirty when it has content.
+/// True when any live Writer field differs from its valid named-save baseline,
+/// or from the complete selected-project default when unbound.
 final writerDirtyProvider = Provider<bool>((ref) {
   final projectId = ref.watch(
     saveSystemProvider.select((s) => s.selectedProjectId),
   );
   if (projectId == null) return false;
-  final project = ref.watch(songwriterProvider);
-  final binding = ref.watch(writerSaveBindingProvider)[projectId];
-  final saves = ref.watch(saveSystemProvider.select((s) => s.saves));
-  final id = binding?.activeSaveId;
-  SaveEntry? entry;
-  if (id != null) {
-    for (final s in saves) {
-      if (s.id == id) {
-        entry = s;
-        break;
-      }
-    }
-  }
-  if (entry == null) {
-    return project.sections.isNotEmpty || project.drumPatterns.isNotEmpty;
-  }
-  final baseline = binding?.materializedBaselineJson;
-  if (baseline != null) {
-    final materialized = ref
-        .read(songwriterProvider.notifier)
-        .materializeCurrentContent();
-    return jsonEncode(materialized.toJson()) != baseline;
-  }
-  return jsonEncode(project.toJson()) != jsonEncode(entry.snapshot.toJson());
+  ref.watch(songwriterProvider);
+  ref.watch(writerSaveBindingProvider);
+  ref.watch(saveSystemProvider);
+  return ref.read(songwriterProvider.notifier).isProjectDirty(projectId);
 });

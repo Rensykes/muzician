@@ -69,6 +69,19 @@ enum FretboardPalette {
   graphite,
 }
 
+/// A read-only marker for a note owned by another feature, such as Writer.
+class FretboardOverlayNote {
+  final int midiNote;
+  final int stringIndex;
+  final int fret;
+
+  const FretboardOverlayNote({
+    required this.midiNote,
+    required this.stringIndex,
+    required this.fret,
+  });
+}
+
 class _PaletteSpec {
   final Color boardDark;
   final Color boardMid;
@@ -109,10 +122,21 @@ class GuitarFretboard extends ConsumerStatefulWidget {
   /// original mahogany; the V2 mockup overrides with [FretboardPalette.midnight].
   final FretboardPalette palette;
 
+  /// Replaces global selection appearance with [controlledNotes]. In this mode
+  /// tapping cannot change the shared Fretboard selection.
+  final bool controlledMode;
+  final List<FretboardOverlayNote> controlledNotes;
+  final int? selectableMidiNote;
+  final ValueChanged<FretCoordinate>? onControlledPositionSelected;
+
   const GuitarFretboard({
     super.key,
     this.hideToolbar = false,
     this.palette = FretboardPalette.wood,
+    this.controlledMode = false,
+    this.controlledNotes = const [],
+    this.selectableMidiNote,
+    this.onControlledPositionSelected,
   });
 
   @override
@@ -156,11 +180,13 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
       _animateToFret(next);
     });
 
-    ref.listen(scrollToFretProvider, (_, next) {
-      if (next == null) return;
-      _animateToFret(next);
-      ref.read(scrollToFretProvider.notifier).state = null;
-    });
+    if (!widget.controlledMode) {
+      ref.listen(scrollToFretProvider, (_, next) {
+        if (next == null) return;
+        _animateToFret(next);
+        ref.read(scrollToFretProvider.notifier).state = null;
+      });
+    }
 
     final svgWidth = _labelW + _openColW + _nutW + numFrets * _fretW + 12;
     final svgHeight = _headerH + _numStrings * _stringH + _vPad;
@@ -188,6 +214,19 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
                 if (down == null) return;
                 final delta = (e.localPosition - down).distance;
                 if (delta >= _scrollThreshold) return;
+                if (widget.controlledMode) {
+                  final callback = widget.onControlledPositionSelected;
+                  if (callback != null) {
+                    _handleControlledTap(
+                      e.localPosition,
+                      cells,
+                      capo,
+                      widget.selectableMidiNote,
+                      callback,
+                    );
+                  }
+                  return;
+                }
                 _handleTap(e.localPosition, cells, numFrets, capo, notifier);
               },
               onPointerCancel: (_) => _pointerDownLocal = null,
@@ -198,12 +237,23 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
                   cells: cells,
                   numFrets: numFrets,
                   capo: capo,
-                  highlightedNotes: state.highlightedNotes,
-                  selectedNotes: state.selectedNotes,
-                  selectedCells: state.selectedCells,
+                  highlightedNotes: widget.controlledMode
+                      ? const []
+                      : state.highlightedNotes,
+                  selectedNotes: widget.controlledMode
+                      ? const []
+                      : state.selectedNotes,
+                  selectedCells: widget.controlledMode
+                      ? const []
+                      : state.selectedCells,
                   viewMode: state.viewMode,
-                  focusedNotes: state.focusedNotes,
+                  focusedNotes: widget.controlledMode
+                      ? const {}
+                      : state.focusedNotes,
                   palette: widget.palette,
+                  controlledMode: widget.controlledMode,
+                  controlledNotes: widget.controlledNotes,
+                  selectableMidiNote: widget.selectableMidiNote,
                 ),
               ),
             ),
@@ -211,6 +261,34 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
         ),
       ],
     );
+  }
+
+  void _handleControlledTap(
+    Offset pos,
+    List<List<FretCell>> cells,
+    int capo,
+    int? selectableMidiNote,
+    ValueChanged<FretCoordinate> onSelected,
+  ) {
+    if (selectableMidiNote == null) return;
+    const hitRadius = 18.0;
+    for (final stringCells in cells) {
+      for (final cell in stringCells) {
+        if (cell.fret < capo || cell.midiNote != selectableMidiNote) continue;
+        final dx = pos.dx - _noteX(cell.fret);
+        final dy = pos.dy - _stringY(cell.stringIndex);
+        if (math.sqrt(dx * dx + dy * dy) <= hitRadius) {
+          onSelected(
+            FretCoordinate(
+              stringIndex: cell.stringIndex,
+              fret: cell.fret,
+              noteName: cell.noteName,
+            ),
+          );
+          return;
+        }
+      }
+    }
   }
 
   void _handleTap(
@@ -268,9 +346,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
         ),
       );
       if (decision != ProjectOffScaleDecision.switchToDump) return;
-      final dumpId = ref
-          .read(saveSystemProvider.notifier)
-          .ensureDumpFolder();
+      final dumpId = ref.read(saveSystemProvider.notifier).ensureDumpFolder();
       ref.read(saveSystemProvider.notifier).selectProject(dumpId);
       notifier.setHighlightedNotes([]);
       onConfirmed();
@@ -470,6 +546,9 @@ class _FretboardPainter extends CustomPainter {
   final List<FretCoordinate> selectedCells;
   final FretboardViewMode viewMode;
   final Set<String> focusedNotes;
+  final bool controlledMode;
+  final List<FretboardOverlayNote> controlledNotes;
+  final int? selectableMidiNote;
 
   final FretboardPalette palette;
 
@@ -484,6 +563,9 @@ class _FretboardPainter extends CustomPainter {
     required this.viewMode,
     this.focusedNotes = const {},
     this.palette = FretboardPalette.wood,
+    this.controlledMode = false,
+    this.controlledNotes = const [],
+    this.selectableMidiNote,
   });
 
   static const _naturalColor = Color(0xFF38BDF8);
@@ -658,13 +740,22 @@ class _FretboardPainter extends CustomPainter {
         final isSelectedExact = selectedCells.any(
           (c) => c.stringIndex == cell.stringIndex && c.fret == cell.fret,
         );
-        final isSelected = isSelectedExact;
+        final isPatternPosition = controlledNotes.any(
+          (note) =>
+              note.stringIndex == cell.stringIndex &&
+              note.fret == cell.fret &&
+              note.midiNote == cell.midiNote,
+        );
+        final isSelectablePosition =
+            selectableMidiNote == cell.midiNote && !behindCapo;
+        final isSelected = isSelectedExact || isPatternPosition;
 
         // focusedNotes: pitch classes tapped in the detection panel.
         final isFocusedPitchClass = focusedNotes.contains(cell.noteName);
 
         // In Solo mode, hide notes that are neither selected nor focused.
         final inExactFocusMode =
+            !controlledMode &&
             viewMode == FretboardViewMode.exactFocus &&
             selectedCells.isNotEmpty;
         if (inExactFocusMode &&
@@ -688,11 +779,21 @@ class _FretboardPainter extends CustomPainter {
         final Color bubbleStroke;
         final double strokeWidth;
         final Color textColor;
-        if (isSelected) {
+        if (isPatternPosition) {
+          bubbleFill = MuzicianTheme.emerald;
+          bubbleStroke = Colors.white;
+          strokeWidth = 2.5;
+          textColor = const Color(0xFF052E2B);
+        } else if (isSelected) {
           bubbleFill = Colors.white;
           bubbleStroke = baseColor;
           strokeWidth = 2.5;
           textColor = baseColor;
+        } else if (isSelectablePosition) {
+          bubbleFill = baseColor;
+          bubbleStroke = MuzicianTheme.sky;
+          strokeWidth = 3;
+          textColor = Colors.white;
         } else if (isFocusedPitchClass) {
           bubbleFill = baseColor;
           bubbleStroke = Colors.white;
@@ -709,8 +810,10 @@ class _FretboardPainter extends CustomPainter {
 
         final opacity = behindCapo
             ? 0.18
-            : (isSelected || isFocusedPitchClass)
+            : (isSelected || isSelectablePosition || isFocusedPitchClass)
             ? 1.0
+            : controlledMode
+            ? 0.48
             : focusedNotes.isNotEmpty
             ? 0.18
             : highlightedNotes.isEmpty
@@ -757,5 +860,26 @@ class _FretboardPainter extends CustomPainter {
       old.selectedNotes != selectedNotes ||
       old.selectedCells != selectedCells ||
       old.highlightedNotes != highlightedNotes ||
-      old.focusedNotes != focusedNotes;
+      old.focusedNotes != focusedNotes ||
+      old.controlledMode != controlledMode ||
+      !_sameOverlayNotes(old.controlledNotes, controlledNotes) ||
+      old.selectableMidiNote != selectableMidiNote;
+}
+
+bool _sameOverlayNotes(
+  List<FretboardOverlayNote> left,
+  List<FretboardOverlayNote> right,
+) {
+  if (identical(left, right)) return true;
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    final a = left[index];
+    final b = right[index];
+    if (a.midiNote != b.midiNote ||
+        a.stringIndex != b.stringIndex ||
+        a.fret != b.fret) {
+      return false;
+    }
+  }
+  return true;
 }

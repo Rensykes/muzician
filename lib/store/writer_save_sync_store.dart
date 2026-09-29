@@ -11,6 +11,10 @@ import '../models/save_system.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
 
+/// True while a Writer-created project is being prepared, written, and
+/// published as one staged transaction.
+final writerProjectWriteFenceProvider = StateProvider<bool>((_) => false);
+
 const writerSaveSyncJournalStorageKey = '@muzician/writer_save_sync/v1';
 
 /// The only storage operations used by the shared persistence queue.
@@ -157,6 +161,11 @@ class WriterSaveSyncNotifier extends Notifier<bool> {
     required Map<String, Map<String, dynamic>> writerBindings,
     required void Function() commitMemory,
   }) {
+    if (ref.read(writerProjectWriteFenceProvider)) {
+      return Future<void>.error(
+        StateError('Writer project writes are fenced during project creation.'),
+      );
+    }
     final journal = WriterSaveSyncJournal(
       projectId: projectId,
       saveSystemPayload: serialiseSaveSystemState(saveSystemState),
@@ -174,21 +183,87 @@ class WriterSaveSyncNotifier extends Notifier<bool> {
     return completion;
   }
 
+  /// Persists a prepared project switch before publishing its in-memory state.
+  /// A failed write before journal acceptance leaves memory untouched. Once
+  /// the journal is accepted, failures roll forward by replaying that exact
+  /// payload; failed replay leaves the caller's fence in place for recovery.
+  Future<void> commitWriterTransactionAfterPersist({
+    required String projectId,
+    required SaveSystemState saveSystemState,
+    required Map<String, SongwriterProjectSnapshot> writerDrafts,
+    required Map<String, Map<String, dynamic>> writerBindings,
+    required void Function() commitMemory,
+  }) async {
+    if (!ref.read(writerProjectWriteFenceProvider)) {
+      throw StateError('A project write fence is required for staged commit.');
+    }
+    final journal = _makeJournal(
+      projectId: projectId,
+      saveSystemState: saveSystemState,
+      writerDrafts: writerDrafts,
+      writerBindings: writerBindings,
+    );
+    var accepted = false;
+    try {
+      await _enqueue(
+        () => _writeTransaction(journal, onAccepted: () => accepted = true),
+      );
+    } catch (error) {
+      if (!accepted) rethrow;
+      try {
+        await replayPendingTransaction();
+      } catch (replayError) {
+        Error.throwWithStackTrace(
+          StateError(
+            'Writer project transaction was accepted but recovery failed: '
+            '$replayError',
+          ),
+          StackTrace.current,
+        );
+      }
+    }
+    commitMemory();
+  }
+
+  WriterSaveSyncJournal _makeJournal({
+    required String projectId,
+    required SaveSystemState saveSystemState,
+    required Map<String, SongwriterProjectSnapshot> writerDrafts,
+    required Map<String, Map<String, dynamic>> writerBindings,
+  }) => WriterSaveSyncJournal(
+    projectId: projectId,
+    saveSystemPayload: serialiseSaveSystemState(saveSystemState),
+    writerDraftsPayload: jsonEncode(
+      writerDrafts.map((key, value) => MapEntry(key, value.toJson())),
+    ),
+    writerBindingsPayload: jsonEncode(writerBindings),
+  );
+
   /// Adds an ordinary Save System write to the same queue as Writer commits.
   Future<void> persistSaveSystem(String payload) =>
-      _enqueue(() => _writeString(saveSystemStorageKey, payload));
+      ref.read(writerProjectWriteFenceProvider)
+      ? Future<void>.value()
+      : _enqueue(() => _writeString(saveSystemStorageKey, payload));
 
   /// Adds an ordinary Writer draft write to the shared queue.
   Future<void> persistWriterDrafts(String payload) =>
-      _enqueue(() => _writeString(songwriterSessionsStorageKey, payload));
+      ref.read(writerProjectWriteFenceProvider)
+      ? Future<void>.value()
+      : _enqueue(() => _writeString(songwriterSessionsStorageKey, payload));
 
   /// Removes the Writer draft key through the shared queue.
-  Future<void> removeWriterDrafts() =>
-      _enqueue(() => _remove(songwriterSessionsStorageKey));
+  Future<void> removeWriterDrafts() => ref.read(writerProjectWriteFenceProvider)
+      ? Future<void>.value()
+      : _enqueue(() => _remove(songwriterSessionsStorageKey));
 
   /// Adds an ordinary named-save binding write to the shared queue.
   Future<void> persistWriterBindings(String payload) =>
-      _enqueue(() => _writeString(writerSaveBindingsStorageKey, payload));
+      ref.read(writerProjectWriteFenceProvider)
+      ? Future<void>.value()
+      : _enqueue(() => _writeString(writerSaveBindingsStorageKey, payload));
+
+  /// Waits for every storage operation already admitted to the shared queue.
+  Future<void> drain() => _tail;
 
   /// Replays a pending transaction before store hydration exposes workspaces.
   /// A missing journal means no complete transaction was durably accepted.
@@ -215,9 +290,15 @@ class WriterSaveSyncNotifier extends Notifier<bool> {
     }
   }, allowRecovery: true);
 
-  Future<void> _writeTransaction(WriterSaveSyncJournal journal) async {
+  Future<void> _writeTransaction(
+    WriterSaveSyncJournal journal, {
+    void Function()? onAccepted,
+  }) async {
+    var accepted = false;
     try {
       await _writeString(writerSaveSyncJournalStorageKey, journal.encode());
+      accepted = true;
+      onAccepted?.call();
       _storageNeedsRecovery = true;
       state = true;
       await _applyTransaction(journal);
@@ -225,8 +306,8 @@ class WriterSaveSyncNotifier extends Notifier<bool> {
       _storageNeedsRecovery = false;
       state = false;
     } catch (_) {
-      _storageNeedsRecovery = true;
-      state = true;
+      _storageNeedsRecovery = accepted;
+      state = accepted;
       rethrow;
     }
   }

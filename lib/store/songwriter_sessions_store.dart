@@ -17,6 +17,7 @@ class SongwriterSessionsNotifier
     extends Notifier<Map<String, SongwriterProjectSnapshot>> {
   Timer? _debounce;
   bool _hydrated = false;
+  bool _projectWritesPaused = false;
 
   @override
   Map<String, SongwriterProjectSnapshot> build() {
@@ -51,6 +52,10 @@ class SongwriterSessionsNotifier
   SongwriterProjectSnapshot? get(String projectId) => state[projectId];
 
   void put(String projectId, SongwriterProjectSnapshot project) {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     state = {...state, projectId: project};
     _schedulePersist();
   }
@@ -65,12 +70,20 @@ class SongwriterSessionsNotifier
   }
 
   void remove(String projectId) {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     final next = {...state}..remove(projectId);
     state = next;
     _schedulePersist();
   }
 
   Future<void> clearAll() async {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     _debounce?.cancel();
     _debounce = null;
     state = const {};
@@ -83,6 +96,10 @@ class SongwriterSessionsNotifier
   /// Use at app-lifecycle flush points (e.g. before backgrounding) and in tests
   /// that need a deterministic round-trip without waiting out the debounce.
   Future<void> flush() async {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     _debounce?.cancel();
     _debounce = null;
     await ref
@@ -90,7 +107,27 @@ class SongwriterSessionsNotifier
         .persistWriterDrafts(_serialiseSessions(state));
   }
 
+  /// Cancels a pending session debounce while preserving the in-memory map.
+  /// The staged project journal will absorb this captured state.
+  void pauseProjectWrites() {
+    _projectWritesPaused = true;
+    _debounce?.cancel();
+    _debounce = null;
+  }
+
+  /// Resumes autosave after a project switch. Failed pre-acceptance attempts
+  /// schedule the still-current map for persistence; successful commits already
+  /// included the exact map in their journal.
+  void resumeProjectWrites({bool persistCurrent = true}) {
+    _projectWritesPaused = false;
+    if (persistCurrent) _schedulePersist();
+  }
+
   void _schedulePersist() {
+    if (_projectWritesPaused ||
+        ref.read(writer_sync.writerProjectWriteFenceProvider)) {
+      return;
+    }
     _debounce?.cancel();
     final snapshot = state;
     _debounce = Timer(_kDebounce, () {

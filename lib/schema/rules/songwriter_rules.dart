@@ -127,6 +127,17 @@ bool blocksOverlap(List<SongBlock> existing, SongBlock candidate) {
   return false;
 }
 
+/// Validates a block move or resize against the section timeline and its lane.
+bool isValidBlockPlacement({
+  required SongSection section,
+  required SongLane lane,
+  required SongBlock candidate,
+}) =>
+    candidate.startBar >= 0 &&
+    candidate.spanBars > 0 &&
+    candidate.endBar <= section.lengthBars &&
+    !blocksOverlap(lane.blocks, candidate);
+
 // ─── Factory Helpers ─────────────────────────────────────────────────────────
 
 SongSection makeSection({
@@ -418,6 +429,7 @@ WriterBlockSnapshot? writerBlockSnapshotFor(
     return WriterBlockSnapshot(
       laneKind: lane.kind,
       melodyPattern: pattern,
+      melodyPerformance: project.melodyPerformancesByPatternId[patternId],
       defaultLyrics: defaultLyrics,
     );
   }
@@ -550,6 +562,71 @@ SongLane? primaryHarmonyLane(SongSection section) {
     if (l.kind == SongLaneKind.harmony) return l;
   }
   return null;
+}
+
+/// Resolves legacy Harmony lanes through the selected Writer project's default
+/// instrument. Newer lanes persist their instrument explicitly.
+HarmonyLaneInstrument effectiveHarmonyInstrument(
+  SongLane lane,
+  HarmonyLaneInstrument projectDefault,
+) => lane.harmonyInstrument ?? projectDefault;
+
+/// Resolves a Guitar Strum lane's source only when it is explicitly assigned
+/// to a live Fretboard Harmony lane. Null and stale anchors stay silent.
+SongLane? guitarStrumAnchorLane(
+  SongSection section,
+  SongLane lane, {
+  HarmonyLaneInstrument projectDefault = HarmonyLaneInstrument.fretboard,
+}) {
+  if (lane.kind != SongLaneKind.guitarStrum || lane.anchorLaneId == null) {
+    return null;
+  }
+  for (final candidate in section.lanes) {
+    if (candidate.id == lane.anchorLaneId &&
+        candidate.kind == SongLaneKind.harmony &&
+        effectiveHarmonyInstrument(candidate, projectDefault) ==
+            HarmonyLaneInstrument.fretboard) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/// Pins legacy null Guitar Strum anchors once, using the old primary Harmony
+/// behavior only when that primary lane resolves to Fretboard. The version is
+/// advanced even when no eligible Harmony lane exists, so later-added lanes do
+/// not acquire a source implicitly.
+SongwriterProjectSnapshot migrateLegacyStrumAnchors(
+  SongwriterProjectSnapshot project, {
+  required HarmonyLaneInstrument projectDefault,
+}) {
+  if (project.strumAnchorMigrationVersion >=
+      strumAnchorMigrationCurrentVersion) {
+    return project;
+  }
+  final sections = [
+    for (final section in project.sections)
+      (() {
+        final primary = primaryHarmonyLane(section);
+        return section.copyWith(
+          lanes: [
+            for (final lane in section.lanes)
+              if (lane.kind == SongLaneKind.guitarStrum &&
+                  lane.anchorLaneId == null &&
+                  primary != null &&
+                  effectiveHarmonyInstrument(primary, projectDefault) ==
+                      HarmonyLaneInstrument.fretboard)
+                lane.copyWith(anchorLaneId: primary.id)
+              else
+                lane,
+          ],
+        );
+      })(),
+  ];
+  return project.copyWith(
+    sections: sections,
+    strumAnchorMigrationVersion: strumAnchorMigrationCurrentVersion,
+  );
 }
 
 /// The harmony lane a save [lane]'s voicings belong to: its

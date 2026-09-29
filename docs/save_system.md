@@ -53,6 +53,19 @@ Every top-level folder has a `kind`:
 
 When a project is selected, tempo / key / time-signature controls on the instrument and arrangement headers are locked. Edit them through the project config sheet, which prompts before retrofitting eligible saves in the project's subtree. Named Writer Song versions are immutable and are not retrofitted; the active Writer session follows the current project config.
 
+Writer's **New project** action creates and selects an independent project root
+with an empty Writer session. It asks for Piano or Fretboard on every creation
+and stores that choice in the new project's `ProjectConfig` without changing
+the app-wide default. If the current Writer session differs from its bound
+active named Writer Save (or from the full project-default session when
+unbound), the user chooses **Keep**, **Discard**, or **Cancel**. Keep retains
+the outgoing session. Discard restores the bound Save through canonical Writer
+block reconciliation, keeps the current project config, and forks changed
+linked block content when needed. If no valid Writer Save is bound, Discard
+clears the session and binding. Either path preserves all named Save entries.
+Cancel creates no project. The project and outgoing Writer disposition are
+persisted together through the shared Writer journal transaction.
+
 ### Migration
 
 Storage key bumped to `@muzician/save-system/v3`. When no valid v3 state exists,
@@ -72,7 +85,7 @@ shown in the startup recovery prompt until the user chooses **Start fresh**.
 | `FretboardSnapshot` | Fretboard save: tuning, capo, selected cells, notes, view mode, pending chord/scale |
 | `PianoSnapshot` | Piano save: key range, selected keys, notes, view mode, pending chord/scale |
 | `PianoRollSnapshot` | Piano roll session: tempo, time signature, notes, range, snap, highlights, derivable chord/scale |
-| `WriterBlockSnapshot` | Writer-native content for a harmony, silent, drum, melody, strum, or audio block, including a default lyric seed for new placements; audio bytes stay in the audio repository |
+| `WriterBlockSnapshot` | Writer-native content for a harmony, silent, drum, melody, strum, or audio block, including a default lyric seed for new placements and optional melody performance mapping; audio bytes stay in the audio repository |
 | `SaveFolder` | Named folder node with optional parent ID, metadata, and ordering |
 | `SaveEntry` | Canonical saved content: ID, name, physical folder ID, snapshot, origin (`manual` or `writer`), timestamp, and ordering |
 | `WriterSaveLink` | Link from one Writer source block to its section folder and canonical save; holds no duplicate snapshot |
@@ -158,8 +171,10 @@ as it was when saved. Defined in `lib/models/songwriter.dart`; see
 One placement-free Writer block's canonical musical content. Harmony and silent
 blocks carry their chord or silent-block data; drum, melody, and strum blocks
 carry pattern contents; audio blocks carry clip and source/derived asset
-metadata. `defaultLyrics` is copied into a new placement once and later lyric
-edits remain local to that placement. Source audio bytes remain in
+metadata. Melody block snapshots also carry the pattern's Piano/Fretboard
+target and per-note physical mapping so canonical Save reuse and restore retain
+performance state. `defaultLyrics` is copied into a new placement once and later
+lyric edits remain local to that placement. Source audio bytes remain in
 `SongAudioRepository`. Save-lane voicings continue to use `FretboardSnapshot`
 or `PianoSnapshot`.
 

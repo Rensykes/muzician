@@ -836,6 +836,9 @@ class SongProjectNotifier extends Notifier<SongProject> {
         saveState.saves,
         projectId: saveState.selectedProjectId,
         folders: saveState.folders,
+        projectDefaultHarmonyInstrument: ref
+            .read(songwriterProvider.notifier)
+            .projectDefaultHarmonyInstrumentForSelectedProject,
       );
     });
   }
@@ -1160,6 +1163,9 @@ final songFromWriterPreviewProvider = Provider<SongProject>((ref) {
     saveState.saves,
     projectId: saveState.selectedProjectId,
     folders: saveState.folders,
+    projectDefaultHarmonyInstrument: ref
+        .read(songwriterProvider.notifier)
+        .projectDefaultHarmonyInstrumentForSelectedProject,
   );
 });
 

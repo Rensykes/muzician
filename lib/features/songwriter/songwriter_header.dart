@@ -7,6 +7,7 @@ import '../../store/settings_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/writer_save_binding_store.dart';
+import '../../ui/project_picker_sheet.dart';
 import '../../utils/note_utils.dart';
 import '../_mockup_shell.dart';
 
@@ -28,7 +29,6 @@ class SongwriterHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(songwriterProvider);
     final config = project.config;
-    final notifier = ref.read(songwriterProvider.notifier);
     final dirty = ref.watch(writerDirtyProvider);
     final keyLabel = config.keyRoot == null
         ? 'No key'
@@ -154,7 +154,9 @@ class SongwriterHeader extends ConsumerWidget {
           tempo: config.tempo,
           onKeyTap: () => _editKey(context, ref),
           onTempoTap: () => _editTempo(context, ref),
-          onNewProject: () => _confirmNew(context, notifier),
+          onNewProject: () async {
+            await showWriterProjectCreationFlow(context, ref);
+          },
           onOverflow: compact ? () => _showOverflowMenu(context, ref) : null,
           onHelp: compact ? onStartTour : null,
         ),
@@ -245,31 +247,6 @@ class SongwriterHeader extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _confirmNew(
-    BuildContext context,
-    SongwriterNotifier notifier,
-  ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogCtx) => MuzicianDialog(
-        title: 'New project?',
-        content: const Text('This clears the current songwriter session.'),
-        actions: [
-          MuzicianDialogButton(
-            'Cancel',
-            onPressed: () => Navigator.pop(dialogCtx, false),
-          ),
-          MuzicianDialogButton(
-            'New project',
-            emphasis: MuzicianDialogEmphasis.primary,
-            onPressed: () => Navigator.pop(dialogCtx, true),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) await notifier.newProject();
   }
 
   void _editTempo(BuildContext context, WidgetRef ref) {
@@ -371,7 +348,19 @@ class _WriterConfigStrip extends ConsumerWidget {
                   .setMetronomeEnabled(!metronomeOn),
             ),
             _stripDivider(),
-            IconBtn(icon: Icons.add_box_outlined, onTap: onNewProject),
+            Tooltip(
+              message: 'Create Writer project',
+              child: Semantics(
+                button: true,
+                label: 'Create Writer project',
+                excludeSemantics: true,
+                child: IconBtn(
+                  key: const Key('writerNewProjectButton'),
+                  icon: Icons.add_box_outlined,
+                  onTap: onNewProject,
+                ),
+              ),
+            ),
             if (onHelp != null)
               IconBtn(
                 key: const Key('writerHelpButton'),

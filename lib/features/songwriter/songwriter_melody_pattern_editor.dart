@@ -13,6 +13,20 @@ import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../piano_roll/piano_roll_screen_v2.dart';
 
+/// Identifies the one just-created Writer placement eligible for its initial
+/// Piano Roll duration expansion. Existing-pattern editors should omit it.
+class SongwriterMelodyInitialPlacement {
+  const SongwriterMelodyInitialPlacement({
+    required this.sectionId,
+    required this.laneId,
+    required this.blockId,
+  });
+
+  final String sectionId;
+  final String laneId;
+  final String blockId;
+}
+
 class _SeededPianoRollNotifier extends PianoRollNotifier {
   _SeededPianoRollNotifier(this.seedState);
   final PianoRollState seedState;
@@ -24,16 +38,25 @@ class _SeededPianoRollNotifier extends PianoRollNotifier {
 Future<void> showSongwriterMelodyPatternEditor({
   required BuildContext context,
   required String patternId,
+  SongwriterMelodyInitialPlacement? initialPlacement,
 }) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) => _SongwriterMelodyPatternEditor(patternId: patternId),
+    builder: (_) => _SongwriterMelodyPatternEditor(
+      patternId: patternId,
+      initialPlacement: initialPlacement,
+    ),
   ),
 );
 
 class _SongwriterMelodyPatternEditor extends ConsumerStatefulWidget {
-  const _SongwriterMelodyPatternEditor({required this.patternId});
+  const _SongwriterMelodyPatternEditor({
+    required this.patternId,
+    this.initialPlacement,
+  });
+
   final String patternId;
+  final SongwriterMelodyInitialPlacement? initialPlacement;
 
   @override
   ConsumerState<_SongwriterMelodyPatternEditor> createState() =>
@@ -78,7 +101,18 @@ class _SongwriterMelodyPatternEditorState
       minimumLengthTicks: pattern.lengthTicks,
       highlightedNotesOverride: pattern.highlightedNotes,
     );
-    ref.read(songwriterProvider.notifier).updateMelodyPattern(updated);
+    ref
+        .read(songwriterProvider.notifier)
+        .saveMelodyPattern(
+          updated,
+          initialPlacement: widget.initialPlacement == null
+              ? null
+              : (
+                  sectionId: widget.initialPlacement!.sectionId,
+                  laneId: widget.initialPlacement!.laneId,
+                  blockId: widget.initialPlacement!.blockId,
+                ),
+        );
     Navigator.pop(context);
   }
 

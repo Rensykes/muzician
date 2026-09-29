@@ -5,6 +5,7 @@ library;
 import 'dart:math' as math;
 
 import '../../models/save_system.dart';
+import '../../models/harmony_lane_instrument.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../models/piano_roll.dart' show TimeSignature;
@@ -32,6 +33,8 @@ SongProject songFromSongwriter(
   List<SaveEntry> saves, {
   String? projectId,
   List<SaveFolder> folders = const [],
+  HarmonyLaneInstrument projectDefaultHarmonyInstrument =
+      HarmonyLaneInstrument.fretboard,
 }) {
   final cfg = project.config;
   final beatTicks = cfg.ticksPerBeat;
@@ -170,17 +173,6 @@ SongProject songFromSongwriter(
     );
   }
 
-  SongLane? strumHarmonyLane(SongSection section, SongLane lane) {
-    if (lane.anchorLaneId == null) return primaryHarmonyLane(section);
-    for (final candidate in section.lanes) {
-      if (candidate.id == lane.anchorLaneId &&
-          candidate.kind == SongLaneKind.harmony) {
-        return candidate;
-      }
-    }
-    return null;
-  }
-
   List<int> harmonyAtTick(
     SongLane? harmonyLane,
     SongSection section,
@@ -209,7 +201,11 @@ SongProject songFromSongwriter(
     required int blockLengthTicks,
   }) {
     final notes = <NotePatternNote>[];
-    final harmonyLane = strumHarmonyLane(section, lane);
+    final harmonyLane = guitarStrumAnchorLane(
+      section,
+      lane,
+      projectDefault: projectDefaultHarmonyInstrument,
+    );
     final gateTicks = math.max(1, cfg.ticksPerBeat ~/ 2);
     if (source.lengthTicks > 0) {
       for (

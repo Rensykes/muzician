@@ -8,6 +8,10 @@ import 'song_project.dart';
 
 enum SongLaneKind { harmony, save, drum, audio, melody, guitarStrum }
 
+/// Version of the one-time migration that pins legacy guitar-strum Harmony
+/// anchors. Missing versions in old snapshots are treated as version zero.
+const strumAnchorMigrationCurrentVersion = 1;
+
 SongLaneKind _laneKindFromName(String? raw) {
   for (final v in SongLaneKind.values) {
     if (v.name == raw) return v;
@@ -441,8 +445,9 @@ class SongLane {
   final double pan; // -1.0 (left) .. 1.0 (right)
   final bool muted;
 
-  /// Save or guitar-strum lane: harmony lane whose chord data drives this
-  /// lane. Null resolves to the section's primary harmony lane.
+  /// Save lane: harmony lane whose chord data drives this lane. Null resolves
+  /// to the section's primary Harmony lane. Guitar Strum lanes use null as an
+  /// explicit unassigned state and never follow the primary lane.
   final String? anchorLaneId;
 
   /// Instrument used by a Harmony Lane; null for other lane kinds.
@@ -547,6 +552,7 @@ class WriterBlockSnapshot extends InstrumentSnapshot {
   final List<String> defaultLyrics;
   final DrumPattern? drumPattern;
   final NotePattern? melodyPattern;
+  final WriterMelodyPerformance? melodyPerformance;
   final GuitarStrumPattern? guitarStrumPattern;
   final AudioClip? audioClip;
   final AudioAsset? audioAsset;
@@ -563,6 +569,7 @@ class WriterBlockSnapshot extends InstrumentSnapshot {
     this.defaultLyrics = const [],
     this.drumPattern,
     this.melodyPattern,
+    this.melodyPerformance,
     this.guitarStrumPattern,
     this.audioClip,
     this.audioAsset,
@@ -595,6 +602,8 @@ class WriterBlockSnapshot extends InstrumentSnapshot {
     'defaultLyrics': defaultLyrics,
     'drumPattern': drumPattern?.toJson(),
     'melodyPattern': melodyPattern?.toJson(),
+    if (melodyPerformance != null)
+      'melodyPerformance': melodyPerformance!.toJson(),
     'guitarStrumPattern': guitarStrumPattern?.toJson(),
     'audioClip': audioClip?.toJson(),
     'audioAsset': audioAsset?.toJson(),
@@ -618,6 +627,11 @@ class WriterBlockSnapshot extends InstrumentSnapshot {
     melodyPattern: json['melodyPattern'] == null
         ? null
         : NotePattern.fromJson(json['melodyPattern'] as Map<String, dynamic>),
+    melodyPerformance: json['melodyPerformance'] == null
+        ? null
+        : WriterMelodyPerformance.fromJson(
+            json['melodyPerformance'] as Map<String, dynamic>,
+          ),
     guitarStrumPattern: json['guitarStrumPattern'] == null
         ? null
         : GuitarStrumPattern.fromJson(
@@ -637,15 +651,77 @@ class WriterBlockSnapshot extends InstrumentSnapshot {
   );
 }
 
+/// Physical fretboard location for a Writer melody note. `stringIndex` is
+/// zero-based (high string first), and `fret` is the physical fret number.
+class FretboardNotePosition {
+  final int stringIndex;
+  final int fret;
+
+  const FretboardNotePosition({required this.stringIndex, required this.fret});
+
+  Map<String, dynamic> toJson() => {'stringIndex': stringIndex, 'fret': fret};
+
+  factory FretboardNotePosition.fromJson(Map<String, dynamic> json) =>
+      FretboardNotePosition(
+        stringIndex: json['stringIndex'] as int,
+        fret: json['fret'] as int,
+      );
+}
+
+/// Instrument target and per-note physical positions for a Writer melody.
+/// Piano positions are the note's MIDI key, already stored on NotePatternNote.
+class WriterMelodyPerformance {
+  final HarmonyLaneInstrument instrument;
+  final Map<String, FretboardNotePosition> fretboardPositionsByNoteId;
+
+  const WriterMelodyPerformance({
+    required this.instrument,
+    this.fretboardPositionsByNoteId = const {},
+  });
+
+  WriterMelodyPerformance copyWith({
+    HarmonyLaneInstrument? instrument,
+    Map<String, FretboardNotePosition>? fretboardPositionsByNoteId,
+  }) => WriterMelodyPerformance(
+    instrument: instrument ?? this.instrument,
+    fretboardPositionsByNoteId:
+        fretboardPositionsByNoteId ?? this.fretboardPositionsByNoteId,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'instrument': instrument.name,
+    'fretboardPositionsByNoteId': fretboardPositionsByNoteId.map(
+      (noteId, position) => MapEntry(noteId, position.toJson()),
+    ),
+  };
+
+  factory WriterMelodyPerformance.fromJson(Map<String, dynamic> json) =>
+      WriterMelodyPerformance(
+        instrument:
+            HarmonyLaneInstrument.fromJson(json['instrument'] as String?) ??
+            HarmonyLaneInstrument.piano,
+        fretboardPositionsByNoteId:
+            (json['fretboardPositionsByNoteId'] as Map?)?.map(
+              (key, value) => MapEntry(
+                key as String,
+                FretboardNotePosition.fromJson(value as Map<String, dynamic>),
+              ),
+            ) ??
+            const {},
+      );
+}
+
 class SongwriterProjectSnapshot extends InstrumentSnapshot {
   final String name;
   final SongwriterConfig config;
   final List<SongSection> sections;
   final List<DrumPattern> drumPatterns;
   final List<NotePattern> melodyPatterns;
+  final Map<String, WriterMelodyPerformance> melodyPerformancesByPatternId;
   final List<GuitarStrumPattern> guitarStrumPatterns;
   final List<AudioAsset> audioAssets;
   final List<AudioClip> audioClips;
+  final int strumAnchorMigrationVersion;
 
   const SongwriterProjectSnapshot({
     this.name = 'Untitled song',
@@ -653,9 +729,11 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     this.sections = const [],
     this.drumPatterns = const [],
     this.melodyPatterns = const [],
+    this.melodyPerformancesByPatternId = const {},
     this.guitarStrumPatterns = const [],
     this.audioAssets = const [],
     this.audioClips = const [],
+    this.strumAnchorMigrationVersion = strumAnchorMigrationCurrentVersion,
   });
 
   @override
@@ -691,18 +769,24 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     List<SongSection>? sections,
     List<DrumPattern>? drumPatterns,
     List<NotePattern>? melodyPatterns,
+    Map<String, WriterMelodyPerformance>? melodyPerformancesByPatternId,
     List<GuitarStrumPattern>? guitarStrumPatterns,
     List<AudioAsset>? audioAssets,
     List<AudioClip>? audioClips,
+    int? strumAnchorMigrationVersion,
   }) => SongwriterProjectSnapshot(
     name: name ?? this.name,
     config: config ?? this.config,
     sections: sections ?? this.sections,
     drumPatterns: drumPatterns ?? this.drumPatterns,
     melodyPatterns: melodyPatterns ?? this.melodyPatterns,
+    melodyPerformancesByPatternId:
+        melodyPerformancesByPatternId ?? this.melodyPerformancesByPatternId,
     guitarStrumPatterns: guitarStrumPatterns ?? this.guitarStrumPatterns,
     audioAssets: audioAssets ?? this.audioAssets,
     audioClips: audioClips ?? this.audioClips,
+    strumAnchorMigrationVersion:
+        strumAnchorMigrationVersion ?? this.strumAnchorMigrationVersion,
   );
 
   @override
@@ -714,9 +798,14 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
     'sections': sections.map((s) => s.toJson()).toList(),
     'drumPatterns': drumPatterns.map((p) => p.toJson()).toList(),
     'melodyPatterns': melodyPatterns.map((p) => p.toJson()).toList(),
+    if (melodyPerformancesByPatternId.isNotEmpty)
+      'melodyPerformancesByPatternId': melodyPerformancesByPatternId.map(
+        (patternId, performance) => MapEntry(patternId, performance.toJson()),
+      ),
     'guitarStrumPatterns': guitarStrumPatterns.map((p) => p.toJson()).toList(),
     'audioAssets': audioAssets.map((a) => a.toJson()).toList(),
     'audioClips': audioClips.map((c) => c.toJson()).toList(),
+    'strumAnchorMigrationVersion': strumAnchorMigrationVersion,
   };
 
   factory SongwriterProjectSnapshot.fromJson(Map<String, dynamic> json) =>
@@ -742,6 +831,14 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
                 ?.map((p) => NotePattern.fromJson(p as Map<String, dynamic>))
                 .toList() ??
             const [],
+        melodyPerformancesByPatternId:
+            (json['melodyPerformancesByPatternId'] as Map?)?.map(
+              (key, value) => MapEntry(
+                key as String,
+                WriterMelodyPerformance.fromJson(value as Map<String, dynamic>),
+              ),
+            ) ??
+            const {},
         guitarStrumPatterns:
             (json['guitarStrumPatterns'] as List?)
                 ?.map(
@@ -759,6 +856,8 @@ class SongwriterProjectSnapshot extends InstrumentSnapshot {
                 ?.map((c) => AudioClip.fromJson(c as Map<String, dynamic>))
                 .toList() ??
             const [],
+        strumAnchorMigrationVersion:
+            json['strumAnchorMigrationVersion'] as int? ?? 0,
       );
 }
 

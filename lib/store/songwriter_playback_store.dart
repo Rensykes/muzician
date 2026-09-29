@@ -141,6 +141,9 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       saveState.saves,
       projectId: saveState.selectedProjectId,
       folders: saveState.folders,
+      projectDefaultHarmonyInstrument: ref
+          .read(songwriterProvider.notifier)
+          .projectDefaultHarmonyInstrumentForSelectedProject,
     );
 
     final cfg = project.config;

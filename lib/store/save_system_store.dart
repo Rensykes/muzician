@@ -20,9 +20,30 @@ import 'writer_save_sync_store.dart';
 
 class SaveSystemNotifier extends Notifier<SaveSystemState> {
   String? lastMutationError;
+  bool _publishingPreparedWriterProject = false;
 
   @override
   SaveSystemState build() => getDefaultSaveSystemState();
+
+  @override
+  set state(SaveSystemState value) {
+    if (ref.read(writerProjectWriteFenceProvider) &&
+        !_publishingPreparedWriterProject) {
+      return;
+    }
+    super.state = value;
+  }
+
+  /// Publishes the Save System portion of a fully persisted Writer project
+  /// switch while its write fence is still held.
+  void publishPreparedWriterProjectSwitch(SaveSystemState next) {
+    _publishingPreparedWriterProject = true;
+    try {
+      state = next;
+    } finally {
+      _publishingPreparedWriterProject = false;
+    }
+  }
 
   Future<void> hydrate() async {
     final prefs = await SharedPreferences.getInstance();

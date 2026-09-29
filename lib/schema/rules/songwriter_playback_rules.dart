@@ -9,6 +9,7 @@ library;
 import 'dart:math' as math;
 
 import '../../models/save_system.dart';
+import '../../models/harmony_lane_instrument.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
@@ -178,17 +179,6 @@ List<int> _blockPitches(
         ),
       );
 
-SongLane? _strumHarmonyLane(SongSection section, SongLane lane) {
-  if (lane.anchorLaneId == null) return primaryHarmonyLane(section);
-  for (final candidate in section.lanes) {
-    if (candidate.id == lane.anchorLaneId &&
-        candidate.kind == SongLaneKind.harmony) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
 List<int> _harmonyAtTick(
   SongLane? harmonyLane,
   SongSection section,
@@ -246,6 +236,8 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   List<SaveEntry> saves, {
   String? projectId,
   List<SaveFolder> folders = const [],
+  HarmonyLaneInstrument projectDefaultHarmonyInstrument =
+      HarmonyLaneInstrument.fretboard,
 }) {
   final cfg = project.config;
   final measureTicks = cfg.measureTicks;
@@ -390,7 +382,11 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             final startTick =
                 (exp.globalStartBar + block.startBar) * measureTicks;
             final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
-            final harmonyLane = _strumHarmonyLane(section, lane);
+            final harmonyLane = guitarStrumAnchorLane(
+              section,
+              lane,
+              projectDefault: projectDefaultHarmonyInstrument,
+            );
             final gateTicks = math.max(1, cfg.ticksPerBeat ~/ 2);
             for (
               var loopOffset = 0;

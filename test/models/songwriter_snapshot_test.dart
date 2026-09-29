@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/save_system.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/models/song_project.dart';
 
@@ -57,6 +58,7 @@ void main() {
       });
       expect(old.melodyPatterns, isEmpty);
       expect(old.guitarStrumPatterns, isEmpty);
+      expect(old.strumAnchorMigrationVersion, 0);
       expect(
         NotePatternNote.fromJson({
           'id': 'legacy',
@@ -109,6 +111,14 @@ void main() {
             ],
           ),
         ],
+        melodyPerformancesByPatternId: const {
+          'melody': WriterMelodyPerformance(
+            instrument: HarmonyLaneInstrument.fretboard,
+            fretboardPositionsByNoteId: {
+              'n1': FretboardNotePosition(stringIndex: 0, fret: 5),
+            },
+          ),
+        },
       );
       final restored = SongwriterProjectSnapshot.fromJson(snapshot.toJson());
       expect(restored.melodyPatterns.single.notes.single.onsetOffsetMs, 12);
@@ -119,6 +129,44 @@ void main() {
             .toList(),
         [(0, GuitarStrumDirection.down), (4, GuitarStrumDirection.up)],
       );
+      final position = restored
+          .melodyPerformancesByPatternId['melody']!
+          .fretboardPositionsByNoteId['n1']!;
+      expect((position.stringIndex, position.fret), (0, 5));
+      expect(restored.strumAnchorMigrationVersion, 0);
     },
   );
+
+  test('Writer block snapshots round-trip optional melody performance', () {
+    const block = WriterBlockSnapshot(
+      laneKind: SongLaneKind.melody,
+      melodyPattern: NotePattern(
+        id: 'melody',
+        name: 'Lead',
+        lengthTicks: 16,
+        notes: [
+          NotePatternNote(
+            id: 'n1',
+            midiNote: 64,
+            startTick: 0,
+            durationTicks: 4,
+          ),
+        ],
+        pitchRangeStart: 48,
+        pitchRangeEnd: 84,
+        snapTicks: 1,
+        highlightedNotes: [],
+      ),
+      melodyPerformance: WriterMelodyPerformance(
+        instrument: HarmonyLaneInstrument.fretboard,
+        fretboardPositionsByNoteId: {
+          'n1': FretboardNotePosition(stringIndex: 0, fret: 0),
+        },
+      ),
+    );
+    final restored = WriterBlockSnapshot.fromJson(block.toJson());
+    final position =
+        restored.melodyPerformance!.fretboardPositionsByNoteId['n1']!;
+    expect((position.stringIndex, position.fret), (0, 0));
+  });
 }

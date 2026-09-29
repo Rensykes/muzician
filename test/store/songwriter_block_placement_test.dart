@@ -92,6 +92,227 @@ void main() {
         .blocks
         .firstWhere((blk) => blk.saveId == 'y');
     expect(y.startBar, 10); // unchanged — overlap rejected
+
+    n.setBlockPlacement(
+      sectionId: s,
+      laneId: l,
+      blockId: yId,
+      startBar: 15,
+      spanBars: 2,
+    );
+    final outOfBounds = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == l)
+        .blocks
+        .firstWhere((block) => block.saveId == 'y');
+    expect((outOfBounds.startBar, outOfBounds.spanBars), (10, 2));
+  });
+
+  test('new melody pattern placement expansion is atomic and undoable', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 6);
+    final sectionId = c.read(songwriterProvider).sections.single.id;
+    final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+    final patternId = n.addMelodyPattern(lengthTicks: 16);
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    final blockId = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single
+        .id;
+    final before = c.read(songwriterProvider);
+    final updated = c
+        .read(songwriterProvider)
+        .melodyPatterns
+        .single
+        .copyWith(
+          lengthTicks: 48,
+          notes: const [
+            NotePatternNote(
+              id: 'melody-note',
+              midiNote: 72,
+              startTick: 0,
+              durationTicks: 2,
+            ),
+          ],
+        );
+
+    n.saveMelodyPattern(
+      updated,
+      initialPlacement: (
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: blockId,
+      ),
+    );
+
+    var block = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, 3);
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 48);
+    expect(n.undo(), isTrue);
+    block = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, 1);
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 16);
+    expect(c.read(songwriterProvider).name, before.name);
+  });
+
+  test(
+    'initial melody expansion rejects overlap and later edits do not resize reuse',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = c.read(songwriterProvider).sections.single.id;
+      final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+      final patternId = n.addMelodyPattern(lengthTicks: 16);
+      n.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      n.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 2,
+        spanBars: 1,
+      );
+      final blockId = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .first
+          .id;
+      final updated = c
+          .read(songwriterProvider)
+          .melodyPatterns
+          .single
+          .copyWith(
+            lengthTicks: 48,
+            notes: const [
+              NotePatternNote(
+                id: 'melody-note',
+                midiNote: 72,
+                startTick: 0,
+                durationTicks: 2,
+              ),
+            ],
+          );
+
+      n.saveMelodyPattern(
+        updated,
+        initialPlacement: (
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: blockId,
+        ),
+      );
+      n.saveMelodyPattern(updated.copyWith(lengthTicks: 64));
+
+      final lane = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((item) => item.id == laneId);
+      final firstBlock = lane.blocks.firstWhere((block) => block.id == blockId);
+      expect(firstBlock.spanBars, 1);
+      expect(lane.blocks.map((block) => block.startBar), [0, 2]);
+      final playedTicks = [
+        for (final event in flattenPlaybackEvents(
+          c.read(songwriterProvider),
+          const [],
+        ))
+          for (final group in event.sequencedNoteGroups)
+            for (final note in group.notes)
+              if (note.id == 'melody-note') event.tick,
+      ];
+      expect(playedTicks, [0, 32]);
+    },
+  );
+
+  test('initial melody expansion is bounded by section end', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = c.read(songwriterProvider).sections.single.id;
+    final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+    final patternId = n.addMelodyPattern(lengthTicks: 16);
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 3,
+      spanBars: 1,
+    );
+    final blockId = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single
+        .id;
+
+    n.saveMelodyPattern(
+      c
+          .read(songwriterProvider)
+          .melodyPatterns
+          .single
+          .copyWith(lengthTicks: 32),
+      initialPlacement: (
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: blockId,
+      ),
+    );
+
+    final block = c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+    expect((block.startBar, block.spanBars), (3, 1));
   });
 
   test(
