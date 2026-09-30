@@ -11,3 +11,9 @@ name = "Run iOS Simulator"
 icon = "run"
 command = "bash scripts/run_ios_simulator.sh"
 platform = "darwin"
+
+[[actions]]
+name = "Deploy to iPhone"
+icon = "run"
+command = "bash scripts/run_ios_iphone.sh"
+platform = "darwin"

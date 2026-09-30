@@ -86,6 +86,9 @@ flutter pub get
 open -a Simulator
 flutter run
 
+# Physical iPhone (or use Codex environment action: Deploy to iPhone)
+bash scripts/run_ios_iphone.sh
+
 # Android
 flutter run -d <device-id>
 
@@ -93,6 +96,8 @@ flutter run -d <device-id>
 flutter devices
 flutter run -d <id>
 ```
+
+For a physical iPhone, connect and unlock the device, trust this Mac, enable iOS Developer Mode, and sign in to an Apple development account in Xcode so automatic signing can create a provisioning profile. The Codex environment's **Deploy to iPhone** action builds a signed Release app, installs it, and launches it directly without attaching the Flutter debugger; you can disconnect the phone after it opens. If more than one physical iPhone is connected, set `MUZICIAN_IOS_DEVICE_ID` to the intended device ID before running the script. The action uses the newest full Xcode installed in `/Applications`, so it can deploy to devices running newer iOS versions even when an older Xcode remains selected globally.
 
 ## Architecture Notes
 
