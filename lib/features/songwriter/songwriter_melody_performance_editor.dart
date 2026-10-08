@@ -10,13 +10,14 @@ import '../../models/piano.dart' show PianoRangeName;
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/fretboard_rules.dart' show tunings;
-import '../../schema/rules/piano_rules.dart'
-    show midiToNoteWithOctave, pianoRanges;
+import '../../schema/rules/piano_rules.dart' show pianoRanges;
 import '../../schema/rules/songwriter_melody_instrument_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../store/piano_store.dart';
+import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_utils.dart' show NoteSpelling, formatMidiNoteLabel;
 import '../fretboard/fretboard.dart';
 import '../piano/piano_keyboard.dart';
 import 'songwriter_melody_pattern_editor.dart';
@@ -82,6 +83,9 @@ class _SongwriterMelodyPerformanceEditorState
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(songwriterProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final pianoState = ref.watch(pianoProvider);
     final fretboardState = ref.watch(fretboardProvider);
     final notifier = ref.read(songwriterProvider.notifier);
@@ -189,6 +193,7 @@ class _SongwriterMelodyPerformanceEditorState
             )) ...[
               _UnavailableInstrumentCard(
                 instrument: performance.instrument,
+                spelling: spelling,
                 notes: _unplayableNotes(
                   pattern,
                   performance.instrument,
@@ -228,6 +233,7 @@ class _SongwriterMelodyPerformanceEditorState
                 }),
                 fretboardState: fretboardState,
                 performance: performance,
+                spelling: spelling,
               ),
               _PatternRollButton(
                 onPressed: () => showSongwriterMelodyPatternEditor(
@@ -280,6 +286,7 @@ class _SongwriterMelodyPerformanceEditorState
                 }),
                 fretboardState: fretboardState,
                 performance: performance,
+                spelling: spelling,
               ),
               _PatternRollButton(
                 onPressed: () => showSongwriterMelodyPatternEditor(
@@ -290,7 +297,7 @@ class _SongwriterMelodyPerformanceEditorState
               if (selectedNote != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Valid positions for ${midiToNoteWithOctave(selectedNote.midiNote)}',
+                  'Valid positions for ${formatMidiNoteLabel(selectedNote.midiNote, spelling: spelling)}',
                   style: const TextStyle(
                     color: MuzicianTheme.textSecondary,
                     fontSize: 12,
@@ -314,6 +321,7 @@ class _SongwriterMelodyPerformanceEditorState
                         _PositionChip(
                           position: position,
                           state: fretboardState,
+                          spelling: spelling,
                           selected:
                               performance
                                       .fretboardPositionsByNoteId[selectedNote
@@ -459,11 +467,13 @@ class _TargetButton extends StatelessWidget {
 class _UnavailableInstrumentCard extends StatelessWidget {
   const _UnavailableInstrumentCard({
     required this.instrument,
+    required this.spelling,
     required this.notes,
     required this.onEditNotes,
   });
 
   final HarmonyLaneInstrument instrument;
+  final NoteSpelling spelling;
   final List<NotePatternNote> notes;
   final VoidCallback onEditNotes;
 
@@ -490,7 +500,7 @@ class _UnavailableInstrumentCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '${instrument == HarmonyLaneInstrument.piano ? 'Piano' : 'Fretboard'} '
-            'view is unavailable for: ${notes.map((note) => midiToNoteWithOctave(note.midiNote)).join(', ')}.',
+            'view is unavailable for: ${notes.map((note) => formatMidiNoteLabel(note.midiNote, spelling: spelling)).join(', ')}.',
             style: const TextStyle(color: MuzicianTheme.textSecondary),
           ),
           const SizedBox(height: 8),
@@ -533,6 +543,7 @@ class _PatternNoteList extends StatelessWidget {
     required this.onSelected,
     required this.fretboardState,
     required this.performance,
+    required this.spelling,
   });
 
   final NotePattern pattern;
@@ -540,6 +551,7 @@ class _PatternNoteList extends StatelessWidget {
   final ValueChanged<String> onSelected;
   final FretboardState fretboardState;
   final WriterMelodyPerformance performance;
+  final NoteSpelling spelling;
 
   @override
   Widget build(BuildContext context) {
@@ -570,6 +582,7 @@ class _PatternNoteList extends StatelessWidget {
                 (selectedNoteId == null && index == 0),
             performance: performance,
             fretboardState: fretboardState,
+            spelling: spelling,
             onSelected: () => onSelected(pattern.notes[index].id),
           ),
       ],
@@ -584,6 +597,7 @@ class _PatternNoteRow extends StatelessWidget {
     required this.selected,
     required this.performance,
     required this.fretboardState,
+    required this.spelling,
     required this.onSelected,
   });
 
@@ -592,6 +606,7 @@ class _PatternNoteRow extends StatelessWidget {
   final bool selected;
   final WriterMelodyPerformance performance;
   final FretboardState fretboardState;
+  final NoteSpelling spelling;
   final VoidCallback onSelected;
 
   @override
@@ -608,7 +623,7 @@ class _PatternNoteRow extends StatelessWidget {
     final mappedLabel = performance.instrument == HarmonyLaneInstrument.piano
         ? 'Piano key MIDI ${note.midiNote}'
         : validPosition
-        ? 'String ${position.stringIndex + 1} (${tuning.strings[position.stringIndex].note}), fret ${position.fret}'
+        ? 'String ${position.stringIndex + 1} (${formatMidiNoteLabel(tuning.strings[position.stringIndex].midiNote, spelling: spelling)}), fret ${position.fret}'
         : 'Choose a playable position';
 
     return Padding(
@@ -630,7 +645,7 @@ class _PatternNoteRow extends StatelessWidget {
                   Semantics(
                     label:
                         'Pattern note ${index + 1}, '
-                        '${midiToNoteWithOctave(note.midiNote)}, '
+                        '${formatMidiNoteLabel(note.midiNote, spelling: spelling)}, '
                         'MIDI ${note.midiNote}',
                     selected: selected,
                     child: ExcludeSemantics(
@@ -662,7 +677,7 @@ class _PatternNoteRow extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${midiToNoteWithOctave(note.midiNote)}  ·  MIDI ${note.midiNote}',
+                          '${formatMidiNoteLabel(note.midiNote, spelling: spelling)}  ·  MIDI ${note.midiNote}',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
@@ -697,12 +712,14 @@ class _PositionChip extends StatelessWidget {
   const _PositionChip({
     required this.position,
     required this.state,
+    required this.spelling,
     required this.selected,
     required this.onPressed,
   });
 
   final FretboardNotePosition position;
   final FretboardState state;
+  final NoteSpelling spelling;
   final bool selected;
   final VoidCallback onPressed;
 
@@ -711,7 +728,7 @@ class _PositionChip extends StatelessWidget {
     final tuning = tunings[state.currentTuning]!;
     final string = tuning.strings[position.stringIndex];
     final label =
-        'String ${position.stringIndex + 1} (${string.note}), '
+        'String ${position.stringIndex + 1} (${formatMidiNoteLabel(string.midiNote, spelling: spelling)}), '
         'fret ${position.fret}';
     return Semantics(
       button: true,

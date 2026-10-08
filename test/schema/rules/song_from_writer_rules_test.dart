@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
@@ -39,6 +41,8 @@ void main() {
                 startBar: 0,
                 spanBars: 2,
                 chordSymbol: 'C',
+                chordQuality: '',
+                chordRootPc: 0,
                 chordNotes: ['C', 'E', 'G'],
               ),
             ],
@@ -125,6 +129,8 @@ void main() {
       startBar: 0,
       spanBars: 1,
       chordSymbol: 'C',
+      chordQuality: '',
+      chordRootPc: 0,
       chordNotes: ['C', 'E', 'G'],
     );
     const writer = SongwriterProjectSnapshot(
@@ -154,6 +160,8 @@ void main() {
                   startBar: 0,
                   spanBars: 1,
                   chordSymbol: 'C',
+                  chordQuality: '',
+                  chordRootPc: 0,
                   chordNotes: ['C', 'E', 'G'],
                 ),
               ],
@@ -196,6 +204,8 @@ void main() {
                   startBar: 0,
                   spanBars: 1,
                   chordSymbol: 'C',
+                  chordQuality: '',
+                  chordRootPc: 0,
                   chordNotes: ['C', 'E', 'G'],
                 ),
               ],
@@ -230,6 +240,89 @@ void main() {
     expect(saveTrack.volume, 0.4);
   });
 
+  test('Song import preserves exact Harmony MIDI and silences Free Saves', () {
+    final exactHarmony = HarmonyChordSnapshot(
+      harmonyInstrument: HarmonyLaneInstrument.piano,
+      writerBlock: const WriterBlockSnapshot(
+        laneKind: SongLaneKind.harmony,
+        chordSymbol: 'C cluster',
+        chordNotes: ['C', 'C#', 'G'],
+      ),
+      instrumentState: PianoSnapshot(
+        currentRange: PianoRangeName.key88,
+        selectedKeys: const [
+          PianoCoordinate(keyIndex: 27, midiNote: 48, noteName: 'C'),
+          PianoCoordinate(keyIndex: 28, midiNote: 49, noteName: 'C#'),
+          PianoCoordinate(keyIndex: 58, midiNote: 79, noteName: 'G'),
+        ],
+        selectedNotes: const ['C', 'C#', 'G'],
+        viewMode: PianoViewMode.exact,
+      ),
+    );
+    final writer = SongwriterProjectSnapshot(
+      config: const SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+      sections: [
+        SongSection(
+          id: 'exact-section',
+          lengthBars: 1,
+          order: 0,
+          lanes: [
+            SongLane(
+              id: 'exact-lane',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              harmonyInstrument: HarmonyLaneInstrument.piano,
+              blocks: [
+                SongBlock(
+                  id: 'exact-block',
+                  startBar: 0,
+                  spanBars: 1,
+                  chordSymbol: 'C cluster',
+                  chordNotes: const ['C', 'C#', 'G'],
+                  embedded: exactHarmony,
+                ),
+              ],
+            ),
+            SongLane(
+              id: 'free-save-lane',
+              kind: SongLaneKind.save,
+              order: 1,
+              label: 'Free Save',
+              blocks: [
+                SongBlock(
+                  id: 'free-save',
+                  startBar: 0,
+                  spanBars: 1,
+                  embedded: FretboardSnapshot(
+                    tuning: TuningName.standard,
+                    numFrets: 12,
+                    capo: 0,
+                    selectedCells: const [
+                      FretCoordinate(stringIndex: 0, fret: 0, noteName: 'E'),
+                      FretCoordinate(stringIndex: 1, fret: 1, noteName: 'C'),
+                    ],
+                    selectedNotes: const ['C', 'E'],
+                    viewMode: FretboardViewMode.exact,
+                    inputMode: FretboardInputMode.free,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final song = songFromSongwriter(writer, const []);
+    expect(song.notePatterns, hasLength(1));
+    expect(song.notePatterns.single.notes.map((note) => note.midiNote), [
+      48,
+      49,
+      79,
+    ]);
+    expect(song.tracks.where((track) => track.name == 'Free Save'), isEmpty);
+  });
+
   test('empty writer project yields a default-sized song', () {
     const writer = SongwriterProjectSnapshot(
       config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
@@ -262,6 +355,9 @@ void main() {
                     id: 'chord',
                     startBar: 0,
                     spanBars: 1,
+                    chordSymbol: 'C',
+                    chordQuality: '',
+                    chordRootPc: 0,
                     chordNotes: ['C', 'E', 'G'],
                   ),
                 ],
@@ -424,18 +520,27 @@ void main() {
                   id: 'c-major',
                   startBar: 0,
                   spanBars: 1,
+                  chordSymbol: 'C',
+                  chordQuality: '',
+                  chordRootPc: 0,
                   chordNotes: ['C', 'E', 'G'],
                 ),
                 SongBlock(
                   id: 'd-major',
                   startBar: 1,
                   spanBars: 1,
+                  chordSymbol: 'D',
+                  chordQuality: '',
+                  chordRootPc: 2,
                   chordNotes: ['D', 'F#', 'A'],
                 ),
                 SongBlock(
                   id: 'g-major',
                   startBar: 2,
                   spanBars: 1,
+                  chordSymbol: 'G',
+                  chordQuality: '',
+                  chordRootPc: 7,
                   chordNotes: ['G', 'B', 'D'],
                 ),
               ],
@@ -559,6 +664,9 @@ void main() {
                   id: 'chord',
                   startBar: 0,
                   spanBars: 1,
+                  chordSymbol: 'C',
+                  chordQuality: '',
+                  chordRootPc: 0,
                   chordNotes: ['C', 'E', 'G'],
                 ),
               ],
@@ -682,6 +790,9 @@ void main() {
           id: 'chord',
           startBar: 0,
           spanBars: 1,
+          chordSymbol: 'C',
+          chordQuality: '',
+          chordRootPc: 0,
           chordNotes: ['C', 'E', 'G'],
         ),
       ],

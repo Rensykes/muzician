@@ -84,6 +84,10 @@ class InstrumentBinding extends ScalePickerBinding {
   /// Captures the selected instrument state without writing a library save.
   final InstrumentSnapshot Function(WidgetRef) captureSnapshot;
 
+  /// State that affects Writer eligibility beyond the selected note list,
+  /// such as Fretboard mode/capo/fret bounds or Piano range.
+  final ProviderListenable<dynamic>? eligibilityState;
+
   /// True when the committed chord contains pitch classes outside the
   /// active project key. Drives the off-key indicator on the Scale dock tab.
   final ProviderListenable<bool> chordOffKey;
@@ -103,6 +107,7 @@ class InstrumentBinding extends ScalePickerBinding {
     required this.chordCommitted,
     required this.captureSnapshot,
     required this.chordOffKey,
+    this.eligibilityState,
   }) : selectionActions = actions,
        super(actions: actions);
 

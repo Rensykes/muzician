@@ -61,9 +61,17 @@ void main() {
         tuning: TuningName.standard,
         numFrets: 12,
         capo: 0,
-        selectedCells: const [],
+        selectedCells: const [
+          FretCoordinate(stringIndex: 0, fret: 0, noteName: 'E'),
+          FretCoordinate(stringIndex: 1, fret: 1, noteName: 'C'),
+          FretCoordinate(stringIndex: 2, fret: 0, noteName: 'G'),
+          FretCoordinate(stringIndex: 3, fret: 2, noteName: 'E'),
+          FretCoordinate(stringIndex: 4, fret: 3, noteName: 'C'),
+          FretCoordinate(stringIndex: 5, fret: 3, noteName: 'G'),
+        ],
         selectedNotes: const ['C', 'E', 'G'],
         viewMode: FretboardViewMode.exact,
+        inputMode: FretboardInputMode.chord,
       ),
     )!;
   }

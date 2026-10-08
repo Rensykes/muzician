@@ -9,6 +9,8 @@ import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/piano_roll_playback_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';
 import 'package:muzician/store/settings_store.dart';
+import 'package:muzician/utils/note_utils.dart';
+import '../../support/test_settings_notifier.dart';
 
 /// Test notifier that tracks mutations so we can assert on state changes.
 class _TrackingNotifier extends PianoRollNotifier {
@@ -59,6 +61,47 @@ Widget _wrapGrid(ProviderContainer container) {
 }
 
 void main() {
+  testWidgets('grid and pitch sidebar semantics update spelling live', (
+    tester,
+  ) async {
+    const note = PianoRollNote(
+      id: 'flat-note',
+      midiNote: 66,
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final settings = TestSettingsNotifier(initialSpelling: NoteSpelling.flats);
+    final container = ProviderContainer(
+      overrides: [
+        settingsProvider.overrideWith(() => settings),
+        pianoRollProvider.overrideWith(
+          () =>
+              _TrackingNotifier(_defaultPRState.copyWith(notes: const [note])),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pumpAndSettle();
+
+    expect(find.semantics.byLabel('Gb4, tick 0'), findsOneWidget);
+    expect(find.semantics.byLabel('Gb4'), findsOneWidget);
+
+    settings.changeSpelling(NoteSpelling.sharps);
+    await tester.pumpAndSettle();
+
+    expect(find.semantics.byLabel('F#4, tick 0'), findsOneWidget);
+    expect(find.semantics.byLabel('F#4'), findsOneWidget);
+    semantics.dispose();
+  });
+
   testWidgets('draws a playback playhead on the grid while playing', (
     tester,
   ) async {

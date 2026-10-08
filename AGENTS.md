@@ -37,6 +37,10 @@ Writer and Song histories are in-memory and project-scoped, capped at 50 prior s
 
 Writer block musical content is canonical in Save System entries; Writer keeps placement and local lyrics, with fallback content for recovery. Persist compound Writer, Save System, and named-save binding changes through the shared journal queue.
 
+Writer native Harmony eligibility uses the saved instrument mode and selection: Fretboard requires valid Chord mode; Free remains an instrument-only idea. Exact Harmony preserves native notes and the user label without inferring chord identity. Each section assigns a Fretboard Harmony source to at most one Guitar Strum lane. Project key is canonical; instrument and Writer key changes require confirmation before updating `ProjectConfig`.
+
+Apply the persistent Sharps/Flats preference at display boundaries only. Keep music callbacks and transfer payloads canonical; preserve literal Save names and exact Harmony labels. Format recognized symbols only after validating root/quality metadata, retaining slash bass and octave information.
+
 ## Build, Test, and Development Commands
 Run `flutter pub get` after dependency changes. Use `flutter run` for the default attached device, or `flutter run -d <device-id>` after checking `flutter devices`. Keep code clean with `dart format lib` and `flutter analyze`. Run `flutter test` for Dart and widget tests once they exist under `test/`. CI currently builds with `flutter build web --release` for Firebase preview/production and `flutter build appbundle --release` for Play Store delivery.
 

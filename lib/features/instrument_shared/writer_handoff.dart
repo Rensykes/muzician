@@ -1,5 +1,7 @@
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,10 +10,15 @@ import '../../models/harmony_lane_instrument.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart'
-    show saveAnchorLane, tileLaneBlocks;
+    show
+        isWriterEligibleHarmonySnapshot,
+        isWriterEligibleNativeSelection,
+        saveAnchorLane,
+        tileLaneBlocks;
 import '../../schema/rules/save_system_rules.dart'
     show isFolderInProject, isValidSaveName, resolveSaveInProject;
 import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
@@ -28,6 +35,9 @@ Future<void> startWriterHandoff({
   SaveEntry? reuseSave,
 }) async {
   final String? initialProjectId = _selectedWriterProjectId(ref);
+  final liveSnapshot = reuseSave == null ? binding.captureSnapshot(ref) : null;
+  InstrumentSnapshot? initialSaveSnapshot;
+  String? initialSaveName;
   if (reuseSave != null) {
     final current = initialProjectId == null
         ? null
@@ -37,7 +47,7 @@ Future<void> startWriterHandoff({
             reuseSave.id,
           );
     final instrument = binding.captureSnapshot(ref).instrument;
-    final isHarmonySave = reuseSave.snapshot is HarmonyChordSnapshot;
+    final isHarmonySave = current?.snapshot is HarmonyChordSnapshot;
     if (initialProjectId == null ||
         current == null ||
         (isHarmonySave
@@ -57,35 +67,80 @@ Future<void> startWriterHandoff({
       );
       return;
     }
+    initialSaveSnapshot = current.snapshot;
+    initialSaveName = current.name;
+    if (!_isEligibleWriterSource(current.snapshot)) {
+      _showHandoffUnavailable(context, current.snapshot);
+      return;
+    }
+  } else if (liveSnapshot == null ||
+      !isWriterEligibleNativeSelection(liveSnapshot)) {
+    _showHandoffUnavailable(
+      context,
+      liveSnapshot ?? binding.captureSnapshot(ref),
+    );
+    return;
+  }
+
+  bool sourceIsCurrent() {
+    if (reuseSave == null) {
+      final current = binding.captureSnapshot(ref);
+      return _isEligibleWriterSource(current) &&
+          _sameLiveSelectionSnapshot(liveSnapshot!, current);
+    }
+    if (_selectedWriterProjectId(ref) != initialProjectId) return false;
+    final current = resolveSaveInProject(
+      ref.read(saveSystemProvider),
+      initialProjectId!,
+      reuseSave.id,
+    );
+    return current != null &&
+        _isEligibleWriterSource(current.snapshot) &&
+        current.name == initialSaveName &&
+        _sameSnapshot(initialSaveSnapshot!, current.snapshot);
+  }
+
+  void showSourceChanged() {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'The instrument selection changed. Start the transfer again.',
+        ),
+      ),
+    );
   }
 
   _WriterTransferChoice? choice;
   if (reuseSave == null) {
-    final exactNotes = ref.read(binding.exactNotes);
     choice = await showModalBottomSheet<_WriterTransferChoice>(
       context: context,
       backgroundColor: MuzicianTheme.surface,
       isScrollControlled: true,
       builder: (sheetContext) => _WriterTransferChoices(
         chordResults: chordResults,
-        canAddVoicing: exactNotes.isNotEmpty,
+        canAddExactHarmony: liveSnapshot!.selectedNotes.isNotEmpty,
+        exactSnapshot: liveSnapshot,
         onChoose: (choice) => Navigator.of(sheetContext).pop(choice),
       ),
     );
     if (choice == null || !context.mounted) return;
+    if (!sourceIsCurrent()) {
+      showSourceChanged();
+      return;
+    }
   }
 
   final payload = reuseSave != null
-      ? reuseSave.snapshot is HarmonyChordSnapshot
+      ? initialSaveSnapshot is HarmonyChordSnapshot
             ? _WriterTransferPayload.harmonySave(
-                reuseSave.snapshot as HarmonyChordSnapshot,
+                initialSaveSnapshot,
                 reuseSaveId: reuseSave.id,
-                initialName: reuseSave.name,
+                initialName: initialSaveName,
               )
-            : _WriterTransferPayload.voicing(
-                reuseSave.snapshot,
+            : _WriterTransferPayload.exactHarmony(
+                initialSaveSnapshot!,
                 reuseSaveId: reuseSave.id,
-                initialName: reuseSave.name,
+                initialName: initialSaveName,
               )
       : choice!.isHarmony
       ? _WriterTransferPayload.harmony(
@@ -95,16 +150,27 @@ Future<void> startWriterHandoff({
               .map((note) => note.pitchClass)
               .toList(),
           sourceHarmonyInstrument: HarmonyLaneInstrument.fromJson(
-            binding.captureSnapshot(ref).instrument,
+            liveSnapshot!.instrument,
           )!,
         )
-      : _WriterTransferPayload.voicing(binding.captureSnapshot(ref));
+      : _WriterTransferPayload.exactHarmony(
+          liveSnapshot!,
+          initialName: liveSnapshot.instrument == 'piano'
+              ? 'Piano harmony'
+              : 'Fretboard harmony',
+        );
+  final spelling = ref.read(settingsProvider).noteSpelling;
+  final displayChordSymbol = payload.displayChordSymbol(spelling);
 
   var projectId = initialProjectId;
   if (projectId == null) {
     if (reuseSave != null) return;
     await ProjectPickerSheet.show(context, allowDump: false);
     if (!context.mounted) return;
+    if (!sourceIsCurrent()) {
+      showSourceChanged();
+      return;
+    }
     projectId = _selectedWriterProjectId(ref);
     if (projectId == null) return;
   }
@@ -136,6 +202,10 @@ Future<void> startWriterHandoff({
       ),
     );
     if (createSection != true || !context.mounted) return;
+    if (!sourceIsCurrent()) {
+      showSourceChanged();
+      return;
+    }
     if (_selectedWriterProjectId(ref) != projectId) {
       await _showDestinationChanged(context);
       return;
@@ -155,6 +225,10 @@ Future<void> startWriterHandoff({
       ),
     );
     if (target == null || !context.mounted) return;
+    if (!sourceIsCurrent()) {
+      showSourceChanged();
+      return;
+    }
     if (_selectedWriterProjectId(ref) != projectId) {
       await _showDestinationChanged(context);
       return;
@@ -217,8 +291,13 @@ Future<void> startWriterHandoff({
         barNumber: target.startBar + 1,
         block: occupiedPlacement,
         isRepeatedPlacement: isRepeatedPlacement,
+        spelling: spelling,
       );
       if (!context.mounted) return;
+      if (!sourceIsCurrent()) {
+        showSourceChanged();
+        return;
+      }
       if (_selectedWriterProjectId(ref) != projectId) {
         await _showDestinationChanged(context);
         return;
@@ -235,6 +314,10 @@ Future<void> startWriterHandoff({
         isRepeatedPlacement: isRepeatedPlacement,
       );
       if (!context.mounted) return;
+      if (!sourceIsCurrent()) {
+        showSourceChanged();
+        return;
+      }
       if (_selectedWriterProjectId(ref) != projectId) {
         await _showDestinationChanged(context);
         return;
@@ -251,9 +334,13 @@ Future<void> startWriterHandoff({
         ? null
         : await _showImportNameDialog(
             context,
-            initialName: payload.chordSymbol ?? payload.initialName,
+            initialName: displayChordSymbol ?? payload.initialName,
           );
     if (payload.reuseSaveId == null && saveName == null || !context.mounted) {
+      return;
+    }
+    if (!sourceIsCurrent()) {
+      showSourceChanged();
       return;
     }
     if (_selectedWriterProjectId(ref) != projectId) {
@@ -267,7 +354,8 @@ Future<void> startWriterHandoff({
         payload.reuseSaveId!,
       );
       final currentHarmonySnapshot = currentSave?.snapshot;
-      final compatibleLocation = payload.isHarmony
+      final reusingHarmonySave = payload.snapshot is HarmonyChordSnapshot;
+      final compatibleLocation = reusingHarmonySave
           ? currentSave != null &&
                 isFolderInProject(
                   ref.read(saveSystemProvider).folders,
@@ -278,7 +366,7 @@ Future<void> startWriterHandoff({
       if (currentSave == null ||
           !compatibleLocation ||
           currentSave.snapshot.instrument != payload.snapshot!.instrument ||
-          (payload.isHarmony &&
+          (reusingHarmonySave &&
               (currentHarmonySnapshot is! HarmonyChordSnapshot ||
                   currentHarmonySnapshot.harmonyInstrument !=
                       payload.harmonyInstrument))) {
@@ -293,7 +381,8 @@ Future<void> startWriterHandoff({
       }
     }
     final writer = ref.read(songwriterProvider.notifier);
-    final inserted = payload.reuseSaveId != null && payload.isHarmony
+    final inserted =
+        payload.reuseSaveId != null && payload.snapshot is HarmonyChordSnapshot
         ? writer.insertWriterBlockFromSave(
             saveId: payload.reuseSaveId!,
             sectionId: target.sectionId,
@@ -310,10 +399,13 @@ Future<void> startWriterHandoff({
             sectionId: target.sectionId,
             startBar: target.startBar,
             snapshot: payload.snapshot,
-            chordSymbol: payload.chordSymbol,
+            chordSymbol: payload.asExactHarmony
+                ? saveName ?? payload.chordSymbol
+                : payload.chordSymbol,
             chordQuality: payload.chordQuality,
             chordRootPc: payload.chordRootPc,
             chordNotes: payload.chordNotes,
+            asExactHarmony: payload.asExactHarmony,
             replaceBlockId: replaceBlockId,
             saveName: saveName,
             reuseSaveId: payload.reuseSaveId,
@@ -329,21 +421,24 @@ Future<void> startWriterHandoff({
           );
     if (!inserted) {
       if (context.mounted) {
+        final reason = writer.lastHarmonyMutationError;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('That Writer bar changed. Choose a bar again.'),
+          SnackBar(
+            content: Text(
+              reason ??
+                  'That Writer bar is no longer available. Start again to choose another bar.',
+            ),
           ),
         );
       }
-      initialSectionId = target.sectionId;
-      continue;
+      return;
     }
     final insertedSection = ref
         .read(songwriterProvider)
         .sections
         .where((candidate) => candidate.id == target.sectionId)
         .firstOrNull;
-    final title = payload.chordSymbol ?? 'Instrument voicing';
+    final title = displayChordSymbol ?? 'Instrument voicing';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -367,17 +462,61 @@ String? _selectedWriterProjectId(WidgetRef ref) {
   return folder?.kind == SaveFolderKind.project ? selectedId : null;
 }
 
+bool _sameSnapshot(InstrumentSnapshot first, InstrumentSnapshot second) =>
+    jsonEncode(first.toJson()) == jsonEncode(second.toJson());
+
+bool _sameLiveSelectionSnapshot(
+  InstrumentSnapshot first,
+  InstrumentSnapshot second,
+) {
+  final firstJson = Map<String, dynamic>.from(first.toJson())
+    ..remove('pendingScale');
+  final secondJson = Map<String, dynamic>.from(second.toJson())
+    ..remove('pendingScale');
+  return jsonEncode(firstJson) == jsonEncode(secondJson);
+}
+
+bool _isEligibleWriterSource(InstrumentSnapshot snapshot) =>
+    snapshot is HarmonyChordSnapshot
+    ? isWriterEligibleHarmonySnapshot(snapshot)
+    : isWriterEligibleNativeSelection(snapshot);
+
+void _showHandoffUnavailable(
+  BuildContext context,
+  InstrumentSnapshot snapshot,
+) {
+  final message = switch (snapshot) {
+    HarmonyChordSnapshot(:final harmonyInstrument) =>
+      harmonyInstrument == HarmonyLaneInstrument.piano
+          ? 'Piano Harmony saves need valid selected keys and matching Harmony notes to enter Writer.'
+          : 'Fretboard Harmony saves need a valid Chord-mode shape with one note per string and matching Harmony notes to enter Writer.',
+    FretboardSnapshot() =>
+      'Fretboard selections need Chord mode with one note per string to enter Writer.',
+    PianoSnapshot() =>
+      'Piano selections need at least one unique key within the selected range to enter Writer.',
+    _ => 'This instrument selection is not valid for Writer.',
+  };
+  ScaffoldMessenger.maybeOf(
+    context,
+  )?.showSnackBar(SnackBar(content: Text(message)));
+}
+
 Future<_OccupiedBarAction?> _showOccupiedBarDialog(
   BuildContext context, {
   required int barNumber,
   required SongBlock block,
   required bool isRepeatedPlacement,
+  required NoteSpelling spelling,
 }) => showDialog<_OccupiedBarAction>(
   context: context,
   builder: (dialogContext) => MuzicianDialog(
     title: 'Bar $barNumber is occupied',
     content: Text(
-      'This bar contains ${block.chordSymbol ?? block.embedded?.instrument ?? 'a Writer block'}. '
+      'This bar contains ${block.chordSymbol == null
+          ? block.embedded?.instrument ?? 'a Writer block'
+          : block.chordRootPc == null || block.chordQuality == null
+          ? block.chordSymbol
+          : formatRecognizedChordLabel(symbol: block.chordSymbol!, rootPc: block.chordRootPc!, quality: block.chordQuality!, spelling: spelling)}. '
       '${isRepeatedPlacement ? 'It is a repeated placement. ' : ''}'
       'Choose how to place the selection.',
     ),
@@ -456,7 +595,7 @@ enum _OccupiedBarAction { replace, chooseAnother, cancel }
 
 class _WriterTransferChoice {
   const _WriterTransferChoice.chord(this.chord) : snapshot = null;
-  const _WriterTransferChoice.voicing(this.snapshot) : chord = null;
+  const _WriterTransferChoice.exactHarmony(this.snapshot) : chord = null;
 
   final ChordDetectionResult? chord;
   final InstrumentSnapshot? snapshot;
@@ -470,15 +609,17 @@ class _WriterTransferPayload {
     required this.sourceHarmonyInstrument,
   }) : snapshot = null,
        reuseSaveId = null,
-       initialName = null;
+       initialName = null,
+       asExactHarmony = false;
 
-  const _WriterTransferPayload.voicing(
+  const _WriterTransferPayload.exactHarmony(
     this.snapshot, {
     this.reuseSaveId,
     this.initialName,
   }) : result = null,
        selectedPitchNames = const [],
-       sourceHarmonyInstrument = null;
+       sourceHarmonyInstrument = null,
+       asExactHarmony = true;
 
   const _WriterTransferPayload.harmonySave(
     this.snapshot, {
@@ -486,7 +627,8 @@ class _WriterTransferPayload {
     required this.initialName,
   }) : result = null,
        selectedPitchNames = const [],
-       sourceHarmonyInstrument = null;
+       sourceHarmonyInstrument = null,
+       asExactHarmony = false;
 
   final ChordDetectionResult? result;
   final List<String> selectedPitchNames;
@@ -494,8 +636,10 @@ class _WriterTransferPayload {
   final InstrumentSnapshot? snapshot;
   final String? reuseSaveId;
   final String? initialName;
+  final bool asExactHarmony;
 
-  bool get isHarmony => result != null || snapshot is HarmonyChordSnapshot;
+  bool get isHarmony =>
+      result != null || snapshot is HarmonyChordSnapshot || asExactHarmony;
   SongLaneKind get laneKind =>
       isHarmony ? SongLaneKind.harmony : SongLaneKind.save;
   HarmonyLaneInstrument? get harmonyInstrument {
@@ -511,19 +655,42 @@ class _WriterTransferPayload {
 
   String? get chordSymbol => switch (snapshot) {
     HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordSymbol,
-    _ => result == null ? null : formatChordSymbol(result!),
+    _ => result == null ? initialName : formatChordSymbol(result!),
+  };
+  String? displayChordSymbol(NoteSpelling spelling) => switch (snapshot) {
+    HarmonyChordSnapshot(:final writerBlock) =>
+      writerBlock.chordSymbol == null
+          ? null
+          : writerBlock.chordRootPc == null || writerBlock.chordQuality == null
+          ? writerBlock.chordSymbol
+          : formatRecognizedChordLabel(
+              symbol: writerBlock.chordSymbol!,
+              rootPc: writerBlock.chordRootPc!,
+              quality: writerBlock.chordQuality!,
+              spelling: spelling,
+            ),
+    _ =>
+      result == null
+          ? initialName
+          : formatChordSymbol(result!, spelling: spelling),
   };
   String? get chordQuality => switch (snapshot) {
     HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordQuality,
-    _ => result?.quality,
+    _ => asExactHarmony ? null : result?.quality,
   };
   int? get chordRootPc => switch (snapshot) {
     HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordRootPc,
-    _ => result == null ? null : chromaticNotes.indexOf(result!.root),
+    _ =>
+      asExactHarmony || result == null
+          ? null
+          : chromaticNotes.indexOf(result!.root),
   };
   List<String> get chordNotes => switch (snapshot) {
     HarmonyChordSnapshot(:final writerBlock) => writerBlock.chordNotes,
-    _ => selectedPitchNames,
+    _ =>
+      asExactHarmony && selectedPitchNames.isEmpty
+          ? snapshot?.selectedNotes ?? const []
+          : selectedPitchNames,
   };
 }
 
@@ -601,68 +768,78 @@ class _WriterImportNameDialogState extends State<_WriterImportNameDialog> {
   );
 }
 
-class _WriterTransferChoices extends StatelessWidget {
+class _WriterTransferChoices extends ConsumerWidget {
   const _WriterTransferChoices({
     required this.chordResults,
-    required this.canAddVoicing,
+    required this.canAddExactHarmony,
+    required this.exactSnapshot,
     required this.onChoose,
   });
 
   final List<ChordDetectionResult> chordResults;
-  final bool canAddVoicing;
+  final bool canAddExactHarmony;
+  final InstrumentSnapshot exactSnapshot;
   final ValueChanged<_WriterTransferChoice> onChoose;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    top: false,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Add to Writer',
-            style: TextStyle(
-              color: MuzicianTheme.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (chordResults.isNotEmpty) ...[
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             const Text(
-              'Detected harmony',
+              'Add to Writer',
+              style: TextStyle(
+                color: MuzicianTheme.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (chordResults.isNotEmpty) ...[
+              const Text(
+                'Detected harmony',
+                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+              ),
+              for (final chord in chordResults)
+                ListTile(
+                  leading: const Icon(
+                    Icons.music_note,
+                    color: MuzicianTheme.violet,
+                  ),
+                  title: Text(
+                    'Add ${formatChordSymbol(chord, spelling: spelling)} as harmony',
+                  ),
+                  onTap: () => onChoose(_WriterTransferChoice.chord(chord)),
+                ),
+            ],
+            if (canAddExactHarmony)
+              ListTile(
+                leading: const Icon(Icons.music_note, color: MuzicianTheme.sky),
+                title: const Text('Add exact notes as Harmony'),
+                subtitle: const Text(
+                  'Keep the selected notes and instrument shape',
+                ),
+                onTap: () =>
+                    onChoose(_WriterTransferChoice.exactHarmony(exactSnapshot)),
+              ),
+            const SizedBox(height: 4),
+            const Text(
+              'Choose a Writer section and bar next.',
               style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
             ),
-            for (final chord in chordResults)
-              ListTile(
-                leading: const Icon(
-                  Icons.music_note,
-                  color: MuzicianTheme.violet,
-                ),
-                title: Text('Add ${formatChordSymbol(chord)} as harmony'),
-                onTap: () => onChoose(_WriterTransferChoice.chord(chord)),
-              ),
           ],
-          if (canAddVoicing)
-            ListTile(
-              leading: const Icon(Icons.piano, color: MuzicianTheme.sky),
-              title: const Text('Add exact voicing'),
-              subtitle: const Text(
-                'Keep the selected notes and instrument shape',
-              ),
-              onTap: () => onChoose(_WriterTransferChoice.voicing(null)),
-            ),
-          const SizedBox(height: 4),
-          const Text(
-            'Choose a Writer section and bar next.',
-            style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class WriterBarTarget {

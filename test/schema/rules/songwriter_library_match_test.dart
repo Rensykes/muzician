@@ -1,9 +1,10 @@
 // test/schema/rules/songwriter_library_match_test.dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_library_match_rules.dart';
+import 'package:muzician/utils/note_utils.dart';
 
 SaveEntry _save({
   required String id,
@@ -12,13 +13,27 @@ SaveEntry _save({
   PendingChord? pendingChord,
   required int updatedAt,
 }) {
-  final snap = FretboardSnapshot(
-    tuning: TuningName.standard,
-    numFrets: 12,
-    capo: 0,
-    selectedCells: const [],
+  final keys = <PianoCoordinate>[];
+  for (final selectedNote in selectedNotes) {
+    final match = RegExp(r'^([A-G](?:#|b)?)(-?\d+)?$').firstMatch(selectedNote);
+    if (match == null) continue;
+    final pitchClass = noteToPC[toSharp(match.group(1)!)];
+    if (pitchClass == null) continue;
+    final octave = int.tryParse(match.group(2) ?? '') ?? 4;
+    final midi = (octave + 1) * 12 + pitchClass;
+    keys.add(
+      PianoCoordinate(
+        keyIndex: midi - 21,
+        midiNote: midi,
+        noteName: chromaticNotes[pitchClass],
+      ),
+    );
+  }
+  final snap = PianoSnapshot(
+    currentRange: PianoRangeName.key88,
+    selectedKeys: keys,
     selectedNotes: selectedNotes,
-    viewMode: FretboardViewMode.exact,
+    viewMode: PianoViewMode.exact,
     pendingChord: pendingChord,
   );
   return SaveEntry(
@@ -37,9 +52,14 @@ PendingChord _pc(String symbol, {String root = 'C', String quality = ''}) =>
 
 void main() {
   const cMajorBlock = SongBlock(
-    id: 'hb1', startBar: 0, spanBars: 2,
-    chordSymbol: 'C', chordQuality: '', chordRootPc: 0,
-    chordNotes: ['C', 'E', 'G'], romanNumeral: 'I',
+    id: 'hb1',
+    startBar: 0,
+    spanBars: 2,
+    chordSymbol: 'C',
+    chordQuality: '',
+    chordRootPc: 0,
+    chordNotes: ['C', 'E', 'G'],
+    romanNumeral: 'I',
   );
 
   test('chord match: save note-set equals chord tones (pitch-class set)', () {
@@ -47,11 +67,15 @@ void main() {
       harmonyBlock: cMajorBlock,
       searchableSaves: [
         _save(
-          id: 's1', name: 'C voicing', selectedNotes: ['C', 'E', 'G'],
+          id: 's1',
+          name: 'C voicing',
+          selectedNotes: ['C', 'E', 'G'],
           updatedAt: 100,
         ),
         _save(
-          id: 's2', name: 'D voicing', selectedNotes: ['D', 'F#', 'A'],
+          id: 's2',
+          name: 'D voicing',
+          selectedNotes: ['D', 'F#', 'A'],
           updatedAt: 200,
         ),
       ],
@@ -69,7 +93,8 @@ void main() {
       searchableSaves: [
         // C3,E3,G3,C4 + a duplicate G → pitch-class set {C,E,G}.
         _save(
-          id: 's1', name: 'C wide',
+          id: 's1',
+          name: 'C wide',
           selectedNotes: ['C3', 'E3', 'G3', 'C4', 'G4'],
           updatedAt: 100,
         ),
@@ -85,7 +110,9 @@ void main() {
       harmonyBlock: cMajorBlock,
       searchableSaves: [
         _save(
-          id: 's1', name: 'Cmaj7', selectedNotes: ['C', 'E', 'G', 'B'],
+          id: 's1',
+          name: 'Cmaj7',
+          selectedNotes: ['C', 'E', 'G', 'B'],
           updatedAt: 100,
         ),
       ],
@@ -102,12 +129,15 @@ void main() {
       harmonyBlock: cMajorBlock,
       searchableSaves: [
         _save(
-          id: 's1', name: 'CMaj scale highlight',
+          id: 's1',
+          name: 'CMaj scale highlight',
           selectedNotes: ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
           updatedAt: 100,
         ),
         _save(
-          id: 's2', name: 'Has F#', selectedNotes: ['F#', 'G'],
+          id: 's2',
+          name: 'Has F#',
+          selectedNotes: ['F#', 'G'],
           updatedAt: 200,
         ),
       ],
@@ -120,22 +150,26 @@ void main() {
     expect(m.scaleMatches.single.kind, LibraryMatchKind.scale);
   });
 
-  test('save that matches both chord and scale only appears in chord bucket',
-      () {
-    final m = matchLibrary(
-      harmonyBlock: cMajorBlock,
-      searchableSaves: [
-        _save(
-          id: 's1', name: 'C voicing', selectedNotes: ['C', 'E', 'G'],
-          updatedAt: 100,
-        ),
-      ],
-      keyRootPc: 0,
-      keyScaleName: 'major',
-    );
-    expect(m.chordMatches.length, 1);
-    expect(m.scaleMatches, isEmpty);
-  });
+  test(
+    'save that matches both chord and scale only appears in chord bucket',
+    () {
+      final m = matchLibrary(
+        harmonyBlock: cMajorBlock,
+        searchableSaves: [
+          _save(
+            id: 's1',
+            name: 'C voicing',
+            selectedNotes: ['C', 'E', 'G'],
+            updatedAt: 100,
+          ),
+        ],
+        keyRootPc: 0,
+        keyScaleName: 'major',
+      );
+      expect(m.chordMatches.length, 1);
+      expect(m.scaleMatches, isEmpty);
+    },
+  );
 
   test('no key and no chordSymbol → empty buckets', () {
     const block = SongBlock(id: 'hb', startBar: 0, spanBars: 1);
@@ -143,7 +177,9 @@ void main() {
       harmonyBlock: block,
       searchableSaves: [
         _save(
-          id: 's1', name: 'C voicing', selectedNotes: ['C', 'E', 'G'],
+          id: 's1',
+          name: 'C voicing',
+          selectedNotes: ['C', 'E', 'G'],
           pendingChord: _pc('C'),
           updatedAt: 100,
         ),
@@ -172,17 +208,23 @@ void main() {
       harmonyBlock: cMajorBlock,
       searchableSaves: [
         _save(
-          id: 'old', name: 'C old', selectedNotes: ['C', 'E', 'G'],
+          id: 'old',
+          name: 'C old',
+          selectedNotes: ['C', 'E', 'G'],
           pendingChord: _pc('C'),
           updatedAt: 100,
         ),
         _save(
-          id: 'new', name: 'C new', selectedNotes: ['C', 'E', 'G'],
+          id: 'new',
+          name: 'C new',
+          selectedNotes: ['C', 'E', 'G'],
           pendingChord: _pc('C'),
           updatedAt: 500,
         ),
         _save(
-          id: 'mid', name: 'C mid', selectedNotes: ['C', 'E', 'G'],
+          id: 'mid',
+          name: 'C mid',
+          selectedNotes: ['C', 'E', 'G'],
           pendingChord: _pc('C'),
           updatedAt: 300,
         ),
@@ -190,7 +232,10 @@ void main() {
       keyRootPc: 0,
       keyScaleName: 'major',
     );
-    expect(m.chordMatches.map((x) => x.entry.id).toList(),
-        ['new', 'mid', 'old']);
+    expect(m.chordMatches.map((x) => x.entry.id).toList(), [
+      'new',
+      'mid',
+      'old',
+    ]);
   });
 }

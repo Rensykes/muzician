@@ -6,6 +6,9 @@ import 'package:muzician/models/hum_to_midi.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/store/hum_to_midi_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';
+import 'package:muzician/store/settings_store.dart';
+import 'package:muzician/utils/note_utils.dart';
+import '../../support/test_settings_notifier.dart';
 
 class FakeHumNotifier extends HumToMidiNotifier {
   FakeHumNotifier(this._initial);
@@ -37,6 +40,46 @@ const _defaultPRState = PianoRollState(
 );
 
 void main() {
+  testWidgets('live Hum to MIDI note follows spelling preference', (
+    tester,
+  ) async {
+    final settings = TestSettingsNotifier(initialSpelling: NoteSpelling.flats);
+    final container = ProviderContainer(
+      overrides: [
+        settingsProvider.overrideWith(() => settings),
+        pianoRollProvider.overrideWith(
+          () => FakePianoRollNotifier(_defaultPRState),
+        ),
+        humToMidiProvider.overrideWith(
+          () => FakeHumNotifier(
+            const HumToMidiState(
+              status: HumToMidiStatus.recording,
+              liveMidiNote: 66,
+              startedAtMs: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(body: PianoRollHumRecorderPanel()),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Gb4'), findsOneWidget);
+
+    settings.changeSpelling(NoteSpelling.sharps);
+    await tester.pumpAndSettle();
+    expect(find.text('F#4'), findsOneWidget);
+    expect(find.text('Gb4'), findsNothing);
+  });
+
   testWidgets('shows jump to latest when latest imported range exists', (
     tester,
   ) async {

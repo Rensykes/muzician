@@ -7,6 +7,7 @@ import 'package:muzician/main.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/songwriter_sessions_store.dart';
+import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _pumpUntil(WidgetTester tester, Finder finder) async {
@@ -146,6 +147,33 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
     await _pumpUntil(tester, find.byType(IndexedStack));
     expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 3);
+  });
+
+  testWidgets('Settings exposes the persistent flat spelling switch', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
+    await _pumpUntil(tester, find.byType(IndexedStack));
+    await tester.tap(find.byKey(const ValueKey('nav_Settings')));
+    await tester.pumpAndSettle();
+
+    final switchFinder = find.byKey(const ValueKey('settings_note_spelling'));
+    await tester.ensureVisible(switchFinder);
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isFalse);
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      AppSettings.fromJson(
+        (jsonDecode(prefs.getString(settingsStorageKey)!) as Map)
+            .cast<String, dynamic>(),
+      ).noteSpelling,
+      NoteSpelling.flats,
+    );
   });
 
   testWidgets(

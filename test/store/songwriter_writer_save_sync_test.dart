@@ -116,6 +116,7 @@ HarmonyChordSnapshot chord(
       selectedCells: selectedCells,
       selectedNotes: chordNotes,
       viewMode: FretboardViewMode.exact,
+      inputMode: FretboardInputMode.chord,
       pendingChord: PendingChord(
         root: chromaticNotes[rootPc % 12],
         quality: quality,
@@ -679,6 +680,86 @@ void main() {
       SaveOrigin.manual,
     );
   });
+
+  test(
+    'occupied Guitar Strum source rejects saved pattern before mutation',
+    () async {
+      final (container, projectId, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final primaryId = section.lanes.single.id;
+      writer.setHarmonyLaneInstrument(
+        sectionId: section.id,
+        laneId: primaryId,
+        instrument: HarmonyLaneInstrument.fretboard,
+      );
+      final secondaryId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.harmony,
+        harmonyInstrument: HarmonyLaneInstrument.fretboard,
+      );
+      final firstStrumId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.guitarStrum,
+      );
+      final secondStrumId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.guitarStrum,
+      );
+      writer.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: firstStrumId,
+        harmonyLaneId: primaryId,
+      );
+      writer.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: secondStrumId,
+        harmonyLaneId: secondaryId,
+      );
+
+      final saveId = container
+          .read(saveSystemProvider.notifier)
+          .saveSnapshot(
+            'Saved strum',
+            projectId,
+            const WriterBlockSnapshot(
+              laneKind: SongLaneKind.guitarStrum,
+              guitarStrumPattern: GuitarStrumPattern(
+                id: 'saved-strum-pattern',
+                name: 'Saved strum',
+                lengthTicks: 16,
+              ),
+            ),
+          )!;
+      final writerBefore = container.read(songwriterProvider);
+      final saveSystemBefore = container.read(saveSystemProvider);
+      final historyBefore = writer.historyRevision;
+
+      expect(
+        writer.insertWriterBlockFromSave(
+          saveId: saveId,
+          sectionId: section.id,
+          laneKind: SongLaneKind.guitarStrum,
+          laneId: secondStrumId,
+          anchorLaneId: primaryId,
+          startBar: 0,
+        ),
+        isFalse,
+      );
+      expect(container.read(songwriterProvider), same(writerBefore));
+      expect(container.read(songwriterProvider).guitarStrumPatterns, isEmpty);
+      expect(
+        container.read(saveSystemProvider).saves,
+        same(saveSystemBefore.saves),
+      );
+      expect(
+        container.read(saveSystemProvider).writerLinks,
+        same(saveSystemBefore.writerLinks),
+      );
+      expect(writer.historyRevision, historyBefore);
+    },
+  );
 
   test(
     'Use in Writer copies saved default lyrics into local placements',

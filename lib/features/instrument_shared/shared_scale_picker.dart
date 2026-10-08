@@ -9,9 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmonic_analysis.dart';
 import '../../models/project_config.dart';
 import '../../models/save_system.dart';
-import '../../schema/rules/save_system_rules.dart';
 import '../../store/project_config_sync.dart';
 import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/core/update_project_key_dialog.dart';
@@ -38,6 +38,18 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
   String? _selectedScale;
   ScaleCategory _activeCategory = ScaleCategory.common;
   bool _initialSyncDone = false;
+  int _scaleSyncRevision = 0;
+
+  void _clearLocalScale() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _selectedRoot = null;
+      _selectedScale = null;
+      _initialSyncDone = false;
+    });
+    widget.binding.actions(ref).setHighlightedNotes([]);
+    ref.read(widget.binding.activeScale.notifier).state = null;
+  }
 
   bool _samePitchClassSet(List<String> a, List<String> b) {
     final left = a.toSet();
@@ -47,12 +59,17 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
 
   @override
   Widget build(BuildContext context) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final highlightedNotes = ref.watch(widget.binding.highlightedNotes);
     final pendingScale = ref.watch(widget.binding.pendingScale);
     final activeScaleRaw = ref.watch(widget.binding.activeScale);
+    final selectedFolder = ref.watch(selectedProjectProvider);
     final projectKey = ref.watch(activeProjectKeyProvider);
-    final activeScale = activeScaleRaw ?? projectKey;
-    final isProjectLocked = projectKey != null;
+    final isProject = selectedFolder?.kind == SaveFolderKind.project;
+    final activeScale = isProject ? projectKey : activeScaleRaw;
+    final isProjectLocked = isProject && projectKey != null;
     final binding = widget.binding;
     final chordOffKey = binding is InstrumentBinding
         ? ref.watch(binding.chordOffKey)
@@ -61,10 +78,21 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
         ? MuzicianTheme.orange
         : MuzicianTheme.emerald;
 
-    // Re-run initial sync when the project key changes (e.g. user switched
-    // projects between sheet opens), so the pills reflect the new locked key.
-    ref.listen(activeProjectKeyProvider, (_, _) {
+    // Re-run initial sync when the selected project changes, including when
+    // both the old and new projects have no key.
+    ref.listen(selectedProjectProvider, (_, _) {
+      _scaleSyncRevision++;
       _initialSyncDone = false;
+      final folder = ref.read(selectedProjectProvider);
+      final key = ref.read(activeProjectKeyProvider);
+      setState(() {
+        _selectedRoot = key?.root;
+        _selectedScale = key?.scaleName;
+        if (folder?.kind == SaveFolderKind.project && key == null) {
+          _selectedRoot = null;
+          _selectedScale = null;
+        }
+      });
     });
 
     // Restore from committed active state once per widget lifecycle.
@@ -74,10 +102,18 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
           highlightedNotes.isNotEmpty &&
           notes.isNotEmpty &&
           !_samePitchClassSet(highlightedNotes, notes);
+      final expectedFolderId = selectedFolder?.id;
+      final expectedProjectKey = projectKey;
+      final expectedRevision = ++_scaleSyncRevision;
       _initialSyncDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (highlightLooksStale) {
+        if (expectedRevision != _scaleSyncRevision ||
+            ref.read(selectedProjectProvider)?.id != expectedFolderId ||
+            ref.read(activeProjectKeyProvider) != expectedProjectKey) {
+          return;
+        }
+        if (highlightLooksStale && !isProject) {
           ref.read(widget.binding.activeScale.notifier).state = null;
           setState(() {
             _selectedRoot = null;
@@ -105,7 +141,20 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
 
     // Sync from detection panel
     if (pendingScale != null) {
+      final expectedFolderId = selectedFolder?.id;
+      final expectedRevision = ++_scaleSyncRevision;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            expectedRevision != _scaleSyncRevision ||
+            ref.read(selectedProjectProvider)?.id != expectedFolderId) {
+          return;
+        }
+        if (isProject) {
+          // Detection results are a local preview. A project key can change
+          // only through the confirmed ProjectConfig path.
+          ref.read(widget.binding.pendingScale.notifier).state = null;
+          return;
+        }
         var cat = ScaleCategory.common;
         for (final entry in scaleGroups.entries) {
           if (entry.value.any((s) => s.$1 == pendingScale.scaleName)) {
@@ -165,81 +214,101 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
               ),
               const SizedBox(width: 8),
               if (isActive)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: chipColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: chipColor.withValues(alpha: 0.4),
-                      width: 0.5,
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        formatScaleLabel(
-                          ScaleDetectionResult(
-                            root: _selectedRoot!,
-                            scaleName: _selectedScale!,
+                    decoration: BoxDecoration(
+                      color: chipColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: chipColor.withValues(alpha: 0.4),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            formatScaleLabel(
+                              ScaleDetectionResult(
+                                root: _selectedRoot!,
+                                scaleName: _selectedScale!,
+                              ),
+                              spelling: spelling,
+                            ),
+                            style: TextStyle(
+                              color: chipColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                        style: TextStyle(
-                          color: chipColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (isProjectLocked) ...[
-                        const SizedBox(width: 6),
-                        Icon(
-                          chordOffKey
-                              ? Icons.warning_amber_rounded
-                              : Icons.lock_outline_rounded,
-                          size: 12,
-                          color: chipColor,
-                        ),
-                      ] else ...[
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: () {
-                            HapticFeedback.mediumImpact();
-                            setState(() {
-                              _selectedRoot = null;
-                              _selectedScale = null;
-                              _initialSyncDone = false;
-                            });
-                            widget.binding.actions(ref).setHighlightedNotes([]);
-                            ref
-                                    .read(widget.binding.activeScale.notifier)
-                                    .state =
-                                null;
-                          },
-                          child: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: chipColor.withValues(alpha: 0.2),
+                        if (isProjectLocked) ...[
+                          const SizedBox(width: 6),
+                          Icon(
+                            chordOffKey
+                                ? Icons.warning_amber_rounded
+                                : Icons.lock_outline_rounded,
+                            size: 12,
+                            color: chipColor,
+                          ),
+                          const SizedBox(width: 2),
+                          IconButton(
+                            key: const Key('sharedScaleClearProjectKey'),
+                            tooltip: 'Clear project key',
+                            constraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 44,
                             ),
-                            child: Center(
-                              child: Text(
-                                '✕',
-                                style: TextStyle(
-                                  color: chipColor,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
+                            padding: EdgeInsets.zero,
+                            onPressed: _clearProjectKey,
+                            icon: const Icon(Icons.close_rounded, size: 16),
+                          ),
+                        ] else ...[
+                          const SizedBox(width: 6),
+                          Semantics(
+                            key: const Key('sharedScaleLocalClear'),
+                            button: true,
+                            label: 'Clear scale selection',
+                            onTap: _clearLocalScale,
+                            child: ExcludeSemantics(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _clearLocalScale,
+                                child: SizedBox(
+                                  width: 44,
+                                  height: 44,
+                                  child: Center(
+                                    child: Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: chipColor.withValues(alpha: 0.2),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '✕',
+                                          style: TextStyle(
+                                            color: chipColor,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 )
               else
@@ -263,8 +332,9 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
         ),
         // Root pills
         SizedBox(
-          height: 38,
+          height: 44,
           child: ListView.separated(
+            key: const Key('sharedScaleRootList'),
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: chromaticNotes.length,
@@ -272,46 +342,57 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
             itemBuilder: (_, i) {
               final note = chromaticNotes[i];
               final active = note == _selectedRoot;
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  final newRoot = note == _selectedRoot ? null : note;
-                  if (newRoot == null) {
-                    setState(() => _selectedRoot = null);
-                    widget.binding.actions(ref).setHighlightedNotes([]);
-                  } else if (_selectedScale != null) {
-                    _tryApplyScale(newRoot, _selectedScale!);
-                  } else {
-                    setState(() => _selectedRoot = newRoot);
-                  }
-                },
-                child: Container(
-                  alignment: Alignment.center,
-                  constraints: const BoxConstraints(minWidth: 42),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: active
-                        ? MuzicianTheme.emerald.withValues(alpha: 0.14)
-                        : Colors.white.withValues(alpha: 0.04),
-                    border: Border.all(
-                      color: active
-                          ? MuzicianTheme.emerald
-                          : Colors.white.withValues(alpha: 0.08),
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Text(
-                    note,
-                    style: TextStyle(
-                      color: active
-                          ? MuzicianTheme.emerald
-                          : const Color(0xFF64748B),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+              return ConstrainedBox(
+                key: ValueKey('sharedScaleRoot_$note'),
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    final newRoot = note == _selectedRoot ? null : note;
+                    if (newRoot == null) {
+                      if (isProject && projectKey != null) {
+                        setState(() => _selectedRoot = projectKey.root);
+                      } else {
+                        setState(() => _selectedRoot = null);
+                        widget.binding.actions(ref).setHighlightedNotes([]);
+                      }
+                    } else if (_selectedScale != null) {
+                      _tryApplyScale(newRoot, _selectedScale!, spelling);
+                    } else {
+                      setState(() => _selectedRoot = newRoot);
+                    }
+                  },
+                  child: Center(
+                    child: Container(
+                      key: ValueKey('sharedScaleRootArtwork_$note'),
+                      constraints: const BoxConstraints(minWidth: 42),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: active
+                            ? MuzicianTheme.emerald.withValues(alpha: 0.14)
+                            : Colors.white.withValues(alpha: 0.04),
+                        border: Border.all(
+                          color: active
+                              ? MuzicianTheme.emerald
+                              : Colors.white.withValues(alpha: 0.08),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        formatRootChoiceLabel(note, spelling: spelling),
+                        style: TextStyle(
+                          color: active
+                              ? MuzicianTheme.emerald
+                              : const Color(0xFF64748B),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -334,26 +415,40 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
             children: ScaleCategory.values.map((cat) {
               final isTab = cat == _activeCategory;
               final c = _catColor[cat]!;
+              void selectCategory() => setState(() => _activeCategory = cat);
+
               return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _activeCategory = cat),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 7),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: isTab ? c : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        scaleCategoryLabels[cat]!,
-                        style: TextStyle(
-                          color: isTab ? c : const Color(0xFF475569),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                child: Semantics(
+                  key: ValueKey('sharedScaleCategory_${cat.name}'),
+                  button: true,
+                  selected: isTab,
+                  label: scaleCategoryLabels[cat]!,
+                  onTap: selectCategory,
+                  child: ExcludeSemantics(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: selectCategory,
+                      child: SizedBox(
+                        height: 44,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: isTab ? c : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              scaleCategoryLabels[cat]!,
+                              style: TextStyle(
+                                color: isTab ? c : const Color(0xFF475569),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -366,8 +461,9 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
         const SizedBox(height: 8),
         // Scale pills
         SizedBox(
-          height: 38,
+          height: 44,
           child: ListView.separated(
+            key: const Key('sharedScaleTypeList'),
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: scalesForCategory.length,
@@ -375,45 +471,56 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
             itemBuilder: (_, i) {
               final (name, label) = scalesForCategory[i];
               final active = name == _selectedScale;
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  final newScale = name == _selectedScale ? null : name;
-                  if (newScale == null) {
-                    setState(() => _selectedScale = null);
-                    widget.binding.actions(ref).setHighlightedNotes([]);
-                  } else if (_selectedRoot != null) {
-                    _tryApplyScale(_selectedRoot!, newScale);
-                  } else {
-                    setState(() => _selectedScale = newScale);
-                  }
-                },
-                child: Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: active
-                        ? MuzicianTheme.emerald.withValues(alpha: 0.12)
-                        : Colors.white.withValues(alpha: 0.04),
-                    border: Border.all(
-                      color: active
-                          ? MuzicianTheme.emerald
-                          : Colors.white.withValues(alpha: 0.08),
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: active
-                          ? MuzicianTheme.emerald
-                          : const Color(0xFF64748B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+              return ConstrainedBox(
+                key: ValueKey('sharedScaleType_$name'),
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    final newScale = name == _selectedScale ? null : name;
+                    if (newScale == null) {
+                      if (isProject && projectKey != null) {
+                        setState(() => _selectedScale = projectKey.scaleName);
+                      } else {
+                        setState(() => _selectedScale = null);
+                        widget.binding.actions(ref).setHighlightedNotes([]);
+                      }
+                    } else if (_selectedRoot != null) {
+                      _tryApplyScale(_selectedRoot!, newScale, spelling);
+                    } else {
+                      setState(() => _selectedScale = newScale);
+                    }
+                  },
+                  child: Center(
+                    child: Container(
+                      key: ValueKey('sharedScaleTypeArtwork_$name'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: active
+                            ? MuzicianTheme.emerald.withValues(alpha: 0.12)
+                            : Colors.white.withValues(alpha: 0.04),
+                        border: Border.all(
+                          color: active
+                              ? MuzicianTheme.emerald
+                              : Colors.white.withValues(alpha: 0.08),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: active
+                              ? MuzicianTheme.emerald
+                              : const Color(0xFF64748B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -426,21 +533,50 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
     );
   }
 
-  Future<void> _tryApplyScale(String root, String scaleName) async {
+  Future<void> _tryApplyScale(
+    String root,
+    String scaleName,
+    NoteSpelling spelling,
+  ) async {
     final scaleNotes = getScaleNotes(root, scaleName);
     if (scaleNotes.isEmpty) return;
-    final projectKey = ref.read(activeProjectKeyProvider);
-    if (projectKey != null) {
-      if (projectKey.root == root && projectKey.scaleName == scaleName) {
+    final folder = ref.read(selectedProjectProvider);
+    if (folder?.kind == SaveFolderKind.project) {
+      final projectKey = ref.read(activeProjectKeyProvider);
+      if (projectKey?.root == root && projectKey?.scaleName == scaleName) {
         setState(() {
           _selectedRoot = root;
           _selectedScale = scaleName;
         });
         return;
       }
-      await _promoteToProjectKey(root, scaleName);
+      final config = folder!.projectConfig ?? const ProjectConfig();
+      final applied = await requestProjectKeyChange(
+        context,
+        ref,
+        keyRootPc: chromaticNotes.indexOf(root),
+        keyScaleName: scaleName,
+        expectedProjectId: folder.id,
+        expectedConfig: config,
+      );
+      if (!mounted) return;
+      if (applied) {
+        setState(() {
+          _selectedRoot = root;
+          _selectedScale = scaleName;
+          _initialSyncDone = false;
+        });
+      } else {
+        final confirmedKey = ref.read(activeProjectKeyProvider);
+        setState(() {
+          _selectedRoot = confirmedKey?.root;
+          _selectedScale = confirmedKey?.scaleName;
+          _initialSyncDone = false;
+        });
+      }
       return;
     }
+
     final scaleSet = scaleNotes.toSet();
     final conflicts = ref
         .read(widget.binding.selectedPitchClasses)
@@ -462,8 +598,18 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
+      builder: (ctx) => ScaleConflictDialog(
+        conflictingNotes: conflicts
+            .map((note) => formatRootChoiceLabel(note, spelling: spelling))
+            .toList(),
+      ),
     );
+    final currentFolder = ref.read(selectedProjectProvider);
+    if (!mounted ||
+        currentFolder?.id != folder?.id ||
+        currentFolder?.kind != folder?.kind) {
+      return;
+    }
     if (confirmed == true) {
       widget.binding.actions(ref).removeNotesByPitchClass(conflicts);
       setState(() {
@@ -478,47 +624,17 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
     }
   }
 
-  Future<void> _promoteToProjectKey(String root, String scaleName) async {
+  Future<void> _clearProjectKey() async {
     final folder = ref.read(selectedProjectProvider);
     if (folder == null || folder.kind != SaveFolderKind.project) return;
-    final saveState = ref.read(saveSystemProvider);
-    final affected = getSavesInSubtree(
-      saveState.folders,
-      saveState.saves,
-      folder.id,
-    ).length;
-    final rootPc = chromaticNotes.indexOf(root);
-    if (rootPc < 0) return;
-    final currentLabel = formatScaleLabel(
-      ScaleDetectionResult(
-        root: _selectedRoot ?? root,
-        scaleName: _selectedScale ?? scaleName,
-      ),
-    );
-    final projectKey = ref.read(activeProjectKeyProvider);
-    final fromLabel = projectKey != null
-        ? formatScaleLabel(
-            ScaleDetectionResult(
-              root: projectKey.root,
-              scaleName: projectKey.scaleName,
-            ),
-          )
-        : currentLabel;
-    final newLabel = formatScaleLabel(
-      ScaleDetectionResult(root: root, scaleName: scaleName),
-    );
-    if (!mounted) return;
-    final confirmed = await UpdateProjectKeyDialog.ask(
+    final config = folder.projectConfig ?? const ProjectConfig();
+    await requestProjectKeyChange(
       context,
-      currentLabel: fromLabel,
-      newLabel: newLabel,
-      affectedSaves: affected,
+      ref,
+      keyRootPc: null,
+      keyScaleName: null,
+      expectedProjectId: folder.id,
+      expectedConfig: config,
     );
-    if (!confirmed) return;
-    final current = folder.projectConfig ?? const ProjectConfig();
-    final next = current.copyWith(keyRootPc: rootPc, keyScaleName: scaleName);
-    await ref
-        .read(saveSystemProvider.notifier)
-        .applyProjectConfig(folder.id, next, retrofit: true);
   }
 }

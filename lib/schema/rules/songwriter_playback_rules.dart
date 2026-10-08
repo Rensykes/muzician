@@ -115,6 +115,9 @@ List<int> _ascendingStack(List<int> pcs) {
 /// string+fret through the tuning's open-string midi. Other snapshot types
 /// (and broken blocks resolved to null) are silent.
 List<int> snapshotMidiNotes(InstrumentSnapshot? snapshot) {
+  if (snapshot is HarmonyChordSnapshot) {
+    return snapshotMidiNotes(snapshot.instrumentState);
+  }
   if (snapshot is PianoSnapshot) {
     return [for (final k in snapshot.selectedKeys) k.midiNote]..sort();
   }
@@ -131,6 +134,75 @@ List<int> snapshotMidiNotes(InstrumentSnapshot? snapshot) {
     return out..sort();
   }
   return const [];
+}
+
+/// Resolves MIDI pitches for a Writer Harmony placement. Recognized chords
+/// retain their symbolic octave-four voicing; exact-note Harmony uses the
+/// composite's native MIDI positions and rejects invalid or Free Fretboard
+/// selections.
+List<int> harmonyBlockMidiNotes(
+  SongBlock block,
+  List<SaveEntry> saves, {
+  required String? projectId,
+  required List<SaveFolder> folders,
+}) {
+  if (block.isSilent) return const [];
+  final snapshot = resolveBlockSnapshot(
+    block,
+    saves,
+    projectId: projectId,
+    folders: folders,
+  );
+  if (snapshot is HarmonyChordSnapshot) {
+    if (!isWriterEligibleHarmonySnapshot(snapshot)) return const [];
+    final content = snapshot.writerBlock;
+    if (content.chordRootPc != null && content.chordQuality != null) {
+      return chordMidiNotes(
+        SongBlock(
+          id: block.id,
+          startBar: block.startBar,
+          spanBars: block.spanBars,
+          chordSymbol: content.chordSymbol,
+          chordQuality: content.chordQuality,
+          chordRootPc: content.chordRootPc,
+          chordNotes: content.chordNotes,
+          romanNumeral: content.romanNumeral,
+          isSilent: content.isSilent,
+        ),
+      );
+    }
+    return snapshotMidiNotes(snapshot.instrumentState);
+  }
+  if (block.chordRootPc != null && block.chordQuality != null) {
+    return chordMidiNotes(block);
+  }
+  return const [];
+}
+
+/// Resolves a Writer Save-lane block while preventing Free Fretboard captures
+/// from becoming musical Writer or Song content. Generic snapshot playback
+/// remains available to other features through [snapshotMidiNotes].
+List<int> writerSaveBlockMidiNotes(
+  SongBlock block,
+  List<SaveEntry> saves, {
+  required String? projectId,
+  required List<SaveFolder> folders,
+}) {
+  final snapshot = resolveBlockSnapshot(
+    block,
+    saves,
+    projectId: projectId,
+    folders: folders,
+  );
+  if (snapshot != null &&
+      (snapshot is FretboardSnapshot || snapshot is PianoSnapshot)) {
+    if (!isWriterEligibleNativeSelection(snapshot)) return const [];
+  }
+  if (snapshot is HarmonyChordSnapshot &&
+      !isWriterEligibleHarmonySnapshot(snapshot)) {
+    return const [];
+  }
+  return snapshotMidiNotes(snapshot);
 }
 
 /// Where the playhead sits inside the sheet layout.
@@ -169,14 +241,17 @@ List<int> _blockPitches(
   String? projectId,
   List<SaveFolder> folders,
 ) => lane.kind == SongLaneKind.harmony
-    ? chordMidiNotes(block)
-    : snapshotMidiNotes(
-        resolveBlockSnapshot(
-          block,
-          saves,
-          projectId: projectId,
-          folders: folders,
-        ),
+    ? harmonyBlockMidiNotes(
+        block,
+        saves,
+        projectId: projectId,
+        folders: folders,
+      )
+    : writerSaveBlockMidiNotes(
+        block,
+        saves,
+        projectId: projectId,
+        folders: folders,
       );
 
 List<int> _harmonyAtTick(
@@ -184,6 +259,9 @@ List<int> _harmonyAtTick(
   SongSection section,
   int sectionTick,
   int measureTicks,
+  List<SaveEntry> saves,
+  String? projectId,
+  List<SaveFolder> folders,
 ) {
   if (harmonyLane == null || sectionTick < 0) return const [];
   final bar = sectionTick ~/ measureTicks;
@@ -193,7 +271,12 @@ List<int> _harmonyAtTick(
   )) {
     if (bar >= block.startBar &&
         bar < math.min(block.endBar, section.lengthBars)) {
-      return chordMidiNotes(block);
+      return harmonyBlockMidiNotes(
+        block,
+        saves,
+        projectId: projectId,
+        folders: folders,
+      );
     }
   }
   return const [];
@@ -414,6 +497,9 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                   section,
                   sectionTick,
                   measureTicks,
+                  saves,
+                  projectId,
+                  folders,
                 );
                 if (pitches.isEmpty) continue;
                 final orderedPitches =

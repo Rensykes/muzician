@@ -5,11 +5,15 @@ import 'package:muzician/features/fretboard/fretboard.dart';
 import 'package:muzician/features/piano/piano_keyboard.dart';
 import 'package:muzician/features/songwriter/songwriter_melody_performance_editor.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
+import 'package:muzician/models/fretboard.dart' show TuningName;
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/songwriter.dart' show FretboardNotePosition;
 import 'package:muzician/store/fretboard_store.dart';
 import 'package:muzician/store/piano_store.dart';
+import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
+import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -110,6 +114,73 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Valid positions for C4'), findsOneWidget);
     expect(find.text('String 2 (B3), fret 1'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Eb Standard mapped note follows spelling without moving', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await container
+        .read(settingsProvider.notifier)
+        .setNoteSpelling(NoteSpelling.sharps);
+    container.read(fretboardProvider.notifier).setTuning(TuningName.ebStandard);
+    final patternId = _addPattern(container, midiNote: 63);
+    final writer = container.read(songwriterProvider.notifier);
+    expect(
+      writer.setMelodyPerformanceInstrument(
+        patternId: patternId,
+        instrument: HarmonyLaneInstrument.fretboard,
+      ),
+      isTrue,
+    );
+    const position = FretboardNotePosition(stringIndex: 0, fret: 0);
+    expect(
+      writer.setMelodyNoteFretboardPosition(
+        patternId: patternId,
+        noteId: 'note-1',
+        position: position,
+      ),
+      isTrue,
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: SongwriterMelodyPerformanceEditor(patternId: patternId),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('String 1 (D#4), fret 0').first);
+    expect(find.text('D#4  ·  MIDI 63'), findsOneWidget);
+    expect(find.text('String 1 (D#4), fret 0'), findsNWidgets(2));
+
+    await container
+        .read(settingsProvider.notifier)
+        .setNoteSpelling(NoteSpelling.flats);
+    await tester.pumpAndSettle();
+    expect(find.text('Eb4  ·  MIDI 63'), findsOneWidget);
+    expect(find.text('String 1 (Eb4), fret 0'), findsNWidgets(2));
+
+    final after = container
+        .read(songwriterProvider)
+        .melodyPerformancesByPatternId[patternId]!
+        .fretboardPositionsByNoteId['note-1']!;
+    expect((after.stringIndex, after.fret), (0, 0));
+    expect(
+      container
+          .read(songwriterProvider)
+          .melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .notes
+          .single
+          .midiNote,
+      63,
+    );
     expect(tester.takeException(), isNull);
   });
 

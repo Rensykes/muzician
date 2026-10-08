@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
@@ -58,6 +59,106 @@ void main() {
       c.read(songwriterProvider).sections.single.lanes.map((l) => l.label),
       [null, 'G'],
     );
+  });
+
+  test(
+    'insertLane rejects a second strum assignment but preserves unresolved IDs',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'V', lengthBars: 8);
+      final section = c.read(songwriterProvider).sections.single;
+      final sourceId = section.lanes.single.id;
+      n.setHarmonyLaneInstrument(
+        sectionId: section.id,
+        laneId: sourceId,
+        instrument: HarmonyLaneInstrument.fretboard,
+      );
+      final existingStrumId = n.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.guitarStrum,
+      );
+      n.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: existingStrumId,
+        harmonyLaneId: sourceId,
+      );
+
+      final beforeRejectedInsert = c.read(songwriterProvider);
+      final beforeRejectedHistory = n.historyRevision;
+      n.insertLane(
+        sectionId: section.id,
+        lane: SongLane(
+          id: 'duplicate-strum',
+          kind: SongLaneKind.guitarStrum,
+          order: 2,
+          anchorLaneId: sourceId,
+        ),
+        index: 2,
+      );
+      expect(c.read(songwriterProvider), same(beforeRejectedInsert));
+      expect(n.historyRevision, beforeRejectedHistory);
+
+      n.insertLane(
+        sectionId: section.id,
+        lane: const SongLane(
+          id: 'unresolved-strum',
+          kind: SongLaneKind.guitarStrum,
+          order: 2,
+          anchorLaneId: 'deleted-source',
+        ),
+        index: 2,
+      );
+      final restored = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == 'unresolved-strum');
+      expect(restored.anchorLaneId, 'deleted-source');
+    },
+  );
+
+  test('insertSection rejects duplicate resolved Guitar Strum anchors', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'Existing', lengthBars: 4);
+    final beforeRejectedInsert = c.read(songwriterProvider);
+    final beforeRejectedHistory = n.historyRevision;
+
+    n.insertSection(
+      const SongSection(
+        id: 'duplicate-strum-section',
+        lengthBars: 4,
+        order: 1,
+        lanes: [
+          SongLane(
+            id: 'fretboard-source',
+            kind: SongLaneKind.harmony,
+            order: 0,
+            harmonyInstrument: HarmonyLaneInstrument.fretboard,
+          ),
+          SongLane(
+            id: 'strum-a',
+            kind: SongLaneKind.guitarStrum,
+            order: 1,
+            anchorLaneId: 'fretboard-source',
+          ),
+          SongLane(
+            id: 'strum-b',
+            kind: SongLaneKind.guitarStrum,
+            order: 2,
+            anchorLaneId: 'fretboard-source',
+          ),
+        ],
+      ),
+      1,
+    );
+
+    expect(c.read(songwriterProvider), same(beforeRejectedInsert));
+    expect(n.historyRevision, beforeRejectedHistory);
   });
 
   test('insertBlock restores a removed block', () {

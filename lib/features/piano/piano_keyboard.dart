@@ -84,6 +84,9 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final notifier = ref.read(pianoProvider.notifier);
     final keys = notifier.getKeys();
 
@@ -129,11 +132,11 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
                 // White keys first
                 ...positioned
                     .where((pk) => !pk.key.isBlack)
-                    .map((pk) => _buildKey(pk, state, notifier)),
+                    .map((pk) => _buildKey(pk, state, notifier, spelling)),
                 // Black keys on top
                 ...positioned
                     .where((pk) => pk.key.isBlack)
-                    .map((pk) => _buildKey(pk, state, notifier)),
+                    .map((pk) => _buildKey(pk, state, notifier, spelling)),
               ],
             ),
           ),
@@ -142,7 +145,12 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     );
   }
 
-  Widget _buildKey(_PosKey pk, PianoState state, PianoNotifier notifier) {
+  Widget _buildKey(
+    _PosKey pk,
+    PianoState state,
+    PianoNotifier notifier,
+    note_utils.NoteSpelling spelling,
+  ) {
     final key = pk.key;
     final controlledNotes = widget.controlledMidiNotes;
     final isControlled = controlledNotes != null;
@@ -208,7 +216,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
       alignment: Alignment.bottomCenter,
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
-        '${key.noteName}${key.octave}',
+        note_utils.formatMidiNoteLabel(key.midiNote, spelling: spelling),
         style: TextStyle(
           color: isSelected
               ? Colors.white
@@ -229,8 +237,9 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         opacity: opacity,
         child: Semantics(
           label:
-              '${key.noteWithOctave}, MIDI ${key.midiNote}'
+              '${note_utils.formatMidiNoteLabel(key.midiNote, spelling: spelling)}, MIDI ${key.midiNote}'
               '${isSelected ? ', melody note' : ''}',
+          excludeSemantics: true,
           selected: isSelected,
           child: GestureDetector(
             onTap: isControlled
@@ -275,8 +284,14 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         context: context,
         builder: (ctx) => ProjectOffScaleDialog(
           projectName: project.name,
-          keyLabel: _keyLabelFor(project),
-          noteName: noteName,
+          keyLabel: _keyLabelFor(
+            project,
+            ref.read(settingsProvider).noteSpelling,
+          ),
+          noteName: note_utils.formatRootChoiceLabel(
+            noteName,
+            spelling: ref.read(settingsProvider).noteSpelling,
+          ),
         ),
       );
       if (decision != ProjectOffScaleDecision.switchToDump) return;
@@ -307,10 +322,13 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     onConfirmed();
   }
 
-  String _keyLabelFor(SaveFolder project) {
+  String _keyLabelFor(SaveFolder project, note_utils.NoteSpelling spelling) {
     final cfg = project.projectConfig;
     if (cfg?.keyRootPc == null) return 'the project key';
-    final root = note_utils.chromaticNotes[cfg!.keyRootPc!];
+    final root = note_utils.formatRootChoiceLabel(
+      note_utils.chromaticNotes[cfg!.keyRootPc!],
+      spelling: spelling,
+    );
     final scale = cfg.keyScaleName ?? '';
     return '$root $scale'.trim();
   }

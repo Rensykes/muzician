@@ -37,8 +37,9 @@ Save/Voicing lane can change instruments while keeping its lane identity.
 
 ### Create a separate project from Writer
 
-Writer's **New project** creates and selects a new Save System project with an
-empty Writer session. If the current Writer session differs from its bound
+Writer's main-menu **New project** creates and selects a new Save System
+project with an empty Writer session. If the current Writer session differs
+from its bound
 active named Writer Save (or from the full project-default session when no
 Save is bound), choose **Keep**, **Discard**, or **Cancel** before switching.
 **Keep** retains the outgoing project's session. **Discard** restores its
@@ -50,6 +51,21 @@ named Save entry. **Cancel** leaves the current project and session in place
 and creates no project. The new project's Piano/Fretboard choice belongs to its project
 config and does not update the Settings default.
 
+The project key is tonic plus scale/mode. Set, change, or clear it from
+Writer's KEY chip or the Fretboard/Piano scale controls, then confirm the
+project update. Cancel leaves the previous key and selected notes untouched.
+The confirmed key is shared across Writer and the instrument tabs; loading
+an instrument Save, including one in Roll, does not override it. Dump and
+no-project scale choices remain local.
+
+**Settings → Prefer flat note names** controls spelling throughout the workspaces:
+for example D# minor pentatonic becomes Eb minor pentatonic. It changes labels,
+preserving the key, pitches, and custom names. **Change chord** uses a seven-degree
+wheel when supported; for pentatonic and other unsupported scales it opens the
+root/quality picker directly, with the current key retained. Wheel labels follow
+the device's text-size setting, and each degree is available as a labeled
+accessibility action.
+
 ---
 
 ## 1. Writer playback
@@ -60,9 +76,10 @@ clicked. It now plays the whole arrangement.
 **What you hear**
 
 - **Harmony blocks** sound their chord as a per-bar stab: the chord fires on the
-  block's first bar and again on every bar boundary it spans. Pitches come from
-  the block's `chordNotes` (stacked upward from octave 4), falling back to the
-  root + quality intervals.
+  block's first bar and again on every bar boundary it spans. Named exact
+  Harmony plays its saved Piano MIDI notes or Fretboard string/fret positions
+  in their original register. Symbolic Harmony uses the block's `chordNotes`
+  (stacked upward from octave 4), falling back to root + quality intervals.
 - **Save blocks** sound the voicing they reference — piano keys play their exact
   MIDI notes, fretboard shapes map string+fret through the tuning. A block whose
   saved item was deleted stays silent.
@@ -75,8 +92,11 @@ clicked. It now plays the whole arrangement.
   edge. Notes and voices also stop at the section edge.
 - **Guitar-strum lanes** play down/up steps from a 16th-note grid against one
   explicitly selected Fretboard Harmony lane. Source selection offers Guitar
-  Harmony lanes only, and a strum lane is available only when one exists.
-  Multiple strum lanes may share a source. If its saved source becomes invalid,
+  Harmony lanes only, and a new strum lane is available only when an unused
+  source exists.
+  Each source can belong to only one strum lane in a section. Other lanes hide
+  that occupied source; the owning lane retains its current selection.
+  Unassigned lanes reserve no source. If its saved source becomes invalid,
   the lane shows **Unresolved** and stays silent until repaired; a truly
   unassigned lane shows **Unassigned** and never follows the primary Harmony
   lane. Each pattern tile
@@ -253,14 +273,21 @@ Imported note offsets and durations are also used by Song live playback and WAV
 rendering.
 
 **Fretboard/Piano handoff** — in the instrument detection panel, choose
-*Add to Writer*, select a detected chord or the exact instrument voicing, then
-choose a Writer section and bar. A chord placement belongs to a Harmony lane
+*Add to Writer*, select a detected chord or exact notes as Harmony, then
+choose a Writer section and bar. The placement belongs to a Harmony lane
 with the same instrument; its symbol and native Piano/Fretboard realization
-stay together in one Harmony Save. An exact voicing remains a separate
-placement in a Save/Voicing lane anchored to a compatible Harmony lane. A
-native handoff offers a compatible Save/Voicing lane or stages one when none
-exists. A saved root idea can also be explicitly linked with **Use in Writer**,
-preserving its root save and sharing later edits across placements.
+stay together in one Harmony Save. Exact selections do not require chord
+recognition: their chosen name and native notes, including octaves and fret
+positions, remain reusable in Harmony Library with **Change chord** and
+**Replace chord**. Theory controls require a recognized chord identity.
+Fretboard must be in **Chord** mode with at most one selected position per
+string. **Free** ideas can be saved and reopened for exploration but cannot
+enter Writer or its playback/import-to-Song path. A selection with multiple
+notes per string must be corrected before handoff, even after switching to
+Chord; the mode change does not discard notes. A saved root idea can be linked
+with **Use in Writer**, promoting
+it to a Harmony Save under the same ID and root folder and sharing later edits
+across placements.
 
 If there is no selected project, the project picker opens; canceling it leaves
 the selection and Writer untouched. An empty Writer project can create its
@@ -271,6 +298,10 @@ that the destination changed. Occupancy includes expanded lane repeats.
 Replacing a repeated placement updates its stored source block in place, so
 every copy gets the new chord or voicing at the same offsets; the confirmation
 explains that all copies change together.
+
+Exact Harmony replacements use the newly chosen Piano notes or Chord-mode guitar
+positions. A rejected handoff shows feedback and ends; the picker reopens only
+when **Choose another bar** is selected.
 
 Tap a Harmony block and choose **Edit in Piano** or **Edit in Fretboard** to
 open its native instrument representation. When a Save is used in multiple

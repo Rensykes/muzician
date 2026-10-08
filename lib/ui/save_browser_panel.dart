@@ -395,6 +395,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   }
 
   List<String> _buildSuggestions() {
+    final spelling = ref.read(settingsProvider).noteSpelling;
     final List<String> selectedNotes;
     final List<String> highlightedNotes;
 
@@ -431,7 +432,16 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
 
     // 1. Detected chord
     final chord = detectFirstChord(selectedNotes);
-    if (chord != null) result.add('${chord.root}${chord.quality}');
+    if (chord != null) {
+      result.add(
+        formatRecognizedChordLabel(
+          symbol: '${chord.root}${chord.quality}',
+          rootPc: noteToPC[chord.root] ?? -1,
+          quality: chord.quality,
+          spelling: spelling,
+        ),
+      );
+    }
 
     // 2. Notes + scale
     if (highlightedNotes.isNotEmpty) {
@@ -444,7 +454,11 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           final toneSet = highlightedNotes.toSet();
           if (scaleTones.length == toneSet.length &&
               scaleTones.every(toneSet.contains)) {
-            result.add('${selectedNotes.join(' ')} | $root ${entry.key}');
+            final displayNotes = selectedNotes
+                .map((note) => formatRootChoiceLabel(note, spelling: spelling))
+                .join(' ');
+            final displayRoot = formatRootChoiceLabel(root, spelling: spelling);
+            result.add('$displayNotes | $displayRoot ${entry.key}');
             break;
           }
         }
@@ -453,7 +467,11 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     }
 
     // 3. Note names only
-    result.add(selectedNotes.join(' '));
+    result.add(
+      selectedNotes
+          .map((note) => formatRootChoiceLabel(note, spelling: spelling))
+          .join(' '),
+    );
 
     return result.toList();
   }
@@ -656,6 +674,9 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     final ssState = ref.watch(saveSystemProvider);
     final notifier = ref.read(saveSystemProvider.notifier);
     final gridMode = ref.watch(settingsProvider).saveBrowserGrid;
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
 
     final breadcrumb = _breadcrumb(ssState.folders);
     final subFolders = _childFolders(ssState.folders);
@@ -764,6 +785,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                   saves,
                   insideFolder,
                   linkedSaveIdsHere,
+                  spelling,
                 )
               : _buildList(
                   context,
@@ -776,6 +798,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                   insideFolder,
                   linkedSaveIds,
                   linkedSaveIdsHere,
+                  spelling,
                 ),
         ],
       ),
@@ -793,6 +816,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     bool insideFolder,
     Set<String> linkedSaveIds,
     Set<String> linkedSaveIdsHere,
+    NoteSpelling spelling,
   ) {
     final folders = ref.read(saveSystemProvider).folders;
     final currentFolderManaged =
@@ -841,6 +865,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           );
           return _SaveRow(
             save: save,
+            spelling: spelling,
             contextLabel: _saveContextLabel(
               save,
               state: ref.read(saveSystemProvider),
@@ -896,6 +921,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     List<SaveEntry> saves,
     bool insideFolder,
     Set<String> linkedSaveIdsHere,
+    NoteSpelling spelling,
   ) {
     if (subFolders.isEmpty && saves.isEmpty) {
       if (!insideFolder) {
@@ -935,7 +961,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
         ),
       ),
       ...saves.map((save) {
-        final label = saveCardLabel(save.snapshot);
+        final label = saveCardLabel(save.snapshot, spelling: spelling);
         final projectKey = ref.watch(activeProjectKeyProvider);
         final offKey = snapshotOffKey(
           save.snapshot,
@@ -947,6 +973,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           instrument: save.snapshot.instrument,
           labelText: label.kind == SaveCardLabelKind.notes ? null : label.text,
           noteChips: label.notes,
+          spelling: spelling,
           contextLabel: _saveContextLabel(
             save,
             state: ref.read(saveSystemProvider),
@@ -1117,6 +1144,8 @@ class _ActionChip extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           child: Center(
+            widthFactor: 1,
+            heightFactor: 1,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
@@ -1365,6 +1394,7 @@ class _FolderRow extends StatelessWidget {
 
 class _SaveRow extends StatefulWidget {
   final SaveEntry save;
+  final NoteSpelling spelling;
   final String? contextLabel;
   final bool offKey;
   final bool isSelected;
@@ -1391,6 +1421,7 @@ class _SaveRow extends StatefulWidget {
 
   const _SaveRow({
     required this.save,
+    this.spelling = NoteSpelling.sharps,
     this.contextLabel,
     this.offKey = false,
     required this.isSelected,
@@ -1596,10 +1627,16 @@ class _SaveRowState extends State<_SaveRow>
                                 ),
                               ),
                             if (widget.save.snapshot is WriterBlockSnapshot &&
-                                saveCardLabel(widget.save.snapshot).text !=
+                                saveCardLabel(
+                                      widget.save.snapshot,
+                                      spelling: widget.spelling,
+                                    ).text !=
                                     null)
                               Text(
-                                saveCardLabel(widget.save.snapshot).text!,
+                                saveCardLabel(
+                                  widget.save.snapshot,
+                                  spelling: widget.spelling,
+                                ).text!,
                                 style: const TextStyle(
                                   color: MuzicianTheme.violet,
                                   fontSize: 10,
@@ -1609,7 +1646,21 @@ class _SaveRowState extends State<_SaveRow>
                             if (widget.save.snapshot is! WriterBlockSnapshot &&
                                 widget.save.snapshot.pendingChord != null)
                               Text(
-                                widget.save.snapshot.pendingChord!.symbol,
+                                formatRecognizedChordLabel(
+                                  symbol:
+                                      widget.save.snapshot.pendingChord!.symbol,
+                                  rootPc:
+                                      noteToPC[toSharp(
+                                        widget.save.snapshot.pendingChord!.root,
+                                      )] ??
+                                      -1,
+                                  quality: widget
+                                      .save
+                                      .snapshot
+                                      .pendingChord!
+                                      .quality,
+                                  spelling: widget.spelling,
+                                ),
                                 style: const TextStyle(
                                   color: MuzicianTheme.violet,
                                   fontSize: 10,
@@ -1716,6 +1767,7 @@ class _SaveRowState extends State<_SaveRow>
                       position: _slideAnim,
                       child: _SaveExpandedDetails(
                         save: widget.save,
+                        spelling: widget.spelling,
                         canLoad: widget.canLoad,
                         hasPrev: widget.hasPrev,
                         hasNext: widget.hasNext,
@@ -1776,6 +1828,7 @@ class _UpDownButton extends StatelessWidget {
 
 class _SaveExpandedDetails extends StatelessWidget {
   final SaveEntry save;
+  final NoteSpelling spelling;
   final bool canLoad;
   final bool hasPrev;
   final bool hasNext;
@@ -1788,6 +1841,7 @@ class _SaveExpandedDetails extends StatelessWidget {
 
   const _SaveExpandedDetails({
     required this.save,
+    this.spelling = NoteSpelling.sharps,
     required this.canLoad,
     required this.hasPrev,
     required this.hasNext,
@@ -1832,7 +1886,7 @@ class _SaveExpandedDetails extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        note,
+                        formatRootChoiceLabel(note, spelling: spelling),
                         style: const TextStyle(
                           color: MuzicianTheme.sky,
                           fontSize: 11,
@@ -1849,7 +1903,7 @@ class _SaveExpandedDetails extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
-                  'Chord: ${save.snapshot.pendingChord!.symbol}',
+                  'Chord: ${formatRecognizedChordLabel(symbol: save.snapshot.pendingChord!.symbol, rootPc: noteToPC[toSharp(save.snapshot.pendingChord!.root)] ?? -1, quality: save.snapshot.pendingChord!.quality, spelling: spelling)}',
                   style: const TextStyle(
                     color: MuzicianTheme.violet,
                     fontSize: 11,
@@ -1861,7 +1915,7 @@ class _SaveExpandedDetails extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
-                  'Scale: ${save.snapshot.pendingScale!.root} ${save.snapshot.pendingScale!.scaleName}',
+                  'Scale: ${formatRootChoiceLabel(save.snapshot.pendingScale!.root, spelling: spelling)} ${save.snapshot.pendingScale!.scaleName}',
                   style: const TextStyle(
                     color: MuzicianTheme.emerald,
                     fontSize: 11,
@@ -2004,6 +2058,7 @@ class _SaveCard extends StatelessWidget {
   final String instrument;
   final String? labelText; // chord symbol / scale / 'Highlight'
   final List<String> noteChips; // shown when labelText is null
+  final NoteSpelling spelling;
   final String? contextLabel;
   final bool offKey;
   final bool selected;
@@ -2015,6 +2070,7 @@ class _SaveCard extends StatelessWidget {
     required this.instrument,
     required this.labelText,
     required this.noteChips,
+    this.spelling = NoteSpelling.sharps,
     this.contextLabel,
     required this.onTap,
     this.offKey = false,
@@ -2150,11 +2206,13 @@ Widget SaveCardForTest({
   required List<String> noteChips,
   required VoidCallback onTap,
   String? contextLabel,
+  NoteSpelling spelling = NoteSpelling.sharps,
 }) => _SaveCard(
   name: name,
   instrument: instrument,
   labelText: labelText,
   noteChips: noteChips,
+  spelling: spelling,
   contextLabel: contextLabel,
   onTap: onTap,
 );

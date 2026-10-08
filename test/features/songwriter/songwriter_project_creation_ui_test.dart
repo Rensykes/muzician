@@ -43,13 +43,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> openNewProjectFromMenu(WidgetTester tester) async {
+    expect(find.byKey(const Key('writerNewProjectButton')), findsNothing);
+    expect(find.byTooltip('Writer menu'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('writerMenuButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('writerMenuTile_new_project')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('writerMenuTile_new_project')));
+    await tester.pumpAndSettle();
+  }
+
   Future<void> enterProjectDetails(
     WidgetTester tester, {
     required String name,
     required HarmonyLaneInstrument instrument,
   }) async {
-    await tester.tap(find.byKey(const Key('writerNewProjectButton')));
-    await tester.pumpAndSettle();
+    await openNewProjectFromMenu(tester);
     await tester.enterText(
       find.byKey(const Key('writerProjectNameField')),
       name,
@@ -175,8 +184,7 @@ void main() {
     addTearDown(container.dispose);
     await pumpHeader(tester, container);
 
-    await tester.tap(find.byKey(const Key('writerNewProjectButton')));
-    await tester.pumpAndSettle();
+    await openNewProjectFromMenu(tester);
     await tester.tap(find.byKey(const Key('writerProjectDetailsCancel')));
     await tester.pumpAndSettle();
 
@@ -191,8 +199,7 @@ void main() {
     addTearDown(container.dispose);
     await pumpHeader(tester, container);
 
-    await tester.tap(find.byKey(const Key('writerNewProjectButton')));
-    await tester.pumpAndSettle();
+    await openNewProjectFromMenu(tester);
     await tester.tap(find.byKey(const Key('writerProjectDetailsContinue')));
     await tester.pumpAndSettle();
 
@@ -212,8 +219,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = size;
       await pumpHeader(tester, container);
-      await tester.tap(find.byKey(const Key('writerNewProjectButton')));
-      await tester.pumpAndSettle();
+      await openNewProjectFromMenu(tester);
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('writerProjectNameField')), findsOneWidget);
       await tester.tap(find.byKey(const Key('writerProjectDetailsCancel')));

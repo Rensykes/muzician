@@ -21,6 +21,7 @@ import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/song_playback_store.dart';
 import '../../store/song_project_store.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/glass_snackbar.dart';
 import '../../utils/note_utils.dart';
@@ -113,7 +114,8 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
     _patternName = pattern.name;
     _patternHighlightFallback = List<String>.from(pattern.highlightedNotes);
 
-    final scale = _songScaleFromConfig(project.config);
+    final spelling = ref.read(settingsProvider).noteSpelling;
+    final scale = _songScaleFromConfig(project.config, spelling: spelling);
 
     final seedState = bridge.pianoRollStateFromNotePattern(
       pattern,
@@ -124,9 +126,13 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
     );
 
     _isolatedContainer = ProviderContainer(
+      parent: ProviderScope.containerOf(context, listen: false),
       overrides: [
         pianoRollProvider.overrideWith(
           () => _SeededPianoRollNotifier(seedState),
+        ),
+        pianoRollPlaybackProvider.overrideWith(
+          () => PianoRollPlaybackNotifier(),
         ),
       ],
     );
@@ -171,6 +177,9 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(songProjectProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
 
     NotePattern pattern;
     SongClipInstance clip;
@@ -216,7 +225,7 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
         .where((c) => c.patternId == widget.patternId)
         .length;
 
-    final songScale = _songScaleFromConfig(project.config);
+    final songScale = _songScaleFromConfig(project.config, spelling: spelling);
     final scaleLabel = songScale?.label ?? 'No song scale';
 
     return Scaffold(
@@ -366,8 +375,9 @@ class _PlaybackModeToggle extends StatelessWidget {
 /// Compact view-model derived from [SongProjectConfig.scaleRoot] /
 /// [SongProjectConfig.scaleName].  Returns `null` when the song has no scale.
 ({String label, List<String> notes})? _songScaleFromConfig(
-  SongProjectConfig config,
-) {
+  SongProjectConfig config, {
+  NoteSpelling spelling = NoteSpelling.sharps,
+}) {
   final root = config.scaleRoot;
   final name = config.scaleName;
   if (root == null || name == null) return null;
@@ -377,5 +387,8 @@ class _PlaybackModeToggle extends StatelessWidget {
       .expand((v) => v)
       .firstWhere((s) => s.$1 == name, orElse: () => (name, name))
       .$2;
-  return (label: '$root $scaleLabel', notes: notes);
+  return (
+    label: '${formatRootChoiceLabel(root, spelling: spelling)} $scaleLabel',
+    notes: notes,
+  );
 }

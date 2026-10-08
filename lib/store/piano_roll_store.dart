@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/instrument_shared/instrument_binding.dart';
 import '../models/hum_to_midi.dart';
 import '../models/piano_roll.dart';
+import '../models/project_config.dart';
 import '../models/save_system.dart' show PianoRollSnapshot;
 import '../schema/rules/piano_roll_rules.dart' as rules;
+import '../utils/note_utils.dart';
 
 class PianoRollNotifier extends Notifier<PianoRollState>
     implements ScaleActions {
@@ -590,13 +592,24 @@ class PianoRollNotifier extends Notifier<PianoRollState>
     );
   }
 
-  void loadSnapshot(PianoRollSnapshot snap) {
+  void loadSnapshot(PianoRollSnapshot snap, {ProjectConfig? projectConfig}) {
+    final projectRootPc = projectConfig?.keyRootPc;
+    final projectScaleName = projectConfig?.keyScaleName;
+    final hasProjectKey =
+        projectRootPc != null &&
+        projectRootPc >= 0 &&
+        projectRootPc < chromaticNotes.length &&
+        projectScaleName != null;
+    final projectKey = hasProjectKey ? chromaticNotes[projectRootPc] : null;
+    final projectScale = hasProjectKey
+        ? getScaleNotes(projectKey!, projectScaleName)
+        : const <String>[];
     final config = PianoRollConfig(
-      tempo: snap.tempo,
-      key: snap.key,
+      tempo: projectConfig?.tempo ?? snap.tempo,
+      key: projectConfig == null ? snap.key : projectKey,
       timeSignature: TimeSignature(
-        beatsPerMeasure: snap.numerator,
-        beatUnit: snap.denominator,
+        beatsPerMeasure: projectConfig?.beatsPerBar ?? snap.numerator,
+        beatUnit: projectConfig?.beatUnit ?? snap.denominator,
       ),
       totalMeasures: snap.totalMeasures,
     );
@@ -619,9 +632,24 @@ class PianoRollNotifier extends Notifier<PianoRollState>
       selectedColumnTick: snap.selectedColumnTick,
       selectedNoteIds: const <String>{},
       snapTicks: snap.snapTicks,
-      highlightedNotes: List<String>.from(snap.highlightedNotes),
+      highlightedNotes: projectConfig == null
+          ? List<String>.from(snap.highlightedNotes)
+          : projectScale,
       latestImportedRange: null,
     );
+    ref.read(pianoRollPendingScaleProvider.notifier).state = null;
+    ref
+        .read(pianoRollActiveScaleProvider.notifier)
+        .state = projectConfig == null
+        ? snap.pendingScale == null
+              ? null
+              : (
+                  root: snap.pendingScale!.root,
+                  scaleName: snap.pendingScale!.scaleName,
+                )
+        : hasProjectKey
+        ? (root: projectKey!, scaleName: projectScaleName)
+        : null;
   }
 
   void reset() => state = rules.getDefaultPianoRollState().copyWith(

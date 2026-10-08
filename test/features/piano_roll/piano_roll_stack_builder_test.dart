@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/piano_roll/piano_roll_stack_builder.dart';
 import 'package:muzician/store/piano_roll_store.dart';
+import 'package:muzician/store/settings_store.dart';
+import 'package:muzician/utils/note_utils.dart';
+import '../../support/test_settings_notifier.dart';
 
 Widget _wrap(ProviderContainer container) {
   return UncontrolledProviderScope(
@@ -142,7 +145,10 @@ void main() {
   testWidgets('wizard preview keeps flat spelling consistent with picker', (
     tester,
   ) async {
-    final container = ProviderContainer();
+    final settings = TestSettingsNotifier(initialSpelling: NoteSpelling.flats);
+    final container = ProviderContainer(
+      overrides: [settingsProvider.overrideWith(() => settings)],
+    );
     addTearDown(container.dispose);
 
     await tester.pumpWidget(_wrap(container));
@@ -185,7 +191,7 @@ void main() {
       find.descendant(of: wizard, matching: find.text('C')).first,
     );
     final db = tester.getTopLeft(
-      find.descendant(of: wizard, matching: find.text('Db')),
+      find.descendant(of: wizard, matching: find.text('C#')),
     );
 
     expect((c.dy - db.dy).abs(), lessThan(1));

@@ -24,15 +24,36 @@ its Writer chord and native instrument realization. Shared-save edits offer an
 explicit all-uses update or a standalone Save; replacing a Writer chord is a
 separate action that preserves its placement and lyrics.
 
+Harmony also accepts named, exact Piano and Fretboard Chord selections without
+chord recognition. These retain native notes and positions, remain reusable in
+the project's Harmony Library, and offer Change chord and Replace chord.
+Fretboard Free is for exploration and saved ideas; it cannot enter or play in
+Writer. Converting Free ideas into melody is outside this workflow.
+
+The project's tonic and scale/mode are shared by Writer and instrument views.
+Setting, changing, or clearing the key from an instrument or Writer asks for
+confirmation; loading an instrument Save does not override the project key.
+
+Settings provides one persistent Sharps/Flats preference for musical labels in
+instruments, detection, chord tools, project keys, and previews. It changes
+spelling only; saved pitches, project keys, custom Save names, and exact Harmony
+labels retain their meaning. Writer's chord wheel supports seven-degree scales;
+other configured scales open the root/quality picker directly without changing
+the key.
+
 Writer supports reusable section-level melody and guitar-strum patterns that
 can move into Song as note tracks. Strum patterns use an explicitly selected
-Fretboard Harmony lane and preview their down/up events on each tile. Melody
-patterns can target Piano or Fretboard, with saved note positions and a
+Fretboard Harmony lane and preview their down/up events on each tile. Within
+a section, each Fretboard Harmony lane can be assigned to only one Guitar
+Strum lane; occupied targets are hidden from other strum selectors.
+Unassigned lanes reserve no target.
+Melody patterns can target Piano or Fretboard, with saved note positions and a
 performance view gated when the current instrument cannot play every note.
-Writer can create a separate Save System project; Keep, Discard, and Cancel
-protect the current Writer session, and Discard restores its bound named Save
-or clears the session and binding while retaining named Saves. Writer audio
-lanes remain part of the section sketch and are not included in that import.
+Writer's main menu can create a separate Save System project; Keep, Discard,
+and Cancel protect the current Writer session. Discard restores its bound
+named Save or clears the session and binding while retaining named Saves.
+Writer audio lanes remain part of the section sketch and are not included in
+that import.
 Both Writer and Song provide bounded, project-scoped undo and redo so a draft
 can be explored and recovered. Native Song Bundles carry an arrangement and
 its referenced audio sources between devices; Web explains that bundle import

@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/save_system.dart';
+import '../../store/project_config_sync.dart';
 import '../../store/fretboard_store.dart';
 import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 import '../../schema/rules/save_system_rules.dart';
+import '../../schema/rules/songwriter_rules.dart'
+    show isWriterEligibleHarmonySnapshot, isWriterEligibleNativeSelection;
+import '../../utils/note_utils.dart';
 import '../instrument_shared/harmony_save_edit_dialog.dart';
 import '../instrument_shared/writer_handoff.dart';
 
@@ -147,6 +151,11 @@ class _FretboardSavePanelState extends ConsumerState<FretboardSavePanel> {
           onLoadSaveId: _onSaveLoaded,
           canUseInWriter: (save) =>
               selectedProjectRoot &&
+              (save.snapshot is HarmonyChordSnapshot
+                  ? isWriterEligibleHarmonySnapshot(
+                      save.snapshot as HarmonyChordSnapshot,
+                    )
+                  : isWriterEligibleNativeSelection(save.snapshot)) &&
               _fretboardSnapshotFor(save.snapshot) != null &&
               (save.snapshot is HarmonyChordSnapshot
                   ? isFolderInProject(
@@ -273,6 +282,7 @@ class _FretboardSavePanelState extends ConsumerState<FretboardSavePanel> {
       selectedCells: List.of(fretState.selectedCells),
       selectedNotes: List.of(fretState.selectedNotes),
       viewMode: fretState.viewMode,
+      inputMode: fretState.inputMode,
       pendingChord: pendingChord != null
           ? PendingChord(
               root: pendingChord.root,
@@ -300,6 +310,9 @@ void loadFretboardSnapshot(WidgetRef ref, InstrumentSnapshot snapshot) {
   final fretboardSnapshot = _fretboardSnapshotFor(snapshot);
   if (fretboardSnapshot == null) return;
 
+  final selectedFolder = ref.read(selectedProjectProvider);
+  final isProject = selectedFolder?.kind == SaveFolderKind.project;
+  final projectKey = isProject ? ref.read(activeProjectKeyProvider) : null;
   ref.read(fretboardProvider.notifier).loadSnapshot(fretboardSnapshot);
   if (fretboardSnapshot.pendingChord != null) {
     ref.read(pendingChordProvider.notifier).state = (
@@ -312,7 +325,14 @@ void loadFretboardSnapshot(WidgetRef ref, InstrumentSnapshot snapshot) {
     ref.read(fretboardChordCommittedProvider.notifier).state = false;
   }
 
-  if (fretboardSnapshot.pendingScale != null) {
+  if (isProject) {
+    final notes = projectKey == null
+        ? const <String>[]
+        : getScaleNotes(projectKey.root, projectKey.scaleName);
+    ref.read(fretboardProvider.notifier).setHighlightedNotes(notes);
+    ref.read(activeScaleProvider.notifier).state = projectKey;
+    ref.read(pendingScaleProvider.notifier).state = null;
+  } else if (fretboardSnapshot.pendingScale != null) {
     ref.read(pendingScaleProvider.notifier).state = (
       root: fretboardSnapshot.pendingScale!.root,
       scaleName: fretboardSnapshot.pendingScale!.scaleName,

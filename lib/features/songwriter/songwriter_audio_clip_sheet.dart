@@ -7,12 +7,14 @@ import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../schema/rules/songwriter_segment_rules.dart';
 import '../../schema/rules/songwriter_slice_rules.dart';
 import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../store/songwriter_audio_audition_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_slice_controller.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_utils.dart';
 import '../song/song_audio_clip_body.dart';
 import '../_mockup_shell.dart' show showWidgetSheet;
 import 'harmony_chord_sheet.dart';
@@ -670,6 +672,9 @@ class _SegmentRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final beats = spanBars * config.beatsPerBar;
     final tpb = config.ticksPerBeat;
     final store = ref.read(songwriterProvider.notifier);
@@ -703,7 +708,7 @@ class _SegmentRow extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 alignment: Alignment.center,
-                child: _label(segmentAtTick(segments, beat * tpb)),
+                child: _label(segmentAtTick(segments, beat * tpb), spelling),
               ),
             ),
           ),
@@ -711,13 +716,22 @@ class _SegmentRow extends ConsumerWidget {
     );
   }
 
-  Widget _label(ChordSegment? seg) {
+  Widget _label(ChordSegment? seg, NoteSpelling spelling) {
     if (seg == null) return const SizedBox.shrink();
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          seg.chordSymbol ?? '◆',
+          seg.chordSymbol == null
+              ? '◆'
+              : seg.chordRootPc == null || seg.chordQuality == null
+              ? seg.chordSymbol!
+              : formatRecognizedChordLabel(
+                  symbol: seg.chordSymbol!,
+                  rootPc: seg.chordRootPc!,
+                  quality: seg.chordQuality!,
+                  spelling: spelling,
+                ),
           style: const TextStyle(
             color: MuzicianTheme.textPrimary,
             fontSize: 12,

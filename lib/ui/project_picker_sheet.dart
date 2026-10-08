@@ -509,7 +509,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _ProjectTile extends StatelessWidget {
+class _ProjectTile extends ConsumerWidget {
   final SaveFolder folder;
   final bool isActive;
   final VoidCallback onTap;
@@ -521,13 +521,14 @@ class _ProjectTile extends StatelessWidget {
     this.onDelete,
   });
 
-  String? _subtitle() {
+  String? _subtitle(NoteSpelling spelling) {
     final cfg = folder.projectConfig;
     if (cfg == null) return null;
     final parts = <String>[];
     if (cfg.keyRootPc != null) {
       parts.add(
-        '${chromaticNotes[cfg.keyRootPc!]} ${cfg.keyScaleName ?? ""}'.trim(),
+        '${formatRootChoiceLabel(chromaticNotes[cfg.keyRootPc!], spelling: spelling)} ${cfg.keyScaleName ?? ""}'
+            .trim(),
       );
     }
     parts.add('${cfg.tempo} bpm');
@@ -536,10 +537,13 @@ class _ProjectTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final isDump = folder.kind == SaveFolderKind.dump;
     final accent = isDump ? MuzicianTheme.textSecondary : MuzicianTheme.emerald;
-    final subtitle = _subtitle();
+    final subtitle = _subtitle(spelling);
     return Material(
       color: Colors.transparent,
       child: InkWell(

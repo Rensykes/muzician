@@ -130,6 +130,139 @@ void main() {
     expect(container.read(songwriterProvider).guitarStrumPatterns, isEmpty);
   });
 
+  testWidgets(
+    'strum source selector hides occupied lanes and keeps labels stable',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(songwriterProvider.notifier);
+      notifier.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final primaryId = section.lanes.single.id;
+      notifier.setHarmonyLaneInstrument(
+        sectionId: section.id,
+        laneId: primaryId,
+        instrument: HarmonyLaneInstrument.fretboard,
+      );
+      final secondHarmonyId = notifier.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.harmony,
+        harmonyInstrument: HarmonyLaneInstrument.fretboard,
+      );
+      final thirdHarmonyId = notifier.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.harmony,
+        harmonyInstrument: HarmonyLaneInstrument.fretboard,
+      );
+      final firstStrumId = notifier.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.guitarStrum,
+      );
+      final secondStrumId = notifier.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.guitarStrum,
+      );
+      notifier.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: firstStrumId,
+        harmonyLaneId: primaryId,
+      );
+      notifier.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: secondStrumId,
+        harmonyLaneId: thirdHarmonyId,
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+
+      final selector = tester.widget<DropdownButton<String>>(
+        find.byKey(Key('strumAnchor_${secondStrumId}_0')),
+      );
+      final options = selector.items!
+          .map((item) => (value: item.value, label: (item.child as Text).data))
+          .toList();
+      expect(selector.value, thirdHarmonyId);
+      expect(options.map((option) => option.value), [
+        '',
+        secondHarmonyId,
+        thirdHarmonyId,
+      ]);
+      expect(options.map((option) => option.label), [
+        'Unassigned',
+        'Fretboard 2',
+        'Fretboard 3',
+      ]);
+    },
+  );
+
+  testWidgets(
+    'stale Add guitar strum action creates no pattern after source is occupied',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(songwriterProvider.notifier);
+      notifier.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final sourceId = section.lanes.single.id;
+      notifier.setHarmonyLaneInstrument(
+        sectionId: section.id,
+        laneId: sourceId,
+        instrument: HarmonyLaneInstrument.fretboard,
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.byKey(Key('sheetSectionMenu_${section.id}')));
+      await tester.pumpAndSettle();
+      final staleAction = find.byKey(
+        const Key('addGuitarStrumLaneSheetAction'),
+      );
+      expect(staleAction, findsOneWidget);
+
+      final existingStrumId = notifier.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.guitarStrum,
+      );
+      notifier.setLaneAnchorLane(
+        sectionId: section.id,
+        laneId: existingStrumId,
+        harmonyLaneId: sourceId,
+      );
+      await tester.pump();
+      await tester.tap(staleAction);
+      await tester.pumpAndSettle();
+
+      final updatedSection = container.read(songwriterProvider).sections.single;
+      expect(
+        updatedSection.lanes.where(
+          (lane) => lane.kind == SongLaneKind.guitarStrum,
+        ),
+        hasLength(1),
+      );
+      expect(container.read(songwriterProvider).guitarStrumPatterns, isEmpty);
+    },
+  );
+
   testWidgets('compact melody tiles show the complete placement summary', (
     tester,
   ) async {

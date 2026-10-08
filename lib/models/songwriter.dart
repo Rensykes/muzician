@@ -318,6 +318,7 @@ class SongBlock {
     bool? isSilent,
     bool clearRomanNumeral = false,
     bool clearChordData = false,
+    bool clearChordIdentity = false,
     bool clearSaveId = false,
     bool clearEmbedded = false,
     bool clearPatternId = false,
@@ -329,10 +330,14 @@ class SongBlock {
     saveId: clearSaveId ? null : (saveId ?? this.saveId),
     embedded: clearEmbedded ? null : (embedded ?? this.embedded),
     chordSymbol: clearChordData ? null : (chordSymbol ?? this.chordSymbol),
-    chordQuality: clearChordData ? null : (chordQuality ?? this.chordQuality),
-    chordRootPc: clearChordData ? null : (chordRootPc ?? this.chordRootPc),
+    chordQuality: clearChordData || clearChordIdentity
+        ? null
+        : (chordQuality ?? this.chordQuality),
+    chordRootPc: clearChordData || clearChordIdentity
+        ? null
+        : (chordRootPc ?? this.chordRootPc),
     chordNotes: clearChordData ? const [] : (chordNotes ?? this.chordNotes),
-    romanNumeral: clearRomanNumeral || clearChordData
+    romanNumeral: clearRomanNumeral || clearChordData || clearChordIdentity
         ? null
         : (romanNumeral ?? this.romanNumeral),
     patternId: clearPatternId ? null : (patternId ?? this.patternId),

@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show ErrorDescription, FlutterError, FlutterErrorDetails, ValueListenable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/fretboard.dart';
 import '../models/harmony_lane_instrument.dart';
 import '../models/piano.dart';
 import '../models/project_config.dart';
@@ -565,6 +566,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String blockId,
     required String saveId,
   }) {
+    lastHarmonyMutationError = null;
     final projectId = ref.read(saveSystemProvider).selectedProjectId;
     if (projectId == null) return false;
     final section = state.sections
@@ -615,6 +617,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                 chordRootPc: writerBlock.chordRootPc,
                 chordNotes: writerBlock.chordNotes,
                 romanNumeral: writerBlock.romanNumeral,
+                clearChordIdentity:
+                    writerBlock.chordRootPc == null &&
+                    writerBlock.chordQuality == null,
                 clearRomanNumeral: writerBlock.romanNumeral == null,
                 isSilent: writerBlock.isSilent,
               )
@@ -640,19 +645,42 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           'Choose ${canonical.harmonyInstrument.name} for this Harmony Lane.';
       return null;
     }
+    if (!hasHarmonyContent(canonical.writerBlock)) {
+      lastHarmonyMutationError = 'This Harmony save has invalid chord data.';
+      return null;
+    }
+    if (!isWriterEligibleNativeSelection(native)) {
+      lastHarmonyMutationError =
+          native is FretboardSnapshot &&
+              native.inputMode != FretboardInputMode.chord
+          ? 'Switch the Fretboard to Chord mode and select at most one note per string.'
+          : 'Choose a valid, non-empty native instrument selection.';
+      return null;
+    }
     final expected = _harmonyPitchClasses(canonical.writerBlock);
     final actual = _selectedPitchClasses(native);
+    final exactHarmony =
+        canonical.writerBlock.chordRootPc == null &&
+        canonical.writerBlock.chordQuality == null;
     if (expected == null ||
         actual == null ||
-        !_samePitchClassSet(actual, expected)) {
+        (!exactHarmony && !_samePitchClassSet(actual, expected))) {
       lastHarmonyMutationError =
           'The instrument notes must match ${canonical.writerBlock.chordSymbol ?? 'the saved chord'}.';
       return null;
     }
+    final writerBlock = exactHarmony
+        ? WriterBlockSnapshot(
+            laneKind: SongLaneKind.harmony,
+            chordSymbol: canonical.writerBlock.chordSymbol,
+            chordNotes: writerNativePitchClassNames(native)!,
+            defaultLyrics: canonical.writerBlock.defaultLyrics,
+          )
+        : canonical.writerBlock;
     return HarmonyChordSnapshot(
       harmonyInstrument: canonical.harmonyInstrument,
-      writerBlock: canonical.writerBlock,
-      instrumentState: _withPendingChord(native, canonical.writerBlock),
+      writerBlock: writerBlock,
+      instrumentState: _withPendingChord(native, writerBlock),
     );
   }
 
@@ -667,8 +695,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   void _set(
     SongwriterProjectSnapshot next, {
     Map<String, String> saveNames = const {},
+    Map<String, SaveEntry> adoptSaves = const {},
   }) {
-    _commitWriterStateInBackground(next, saveNames: saveNames);
+    _commitWriterStateInBackground(
+      next,
+      saveNames: saveNames,
+      adoptSaves: adoptSaves,
+    );
   }
 
   void _commitWriterStateInBackground(
@@ -990,6 +1023,22 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           final oldContent = oldBlock == null || oldLane == null
               ? null
               : _contentSnapshot(previous, oldLane, oldBlock);
+          if (lane.kind == SongLaneKind.save) {
+            final linked = block.saveId == null
+                ? null
+                : nextSaves[block.saveId]?.snapshot;
+            final candidate = linked ?? block.embedded;
+            if (candidate is FretboardSnapshot ||
+                candidate is PianoSnapshot ||
+                candidate is HarmonyChordSnapshot) {
+              if (candidate != null &&
+                  !_isWriterEligibleSaveSnapshot(candidate)) {
+                lastHarmonyMutationError =
+                    'This native Save is not eligible for Writer.';
+                return null;
+              }
+            }
+          }
           var liveContent = _contentSnapshot(proposed, lane, block);
           if (lane.kind == SongLaneKind.harmony &&
               liveContent is WriterBlockSnapshot &&
@@ -1394,12 +1443,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   };
 
   bool _hasChordContent(WriterBlockSnapshot snapshot) =>
-      !snapshot.isSilent &&
-      snapshot.chordRootPc != null &&
-      snapshot.chordQuality != null &&
-      snapshot.chordNotes.isNotEmpty;
+      hasHarmonyContent(snapshot);
 
   Set<int>? _harmonyPitchClasses(WriterBlockSnapshot writerBlock) {
+    if (!hasHarmonyContent(writerBlock)) return null;
     final pitchClasses = <int>{};
     for (final note in writerBlock.chordNotes) {
       final pitchClass = noteToPC[toSharp(note)];
@@ -1408,7 +1455,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     }
     final rootPc = writerBlock.chordRootPc;
     final quality = writerBlock.chordQuality;
-    if (rootPc == null || quality == null || pitchClasses.isEmpty) return null;
+    if (pitchClasses.isEmpty) return null;
+    if (rootPc == null && quality == null) return pitchClasses;
+    if (rootPc == null || quality == null) return null;
     final intervals = chordIntervals[quality];
     if (intervals == null) return null;
     final expected = {
@@ -1421,34 +1470,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       left.length == right.length && left.containsAll(right);
 
   Set<int>? _selectedPitchClasses(InstrumentSnapshot snapshot) {
-    final pitchClasses = <int>{};
-    switch (snapshot) {
-      case PianoSnapshot():
-        final range = piano_rules.pianoRanges[snapshot.currentRange];
-        if (range == null || snapshot.selectedKeys.isEmpty) return null;
-        for (final key in snapshot.selectedKeys) {
-          if (key.midiNote < range.startMidi || key.midiNote > range.endMidi) {
-            return null;
-          }
-          pitchClasses.add(((key.midiNote % 12) + 12) % 12);
-        }
-      case FretboardSnapshot():
-        final tuning = tunings[snapshot.tuning];
-        if (tuning == null || snapshot.selectedCells.isEmpty) return null;
-        for (final cell in snapshot.selectedCells) {
-          if (cell.stringIndex < 0 ||
-              cell.stringIndex >= tuning.strings.length ||
-              cell.fret < snapshot.capo ||
-              cell.fret > snapshot.numFrets) {
-            return null;
-          }
-          final midi = tuning.strings[cell.stringIndex].midiNote + cell.fret;
-          pitchClasses.add(((midi % 12) + 12) % 12);
-        }
-      default:
-        return null;
-    }
-    return pitchClasses;
+    final notes = writerNativePitchClassNames(snapshot);
+    if (notes == null || notes.isEmpty) return null;
+    return {for (final note in notes) noteToPC[note]!};
   }
 
   PendingChord? _pendingChordFor(WriterBlockSnapshot writerBlock) {
@@ -1479,6 +1503,11 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
             existing.harmonyInstrument == instrument
         ? existing
         : null;
+    if (composite != null && !_isPlayableHarmonyComposite(composite)) {
+      lastHarmonyMutationError =
+          'This Harmony Save has an invalid native selection.';
+      return null;
+    }
     final oldNative = composite?.instrumentState;
     if (oldNative != null) {
       final oldPcs = _selectedPitchClasses(oldNative);
@@ -1489,6 +1518,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           instrumentState: _withPendingChord(oldNative, writerBlock),
         );
       }
+    }
+
+    if (writerBlock.chordRootPc == null && writerBlock.chordQuality == null) {
+      lastHarmonyMutationError =
+          'Exact Harmony needs a valid native selection with the same notes.';
+      return null;
     }
 
     final native = _realizeHarmonyChord(
@@ -1626,6 +1661,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         selectedCells: snapshot.selectedCells,
         selectedNotes: snapshot.selectedNotes,
         viewMode: snapshot.viewMode,
+        inputMode: snapshot.inputMode,
         pendingChord: pending,
         pendingScale: snapshot.pendingScale,
       ),
@@ -1639,6 +1675,42 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       ),
       _ => snapshot,
     };
+  }
+
+  HarmonyChordSnapshot? _exactHarmonyFromNative(
+    InstrumentSnapshot? snapshot,
+    String name,
+  ) {
+    final label = name.trim();
+    if (snapshot == null || !isValidSaveName(label)) {
+      lastHarmonyMutationError = 'Enter a name for this exact Harmony.';
+      return null;
+    }
+    if (!isWriterEligibleNativeSelection(snapshot)) {
+      lastHarmonyMutationError =
+          snapshot is FretboardSnapshot &&
+              snapshot.inputMode != FretboardInputMode.chord
+          ? 'Switch the Fretboard to Chord mode and select at most one note per string.'
+          : 'Choose a valid, non-empty Piano or Fretboard selection.';
+      return null;
+    }
+    final instrument = _harmonyInstrumentForNativeSnapshot(snapshot);
+    final notes = writerNativePitchClassNames(snapshot);
+    if (instrument == null || notes == null || notes.isEmpty) {
+      lastHarmonyMutationError =
+          'Choose a valid, non-empty Piano or Fretboard selection.';
+      return null;
+    }
+    final writerBlock = WriterBlockSnapshot(
+      laneKind: SongLaneKind.harmony,
+      chordSymbol: label,
+      chordNotes: notes,
+    );
+    return HarmonyChordSnapshot(
+      harmonyInstrument: instrument,
+      writerBlock: writerBlock,
+      instrumentState: _withPendingChord(snapshot, writerBlock),
+    );
   }
 
   bool _jsonEqual(Object? left, Object? right) =>
@@ -1723,6 +1795,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                 chordRootPc: writerBlock.chordRootPc,
                 chordNotes: writerBlock.chordNotes,
                 romanNumeral: writerBlock.romanNumeral,
+                clearChordIdentity:
+                    writerBlock.chordRootPc == null &&
+                    writerBlock.chordQuality == null,
                 clearRomanNumeral: writerBlock.romanNumeral == null,
                 isSilent: writerBlock.isSilent,
               )
@@ -2048,8 +2123,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         ? state.config.copyWith(clearKey: true)
         : state.config.copyWith(keyRoot: root, keyScaleName: scaleName);
     runHistoryGroup(() {
-      _set(state.copyWith(config: cfg));
-      _recomputeNumerals();
+      _set(_recomputeNumerals(state.copyWith(config: cfg), cfg));
     });
   }
 
@@ -2094,7 +2168,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     _history.clear();
     _suppressHistory = true;
     try {
-      _commitWriterStateInBackground(state.copyWith(config: nextConfig));
+      _commitWriterStateInBackground(
+        _recomputeNumerals(state.copyWith(config: nextConfig), nextConfig),
+      );
     } finally {
       _suppressHistory = false;
     }
@@ -2263,12 +2339,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .where((candidate) => candidate.id == sectionId)
         .firstOrNull;
     return section != null &&
-        section.lanes.any(
-          (lane) =>
-              lane.kind == SongLaneKind.harmony &&
-              _instrumentForHarmonyLane(lane) ==
-                  HarmonyLaneInstrument.fretboard,
-        );
+        availableGuitarStrumHarmonyLanes(
+          section,
+          projectDefault: projectDefaultHarmonyInstrumentForSelectedProject,
+        ).isNotEmpty;
   }
 
   /// Duplicates a Harmony lane and its chord placements. The copied blocks get
@@ -2410,8 +2484,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required bool muted,
   }) => _replaceLane(sectionId, laneId, (l) => l.copyWith(muted: muted));
 
-  /// Selects the harmony lane used by save voicings or guitar strums.
-  /// A null selection follows the section's primary harmony lane.
+  /// Selects the Harmony lane used by Save voicings or Guitar Strum.
+  /// A null Save anchor follows the primary Harmony lane; a null Strum anchor
+  /// is explicitly Unassigned.
   void setLaneAnchorLane({
     required String sectionId,
     required String laneId,
@@ -2425,16 +2500,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .firstOrNull;
     if (section == null || lane == null) return;
     if (lane.kind == SongLaneKind.guitarStrum && harmonyLaneId != null) {
-      final anchor = section.lanes
-          .where(
-            (candidate) =>
-                candidate.id == harmonyLaneId &&
-                candidate.kind == SongLaneKind.harmony,
-          )
-          .firstOrNull;
-      if (anchor == null ||
-          _instrumentForHarmonyLane(anchor) !=
-              HarmonyLaneInstrument.fretboard) {
+      final available = availableGuitarStrumHarmonyLanes(
+        section,
+        projectDefault: projectDefaultHarmonyInstrumentForSelectedProject,
+        excludingLaneId: lane.id,
+      );
+      if (!available.any((candidate) => candidate.id == harmonyLaneId)) {
         return;
       }
     }
@@ -2532,10 +2603,6 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           for (final current in currentSection.lanes)
             if (current.id == laneId)
               current.copyWith(harmonyInstrument: instrument)
-            else if (instrument == HarmonyLaneInstrument.piano &&
-                current.kind == SongLaneKind.guitarStrum &&
-                current.anchorLaneId == laneId)
-              current.copyWith(clearAnchorLaneId: true)
             else
               current,
         ],
@@ -2557,12 +2624,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                 !(removed.kind == SongLaneKind.harmony &&
                     lane.kind == SongLaneKind.save &&
                     saveAnchorLane(section, lane)?.id == laneId))
-              if (removed.kind == SongLaneKind.harmony &&
-                  lane.kind == SongLaneKind.guitarStrum &&
-                  lane.anchorLaneId == laneId)
-                lane.copyWith(clearAnchorLaneId: true)
-              else
-                lane,
+              lane,
         ],
       );
     });
@@ -2599,6 +2661,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                 saveId ?? '',
               )?.snapshot);
     if (resolvedSnapshot is HarmonyChordSnapshot ||
+        (resolvedSnapshot != null &&
+            !_isWriterEligibleSaveSnapshot(resolvedSnapshot)) ||
         (resolvedSnapshot != null &&
             !_saveSnapshotMatchesAnchor(
               section,
@@ -2697,6 +2761,8 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       chordRootPc: content.chordRootPc,
       chordNotes: content.chordNotes,
       romanNumeral: content.romanNumeral,
+      clearChordIdentity:
+          content.chordRootPc == null && content.chordQuality == null,
       clearRomanNumeral: content.romanNumeral == null,
       clearChordData: content.isSilent,
       lyrics: lyrics,
@@ -2733,15 +2799,20 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     return true;
   }
 
-  /// Inserts an instrument selection without creating a library save.
-  /// Passing [snapshot] creates an embedded save-lane block; otherwise the
-  /// chord fields create a harmony-lane block. When [replaceBlockId] is set,
-  /// the stored source block is replaced in place so repeated placements keep
-  /// their source ID, start, span, and lane repeat pattern.
+  /// Inserts a native selection or a Harmony placement at [startBar].
+  ///
+  /// With [asExactHarmony], the captured native selection is stored as exact
+  /// Harmony content with [chordSymbol] as its label and no inferred chord
+  /// identity. Reusing a root Save promotes its existing entry in place.
+  /// Otherwise, [snapshot] creates a save-lane placement and chord fields
+  /// create a recognized harmony-lane placement. When [replaceBlockId] is
+  /// set, the stored source block is replaced in place so repeated placements
+  /// keep their source ID, start, span, and lane repeat pattern.
   bool insertInstrumentSelectionAtBar({
     required String? sectionId,
     required int startBar,
     InstrumentSnapshot? snapshot,
+    bool asExactHarmony = false,
     String? chordSymbol,
     String? chordQuality,
     int? chordRootPc,
@@ -2758,11 +2829,44 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     int stagedSectionLengthBars = 8,
     String? expectedProjectId,
   }) {
+    lastHarmonyMutationError = null;
     final projectId = ref.read(saveSystemProvider).selectedProjectId;
     if (expectedProjectId != null && expectedProjectId != projectId) {
       return false;
     }
-    if (reuseSaveId != null) {
+    SaveEntry? promotedSave;
+    if (asExactHarmony) {
+      if (reuseSaveId != null) {
+        if (projectId == null) return false;
+        final entry = resolveSaveInProject(
+          ref.read(saveSystemProvider),
+          projectId,
+          reuseSaveId,
+        );
+        if (entry == null) return false;
+        if (entry.snapshot case final HarmonyChordSnapshot composite) {
+          if (!isWriterEligibleHarmonySnapshot(composite)) return false;
+          snapshot = composite;
+        } else {
+          final promoted = _exactHarmonyFromNative(
+            entry.snapshot,
+            chordSymbol ?? '',
+          );
+          if (promoted == null) return false;
+          promotedSave = entry.copyWith(
+            snapshot: promoted,
+            updatedAt: DateTime.now().millisecondsSinceEpoch,
+          );
+          snapshot = promoted;
+        }
+      } else if (snapshot is HarmonyChordSnapshot) {
+        if (!isWriterEligibleHarmonySnapshot(snapshot)) return false;
+      } else {
+        final exact = _exactHarmonyFromNative(snapshot, chordSymbol ?? '');
+        if (exact == null) return false;
+        snapshot = exact;
+      }
+    } else if (reuseSaveId != null) {
       if (projectId == null ||
           (saveName != null && !isValidSaveName(saveName.trim()))) {
         return false;
@@ -2781,7 +2885,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       // naming dialog may have gone stale while the dialog was open.
       snapshot = canonical;
     }
-    final isHarmony = snapshot == null;
+    if (!asExactHarmony && snapshot is HarmonyChordSnapshot) return false;
+    if (!asExactHarmony &&
+        snapshot != null &&
+        (snapshot is FretboardSnapshot || snapshot is PianoSnapshot) &&
+        !isWriterEligibleNativeSelection(snapshot)) {
+      return false;
+    }
+    final isHarmony = asExactHarmony || snapshot == null;
     if (startBar < 0 ||
         (harmonyInstrument != null && !isHarmony) ||
         (isHarmony &&
@@ -2791,9 +2902,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       return false;
     }
     if (isHarmony &&
+        !asExactHarmony &&
         (chordSymbol == null || chordQuality == null || chordRootPc == null)) {
       return false;
     }
+    final exactComposite = asExactHarmony
+        ? snapshot as HarmonyChordSnapshot
+        : null;
     final requestedSectionId = sectionId ?? stagedSectionId;
     final sectionIndex = requestedSectionId == null
         ? -1
@@ -2813,8 +2928,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     }
     final projectDefault = projectDefaultHarmonyInstrumentForSelectedProject;
     final selectedInstrument = isHarmony
-        ? harmonyInstrument ?? projectDefault
+        ? harmonyInstrument ??
+              exactComposite?.harmonyInstrument ??
+              projectDefault
         : _harmonyInstrumentForNativeSnapshot(snapshot);
+    if (exactComposite != null &&
+        harmonyInstrument != null &&
+        exactComposite.harmonyInstrument != harmonyInstrument) {
+      return false;
+    }
     if (!sectionExists &&
         (stagedSectionLengthBars < 1 || startBar >= stagedSectionLengthBars)) {
       return false;
@@ -2896,22 +3018,45 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           )) {
         return false;
       }
+      final exactContent = exactComposite?.writerBlock;
       var candidate = source == null
-          ? makeHarmonyBlock(
-              startBar: startBar,
-              spanBars: 1,
-              chordSymbol: chordSymbol!,
-              chordQuality: chordQuality!,
-              chordRootPc: chordRootPc!,
-              chordNotes: chordNotes,
-            )
+          ? exactContent == null
+                ? makeHarmonyBlock(
+                    startBar: startBar,
+                    spanBars: 1,
+                    chordSymbol: chordSymbol!,
+                    chordQuality: chordQuality!,
+                    chordRootPc: chordRootPc!,
+                    chordNotes: chordNotes,
+                  )
+                : SongBlock(
+                    id: generateId(),
+                    saveId: reuseSaveId,
+                    embedded: exactComposite,
+                    startBar: startBar,
+                    spanBars: 1,
+                    chordSymbol: exactContent.chordSymbol,
+                    chordQuality: exactContent.chordQuality,
+                    chordRootPc: exactContent.chordRootPc,
+                    chordNotes: exactContent.chordNotes,
+                    romanNumeral: exactContent.romanNumeral,
+                    lyrics: exactContent.defaultLyrics,
+                    isSilent: exactContent.isSilent,
+                  )
           : source.copyWith(
-              clearSaveId: true,
-              chordSymbol: chordSymbol,
-              chordQuality: chordQuality,
-              chordRootPc: chordRootPc,
-              chordNotes: chordNotes,
-              clearRomanNumeral: true,
+              clearSaveId: reuseSaveId == null,
+              saveId: reuseSaveId,
+              embedded: exactComposite,
+              chordSymbol: exactContent?.chordSymbol ?? chordSymbol,
+              chordQuality: exactContent?.chordQuality ?? chordQuality,
+              chordRootPc: exactContent?.chordRootPc ?? chordRootPc,
+              chordNotes: exactContent?.chordNotes ?? chordNotes,
+              romanNumeral: exactContent?.romanNumeral,
+              clearChordIdentity:
+                  exactContent != null &&
+                  exactContent.chordRootPc == null &&
+                  exactContent.chordQuality == null,
+              clearRomanNumeral: exactContent?.romanNumeral == null,
               isSilent: false,
             );
       if (source != null &&
@@ -2929,7 +3074,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       if (writerBlock == null || !_hasChordContent(writerBlock)) return false;
       final composite = _buildHarmonyChordSnapshot(
         writerBlock,
-        existing: source?.embedded ?? candidate.embedded,
+        existing: candidate.embedded ?? source?.embedded,
         instrument: selectedInstrument!,
       );
       if (composite == null) return false;
@@ -2943,11 +3088,18 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                   if (block.id == source.id) candidate else block,
               ],
       );
-      final updatedLanes = [
-        for (final lane in section.lanes)
-          if (lane.id != updatedLane.id) lane,
-        updatedLane,
-      ];
+      final existingLaneIndex = section.lanes.indexWhere(
+        (lane) => lane.id == updatedLane.id,
+      );
+      final updatedLanes = existingLaneIndex < 0
+          ? [...section.lanes, updatedLane]
+          : [
+              for (var index = 0; index < section.lanes.length; index++)
+                if (index == existingLaneIndex)
+                  updatedLane
+                else
+                  section.lanes[index],
+            ];
       final nextSection = section.copyWith(lanes: updatedLanes);
       final sections = [...state.sections];
       if (sectionExists) {
@@ -2958,9 +3110,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       _set(
         state.copyWith(sections: sections),
         saveNames: {
-          if (saveName != null && saveName.trim().isNotEmpty)
+          if (reuseSaveId == null &&
+              saveName != null &&
+              saveName.trim().isNotEmpty)
             candidate.id: saveName,
         },
+        adoptSaves: promotedSave == null
+            ? const {}
+            : {promotedSave.id: promotedSave},
       );
       return true;
     }
@@ -3132,6 +3289,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     InstrumentSnapshot snapshot, {
     required String? harmonyLaneId,
   }) {
+    if (!_isWriterEligibleSaveSnapshot(snapshot)) return false;
     final sourceInstrument = _instrumentForSaveSnapshot(snapshot);
     if (sourceInstrument == null) return true;
     final anchor = harmonyLaneId == null
@@ -3150,6 +3308,16 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
             ? projectDefaultHarmonyInstrumentForSelectedProject
             : null);
     return sourceInstrument == targetInstrument;
+  }
+
+  bool _isWriterEligibleSaveSnapshot(InstrumentSnapshot snapshot) {
+    if (snapshot is HarmonyChordSnapshot) {
+      return isWriterEligibleHarmonySnapshot(snapshot);
+    }
+    if (snapshot is FretboardSnapshot || snapshot is PianoSnapshot) {
+      return isWriterEligibleNativeSelection(snapshot);
+    }
+    return true;
   }
 
   bool _saveLaneBlocksMatchAnchor(
@@ -3309,6 +3477,13 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
 
   // ── inserters (for undo of deletes) ──
   void insertSection(SongSection section, int index) {
+    if (state.sections.any((candidate) => candidate.id == section.id) ||
+        !hasUniqueGuitarStrumHarmonyAnchors(
+          section,
+          projectDefault: projectDefaultHarmonyInstrumentForSelectedProject,
+        )) {
+      return;
+    }
     final list = [...state.sections];
     final i = index.clamp(0, list.length);
     list.insert(i, section);
@@ -3327,6 +3502,14 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required int index,
   }) {
     _replaceSection(sectionId, (s) {
+      if (s.lanes.any((candidate) => candidate.id == lane.id)) return s;
+      if (lane.kind == SongLaneKind.guitarStrum &&
+          !hasUniqueGuitarStrumHarmonyAnchors(
+            s.copyWith(lanes: [...s.lanes, lane]),
+            projectDefault: projectDefaultHarmonyInstrumentForSelectedProject,
+          )) {
+        return s;
+      }
       final list = [...s.lanes];
       final i = index.clamp(0, list.length);
       list.insert(i, lane);
@@ -4402,6 +4585,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       }
       updatedSnapshot = result.snapshot!;
     } else {
+      if (!_isWriterEligibleSaveSnapshot(snapshot)) return false;
       if (snapshot is WriterBlockSnapshot || snapshot is HarmonyChordSnapshot) {
         return false;
       }
@@ -4472,6 +4656,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     String? expectedProjectId,
     String? replaceBlockId,
   }) {
+    lastHarmonyMutationError = null;
     final projectId = ref.read(saveSystemProvider).selectedProjectId;
     if (projectId == null ||
         (expectedProjectId != null && expectedProjectId != projectId) ||
@@ -4561,20 +4746,6 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         startBar + spanBars > section.lengthBars) {
       return false;
     }
-    if (laneKind == SongLaneKind.guitarStrum) {
-      final guitarLanes = section.lanes.where(
-        (candidate) =>
-            candidate.kind == SongLaneKind.harmony &&
-            _instrumentForHarmonyLane(candidate) ==
-                HarmonyLaneInstrument.fretboard,
-      );
-      if (guitarLanes.isEmpty) return false;
-      if (anchorLaneId != null &&
-          !guitarLanes.any((candidate) => candidate.id == anchorLaneId)) {
-        return false;
-      }
-    }
-
     SongLane? destination;
     if (laneId != null) {
       destination = section.lanes
@@ -4602,10 +4773,21 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       destination = matching.firstOrNull;
     }
     if (destination == null && laneId != null && sectionExists) return false;
+    final targetLaneId = destination?.id ?? laneId ?? generateId();
+    if (laneKind == SongLaneKind.guitarStrum && anchorLaneId != null) {
+      final available = availableGuitarStrumHarmonyLanes(
+        section,
+        projectDefault: defaultInstrument,
+        excludingLaneId: targetLaneId,
+      );
+      if (!available.any((candidate) => candidate.id == anchorLaneId)) {
+        return false;
+      }
+    }
     final targetLane =
         destination ??
         SongLane(
-          id: laneId ?? generateId(),
+          id: targetLaneId,
           kind: laneKind,
           order: section.lanes.length,
           harmonyInstrument: laneKind == SongLaneKind.harmony
@@ -4668,11 +4850,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           ? anchorLaneId
           : targetLane.anchorLaneId,
     );
-    final lanes = [
-      for (final lane in section.lanes)
-        if (lane.id != laneWithBlock.id) lane,
-      laneWithBlock,
-    ];
+    final laneIndex = section.lanes.indexWhere(
+      (lane) => lane.id == laneWithBlock.id,
+    );
+    final lanes = laneIndex < 0
+        ? [...section.lanes, laneWithBlock]
+        : [
+            for (var index = 0; index < section.lanes.length; index++)
+              if (index == laneIndex) laneWithBlock else section.lanes[index],
+          ];
     final sections = [...state.sections];
     if (sectionExists) {
       sections[sectionIndex] = section.copyWith(lanes: lanes);
@@ -4685,12 +4871,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
   }
 
   bool _isPlayableHarmonyComposite(HarmonyChordSnapshot snapshot) {
-    final expected = _harmonyPitchClasses(snapshot.writerBlock);
-    final actual = _selectedPitchClasses(snapshot.instrumentState);
-    return _hasChordContent(snapshot.writerBlock) &&
-        expected != null &&
-        actual != null &&
-        _samePitchClassSet(expected, actual);
+    return isWriterEligibleHarmonySnapshot(snapshot);
   }
 
   SongBlock _blockFromWriterSnapshot(
@@ -5056,25 +5237,45 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     );
     if (section.id.isEmpty) return;
     SongBlock? harmonyBlock;
-    String? harmonyLaneId;
+    SongLane? harmonyLane;
     for (final lane in section.lanes) {
       for (final b in lane.blocks) {
         if (b.id == harmonyBlockId) {
           harmonyBlock = b;
-          harmonyLaneId = lane.id;
+          harmonyLane = lane;
           break;
         }
       }
       if (harmonyBlock != null) break;
     }
     final selectedBlock = harmonyBlock;
-    if (selectedBlock == null) return;
+    if (selectedBlock == null ||
+        harmonyLane?.kind != SongLaneKind.harmony ||
+        !hasHarmonyBlockContent(selectedBlock)) {
+      return;
+    }
+    if (selectedBlock.chordRootPc == null &&
+        selectedBlock.chordQuality == null) {
+      final projectId = ref.read(saveSystemProvider).selectedProjectId;
+      final snapshot = projectId == null
+          ? null
+          : resolveBlockSnapshot(
+              selectedBlock,
+              ref.read(saveSystemProvider).saves,
+              projectId: projectId,
+              folders: ref.read(saveSystemProvider).folders,
+            );
+      if (snapshot is! HarmonyChordSnapshot ||
+          !_isPlayableHarmonyComposite(snapshot)) {
+        return;
+      }
+    }
     addLibraryBlockAt(
       sectionId: sectionId,
       saveId: saveId,
       startBar: selectedBlock.startBar,
       spanBars: selectedBlock.spanBars,
-      anchorLaneId: harmonyLaneId,
+      anchorLaneId: harmonyLane!.id,
     );
   }
 
@@ -5212,43 +5413,46 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     return laneId;
   }
 
-  void _recomputeNumerals() {
-    final key = state.config;
-    _set(
-      state.copyWith(
-        sections: state.sections
-            .map(
-              (s) => s.copyWith(
-                lanes: s.lanes
-                    .map(
-                      (l) => l.kind != SongLaneKind.harmony
-                          ? l
-                          : l.copyWith(
-                              blocks: l.blocks.map((b) {
-                                if (b.chordRootPc == null ||
-                                    b.chordQuality == null) {
-                                  return b;
-                                }
-                                final numeral = romanNumeralFor(
-                                  b.chordRootPc!,
-                                  b.chordQuality!,
-                                  key.keyRoot,
-                                  key.keyScaleName,
-                                );
-                                return b.copyWith(
-                                  romanNumeral: numeral,
-                                  clearRomanNumeral: numeral == null,
-                                );
-                              }).toList(),
-                            ),
-                    )
-                    .toList(),
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
+  SongwriterProjectSnapshot _recomputeNumerals(
+    SongwriterProjectSnapshot project,
+    SongwriterConfig key,
+  ) => project.copyWith(
+    sections: project.sections
+        .map(
+          (s) => s.copyWith(
+            lanes: s.lanes
+                .map(
+                  (l) => l.kind != SongLaneKind.harmony
+                      ? l
+                      : l.copyWith(
+                          blocks: l.blocks.map((b) {
+                            if (b.chordRootPc == null &&
+                                b.chordQuality == null &&
+                                b.romanNumeral != null) {
+                              return b.copyWith(clearRomanNumeral: true);
+                            }
+                            if (b.chordRootPc == null ||
+                                b.chordQuality == null) {
+                              return b;
+                            }
+                            final numeral = romanNumeralFor(
+                              b.chordRootPc!,
+                              b.chordQuality!,
+                              key.keyRoot,
+                              key.keyScaleName,
+                            );
+                            return b.copyWith(
+                              romanNumeral: numeral,
+                              clearRomanNumeral: numeral == null,
+                            );
+                          }).toList(),
+                        ),
+                )
+                .toList(),
+          ),
+        )
+        .toList(),
+  );
 
   /// Replaces the whole project from a named save and starts a fresh history.
   /// The bound save ID, overwrite setting, and materialized clean baseline are

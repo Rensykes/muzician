@@ -2,6 +2,12 @@
 
 An interactive piano keyboard rendered with `CustomPainter`. Supports three range sizes (49 / 61 / 88 keys), chord and scale highlighting, note detection, and a landscape modal view.
 
+When height is tight, including landscape and compact screens with enlarged
+text, the header, keyboard, and detection area scroll above the fixed
+Scale/Chord dock. The keyboard retains its full size and horizontal scroll
+gestures. Chord-picker and scale-picker controls provide at least 44×44px tap
+regions, including scale categories and clear actions.
+
 ---
 
 ## Architecture
@@ -113,7 +119,12 @@ Root + scale type selector. Tapping "Highlight" calls `highlightScale()` and wri
 ---
 
 ### `PianoNoteDetectionPanel`
-Reading `pianoPendingChordProvider` and `pianoPendingScaleProvider`, displays the detected chord and scale for active selected keys using shared `formatChordSymbol` / `formatScaleLabel` helpers with contextual flat spelling. Supports inversion-aware slash chords (e.g. `"C/E"`) and the full scale catalog. Includes a "Clear" button that resets both providers and clears highlights.
+Reading `pianoPendingChordProvider` and `pianoPendingScaleProvider`, displays the detected chord and scale for active selected keys using shared `formatChordSymbol` / `formatScaleLabel` helpers with the global Sharps/Flats preference. Supports inversion-aware slash chords (e.g. `"C/E"`) and the full scale catalog. Includes a "Clear" button that resets both providers and clears highlights.
+
+**Settings → Prefer flat note names** also updates keyboard notes, voicing labels,
+root choices, Scale dock, and project key labels. The setting persists across
+restarts; MIDI notes, octaves, custom Save names, and exact Harmony labels stay
+unchanged.
 
 ---
 
@@ -165,16 +176,19 @@ the space available below the keyboard.
 
 ## Project lock
 
-When a project is selected, the instrument inherits its key / tempo /
-time-signature (where applicable) and the corresponding controls are disabled.
-Change the values through the project config sheet from the project chip in
-the header. Dump and "no project" leave controls free.
+When a project is selected, the instrument inherits its tonic and scale/mode,
+tempo, and time-signature where applicable. The scale picker can set, change,
+or clear the project key after confirmation, including the first key on an
+unkeyed project. Cancel keeps the previous key; confirming updates Writer,
+Fretboard, and Piano without transposing selected notes. Instrument Save loads
+retain the project key. Tempo and meter use the project config sheet from the
+project chip in the header. Dump and "no project" leave scale choices local.
 
 **Scale dock label:** The Scale dock tab shows the active project key (e.g.
 "C major") as its label when the selected project has a key configured. When
-no project key is active, the label falls back to the user-selected active
-scale (set via `SharedScalePicker`), and to the default `"Scale"` when
-neither is present. See `_resolveScaleDockState()` in `lib/main.dart`.
+the real project has no key, the label is `"Scale"`. In Dump or with no project,
+the label uses the local active scale or `"Scale"` when none is present.
+See `_resolveScaleDockState()` in `lib/main.dart`.
 
 **chordOffKey warning:** When the committed chord contains notes outside the
 active project key, the Scale dock tab turns orange and shows a warning icon.
@@ -184,7 +198,7 @@ passed as `scaleOffKey` to `InstrumentScreen` → `DockTab.warning`.
 
 **Shared scale picker:** The scale picker (`SharedScalePicker` in
 `lib/features/instrument_shared/shared_scale_picker.dart`) reads
-`activeProjectKeyProvider` and merges it with the user-set active scale. The
+`activeProjectKeyProvider` and treats the real project key as authoritative. The
 active-scale chip turns orange when the committed chord is off-key and the
 project is locked (`chordOffKey && isProjectLocked`).
 
@@ -198,11 +212,18 @@ badge. Used by both the Fretboard and Piano chord pickers.
 Saving a piano voicing outside Writer stores a free idea in the selected
 project root. In the save browser, **Use in Writer** explicitly links that
 existing project-root save to a selected Writer section and placement without
-moving or copying it; Dump-root ideas stay in Dump. A fresh **Add to Writer**
+moving or copying it; its ID and root folder stay unchanged as it becomes a
+Harmony Save. Dump-root ideas stay in Dump. A fresh **Add to Writer**
 handoff creates a new named save after the destination is chosen. Harmony
 chord saves keep the symbolic Writer chord together with its native Piano
-realization. The selected piano pitch classes must match that chord, and the
-saved pending-chord label is normalized to the Writer chord on update.
+realization. **Add exact notes as Harmony** accepts any nonempty valid Piano
+selection, including unrecognized combinations. It preserves exact MIDI notes
+and the chosen name and makes the block reusable from the Harmony Library.
+Unrecognized Harmony offers Change chord, Replace chord, and native editing;
+theory actions wait for a symbolic chord identity. Symbolic Harmony native
+edits must still match its chord pitch classes and normalize the pending-chord
+label. Exact Harmony native edits preserve the name and update its notes
+without inventing a root or quality.
 
 If a linked Save is used by multiple Writer blocks, updating it offers
 **Update all placements** or **Create a unique instance**. The unique choice

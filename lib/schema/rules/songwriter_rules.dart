@@ -6,7 +6,10 @@ import '../../models/save_system.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
 import '../../models/harmony_lane_instrument.dart';
+import '../../models/fretboard.dart';
 import '../../utils/note_utils.dart';
+import 'fretboard_rules.dart' show tunings;
+import 'piano_rules.dart' as piano_rules;
 import 'save_system_rules.dart' show generateId, getProjectIdForFolder;
 
 const _romanByDegree = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
@@ -64,11 +67,11 @@ class DiatonicTriad {
 /// Each triad's quality is derived by stacking thirds from the scale's
 /// interval set: the intervals root→3rd and root→5th classify the triad
 /// as major (''), minor ('m'), diminished ('dim'), or augmented ('aug').
-/// Returns an empty list when [scaleName] is unknown or has fewer than 7
-/// degrees.
+/// Returns an empty list when [scaleName] is unknown or does not have exactly
+/// 7 degrees, as required by the fixed seven-wedge chord wheel.
 List<DiatonicTriad> diatonicTriads(int keyRootPc, String scaleName) {
   final intervals = scaleIntervals[scaleName];
-  if (intervals == null || intervals.length < 7) return [];
+  if (intervals == null || intervals.length != 7) return [];
   final out = <DiatonicTriad>[];
   for (var d = 0; d < 7; d++) {
     final rootSemitone = intervals[d];
@@ -87,8 +90,7 @@ List<DiatonicTriad> diatonicTriads(int keyRootPc, String scaleName) {
     } else if (i3 == 4 && i5 == 8) {
       quality = 'aug';
     } else {
-      // Non-tertian triad (e.g. whole-tone, diminished scales). Fall back to
-      // major for symbol display; chord notes still use scale-derived pcs.
+      // Use a major quality label when the stacked intervals are non-tertian.
       quality = '';
     }
 
@@ -215,6 +217,145 @@ SongBlock makeHarmonyBlock({
   chordNotes: chordNotes,
   romanNumeral: romanNumeral,
 );
+
+/// Whether [content] contains a complete recognized chord or exact-note
+/// Harmony. Exact-note Harmony keeps its user label and pitch classes without
+/// assigning a chord root, quality, or Roman numeral.
+bool hasHarmonyContent(WriterBlockSnapshot content) {
+  if (content.laneKind != SongLaneKind.harmony || content.isSilent) {
+    return false;
+  }
+  final pcs = _writerPitchClasses(content.chordNotes);
+  if (pcs == null || pcs.isEmpty) return false;
+  final rootPc = content.chordRootPc;
+  final quality = content.chordQuality;
+  if (rootPc == null && quality == null) {
+    return content.chordSymbol?.trim().isNotEmpty == true &&
+        content.romanNumeral == null;
+  }
+  if (rootPc == null || quality == null || rootPc < 0 || rootPc > 11) {
+    return false;
+  }
+  final intervals = chordIntervals[quality];
+  if (intervals == null) return false;
+  final expected = {for (final interval in intervals) (rootPc + interval) % 12};
+  return _samePitchClassSet(pcs, expected);
+}
+
+/// Same Harmony-content validation for an already placed Song block.
+bool hasHarmonyBlockContent(SongBlock block) => hasHarmonyContent(
+  WriterBlockSnapshot(
+    laneKind: SongLaneKind.harmony,
+    isSilent: block.isSilent,
+    chordSymbol: block.chordSymbol,
+    chordQuality: block.chordQuality,
+    chordRootPc: block.chordRootPc,
+    chordNotes: block.chordNotes,
+    romanNumeral: block.romanNumeral,
+  ),
+);
+
+/// True when a native Piano or Chord-mode Fretboard selection can enter
+/// Writer. Harmony composites are checked through their native realization.
+bool isWriterEligibleNativeSelection(InstrumentSnapshot snapshot) {
+  final native = snapshot is HarmonyChordSnapshot
+      ? snapshot.instrumentState
+      : snapshot;
+  return switch (native) {
+    PianoSnapshot() => _hasValidPianoSelection(native),
+    FretboardSnapshot() => _hasValidFretboardSelection(native),
+    _ => false,
+  };
+}
+
+/// Whether a Harmony composite has valid content and a native realization
+/// with exactly the same pitch classes.
+bool isWriterEligibleHarmonySnapshot(HarmonyChordSnapshot snapshot) {
+  if (!hasHarmonyContent(snapshot.writerBlock) ||
+      !isWriterEligibleNativeSelection(snapshot.instrumentState)) {
+    return false;
+  }
+  final contentPcs = _writerPitchClasses(snapshot.writerBlock.chordNotes);
+  final nativePcs = writerNativePitchClassNames(snapshot.instrumentState);
+  if (contentPcs == null || nativePcs == null) return false;
+  return _samePitchClassSet(contentPcs, {
+    for (final note in nativePcs) noteToPC[note]!,
+  });
+}
+
+/// Pitch-class note names from a valid native Piano/Fretboard selection,
+/// ordered from the lowest selected MIDI note upward.
+List<String>? writerNativePitchClassNames(InstrumentSnapshot snapshot) {
+  final native = snapshot is HarmonyChordSnapshot
+      ? snapshot.instrumentState
+      : snapshot;
+  if (!isWriterEligibleNativeSelection(native)) return null;
+  final midiNotes = switch (native) {
+    PianoSnapshot() => native.selectedKeys.map((key) => key.midiNote).toList(),
+    FretboardSnapshot() => [
+      for (final cell in native.selectedCells)
+        tunings[native.tuning]!.strings[cell.stringIndex].midiNote + cell.fret,
+    ],
+    _ => const <int>[],
+  }..sort();
+  final seen = <String>{};
+  return [
+    for (final midi in midiNotes)
+      if (seen.add(chromaticNotes[((midi % 12) + 12) % 12]))
+        chromaticNotes[((midi % 12) + 12) % 12],
+  ];
+}
+
+bool _hasValidFretboardSelection(FretboardSnapshot snapshot) {
+  final tuning = tunings[snapshot.tuning];
+  if (snapshot.inputMode != FretboardInputMode.chord ||
+      tuning == null ||
+      snapshot.numFrets < 1 ||
+      snapshot.numFrets > 24 ||
+      snapshot.capo < 0 ||
+      snapshot.capo > snapshot.numFrets ||
+      snapshot.selectedCells.isEmpty) {
+    return false;
+  }
+  final strings = <int>{};
+  for (final cell in snapshot.selectedCells) {
+    if (cell.stringIndex < 0 ||
+        cell.stringIndex >= tuning.strings.length ||
+        cell.fret < snapshot.capo ||
+        cell.fret > snapshot.numFrets ||
+        !strings.add(cell.stringIndex)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _hasValidPianoSelection(PianoSnapshot snapshot) {
+  final range = piano_rules.pianoRanges[snapshot.currentRange];
+  if (range == null || snapshot.selectedKeys.isEmpty) return false;
+  final seen = <int>{};
+  for (final key in snapshot.selectedKeys) {
+    if (key.midiNote < range.startMidi ||
+        key.midiNote > range.endMidi ||
+        !seen.add(key.midiNote)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+Set<int>? _writerPitchClasses(Iterable<String> notes) {
+  final pcs = <int>{};
+  for (final note in notes) {
+    final pc = noteToPC[toSharp(note)];
+    if (pc == null) return null;
+    pcs.add(pc);
+  }
+  return pcs;
+}
+
+bool _samePitchClassSet(Set<int> left, Set<int> right) =>
+    left.length == right.length && left.containsAll(right);
 
 SongBlock makeSilentBlock({
   required int startBar,
@@ -592,6 +733,50 @@ SongLane? guitarStrumAnchorLane(
   return null;
 }
 
+/// Fretboard Harmony lanes that can be assigned as a Guitar Strum source in
+/// [section]. A lane's existing source stays available while editing that
+/// same Guitar Strum lane.
+List<SongLane> availableGuitarStrumHarmonyLanes(
+  SongSection section, {
+  required HarmonyLaneInstrument projectDefault,
+  String? excludingLaneId,
+}) {
+  final occupiedLaneIds = {
+    for (final lane in section.lanes)
+      if (lane.kind == SongLaneKind.guitarStrum &&
+          lane.id != excludingLaneId &&
+          lane.anchorLaneId != null)
+        lane.anchorLaneId!,
+  };
+  return [
+    for (final lane in section.lanes)
+      if (lane.kind == SongLaneKind.harmony &&
+          effectiveHarmonyInstrument(lane, projectDefault) ==
+              HarmonyLaneInstrument.fretboard &&
+          !occupiedLaneIds.contains(lane.id))
+        lane,
+  ];
+}
+
+/// Whether every currently resolvable Guitar Strum source in [section] is
+/// unique. Stale and incompatible anchors remain unresolved without reserving
+/// a live Fretboard Harmony lane.
+bool hasUniqueGuitarStrumHarmonyAnchors(
+  SongSection section, {
+  required HarmonyLaneInstrument projectDefault,
+}) {
+  final assignedLaneIds = <String>{};
+  for (final lane in section.lanes) {
+    final anchor = guitarStrumAnchorLane(
+      section,
+      lane,
+      projectDefault: projectDefault,
+    );
+    if (anchor != null && !assignedLaneIds.add(anchor.id)) return false;
+  }
+  return true;
+}
+
 /// Pins legacy null Guitar Strum anchors once, using the old primary Harmony
 /// behavior only when that primary lane resolves to Fretboard. The version is
 /// advanced even when no eligible Harmony lane exists, so later-added lanes do
@@ -749,6 +934,29 @@ class ResolvedChord {
 /// a scale degree. Returns null when no chord can be determined.
 ResolvedChord? resolveSnapshotChord(InstrumentSnapshot? snapshot) {
   if (snapshot == null) return null;
+
+  if (snapshot is HarmonyChordSnapshot) {
+    final harmony = snapshot.writerBlock;
+    // An exact-note Harmony has deliberately unknown symbolic identity. Never
+    // infer one from its pitch classes or the native instrument's pending data.
+    if (harmony.chordRootPc == null && harmony.chordQuality == null) {
+      return null;
+    }
+    if (hasHarmonyContent(harmony) &&
+        harmony.chordRootPc != null &&
+        harmony.chordQuality != null) {
+      return ResolvedChord(
+        rootPc: harmony.chordRootPc!,
+        quality: harmony.chordQuality!,
+        symbol:
+            harmony.chordSymbol ??
+            '${chromaticNotes[harmony.chordRootPc!]}${harmony.chordQuality}',
+      );
+    }
+    // Malformed composite metadata also fails closed instead of falling back to
+    // a detected chord from the native notes.
+    return null;
+  }
 
   // noteToPC is keyed by sharp spellings only, so normalize any flat-spelled
   // root (e.g. a legacy/imported save or a future flats display mode) to its

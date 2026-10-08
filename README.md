@@ -22,12 +22,13 @@ Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESI
 
 | Feature | Description | Docs |
 |---|---|---|
-| **Fretboard** | Interactive guitar fretboard with tunings, capo, chord voicing, scale highlighting | [docs/fretboard.md](docs/fretboard.md) |
-| **Piano** | Piano keyboard (49 / 61 / 88 keys) with chord and scale highlighting | [docs/piano.md](docs/piano.md) |
+| **Fretboard** | Guitar exploration with tunings, capo, saved Free/Chord mode, shared project key, scrollable compact layouts, and Chord-only Writer Harmony handoff | [docs/fretboard.md](docs/fretboard.md) |
+| **Piano** | Piano keyboard (49 / 61 / 88 keys), shared project key, scrollable compact layouts, and reusable Writer Harmony from recognized chords or exact notes | [docs/piano.md](docs/piano.md) |
 | **Piano Roll** | Quantized timeline note editor with four tool modes, pinch-zoom, beat snapping, hum-to-MIDI, metronome | [docs/piano_roll.md](docs/piano_roll.md) |
-| **Writer** | Section sketch with instrument-bound Harmony and composite chord Saves, lane-category folders and shared-save actions; explicit Guitar Harmony strum sources/previews; reusable duration-aware melodies with saved Piano/Fretboard positions; protected project creation, playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Writer** | Section sketch with recognized or named exact Harmony, shared Saves and Change/Replace actions; exclusive Guitar Harmony strum sources/previews; reusable melodies with saved instrument positions; confirmed project key changes, New project in the main menu, playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Song** | Clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
+| **Settings** | Persistent Sharps/Flats spelling shared by musical labels across instruments and workspaces, retaining pitches and custom names | [docs/save_system.md](docs/save_system.md) |
 
 ## Project Structure
 
@@ -70,6 +71,8 @@ docs/
 ```
 
 ## Notes (Fretboard & Piano)
+
+- **Note spelling:** Settings → **Prefer flat note names** switches musical labels between Sharps (default) and Flats throughout the app. A D# minor pentatonic project displays as Eb minor pentatonic when enabled. Custom Save names and named exact Harmony stay literal; changing spelling does not change the project key or notes.
 
 - **Out-of-key confirmation:** When a scale highlight is active and the user tries to add a note that falls outside the highlighted scale, the app shows an "out-of-key" confirmation dialog (with a "Don't show again" option). See [lib/ui/core/out_of_key_dialog.dart](lib/ui/core/out_of_key_dialog.dart).
 

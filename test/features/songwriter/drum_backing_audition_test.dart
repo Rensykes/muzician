@@ -36,7 +36,12 @@ void main() {
               pattern: _pattern(),
               tempo: 120,
               onChanged: (_) {},
-              backing: (loopTicks: 16, notesByTick: {0: [60, 64, 67]}),
+              backing: (
+                loopTicks: 16,
+                notesByTick: {
+                  0: [60, 64, 67],
+                },
+              ),
             ),
           ),
         ),
@@ -70,79 +75,92 @@ void main() {
 
   SongwriterProjectSnapshot projectWithHarmony() =>
       const SongwriterProjectSnapshot(
-    name: 'demo',
-    config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
-    drumPatterns: [
-      DrumPattern(
-        id: 'p1',
-        name: 'Beat',
-        lengthTicks: 16,
-        lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
-      ),
-    ],
-    sections: [
-      SongSection(
-        id: 's1',
-        lengthBars: 2,
-        order: 0,
-        lanes: [
-          SongLane(
-            id: 'h1',
-            kind: SongLaneKind.harmony,
+        name: 'demo',
+        config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+        drumPatterns: [
+          DrumPattern(
+            id: 'p1',
+            name: 'Beat',
+            lengthTicks: 16,
+            lanes: [
+              DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
+            ],
+          ),
+        ],
+        sections: [
+          SongSection(
+            id: 's1',
+            lengthBars: 2,
             order: 0,
-            blocks: [
-              SongBlock(
-                id: 'b1',
-                startBar: 0,
-                spanBars: 1,
-                chordNotes: ['C', 'E', 'G'],
+            lanes: [
+              SongLane(
+                id: 'h1',
+                kind: SongLaneKind.harmony,
+                order: 0,
+                blocks: [
+                  SongBlock(
+                    id: 'b1',
+                    startBar: 0,
+                    spanBars: 1,
+                    chordSymbol: 'C',
+                    chordRootPc: 0,
+                    chordQuality: '',
+                    chordNotes: ['C', 'E', 'G'],
+                  ),
+                ],
+              ),
+              SongLane(
+                id: 'd1',
+                kind: SongLaneKind.drum,
+                order: 1,
+                blocks: [
+                  SongBlock(
+                    id: 'db1',
+                    startBar: 0,
+                    spanBars: 2,
+                    patternId: 'p1',
+                  ),
+                ],
               ),
             ],
           ),
-          SongLane(
-            id: 'd1',
-            kind: SongLaneKind.drum,
-            order: 1,
-            blocks: [
-              SongBlock(id: 'db1', startBar: 0, spanBars: 2, patternId: 'p1'),
-            ],
-          ),
         ],
-      ),
-    ],
-  );
+      );
 
-  SongwriterProjectSnapshot projectNoChords() => const SongwriterProjectSnapshot(
-    name: 'demo',
-    config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
-    drumPatterns: [
-      DrumPattern(
-        id: 'p1',
-        name: 'Beat',
-        lengthTicks: 16,
-        lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
-      ),
-    ],
-    sections: [
-      SongSection(
-        id: 's1',
-        lengthBars: 2,
-        order: 0,
-        lanes: [
-          SongLane(
-            id: 'h1',
-            kind: SongLaneKind.harmony,
-            order: 0,
-            blocks: [
-              // Harmony lane present but the block has no chord notes → the
-              // backing flattener yields an empty map → no toggle.
-              SongBlock(id: 'b1', startBar: 0, spanBars: 1),
+  SongwriterProjectSnapshot projectNoChords() =>
+      const SongwriterProjectSnapshot(
+        name: 'demo',
+        config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+        drumPatterns: [
+          DrumPattern(
+            id: 'p1',
+            name: 'Beat',
+            lengthTicks: 16,
+            lanes: [
+              DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
             ],
           ),
         ],
-      ),
-    ],
-  );
+        sections: [
+          SongSection(
+            id: 's1',
+            lengthBars: 2,
+            order: 0,
+            lanes: [
+              SongLane(
+                id: 'h1',
+                kind: SongLaneKind.harmony,
+                order: 0,
+                blocks: [
+                  // Harmony lane present but the block has no chord notes → the
+                  // backing flattener yields an empty map → no toggle.
+                  SongBlock(id: 'b1', startBar: 0, spanBars: 1),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
 
   Future<void> openSheet(
     WidgetTester tester,
@@ -172,17 +190,21 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('sheet shows the backing toggle when opened from a harmony section',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    container.read(songwriterProvider.notifier).loadProject(projectWithHarmony());
+  testWidgets(
+    'sheet shows the backing toggle when opened from a harmony section',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(projectWithHarmony());
 
-    await openSheet(tester, container, 's1');
+      await openSheet(tester, container, 's1');
 
-    expect(find.byKey(const Key('backingToggle')), findsOneWidget);
-  });
+      expect(find.byKey(const Key('backingToggle')), findsOneWidget);
+    },
+  );
 
   testWidgets('sheet shows no backing toggle when opened without a section', (
     tester,
@@ -190,7 +212,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    container.read(songwriterProvider.notifier).loadProject(projectWithHarmony());
+    container
+        .read(songwriterProvider.notifier)
+        .loadProject(projectWithHarmony());
 
     await openSheet(tester, container, null);
 

@@ -395,6 +395,7 @@ FretboardSnapshot voicingToSnapshot(VoicingSuggestion v) {
     selectedCells: v.cells,
     selectedNotes: pcs.toList(),
     viewMode: FretboardViewMode.exact,
+    inputMode: FretboardInputMode.chord,
     pendingChord: PendingChord(
       root: rootName,
       quality: v.quality,

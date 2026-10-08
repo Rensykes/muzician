@@ -55,7 +55,8 @@ Harmony lanes choose their instrument when created. An empty Harmony lane with
 no anchored Save/Voicing lane can change instruments without changing its lane
 ID. Existing projects keep their stored default.
 
-Writer's **New project** creates and selects a separate Save System project
+Writer's main-menu **New project** creates and selects a separate Save System
+project
 with an empty Writer session. When the current Writer session differs from the
 bound active named Writer Save, or from the full project-default session when
 unbound, choose **Keep**, **Discard**, or **Cancel**. **Keep** retains the
@@ -70,10 +71,17 @@ session and binding. Both Discard paths preserve every named Save entry.
 in that section's Harmony folder. The snapshot keeps the Writer chord and its
 native Piano/Fretboard realization together. No separate visible Save block is
 created for the chord. Harmony library choices must match the lane instrument.
-The block action sheet opens its native Piano or Fretboard editor. Exact native
-voicings can only be placed on Save/Voicing lanes anchored to a Harmony lane
-with the same instrument; handoff offers a compatible existing lane or stages
-one when needed.
+The block action sheet opens its native Piano or Fretboard editor. Exact Piano
+or valid Fretboard Chord selections also become Harmony, retaining the chosen
+name and native notes even without recognition. They appear in Harmony Library
+and offer **Change chord** and **Replace chord**. Root, quality, and Roman
+numeral remain absent until the user explicitly chooses a chord; theory and
+voicing suggestions require that identity. Exact Harmony playback retains
+octaves and instrument positions in Writer, strums, and Song import.
+Free Fretboard selections remain savable and loadable for exploration but
+cannot be imported into Writer or used in its playback. Chord selections
+must have one valid position per string; a mode change does not remove
+duplicate-string notes automatically.
 
 Editing a shared Harmony save warns when it is linked in multiple places and
 offers **Update all placements** or **Create standalone Save**. Updating all
@@ -81,6 +89,11 @@ changes the canonical save. Creating a standalone Save copies the complete
 composite to a manual Save in the project root and leaves Writer blocks and
 links untouched; use **Replace chord** in Writer to bind it to one placement.
 Replacement preserves that block's bar, duration, repeats, and local lyrics.
+Both a fresh instrument selection and a reused Harmony Save retain the lane's
+position and primary identity, preserving dependent Save and strum targets.
+An exact-note replacement validates the newly selected native notes, including
+their register, rather than the old realization. A failed handoff ends with
+feedback; the destination picker repeats only after **Choose another bar**.
 The Harmony block action sheet uses **Create standalone Save**; **Make Unique**
 keeps its detach behavior for other Writer block and Save-lane kinds.
 
@@ -92,10 +105,12 @@ primary lane. Tap a Save block there to edit it in its native instrument when
 that editor is available, or choose **Remove save**. If no Harmony lane can
 accept the blocks, the row offers **Remove lane**.
 
-A Guitar Strum lane uses one explicitly selected Fretboard Harmony source;
-multiple strum lanes may share it, and selecting the primary lane still stores
-its ID. Source choices include only Fretboard Harmony lanes, and a strum
-lane can be added only when at least one such source exists. If its saved
+A Guitar Strum lane uses one explicitly selected Fretboard Harmony source.
+Within a section, each source can be assigned to only one Guitar Strum lane.
+Source choices hide lanes occupied by another strum lane and retain the
+editing lane's own current source. An unassigned strum lane reserves nothing.
+A strum lane can be added only when an unused source exists, and selecting the
+primary lane still stores its ID. If its saved
 source is removed or changed to Piano, it shows **Unresolved** and stays silent
 until repaired; a truly unassigned lane shows **Unassigned** and never follows
 the primary lane. A legacy null
@@ -104,9 +119,10 @@ resolves to Fretboard. If it resolves to Piano or is absent, the anchor stays
 unassigned; a versioned null anchor stays unassigned when a guitar lane is
 added later.
 
-Fretboard and Piano saves made outside Writer stay in the project root as free
-ideas. **Use in Writer** explicitly links a selected root idea without moving or
-copying it; all placements share edits until one is made unique. Writer-created
+Fretboard and Piano saves made outside Writer stay in the project root as
+ideas. **Use in Writer** promotes an eligible native idea to a Harmony Save
+under the same ID and folder; all placements share edits until one is made
+unique. Existing Save/Voicing links retain that native realization. Writer-created
 saves live in a section folder while linked. Removing their last block moves
 them to the project root. Manually created saves keep their original folder.
 Managed section folders cannot be directly renamed, moved, or deleted in the
@@ -117,8 +133,23 @@ Writer-native block restores its pattern or clip data and copies its default
 lyrics into the new placement once; later lyric edits remain local.
 `WriterBlockSnapshot.defaultLyrics` stores that initial seed, so edits to one
 placement do not change what another new placement receives.
+Linked Melody and Guitar Strum tiles expose **Rename** and **Make Unique**
+alongside their block actions. Melody retains **Adjust placement** and
+**Edit performance** in the same menu.
 
 ## Rules (`lib/schema/rules/songwriter_rules.dart`)
+
+The chord wheel requires exactly seven scale degrees. With a pentatonic, blues,
+whole-tone, diminished, or unsupported scale, **Change chord** opens the existing
+root/quality picker directly while retaining the project key. A configured key
+is never presented as missing merely because the wheel cannot represent it.
+Wheel chord symbols and Roman numerals follow the device's text-size setting.
+Each of the seven degrees exposes a labeled accessibility action that selects
+the same chord as its visible wedge.
+
+KEY, chord tools, and musical previews use the global Sharps/Flats preference.
+Custom Save names and exact Harmony labels stay literal; recognized slash chords
+preserve their bass note when displayed in either spelling.
 
 | Function | Purpose |
 |---|---|
@@ -187,9 +218,10 @@ preserved when importing or editing Song note patterns.
 tick-indexed event list the transport walks:
 
 - **Harmony blocks** sound their chord as a per-bar stab (block start + every bar
-  boundary inside the block, clipped to the section). Pitches come from
-  `chordNotes` stacked ascending from octave 4, falling back to
-  `chordRootPc` + `chordQuality` intervals. Silent blocks stay silent.
+  boundary inside the block, clipped to the section). Named exact Harmony
+  uses native MIDI notes or fret positions in their original register.
+  Symbolic Harmony uses `chordNotes` stacked ascending from octave 4, falling
+  back to `chordRootPc` + `chordQuality` intervals. Silent blocks stay silent.
 - **Save blocks** resolve their canonical save first, then retained fallback
   content, and sound the voicing the same way: piano keys use
   `PianoCoordinate.midiNote`, fretboard
@@ -200,7 +232,8 @@ tick-indexed event list the transport walks:
   local tick zero and clipping voices at the block/section boundary.
 - **Guitar-strum blocks** resolve each down/up step against their explicitly
   selected Fretboard Harmony source and stay silent when it is unassigned or has
-  no chord at that step.
+  no playable Harmony at that step. Named exact Harmony uses its native
+  register and positions here as in ordinary Writer playback and Song import.
 - The metronome click is unchanged and still gated by `settingsProvider.metronomeEnabled`.
 
 Sinks are injectable providers (`songwriterNoteSinkProvider`,
@@ -297,12 +330,14 @@ Both bar-cell kinds in the sheet grid (`songwriter_screen_sheet.dart`) show a
 Roman numeral under their label when the chord is diatonic to the project key:
 
 - **Harmony cells** render `block.chordSymbol` + `block.romanNumeral` (computed
-  at block creation, recomputed by `setKey`).
+  at block creation and recomputed when the project key changes).
 - **Save cells** resolve their snapshot's chord via `saveBlockRomanNumeral`
   (`pendingChord`, else detected from the saved notes) and render it under the
   save name, keyed `saveRoman_<blockId>_<instance>`.
 
-A non-diatonic chord (or no key) yields `null` and no numeral is shown — only
+A named exact Harmony Save intentionally has no chord identity; it does not
+fall back to chord detection to invent a Roman numeral. A non-diatonic chord
+(or no key) yields `null` and no numeral is shown — only
 the symbol/name. Example in C major: a saved F-major voicing shows `IV`.
 
 ## Save / Load
@@ -345,14 +380,21 @@ Its top-right Close action has a screen-reader label.
 
 Writer uses `SaveSystemState.selectedProjectId` instead of the old
 folder-name convention. When a real project is selected (kind `project`),
-tempo and key chips in the header are locked; edit them through the project
-config sheet. Instrument handoff asks the user to select a real project if
+tempo is edited through the project config sheet. The key chip opens a
+project-key picker; setting, changing, or clearing tonic and scale/mode asks
+for confirmation before updating the project. Fretboard and Piano use the
+same confirmed project-key workflow. Cancel leaves the project unchanged,
+and a dialog opened for another project cannot update the current one.
+Instrument handoff asks the user to select a real project if
 there is no project selected or Dump is active.
 
 `projectConfigSyncProvider` (`lib/store/project_config_sync.dart`) pushes the
 active project's tempo, meter, and key into the songwriter and Song stores
 whenever a project is selected or its config changes. Changed master config
-clears stale local undo history; an equal sync keeps current history. A named
+clears stale local undo history; an equal sync keeps current history. Key sync
+also recomputes Writer Roman numerals. Project key is authoritative when
+loading an instrument Save, including Piano Roll; the Save's embedded scale
+does not replace it. Dump and no-project scale choices remain local. A named
 Song version load keeps the active project config after showing any differences
 from that version. When loading a project that has no session yet,
 `_defaultFor` seeds a new `SongwriterProjectSnapshot` from the project folder's
@@ -363,10 +405,14 @@ Library-match scope is `getSavesInSubtree(folders, saves, selectedProjectId)`.
 ## Fretboard and Piano handoff
 
 In either instrument's detection panel, choose **Add to Writer**, select a
-detected chord or the exact selected voicing, then choose a section and bar.
+detected chord or **Add exact notes as Harmony**, then choose a section and bar.
 Writer prompts for an editable save name before committing; the chord symbol is
 the default for a chord. A detected chord keeps its symbol, root, quality, and
 selected pitch names. An exact selection keeps the full instrument snapshot.
+Exact Piano and valid Fretboard Chord selections need no recognized chord:
+they retain their chosen name, native notes, and nullable symbolic identity,
+and appear in the Harmony Library with Change chord and Replace chord.
+Free Fretboard selections remain savable and consultable outside Writer.
 If the active project changes while the picker is open, Writer cancels the
 transfer and explains why. Occupied bars are labeled for assistive technology
 and offer replace-with-confirmation, choose-another-bar, or cancel.

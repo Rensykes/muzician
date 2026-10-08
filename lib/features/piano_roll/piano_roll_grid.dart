@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart';
@@ -16,6 +17,7 @@ import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../utils/note_player.dart';
+import '../../utils/note_utils.dart';
 
 // ── Layout constants ────────────────────────────────────────────────────────
 
@@ -60,6 +62,7 @@ class _GridPainter extends CustomPainter {
   final int? playbackTick;
   final double? scissorsCursorX;
   final Set<String> previewSelectedNoteIds;
+  final NoteSpelling spelling;
 
   _GridPainter({
     required this.state,
@@ -70,6 +73,7 @@ class _GridPainter extends CustomPainter {
     this.playbackTick,
     this.scissorsCursorX,
     this.previewSelectedNoteIds = const <String>{},
+    this.spelling = NoteSpelling.sharps,
   });
 
   @override
@@ -193,7 +197,7 @@ class _GridPainter extends CustomPainter {
       // Note label
       final tp = TextPainter(
         text: TextSpan(
-          text: note.pitchClass,
+          text: formatRootChoiceLabel(note.pitchClass, spelling: spelling),
           style: TextStyle(
             color: color,
             fontSize: 9,
@@ -240,6 +244,29 @@ class _GridPainter extends CustomPainter {
   }
 
   @override
+  SemanticsBuilderCallback get semanticsBuilder =>
+      (Size size) => [
+        for (final note in state.notes)
+          if (note.midiNote >= state.pitchRangeStart &&
+              note.midiNote <= state.pitchRangeEnd)
+            CustomPainterSemantics(
+              rect: Rect.fromLTWH(
+                note.startTick * cellW,
+                (state.pitchRangeEnd - note.midiNote) * rowH,
+                note.durationTicks * cellW,
+                rowH,
+              ),
+              properties: SemanticsProperties(
+                label:
+                    '${formatMidiNoteLabel(note.midiNote, spelling: spelling)}, '
+                    'tick ${note.startTick}',
+                selected: state.selectedNoteIds.contains(note.id),
+                textDirection: TextDirection.ltr,
+              ),
+            ),
+      ];
+
+  @override
   bool shouldRepaint(covariant _GridPainter old) =>
       old.state != state ||
       old.totalTicks != totalTicks ||
@@ -248,7 +275,8 @@ class _GridPainter extends CustomPainter {
       old.rowH != rowH ||
       old.playbackTick != playbackTick ||
       old.scissorsCursorX != scissorsCursorX ||
-      old.previewSelectedNoteIds != previewSelectedNoteIds;
+      old.previewSelectedNoteIds != previewSelectedNoteIds ||
+      old.spelling != spelling;
 }
 
 // ── Ruler Painter ───────────────────────────────────────────────────────────
@@ -359,11 +387,13 @@ class _PitchSidebarPainter extends CustomPainter {
   final int rangeStart;
   final int rangeEnd;
   final double rowH;
+  final NoteSpelling spelling;
 
   _PitchSidebarPainter({
     required this.rangeStart,
     required this.rangeEnd,
     required this.rowH,
+    this.spelling = NoteSpelling.sharps,
   });
 
   @override
@@ -381,7 +411,7 @@ class _PitchSidebarPainter extends CustomPainter {
         );
       }
 
-      final label = rules.midiToNoteWithOctave(midi);
+      final label = formatMidiNoteLabel(midi, spelling: spelling);
       final tp = TextPainter(
         text: TextSpan(
           text: label,
@@ -401,10 +431,24 @@ class _PitchSidebarPainter extends CustomPainter {
   }
 
   @override
+  SemanticsBuilderCallback get semanticsBuilder =>
+      (Size size) => [
+        for (var i = 0; i < rangeEnd - rangeStart + 1; i++)
+          CustomPainterSemantics(
+            rect: Rect.fromLTWH(0, i * rowH, _pitchLabelWidth, rowH),
+            properties: SemanticsProperties(
+              label: formatMidiNoteLabel(rangeEnd - i, spelling: spelling),
+              textDirection: TextDirection.ltr,
+            ),
+          ),
+      ];
+
+  @override
   bool shouldRepaint(covariant _PitchSidebarPainter old) =>
       rangeStart != old.rangeStart ||
       rangeEnd != old.rangeEnd ||
-      rowH != old.rowH;
+      rowH != old.rowH ||
+      spelling != old.spelling;
 }
 
 // ── Main Widget ─────────────────────────────────────────────────────────────
@@ -1143,6 +1187,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pianoRollProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final playbackTick = ref.watch(
       pianoRollPlaybackProvider.select((playbackState) {
         return playbackState.status == PianoRollPlaybackStatus.playing
@@ -1272,6 +1319,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                             rangeStart: state.pitchRangeStart,
                             rangeEnd: state.pitchRangeEnd,
                             rowH: _rowH,
+                            spelling: spelling,
                           ),
                         ),
                       ),
@@ -1320,6 +1368,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                                         scissorsCursorX: _scissorsCursorX,
                                         previewSelectedNoteIds:
                                             _marqueePreviewIds,
+                                        spelling: spelling,
                                       ),
                                     ),
                                   ),

@@ -1,5 +1,10 @@
 # Piano Roll
 
+Musical labels follow **Settings → Prefer flat note names**, including pitch
+sidebar notes, detection, scale/root choices, hum previews, and saved-stack
+details. Sharps is the default; Flats displays Eb for D# and Gb for F# without
+changing MIDI notes, octaves, project keys, or custom names.
+
 A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and adaptive landscape/portrait layout.
 
 ---
@@ -650,16 +655,20 @@ Rendered as a modal bottom sheet at 88 % of screen height with a drag handle.
 
 ## Project lock
 
-When a project is selected, the instrument inherits its key / tempo /
-time-signature (where applicable) and the corresponding controls are disabled.
-Change the values through the project config sheet from the project chip in
-the header (`ProjectChip` shown in `PianoRollScreenV2`). Dump and "no
-project" leave controls free.
+When a project is selected, Roll inherits its key, tempo, and time-signature.
+Tempo and meter use the project config sheet from the project chip in the
+header (`ProjectChip` shown in `PianoRollScreenV2`). The shared scale picker
+asks for confirmation before changing or clearing the project key. Dump and
+"no project" leave scale choices local.
 
 **Scale dock / key resolution:** The piano roll's header shows a `ProjectChip`
 when a project is active. The `projectConfigSyncProvider` pushes the project
 key into the `highlightedNotes` pitch-class list so the grid reflects the
-locked-in scale automatically.
+project scale automatically. Loading a Save in the same project preserves
+the project's key and scale highlights, clears stale pending scale metadata,
+and retains the Save's notes. An embedded Save scale cannot override the
+project. Clearing the project key clears its scale context in Roll as well.
+Dump and no-project Save loads retain their local scale behavior.
 
 **Key-aware detection:** When a column is selected, the detection panel
 (`PianoRollDetectionPanel`) benefits from the project key context. The

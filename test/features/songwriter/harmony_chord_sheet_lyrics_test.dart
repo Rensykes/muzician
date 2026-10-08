@@ -1,28 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/songwriter/harmony_chord_sheet.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/store/settings_store.dart';
+import '../../support/test_settings_notifier.dart';
 
 void main() {
-  testWidgets('renders a single lyric input prefilled with currentLyric',
-      (tester) async {
+  testWidgets('renders a single lyric input prefilled with currentLyric', (
+    tester,
+  ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (ctx) => ElevatedButton(
-              onPressed: () async {
-                await showHarmonyChordSheet(
-                  ctx,
-                  startBar: 0,
-                  spanBars: 1,
-                  keyRoot: 0,
-                  keyScaleName: 'major',
-                  instanceIndex: 2,
-                  currentLyric: 'verse 3 lyric',
-                );
-              },
-              child: const Text('open'),
+      ProviderScope(
+        overrides: [settingsProvider.overrideWith(TestSettingsNotifier.new)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () async {
+                  await showHarmonyChordSheet(
+                    ctx,
+                    startBar: 0,
+                    spanBars: 1,
+                    keyRoot: 0,
+                    keyScaleName: 'major',
+                    instanceIndex: 2,
+                    currentLyric: 'verse 3 lyric',
+                  );
+                },
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
@@ -38,26 +45,30 @@ void main() {
     expect(find.textContaining('Verse 3'), findsOneWidget);
   });
 
-  testWidgets('silent toggle returns a silent block with the typed lyric',
-      (tester) async {
+  testWidgets('silent toggle returns a silent block with the typed lyric', (
+    tester,
+  ) async {
     SongBlock? result;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (ctx) => ElevatedButton(
-              onPressed: () async {
-                result = await showHarmonyChordSheet(
-                  ctx,
-                  startBar: 1,
-                  spanBars: 1,
-                  keyRoot: 0,
-                  keyScaleName: 'major',
-                  instanceIndex: 0,
-                  currentLyric: '',
-                );
-              },
-              child: const Text('open'),
+      ProviderScope(
+        overrides: [settingsProvider.overrideWith(TestSettingsNotifier.new)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () async {
+                  result = await showHarmonyChordSheet(
+                    ctx,
+                    startBar: 1,
+                    spanBars: 1,
+                    keyRoot: 0,
+                    keyScaleName: 'major',
+                    instanceIndex: 0,
+                    currentLyric: '',
+                  );
+                },
+                child: const Text('open'),
+              ),
             ),
           ),
         ),

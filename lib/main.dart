@@ -18,7 +18,8 @@ import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
 import 'models/harmony_lane_instrument.dart';
 import 'models/piano.dart' show PianoViewMode;
 import 'models/save_system.dart';
-import 'utils/note_utils.dart' show chromaticNotes;
+import 'utils/note_utils.dart'
+    show NoteSpelling, chromaticNotes, formatRootChoiceLabel;
 import 'store/app_bootstrap.dart';
 import 'store/persisted_data_recovery_store.dart';
 import 'store/fretboard_store.dart';
@@ -1037,6 +1038,20 @@ class _SettingsScreen extends ConsumerWidget {
         const DataRecoveryPanel(),
         const SizedBox(height: 12),
         _Card(
+          child: SwitchListTile.adaptive(
+            key: const ValueKey('settings_note_spelling'),
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.music_note, color: MuzicianTheme.sky),
+            title: const Text('Prefer flat note names'),
+            subtitle: const Text('Show Eb instead of D# in musical labels.'),
+            value: settings.noteSpelling == NoteSpelling.flats,
+            onChanged: (useFlats) => notifier.setNoteSpelling(
+              useFlats ? NoteSpelling.flats : NoteSpelling.sharps,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1261,17 +1276,25 @@ class _SettingsScreen extends ConsumerWidget {
   ({String root, String scaleName})? activeScale,
 ) {
   final project = ref.watch(selectedProjectProvider);
+  final spelling = ref.watch(
+    settingsProvider.select((settings) => settings.noteSpelling),
+  );
   if (project != null && project.kind == SaveFolderKind.project) {
     final cfg = project.projectConfig;
     if (cfg?.keyRootPc != null && cfg!.keyScaleName != null) {
       final root = chromaticNotes[cfg.keyRootPc!];
-      return (hasValue: true, label: '$root ${cfg.keyScaleName}');
+      return (
+        hasValue: true,
+        label:
+            '${formatRootChoiceLabel(root, spelling: spelling)} ${cfg.keyScaleName}',
+      );
     }
   }
   if (activeScale != null) {
     return (
       hasValue: true,
-      label: '${activeScale.root} ${activeScale.scaleName}',
+      label:
+          '${formatRootChoiceLabel(activeScale.root, spelling: spelling)} ${activeScale.scaleName}',
     );
   }
   return (hasValue: false, label: 'Scale');

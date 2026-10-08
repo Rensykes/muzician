@@ -192,7 +192,7 @@ class FretboardNotifier extends Notifier<FretboardState>
       selectedNotes: List<String>.from(snap.selectedNotes),
       selectedCells: List<FretCoordinate>.from(snap.selectedCells),
       viewMode: snap.viewMode,
-      inputMode: state.inputMode,
+      inputMode: snap.inputMode,
     );
   }
 
@@ -308,6 +308,7 @@ final fretboardBinding = InstrumentBinding(
   activeChord: activeChordProvider,
   manualEdit: fretboardManualEditProvider,
   chordCommitted: fretboardChordCommittedProvider,
+  eligibilityState: fretboardProvider,
   captureSnapshot: (ref) {
     final fretboard = ref.read(fretboardProvider);
     final chord = ref.read(pendingChordProvider);
@@ -319,6 +320,7 @@ final fretboardBinding = InstrumentBinding(
       selectedCells: List.of(fretboard.selectedCells),
       selectedNotes: List.of(fretboard.selectedNotes),
       viewMode: fretboard.viewMode,
+      inputMode: fretboard.inputMode,
       pendingChord: chord == null
           ? null
           : PendingChord(

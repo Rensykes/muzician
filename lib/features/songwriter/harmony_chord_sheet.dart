@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/muzician_theme.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/save_system_rules.dart' show generateId;
 import '../../schema/rules/songwriter_rules.dart';
+import '../../store/settings_store.dart';
 import '../../utils/note_utils.dart';
 import 'chord_wheel.dart';
 
@@ -22,10 +24,10 @@ const _qualities = <(String value, String label)>[
 
 /// Opens the harmony chord picker. Returns a ready-to-add [SongBlock], or null
 /// if dismissed. Two modes:
-///  - **Key set:** primary picker is the diatonic [ChordWheel]; the
+///  - **Seven-degree key:** primary picker is the diatonic [ChordWheel]; the
 ///    root+quality grid hides behind an "Other chord" expander for borrowed
 ///    or altered chords.
-///  - **No key:** the root+quality grid is shown directly.
+///  - **No key or unsupported scale:** the root+quality grid is shown directly.
 Future<SongBlock?> showHarmonyChordSheet(
   BuildContext context, {
   required int startBar,
@@ -68,7 +70,7 @@ Future<SongBlock?> showHarmonyChordSheet(
   );
 }
 
-class _HarmonySheet extends StatefulWidget {
+class _HarmonySheet extends ConsumerStatefulWidget {
   const _HarmonySheet({
     required this.startBar,
     required this.spanBars,
@@ -91,10 +93,10 @@ class _HarmonySheet extends StatefulWidget {
   final VoidCallback? onPickFromLibrary;
 
   @override
-  State<_HarmonySheet> createState() => _HarmonySheetState();
+  ConsumerState<_HarmonySheet> createState() => _HarmonySheetState();
 }
 
-class _HarmonySheetState extends State<_HarmonySheet> {
+class _HarmonySheetState extends ConsumerState<_HarmonySheet> {
   bool _showManual = false;
   int? _rootPc;
   bool _silentMode = false;
@@ -114,6 +116,10 @@ class _HarmonySheetState extends State<_HarmonySheet> {
   }
 
   bool get _hasKey => widget.keyRoot != null && widget.keyScaleName != null;
+
+  bool get _hasDiatonicWheel =>
+      _hasKey &&
+      diatonicTriads(widget.keyRoot!, widget.keyScaleName!).length == 7;
 
   void _commitTriad(DiatonicTriad triad) {
     final block = makeHarmonyBlock(
@@ -151,6 +157,9 @@ class _HarmonySheetState extends State<_HarmonySheet> {
 
   @override
   Widget build(BuildContext context) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -182,12 +191,13 @@ class _HarmonySheetState extends State<_HarmonySheet> {
               onChanged: (v) => setState(() => _silentMode = v),
             ),
           if (!_silentMode) ...[
-            if (_hasKey) ...[
+            if (_hasDiatonicWheel) ...[
               SizedBox(
                 height: 240,
                 child: ChordWheel(
                   keyRootPc: widget.keyRoot!,
                   scaleName: widget.keyScaleName!,
+                  spelling: spelling,
                   onPick: _commitTriad,
                 ),
               ),
@@ -206,32 +216,32 @@ class _HarmonySheetState extends State<_HarmonySheet> {
                 ),
               ),
             ],
-            if (!_hasKey || _showManual) ...[
+            if (!_hasDiatonicWheel || _showManual) ...[
               const SizedBox(height: 8),
-              _manualPicker(),
+              _manualPicker(spelling),
             ],
           ],
           const SizedBox(height: 12),
           if (widget.showLyrics)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: TextField(
-              key: const Key('lyricInput'),
-              controller: _lyricController,
-              style: const TextStyle(color: MuzicianTheme.textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Verse ${widget.instanceIndex + 1}',
-                labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
-                filled: true,
-                fillColor: MuzicianTheme.glassBg,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: TextField(
+                key: const Key('lyricInput'),
+                controller: _lyricController,
+                style: const TextStyle(color: MuzicianTheme.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Verse ${widget.instanceIndex + 1}',
+                  labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
+                  filled: true,
+                  fillColor: MuzicianTheme.glassBg,
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+                  ),
                 ),
               ),
             ),
-          ),
           if (_silentMode)
             Padding(
               padding: const EdgeInsets.all(12),
@@ -256,7 +266,7 @@ class _HarmonySheetState extends State<_HarmonySheet> {
     );
   }
 
-  Widget _manualPicker() {
+  Widget _manualPicker(NoteSpelling spelling) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +287,10 @@ class _HarmonySheetState extends State<_HarmonySheet> {
             for (var pc = 0; pc < 12; pc++)
               _GlassPickerChip(
                 key: Key('harmonyRoot_$pc'),
-                label: chromaticNotes[pc],
+                label: formatRootChoiceLabel(
+                  chromaticNotes[pc],
+                  spelling: spelling,
+                ),
                 selected: _rootPc == pc,
                 onTap: () => setState(() => _rootPc = pc),
               ),
@@ -329,26 +342,50 @@ class _GlassPickerChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: 0.10)
-              : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected
-                ? Colors.white.withValues(alpha: 0.30)
-                : MuzicianTheme.glassBorder,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: enabled ? MuzicianTheme.textPrimary : MuzicianTheme.textDim,
-            fontSize: 13,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      child: Semantics(
+        button: true,
+        enabled: enabled && onTap != null,
+        selected: selected,
+        label: label,
+        onTap: enabled ? onTap : null,
+        child: ExcludeSemantics(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.white.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.30)
+                      : MuzicianTheme.glassBorder,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: Center(
+                  widthFactor: 1,
+                  heightFactor: 1,
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: enabled
+                          ? MuzicianTheme.textPrimary
+                          : MuzicianTheme.textDim,
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

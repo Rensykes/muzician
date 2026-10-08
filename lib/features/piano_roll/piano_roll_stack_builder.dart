@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll_composer.dart';
 import '../../models/piano_roll_stack_builder.dart';
 import '../../store/piano_roll_stack_builder_store.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../utils/note_utils.dart';
 
@@ -53,13 +54,16 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
     });
   }
 
-  void _confirmWizard(PianoRollStackBuilderNotifier notifier) {
+  void _confirmWizard(
+    PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
+  ) {
     final midi = _wizardMidi;
     var success = false;
     if (_wizardIndex == -1) {
-      success = notifier.addAbsoluteNote(midi);
+      success = notifier.addAbsoluteNote(midi, spelling: spelling);
     } else if (_wizardIndex != null && _wizardIndex! >= 0) {
-      success = notifier.replaceNoteAt(_wizardIndex!, midi);
+      success = notifier.replaceNoteAt(_wizardIndex!, midi, spelling: spelling);
     }
     if (success) {
       _closeWizard();
@@ -71,6 +75,9 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
   @override
   Widget build(BuildContext context) {
     final builderState = ref.watch(pianoRollStackBuilderProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final notifier = ref.read(pianoRollStackBuilderProvider.notifier);
 
     return Container(
@@ -85,23 +92,23 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(builderState),
+            _buildHeader(builderState, spelling),
             const SizedBox(height: 8),
             _buildTabRow(builderState, notifier),
             Divider(color: MuzicianTheme.glassBorder, height: 1),
             const SizedBox(height: 8),
             if (builderState.activeView == PianoRollStackBuilderView.canonical)
-              _buildCanonicalBody(builderState, notifier)
+              _buildCanonicalBody(builderState, notifier, spelling)
             else
-              _buildAdvancedBody(builderState, notifier),
+              _buildAdvancedBody(builderState, notifier, spelling),
             if (builderState.errorMessage != null) ...[
               const SizedBox(height: 6),
               _buildError(builderState.errorMessage!, notifier),
             ],
             const SizedBox(height: 8),
-            _buildPreview(builderState),
+            _buildPreview(builderState, spelling),
             const SizedBox(height: 8),
-            _buildAddStackButton(notifier),
+            _buildAddStackButton(notifier, spelling),
           ],
         ),
       ),
@@ -110,12 +117,15 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
 
   // ── Header ───────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(PianoRollStackBuilderState state) {
+  Widget _buildHeader(PianoRollStackBuilderState state, NoteSpelling spelling) {
     final r = state.recognition;
     final parts = <String>[];
 
     if (r.isRecognized && r.recognizedRoot != null) {
-      final displayRoot = formatRootChoiceLabel(r.recognizedRoot!);
+      final displayRoot = formatRootChoiceLabel(
+        r.recognizedRoot!,
+        spelling: spelling,
+      );
       final qualityLabel =
           qualityLabelBySymbol[r.recognizedQuality ?? ''] ?? '';
       parts.add('$displayRoot $qualityLabel');
@@ -187,6 +197,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
   Widget _buildCanonicalBody(
     PianoRollStackBuilderState state,
     PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
   ) {
     final r = state.recognition;
     final currentRoot = r.recognizedRoot ?? 'C';
@@ -208,7 +219,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: _Pill(
-                    label: formatRootChoiceLabel(root),
+                    label: formatRootChoiceLabel(root, spelling: spelling),
                     active: root == currentRoot,
                     onTap: () => notifier.setCanonicalRoot(root),
                   ),
@@ -289,17 +300,19 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
   Widget _buildAdvancedBody(
     PianoRollStackBuilderState state,
     PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
   ) {
     if (_wizardActive) {
-      return _buildAdvancedWizardBody(state, notifier);
+      return _buildAdvancedWizardBody(state, notifier, spelling);
     }
 
-    return _buildAdvancedDefaultBody(state, notifier);
+    return _buildAdvancedDefaultBody(state, notifier, spelling);
   }
 
   Widget _buildAdvancedDefaultBody(
     PianoRollStackBuilderState state,
     PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,7 +331,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         else
           ...List.generate(state.midiNotes.length, (i) {
             final midi = state.midiNotes[i];
-            final noteName = formatMidiNoteLabel(midi);
+            final noteName = formatMidiNoteLabel(midi, spelling: spelling);
             final isEditing = _wizardIndex == i;
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
@@ -351,7 +364,10 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                   padding: const EdgeInsets.only(right: 6),
                   child: _DegreePill(
                     label: degree,
-                    onTap: () => notifier.insertDegreeShortcut(degree),
+                    onTap: () => notifier.insertDegreeShortcut(
+                      degree,
+                      spelling: spelling,
+                    ),
                   ),
                 );
               }),
@@ -365,12 +381,13 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
   Widget _buildAdvancedWizardBody(
     PianoRollStackBuilderState state,
     PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
   ) {
     final isAdd = _wizardIndex == -1;
     final title = isAdd ? 'Add note' : 'Edit note';
     final detail = isAdd
         ? '${state.midiNotes.length} notes in stack'
-        : 'Editing ${formatMidiNoteLabel(state.midiNotes[_wizardIndex!])}';
+        : 'Editing ${formatMidiNoteLabel(state.midiNotes[_wizardIndex!], spelling: spelling)}';
 
     return Column(
       key: const ValueKey('stack-builder-advanced-wizard'),
@@ -424,7 +441,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
           ],
         ),
         const SizedBox(height: 10),
-        _buildNoteWizard(notifier),
+        _buildNoteWizard(notifier, spelling),
       ],
     );
   }
@@ -462,8 +479,11 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
 
   // ── Inline wizard ────────────────────────────────────────────────────────
 
-  Widget _buildNoteWizard(PianoRollStackBuilderNotifier notifier) {
-    final noteName = formatMidiNoteLabel(_wizardMidi);
+  Widget _buildNoteWizard(
+    PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
+  ) {
+    final noteName = formatMidiNoteLabel(_wizardMidi, spelling: spelling);
 
     return Container(
       key: const ValueKey('stack-builder-note-wizard-card'),
@@ -519,7 +539,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                     ),
                     child: Center(
                       child: Text(
-                        formatRootChoiceLabel(note),
+                        formatRootChoiceLabel(note, spelling: spelling),
                         style: TextStyle(
                           color: active
                               ? MuzicianTheme.sky
@@ -627,7 +647,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => _confirmWizard(notifier),
+                onTap: () => _confirmWizard(notifier, spelling),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -700,9 +720,14 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
 
   // ── Preview ──────────────────────────────────────────────────────────────
 
-  Widget _buildPreview(PianoRollStackBuilderState state) {
+  Widget _buildPreview(
+    PianoRollStackBuilderState state,
+    NoteSpelling spelling,
+  ) {
     if (state.midiNotes.isEmpty) return const SizedBox.shrink();
-    final preview = state.midiNotes.map(formatMidiNoteLabel).join(', ');
+    final preview = state.midiNotes
+        .map((midi) => formatMidiNoteLabel(midi, spelling: spelling))
+        .join(', ');
     return Text(
       preview,
       maxLines: 2,
@@ -718,11 +743,14 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
 
   // ── Add Stack button ─────────────────────────────────────────────────────
 
-  Widget _buildAddStackButton(PianoRollStackBuilderNotifier notifier) {
+  Widget _buildAddStackButton(
+    PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
+  ) {
     return GestureDetector(
       onTap: () {
         HapticFeedback.mediumImpact();
-        final added = notifier.addStack();
+        final added = notifier.addStack(spelling: spelling);
         if (added && widget.dismissOnAdd) {
           Navigator.of(context).maybePop();
         }

@@ -10,6 +10,7 @@ library;
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../utils/note_utils.dart';
+import 'songwriter_rules.dart';
 
 enum LibraryMatchKind { chord, scale }
 
@@ -24,8 +25,7 @@ class LibraryMatch {
 int? _pcOf(String name) {
   // Strip a trailing octave number (and any sign) so 'C4'/'C-1' → 'C'.
   var head = name;
-  while (head.isNotEmpty &&
-      (head.codeUnitAt(head.length - 1) ^ 0x30) <= 9) {
+  while (head.isNotEmpty && (head.codeUnitAt(head.length - 1) ^ 0x30) <= 9) {
     head = head.substring(0, head.length - 1);
   }
   if (head.endsWith('-')) head = head.substring(0, head.length - 1);
@@ -76,7 +76,20 @@ matchLibrary({
   final chord = <LibraryMatch>[];
   final scale = <LibraryMatch>[];
   for (final save in searchableSaves) {
-    final notes = save.snapshot.selectedNotes;
+    final snapshot = save.snapshot;
+    if ((snapshot is FretboardSnapshot ||
+            snapshot is PianoSnapshot ||
+            snapshot is HarmonyChordSnapshot) &&
+        !isWriterEligibleNativeSelection(snapshot)) {
+      continue;
+    }
+    if (snapshot is HarmonyChordSnapshot &&
+        !isWriterEligibleHarmonySnapshot(snapshot)) {
+      continue;
+    }
+    final notes = snapshot is HarmonyChordSnapshot
+        ? snapshot.writerBlock.chordNotes
+        : snapshot.selectedNotes;
     if (notes.isEmpty) continue;
     final savePcs = _pcSet(notes);
 

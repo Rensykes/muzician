@@ -184,18 +184,34 @@ void main() {
               widget.axisDirection == AxisDirection.down,
         );
         expect(verticalScrollables, findsOneWidget);
-        await tester.drag(find.text('SAVES'), const Offset(0, -180));
-        await tester.pumpAndSettle();
-        await tester.drag(find.text('Save 00'), const Offset(0, -700));
-        await tester.pumpAndSettle();
-        await tester.drag(find.text('Save 10'), const Offset(0, -700));
-        await tester.pumpAndSettle();
+        final scrollableState = tester.state<ScrollableState>(
+          verticalScrollables,
+        );
+        final initialScrollOffset = scrollableState.position.pixels;
+        var lastSaveRect = tester.getRect(find.text('Save 19'));
+        for (
+          var attempt = 0;
+          attempt < 20 &&
+              (lastSaveRect.top < browserViewport.top ||
+                  lastSaveRect.bottom > browserViewport.bottom);
+          attempt++
+        ) {
+          await tester.dragFrom(browserViewport.center, const Offset(0, -100));
+          await tester.pumpAndSettle();
+          lastSaveRect = tester.getRect(find.text('Save 19'));
+        }
 
-        final lastSaveRect = tester.getRect(find.text('Save 19'));
+        expect(
+          scrollableState.position.pixels,
+          greaterThan(initialScrollOffset),
+          reason: 'the visible browser viewport should scroll its save rows',
+        );
         expect(lastSaveRect.top, greaterThanOrEqualTo(sheetRect.top));
         expect(lastSaveRect.bottom, lessThanOrEqualTo(sheetRect.bottom));
         expect(lastSaveRect.top, greaterThanOrEqualTo(browserViewport.top));
         expect(lastSaveRect.bottom, lessThanOrEqualTo(browserViewport.bottom));
+        await tester.tap(find.text('Save 19'));
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       }
 
@@ -623,6 +639,7 @@ _WriterUseFixture _writerUseFixture({bool includeLegacyHarmony = false}) {
   const overlayLaneId = 'verse-overlay';
   const saveId = 'free-block';
   const verseHarmonyLaneId = 'verse-harmony';
+  const verseOverlayHarmonyLaneId = 'verse-overlay-harmony';
   const chorusHarmonyLaneId = 'chorus-harmony';
   const writerState = SongwriterProjectSnapshot(
     config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
@@ -641,18 +658,24 @@ _WriterUseFixture _writerUseFixture({bool includeLegacyHarmony = false}) {
             order: 0,
           ),
           SongLane(
+            id: verseOverlayHarmonyLaneId,
+            kind: SongLaneKind.harmony,
+            label: 'Verse overlay harmony',
+            order: 1,
+          ),
+          SongLane(
             id: primaryLaneId,
             kind: SongLaneKind.guitarStrum,
             label: 'Verse primary',
-            order: 1,
+            order: 2,
             anchorLaneId: verseHarmonyLaneId,
           ),
           SongLane(
             id: overlayLaneId,
             kind: SongLaneKind.guitarStrum,
             label: 'Verse overlay',
-            order: 2,
-            anchorLaneId: verseHarmonyLaneId,
+            order: 3,
+            anchorLaneId: verseOverlayHarmonyLaneId,
           ),
         ],
       ),

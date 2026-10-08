@@ -8,11 +8,18 @@ import '../../schema/rules/save_system_rules.dart';
 import '../../schema/rules/songwriter_library_match_rules.dart';
 import '../../schema/rules/songwriter_third_above_rules.dart';
 import '../../schema/rules/songwriter_voicing_rules.dart';
+import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../../ui/save_card_label.dart';
 import '../../ui/save_previews/save_preview_thumbnail.dart';
 import '../_mockup_shell.dart';
+import '../../utils/note_utils.dart'
+    show
+        NoteSpelling,
+        chromaticNotes,
+        formatRecognizedChordLabel,
+        formatRootChoiceLabel;
 
 SaveEntry? writerSaveEntryForBlock(SaveSystemState state, SongBlock block) {
   final projectId = state.selectedProjectId;
@@ -242,7 +249,11 @@ class _WriterSaveNameDialogState extends State<_WriterSaveNameDialog> {
 }
 
 void showBlockPreviewSheet(BuildContext context, InstrumentSnapshot snapshot) {
-  final label = saveCardLabel(snapshot);
+  final spelling = ProviderScope.containerOf(
+    context,
+    listen: false,
+  ).read(settingsProvider).noteSpelling;
+  final label = saveCardLabel(snapshot, spelling: spelling);
 
   showWidgetSheet(
     context: context,
@@ -259,7 +270,7 @@ void showBlockPreviewSheet(BuildContext context, InstrumentSnapshot snapshot) {
             children: [
               for (final note in snapshot.selectedNotes)
                 Chip(
-                  label: Text(note),
+                  label: Text(formatRootChoiceLabel(note, spelling: spelling)),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -332,11 +343,19 @@ void showHarmonyBlockSheet(
   required void Function(ThirdAboveSuggestion) onAcceptThirdAbove,
   required void Function(String saveId) onAcceptLibrary,
   bool showLibrary = true,
+  NoteSpelling spelling = NoteSpelling.sharps,
   VoidCallback? onEditChord,
   String editChordLabel = 'Edit chord & lyrics',
 }) {
   final hasChord = block.chordRootPc != null && block.chordQuality != null;
-  final title = block.chordSymbol ?? (hasChord ? '?' : 'Harmony');
+  final title = block.chordSymbol == null
+      ? (hasChord ? '?' : 'Harmony')
+      : formatRecognizedChordLabel(
+          symbol: block.chordSymbol!,
+          rootPc: block.chordRootPc ?? -1,
+          quality: block.chordQuality ?? '',
+          spelling: spelling,
+        );
   final numeral = block.romanNumeral;
 
   showWidgetSheet(
@@ -355,7 +374,7 @@ void showHarmonyBlockSheet(
               children: [
                 for (final n in block.chordNotes)
                   Chip(
-                    label: Text(n),
+                    label: Text(formatRootChoiceLabel(n, spelling: spelling)),
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -385,6 +404,7 @@ void showHarmonyBlockSheet(
                 _HarmonyTab(
                   hasChord: hasChord,
                   thirdAbove: thirdAbove,
+                  spelling: spelling,
                   onAccept: (s) {
                     Navigator.pop(context);
                     onAcceptThirdAbove(s);
@@ -469,10 +489,12 @@ class _HarmonyTab extends StatelessWidget {
   const _HarmonyTab({
     required this.hasChord,
     required this.thirdAbove,
+    required this.spelling,
     required this.onAccept,
   });
   final bool hasChord;
   final ThirdAboveSuggestion? thirdAbove;
+  final NoteSpelling spelling;
   final void Function(ThirdAboveSuggestion) onAccept;
 
   @override
@@ -495,6 +517,7 @@ class _HarmonyTab extends StatelessWidget {
       child: _ThirdAboveCard(
         key: const Key('thirdAboveCard'),
         suggestion: s,
+        spelling: spelling,
         onTap: () => onAccept(s),
       ),
     );
@@ -505,9 +528,11 @@ class _ThirdAboveCard extends StatelessWidget {
   const _ThirdAboveCard({
     super.key,
     required this.suggestion,
+    required this.spelling,
     required this.onTap,
   });
   final ThirdAboveSuggestion suggestion;
+  final NoteSpelling spelling;
   final VoidCallback onTap;
 
   @override
@@ -532,7 +557,7 @@ class _ThirdAboveCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              suggestion.label,
+              '3rd above (${suggestion.targetPcs.map((pc) => formatRootChoiceLabel(chromaticNotes[pc], spelling: spelling)).join(', ')})',
               style: const TextStyle(
                 fontSize: 11,
                 color: MuzicianTheme.textPrimary,

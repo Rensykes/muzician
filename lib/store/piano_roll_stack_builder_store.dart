@@ -6,25 +6,47 @@ import '../schema/rules/piano_roll_stack_builder_rules.dart';
 import '../models/piano_roll.dart';
 import '../utils/note_utils.dart';
 import 'piano_roll_store.dart';
+import 'settings_store.dart';
 
 class PianoRollStackBuilderNotifier
     extends Notifier<PianoRollStackBuilderState> {
+  String Function(NoteSpelling spelling)? _errorFormatter;
+
   @override
   PianoRollStackBuilderState build() {
-    final state = defaultStackBuilderState;
-    final recognition = recognizeStack(state.midiNotes);
-    return state.copyWith(recognition: recognition);
+    ref.listen(settingsProvider.select((settings) => settings.noteSpelling), (
+      _,
+      spelling,
+    ) {
+      final formatter = _errorFormatter;
+      if (formatter != null && state.errorMessage != null) {
+        state = state.copyWith(errorMessage: () => formatter(spelling));
+      }
+    });
+    final initialState = defaultStackBuilderState;
+    final recognition = recognizeStack(initialState.midiNotes);
+    return initialState.copyWith(recognition: recognition);
   }
 
   // ── Internal helpers ───────────────────────────────────────────────────
 
   void _clearError() {
+    _errorFormatter = null;
     if (state.errorMessage != null) {
       state = state.copyWith(errorMessage: () => null);
     }
   }
 
+  void _setError(
+    String Function(NoteSpelling spelling) formatter, {
+    required NoteSpelling spelling,
+  }) {
+    _errorFormatter = formatter;
+    state = state.copyWith(errorMessage: () => formatter(spelling));
+  }
+
   void _updateWith(List<int> midiNotes) {
+    _errorFormatter = null;
     final clamped = enforceMaxNotes(midiNotes);
     final recognition = recognizeStack(clamped);
     state = state.copyWith(
@@ -87,15 +109,19 @@ class PianoRollStackBuilderNotifier
 
   // ── Advanced edits ─────────────────────────────────────────────────────
 
-  bool addAbsoluteNote(int midiNote) {
+  bool addAbsoluteNote(
+    int midiNote, {
+    NoteSpelling spelling = NoteSpelling.sharps,
+  }) {
     if (state.midiNotes.length >= 10) {
-      state = state.copyWith(errorMessage: () => 'Maximum 10 notes');
+      _setError((_) => 'Maximum 10 notes', spelling: spelling);
       return false;
     }
     if (_isDuplicate(midiNote)) {
-      final name = _midiToName(midiNote);
-      state = state.copyWith(
-        errorMessage: () => '$name already exists in the stack',
+      _setError(
+        (currentSpelling) =>
+            '${_midiToName(midiNote, spelling: currentSpelling)} already exists in the stack',
+        spelling: spelling,
       );
       return false;
     }
@@ -104,14 +130,19 @@ class PianoRollStackBuilderNotifier
     return true;
   }
 
-  bool replaceNoteAt(int index, int midiNote) {
+  bool replaceNoteAt(
+    int index,
+    int midiNote, {
+    NoteSpelling spelling = NoteSpelling.sharps,
+  }) {
     if (index < 0 || index >= state.midiNotes.length) {
       return false;
     }
     if (_isDuplicate(midiNote) && state.midiNotes[index] != midiNote) {
-      final name = _midiToName(midiNote);
-      state = state.copyWith(
-        errorMessage: () => '$name already exists in the stack',
+      _setError(
+        (currentSpelling) =>
+            '${_midiToName(midiNote, spelling: currentSpelling)} already exists in the stack',
+        spelling: spelling,
       );
       return false;
     }
@@ -145,7 +176,10 @@ class PianoRollStackBuilderNotifier
     _updateWith(midiNotes);
   }
 
-  void insertDegreeShortcut(String degree) {
+  void insertDegreeShortcut(
+    String degree, {
+    NoteSpelling spelling = NoteSpelling.sharps,
+  }) {
     final root = state.recognition.recognizedRoot ?? 'C';
     final degreeNum = int.tryParse(degree);
     if (degreeNum == null) return;
@@ -163,16 +197,17 @@ class PianoRollStackBuilderNotifier
     var candidate = ((highest ~/ 12) * 12) + targetPc;
     if (candidate <= highest) candidate += 12;
 
-    addAbsoluteNote(candidate);
+    addAbsoluteNote(candidate, spelling: spelling);
   }
 
   void clearError() {
+    _errorFormatter = null;
     state = state.copyWith(errorMessage: () => null);
   }
 
   // ── Add Stack → Piano Roll ─────────────────────────────────────────────
 
-  bool addStack() {
+  bool addStack({NoteSpelling spelling = NoteSpelling.sharps}) {
     final prState = ref.read(pianoRollProvider);
     final prNotifier = ref.read(pianoRollProvider.notifier);
     final startTick =
@@ -193,10 +228,13 @@ class PianoRollStackBuilderNotifier
                   orElse: () => (activeScale.scaleName, activeScale.scaleName),
                 )
                 .$2;
-      final error = activeScale == null
-          ? 'Unable to add this stack at the current position'
-          : 'Stack contains notes outside ${formatRootChoiceLabel(activeScale.root)} $scaleLabel. Clear the scale pill to add chromatic notes.';
-      state = state.copyWith(errorMessage: () => error);
+      _setError(
+        activeScale == null
+            ? (_) => 'Unable to add this stack at the current position'
+            : (currentSpelling) =>
+                  'Stack contains notes outside ${formatRootChoiceLabel(activeScale.root, spelling: currentSpelling)} $scaleLabel. Clear the scale pill to add chromatic notes.',
+        spelling: spelling,
+      );
       return false;
     }
     prNotifier.selectColumn(startTick);
@@ -260,7 +298,8 @@ class PianoRollStackBuilderNotifier
     prNotifier.selectColumn(startTick);
   }
 
-  String _midiToName(int midi) => formatMidiNoteLabel(midi);
+  String _midiToName(int midi, {required NoteSpelling spelling}) =>
+      formatMidiNoteLabel(midi, spelling: spelling);
 }
 
 final pianoRollStackBuilderProvider =

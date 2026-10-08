@@ -16,6 +16,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/song_project.dart';
+import 'playback_profiling.dart';
+import 'playback_profile_source.dart';
 
 // Conditional import: note_player_io.dart on native, note_player_web.dart on web.
 import 'note_player_io.dart' if (dart.library.html) 'note_player_web.dart';
@@ -277,6 +279,13 @@ class NotePlayer {
   final Map<AudioPlayer, int> _activeSequencedVoices = {};
   final Map<AudioPlayer, int> _pendingSequencedVoices = {};
   final Map<AudioPlayer, Future<void>> _sequencedStops = {};
+  final Map<AudioPlayer, PlaybackProfileVoiceContext>
+  _activePreviewProfileVoices = {};
+  final Map<AudioPlayer, PlaybackProfileVoiceContext>
+  _pendingPreviewProfileVoices = {};
+  final Map<AudioPlayer, PlaybackProfileVoiceContext> _sequencedProfileVoices =
+      {};
+  final List<StreamSubscription<void>> _profileCompletionSubscriptions = [];
   int _sequencedVoiceId = 0;
   int _sequencedGeneration = 0;
 
@@ -296,23 +305,92 @@ class NotePlayer {
   bool _ready = false;
 
   /// Initialises the player pool. Call once during app startup.
-  Future<void> init() async {
-    if (_needsFile) {
-      _tempDir = await ioTempDir(); // resolves via note_player_io.dart
+  Future<void> init({String? tempDirectoryOverride}) async {
+    final initTrace = playbackProfilingEnabled
+        ? PlaybackProfileTask.begin(
+            'note_player.init',
+            arguments: {
+              'source_strategy': _needsFile
+                  ? 'DeviceFileSource'
+                  : 'BytesSource',
+              'pool_size': _poolSize,
+            },
+          )
+        : null;
+    try {
+      if (_needsFile) {
+        _tempDir =
+            tempDirectoryOverride ??
+            await ioTempDir(); // resolves via note_player_io.dart
+      }
+      for (var i = 0; i < _poolSize; i++) {
+        final player = AudioPlayer();
+        await player.setReleaseMode(ReleaseMode.stop);
+        _pool.add(player);
+        if (playbackProfilingEnabled) {
+          playbackProfileInstant(
+            'note_player.player_created',
+            arguments: {
+              'kind': 'preview_pool',
+              'player_id': identityHashCode(player),
+              'pool_size': _pool.length,
+            },
+          );
+          _profileCompletionSubscriptions.add(
+            player.onPlayerComplete.listen((_) {
+              final voice = _activePreviewProfileVoices.remove(player);
+              if (voice == null) return;
+              voice.run.outcome(voice, 'natural_completion');
+              playbackProfileInstant(
+                'note_player.voice_terminated',
+                arguments: {
+                  ...voice.timelineArguments,
+                  'player_id': identityHashCode(player),
+                  'outcome': 'natural_completion',
+                  'active_voice_count': _activePreviewProfileVoices.length,
+                  'pending_voice_count': _pendingPreviewProfileVoices.length,
+                },
+              );
+            }),
+          );
+        }
+      }
+      _ready = true;
+      initTrace?.finish(
+        arguments: {'outcome': 'ready', 'pool_size': _pool.length},
+      );
+    } catch (error) {
+      initTrace?.finishError(error, stage: 'player_pool');
+      rethrow;
     }
-    for (var i = 0; i < _poolSize; i++) {
-      final player = AudioPlayer();
-      await player.setReleaseMode(ReleaseMode.stop);
-      _pool.add(player);
-    }
-    _ready = true;
   }
 
   /// Plays [midiNote] as a short synthesised tone at [volume] (0.0–1.0),
   /// panned by [pan] (-1.0 left .. 1.0 right).
   void previewNote(int midiNote, {double volume = 0.8, double pan = 0.0}) {
-    if (!_ready) return;
-    unawaited(_play(midiNote, volume, pan));
+    final profileVoice = playbackProfilingEnabled
+        ? playbackProfileVoiceContext()
+        : null;
+    if (profileVoice != null) {
+      profileVoice.run.request(profileVoice);
+    }
+    if (!_ready) {
+      if (profileVoice != null) {
+        profileVoice.run.outcome(profileVoice, 'dropped_not_ready');
+        playbackProfileInstant(
+          'note_player.voice_requested',
+          arguments: {
+            ...profileVoice.timelineArguments,
+            'midi': midiNote,
+            'outcome': 'dropped_not_ready',
+            'active_voice_count': _activePreviewProfileVoices.length,
+            'pending_voice_count': _pendingPreviewProfileVoices.length,
+          },
+        );
+      }
+      return;
+    }
+    unawaited(_play(midiNote, volume, pan, profileVoice: profileVoice));
   }
 
   /// Starts one duration-aware voice for a sequenced note. Each voice releases
@@ -326,7 +404,25 @@ class NotePlayer {
     double volume = 0.8,
     double pan = 0.0,
   }) {
-    if (!_ready) return;
+    final profileVoice = playbackProfilingEnabled
+        ? playbackProfileVoiceContext(onsetOffsetUs: onsetDelay.inMicroseconds)
+        : null;
+    if (profileVoice != null) profileVoice.run.request(profileVoice);
+    if (!_ready) {
+      if (profileVoice != null) {
+        profileVoice.run.outcome(profileVoice, 'dropped_not_ready');
+        playbackProfileInstant(
+          'note_player.voice_requested',
+          arguments: {
+            ...profileVoice.timelineArguments,
+            'midi': midiNote,
+            'duration_ms': duration.inMilliseconds,
+            'outcome': 'dropped_not_ready',
+          },
+        );
+      }
+      return;
+    }
     unawaited(
       _playSequencedNote(
         midiNote,
@@ -335,6 +431,7 @@ class NotePlayer {
         volume: volume,
         pan: pan,
         generation: _sequencedGeneration,
+        profileVoice: profileVoice,
       ),
     );
   }
@@ -343,7 +440,9 @@ class NotePlayer {
   void stopSequencedNotes() {
     _sequencedGeneration++;
     for (final entry in _activeSequencedVoices.entries.toList()) {
-      unawaited(_stopSequencedVoice(entry.key, entry.value));
+      unawaited(
+        _stopSequencedVoice(entry.key, entry.value, reason: 'cancelled'),
+      );
     }
   }
 
@@ -445,17 +544,173 @@ class NotePlayer {
     }
   }
 
-  Future<void> _play(int midi, double volume, double pan) async {
+  Future<void> _play(
+    int midi,
+    double volume,
+    double pan, {
+    PlaybackProfileVoiceContext? profileVoice,
+  }) async {
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
-    await player.setVolume(volume.clamp(0.0, 1.0));
-    await _applyBalance(player, pan);
-    if (_needsFile) {
-      final path = await _ensureFile(midi, () => _renderNote(midi));
-      await player.play(DeviceFileSource(path));
-    } else {
-      final bytes = _bytesCache.putIfAbsent(midi, () => _renderNote(midi));
-      await player.play(BytesSource(bytes));
+    if (profileVoice != null) profileVoice.run.playerReusedCount++;
+    final previewTrace = playbackProfilingEnabled
+        ? PlaybackProfileTask.begin(
+            'note_player.preview_voice',
+            arguments: {
+              ...?profileVoice?.timelineArguments,
+              'midi': midi,
+              'volume': volume,
+              'pan': pan,
+              'source_strategy': _needsFile
+                  ? 'DeviceFileSource'
+                  : 'BytesSource',
+              'player_id': identityHashCode(player),
+              'player_reused': true,
+              'active_voice_count': _activePreviewProfileVoices.length,
+              'pending_voice_count': _pendingPreviewProfileVoices.length,
+            },
+          )
+        : null;
+    final startWatch = playbackProfilingEnabled ? (Stopwatch()..start()) : null;
+    try {
+      final configureTrace = playbackProfilingEnabled
+          ? PlaybackProfileTask.begin(
+              'note_player.configure_voice',
+              arguments: {
+                ...?profileVoice?.timelineArguments,
+                'kind': 'preview',
+                'midi': midi,
+                'player_id': identityHashCode(player),
+                'pan': pan,
+              },
+            )
+          : null;
+      try {
+        await player.setVolume(volume.clamp(0.0, 1.0));
+        await _applyBalance(player, pan);
+        configureTrace?.finish(arguments: {'outcome': 'configured'});
+      } catch (error) {
+        configureTrace?.finishError(error, stage: 'configure');
+        rethrow;
+      }
+
+      final Source source;
+      final sourceName = _needsFile ? 'DeviceFileSource' : 'BytesSource';
+      final fileWasCached = playbackProfilingEnabled
+          ? _fileCache.containsKey(midi)
+          : false;
+      final bytesWereCached = playbackProfilingEnabled
+          ? _bytesCache.containsKey(midi)
+          : false;
+      if (_needsFile) {
+        final path = await _ensureFile(midi, () => _renderNote(midi));
+        source = DeviceFileSource(path);
+      } else {
+        final bytes = _bytesCache.putIfAbsent(midi, () => _renderNote(midi));
+        source = BytesSource(bytes);
+      }
+
+      if (playbackProfilingEnabled) {
+        final previousActive = _activePreviewProfileVoices.remove(player);
+        final previousPending = _pendingPreviewProfileVoices.remove(player);
+        final previous = previousActive ?? previousPending;
+        if (previous != null && previous.voiceId != profileVoice?.voiceId) {
+          previous.run.outcome(previous, 'stolen_before_completion');
+          playbackProfileInstant(
+            'note_player.voice_terminated',
+            arguments: {
+              ...previous.timelineArguments,
+              'player_id': identityHashCode(player),
+              'outcome': 'stolen_before_completion',
+              'active_voice_count': _activePreviewProfileVoices.length,
+              'pending_voice_count': _pendingPreviewProfileVoices.length,
+            },
+          );
+        }
+        if (profileVoice != null) {
+          _pendingPreviewProfileVoices[player] = profileVoice;
+        }
+      }
+
+      final playTrace = playbackProfilingEnabled
+          ? PlaybackProfileTask.begin(
+              'note_player.play_request',
+              arguments: {
+                ...?profileVoice?.timelineArguments,
+                'kind': 'preview',
+                'midi': midi,
+                'player_id': identityHashCode(player),
+                'source': sourceName,
+                'file_cache_hit': fileWasCached,
+                'wav_cache_hit': bytesWereCached,
+                if (startWatch != null)
+                  'request_to_play_us': startWatch.elapsedMicroseconds,
+                if (profileVoice != null)
+                  'dispatch_error_us':
+                      profileVoice.clock.elapsedMicroseconds -
+                      profileVoice.intendedDeadlineUs,
+              },
+            )
+          : null;
+      try {
+        if (profileVoice != null) profileVoice.run.launched(profileVoice);
+        await player.play(
+          playbackProfilingEnabled
+              ? PlaybackProfileSource(source, {
+                  ...?profileVoice?.timelineArguments,
+                  'kind': 'preview',
+                  'midi': midi,
+                  'player_id': identityHashCode(player),
+                })
+              : source,
+        );
+        playTrace?.finish(arguments: {'outcome': 'play_future_completed'});
+      } catch (error) {
+        playTrace?.finishError(error, stage: 'play');
+        rethrow;
+      }
+      if (profileVoice != null) {
+        profileVoice.run.outcome(profileVoice, 'play_future_completed');
+        _pendingPreviewProfileVoices.remove(player);
+        if (!profileVoice.run.isTerminated(profileVoice)) {
+          _activePreviewProfileVoices[player] = profileVoice;
+        }
+      }
+      previewTrace?.finish(
+        arguments: {
+          ...?profileVoice?.timelineArguments,
+          'outcome': 'play_future_completed',
+          if (startWatch != null)
+            'request_to_play_us': startWatch.elapsedMicroseconds,
+          'active_voice_count': _activePreviewProfileVoices.length,
+          'pending_voice_count': _pendingPreviewProfileVoices.length,
+        },
+      );
+    } catch (error, stackTrace) {
+      if (profileVoice != null) {
+        profileVoice.run.outcome(profileVoice, 'error');
+        if (_activePreviewProfileVoices[player]?.voiceId ==
+            profileVoice.voiceId) {
+          _activePreviewProfileVoices.remove(player);
+        }
+        if (_pendingPreviewProfileVoices[player]?.voiceId ==
+            profileVoice.voiceId) {
+          _pendingPreviewProfileVoices.remove(player);
+        }
+      }
+      previewTrace?.finishError(error, stage: 'preview');
+      playbackProfileInstant(
+        'note_player.voice_terminated',
+        arguments: {
+          ...?profileVoice?.timelineArguments,
+          'player_id': identityHashCode(player),
+          'outcome': 'error',
+          'error_type': error.runtimeType.toString(),
+          'active_voice_count': _activePreviewProfileVoices.length,
+          'pending_voice_count': _pendingPreviewProfileVoices.length,
+        },
+      );
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -466,102 +721,495 @@ class NotePlayer {
     required double volume,
     required double pan,
     required int generation,
+    required PlaybackProfileVoiceContext? profileVoice,
   }) async {
-    if (onsetDelay > Duration.zero) await Future<void>.delayed(onsetDelay);
-    if (generation != _sequencedGeneration) return;
-
-    AudioPlayer? availablePlayer;
-    for (final candidate in _sequencedPool) {
-      if (!_activeSequencedVoices.containsKey(candidate)) {
-        availablePlayer = candidate;
-        break;
-      }
-    }
-    final AudioPlayer player;
-    if (availablePlayer == null) {
-      player = AudioPlayer();
-      await player.setReleaseMode(ReleaseMode.stop);
-      _sequencedPool.add(player);
-      if (generation != _sequencedGeneration) {
-        unawaited(player.dispose());
-        _sequencedPool.remove(player);
-        return;
-      }
-    } else {
-      player = availablePlayer;
-    }
-
-    final voiceId = ++_sequencedVoiceId;
-    _activeSequencedVoices[player] = voiceId;
-    _pendingSequencedVoices[player] = voiceId;
-    final durationMs = duration.inMilliseconds < 1
-        ? 1
-        : duration.inMilliseconds;
-    var started = false;
+    final noteTrace = playbackProfilingEnabled
+        ? PlaybackProfileTask.begin(
+            'note_player.sequenced_voice',
+            arguments: {
+              ...?profileVoice?.timelineArguments,
+              'midi': midi,
+              'duration_ms': duration.inMilliseconds,
+              'onset_delay_ms': onsetDelay.inMilliseconds,
+              'pan': pan,
+              'generation': generation,
+              'source_strategy': _needsFile
+                  ? 'DeviceFileSource'
+                  : 'BytesSource',
+              'active_voice_count': _activeSequencedVoices.length,
+              'pending_voice_count': _pendingSequencedVoices.length,
+            },
+          )
+        : null;
+    final startWatch = playbackProfilingEnabled ? (Stopwatch()..start()) : null;
+    int? sequencedVoiceId;
     try {
-      await player.setVolume(volume.clamp(0.0, 1.0));
-      await _applyBalance(player, pan);
-      if (generation != _sequencedGeneration ||
-          _activeSequencedVoices[player] != voiceId) {
+      if (onsetDelay > Duration.zero) await Future<void>.delayed(onsetDelay);
+      if (generation != _sequencedGeneration) {
+        if (profileVoice != null) {
+          profileVoice.run.outcome(profileVoice, 'cancelled');
+        }
+        noteTrace?.finish(
+          arguments: sequencedPlaybackProfileArguments(
+            profileTimelineArguments: profileVoice?.timelineArguments,
+            sequencedVoiceId: sequencedVoiceId,
+            additionalArguments: {
+              'outcome': 'cancelled',
+              'stage': 'onset_delay',
+            },
+          ),
+        );
+        return;
+      }
+      noteTrace?.instant('note_player.onset_delay_complete');
+
+      AudioPlayer? availablePlayer;
+      for (final candidate in _sequencedPool) {
+        if (!_activeSequencedVoices.containsKey(candidate)) {
+          availablePlayer = candidate;
+          break;
+        }
+      }
+      final AudioPlayer player;
+      if (availablePlayer == null) {
+        player = AudioPlayer();
+        await player.setReleaseMode(ReleaseMode.stop);
+        _sequencedPool.add(player);
+        if (profileVoice != null) profileVoice.run.playerCreatedCount++;
+        playbackProfileInstant(
+          'note_player.player_created',
+          arguments: {
+            ...?profileVoice?.timelineArguments,
+            'kind': 'sequenced',
+            'player_id': identityHashCode(player),
+          },
+        );
+        if (generation != _sequencedGeneration) {
+          unawaited(player.dispose());
+          _sequencedPool.remove(player);
+          if (profileVoice != null) {
+            profileVoice.run.outcome(profileVoice, 'cancelled');
+          }
+          noteTrace?.finish(
+            arguments: sequencedPlaybackProfileArguments(
+              profileTimelineArguments: profileVoice?.timelineArguments,
+              sequencedVoiceId: sequencedVoiceId,
+              additionalArguments: {
+                'outcome': 'cancelled',
+                'stage': 'player_create',
+              },
+            ),
+          );
+          return;
+        }
+      } else {
+        player = availablePlayer;
+        if (profileVoice != null) profileVoice.run.playerReusedCount++;
+      }
+
+      final voiceId = ++_sequencedVoiceId;
+      sequencedVoiceId = voiceId;
+      _activeSequencedVoices[player] = voiceId;
+      _pendingSequencedVoices[player] = voiceId;
+      if (profileVoice != null) _sequencedProfileVoices[player] = profileVoice;
+      final durationMs = duration.inMilliseconds < 1
+          ? 1
+          : duration.inMilliseconds;
+      var started = false;
+      var cancelled = false;
+      Object? operationError;
+      try {
+        final configureTrace = playbackProfilingEnabled
+            ? PlaybackProfileTask.begin(
+                'note_player.configure_voice',
+                arguments: sequencedPlaybackProfileArguments(
+                  profileTimelineArguments: profileVoice?.timelineArguments,
+                  sequencedVoiceId: voiceId,
+                  additionalArguments: {
+                    'kind': 'sequenced',
+                    'midi': midi,
+                    'player_id': identityHashCode(player),
+                    'player_lifecycle': availablePlayer == null
+                        ? 'created'
+                        : 'reused',
+                    'pan': pan,
+                    'active_voice_count': _activeSequencedVoices.length,
+                    'pending_voice_count': _pendingSequencedVoices.length,
+                  },
+                ),
+              )
+            : null;
+        try {
+          await player.setVolume(volume.clamp(0.0, 1.0));
+          await _applyBalance(player, pan);
+          configureTrace?.finish(
+            arguments: sequencedPlaybackProfileArguments(
+              profileTimelineArguments: profileVoice?.timelineArguments,
+              sequencedVoiceId: voiceId,
+              additionalArguments: {'outcome': 'configured'},
+            ),
+          );
+        } catch (error) {
+          configureTrace?.finish(
+            arguments: sequencedPlaybackProfileArguments(
+              profileTimelineArguments: profileVoice?.timelineArguments,
+              sequencedVoiceId: voiceId,
+              additionalArguments: {
+                'outcome': 'error',
+                'error_type': error.runtimeType.toString(),
+                'stage': 'configure',
+              },
+            ),
+          );
+          rethrow;
+        }
+        if (generation != _sequencedGeneration ||
+            _activeSequencedVoices[player] != voiceId) {
+          cancelled = true;
+          if (profileVoice != null) {
+            profileVoice.run.outcome(profileVoice, 'cancelled');
+          }
+          noteTrace?.finish(
+            arguments: sequencedPlaybackProfileArguments(
+              profileTimelineArguments: profileVoice?.timelineArguments,
+              sequencedVoiceId: sequencedVoiceId,
+              additionalArguments: {
+                'outcome': 'cancelled',
+                'stage': 'configure',
+              },
+            ),
+          );
+          return;
+        }
+
+        final cacheKey = 1000000 + midi * 10000000000 + durationMs;
+        if (_needsFile) {
+          final fileWasCached = playbackProfilingEnabled
+              ? _fileCache.containsKey(cacheKey)
+              : false;
+          final bytesWereCached = playbackProfilingEnabled
+              ? _bytesCache.containsKey(cacheKey)
+              : false;
+          final path = await _ensureFile(
+            cacheKey,
+            () => _renderSequencedNote(midi, durationMs),
+          );
+          if (generation != _sequencedGeneration ||
+              _activeSequencedVoices[player] != voiceId) {
+            cancelled = true;
+            if (profileVoice != null) {
+              profileVoice.run.outcome(profileVoice, 'cancelled');
+            }
+            noteTrace?.finish(
+              arguments: sequencedPlaybackProfileArguments(
+                profileTimelineArguments: profileVoice?.timelineArguments,
+                sequencedVoiceId: sequencedVoiceId,
+                additionalArguments: {
+                  'outcome': 'cancelled',
+                  'stage': 'source_prepare',
+                },
+              ),
+            );
+            return;
+          }
+          final playTrace = playbackProfilingEnabled
+              ? PlaybackProfileTask.begin(
+                  'note_player.play_request',
+                  arguments: sequencedPlaybackProfileArguments(
+                    profileTimelineArguments: profileVoice?.timelineArguments,
+                    sequencedVoiceId: voiceId,
+                    additionalArguments: {
+                      'kind': 'sequenced',
+                      'midi': midi,
+                      'duration_ms': durationMs,
+                      'player_id': identityHashCode(player),
+                      'source': 'DeviceFileSource',
+                      'player_lifecycle': availablePlayer == null
+                          ? 'created'
+                          : 'reused',
+                      'file_cache_hit': fileWasCached,
+                      'wav_cache_hit': bytesWereCached,
+                      if (startWatch != null)
+                        'dispatch_to_play_us': startWatch.elapsedMicroseconds,
+                      if (profileVoice != null)
+                        'dispatch_error_us':
+                            profileVoice.clock.elapsedMicroseconds -
+                            profileVoice.intendedDeadlineUs,
+                    },
+                  ),
+                )
+              : null;
+          try {
+            if (profileVoice != null) profileVoice.run.launched(profileVoice);
+            await player.play(
+              playbackProfilingEnabled
+                  ? PlaybackProfileSource(DeviceFileSource(path), {
+                      ...sequencedPlaybackProfileArguments(
+                        profileTimelineArguments:
+                            profileVoice?.timelineArguments,
+                        sequencedVoiceId: voiceId,
+                        additionalArguments: {
+                          'kind': 'sequenced',
+                          'midi': midi,
+                          'duration_ms': durationMs,
+                          'player_id': identityHashCode(player),
+                        },
+                      ),
+                    })
+                  : DeviceFileSource(path),
+            );
+            playTrace?.finish(
+              arguments: sequencedPlaybackProfileArguments(
+                profileTimelineArguments: profileVoice?.timelineArguments,
+                sequencedVoiceId: voiceId,
+                additionalArguments: {'outcome': 'play_future_completed'},
+              ),
+            );
+          } catch (error) {
+            playTrace?.finish(
+              arguments: sequencedPlaybackProfileArguments(
+                profileTimelineArguments: profileVoice?.timelineArguments,
+                sequencedVoiceId: voiceId,
+                additionalArguments: {
+                  'outcome': 'error',
+                  'error_type': error.runtimeType.toString(),
+                  'stage': 'play',
+                },
+              ),
+            );
+            rethrow;
+          }
+        } else {
+          final bytesWereCached = playbackProfilingEnabled
+              ? _bytesCache.containsKey(cacheKey)
+              : false;
+          final bytes = _bytesCache.putIfAbsent(
+            cacheKey,
+            () => _renderSequencedNote(midi, durationMs),
+          );
+          if (generation != _sequencedGeneration ||
+              _activeSequencedVoices[player] != voiceId) {
+            cancelled = true;
+            if (profileVoice != null) {
+              profileVoice.run.outcome(profileVoice, 'cancelled');
+            }
+            noteTrace?.finish(
+              arguments: sequencedPlaybackProfileArguments(
+                profileTimelineArguments: profileVoice?.timelineArguments,
+                sequencedVoiceId: sequencedVoiceId,
+                additionalArguments: {
+                  'outcome': 'cancelled',
+                  'stage': 'source_prepare',
+                },
+              ),
+            );
+            return;
+          }
+          final playTrace = playbackProfilingEnabled
+              ? PlaybackProfileTask.begin(
+                  'note_player.play_request',
+                  arguments: sequencedPlaybackProfileArguments(
+                    profileTimelineArguments: profileVoice?.timelineArguments,
+                    sequencedVoiceId: voiceId,
+                    additionalArguments: {
+                      'kind': 'sequenced',
+                      'midi': midi,
+                      'duration_ms': durationMs,
+                      'player_id': identityHashCode(player),
+                      'source': 'BytesSource',
+                      'player_lifecycle': availablePlayer == null
+                          ? 'created'
+                          : 'reused',
+                      'wav_cache_hit': bytesWereCached,
+                      if (startWatch != null)
+                        'dispatch_to_play_us': startWatch.elapsedMicroseconds,
+                      if (profileVoice != null)
+                        'dispatch_error_us':
+                            profileVoice.clock.elapsedMicroseconds -
+                            profileVoice.intendedDeadlineUs,
+                    },
+                  ),
+                )
+              : null;
+          try {
+            if (profileVoice != null) profileVoice.run.launched(profileVoice);
+            await player.play(
+              playbackProfilingEnabled
+                  ? PlaybackProfileSource(BytesSource(bytes), {
+                      ...sequencedPlaybackProfileArguments(
+                        profileTimelineArguments:
+                            profileVoice?.timelineArguments,
+                        sequencedVoiceId: voiceId,
+                        additionalArguments: {
+                          'kind': 'sequenced',
+                          'midi': midi,
+                          'duration_ms': durationMs,
+                          'player_id': identityHashCode(player),
+                        },
+                      ),
+                    })
+                  : BytesSource(bytes),
+            );
+            playTrace?.finish(
+              arguments: sequencedPlaybackProfileArguments(
+                profileTimelineArguments: profileVoice?.timelineArguments,
+                sequencedVoiceId: voiceId,
+                additionalArguments: {'outcome': 'play_future_completed'},
+              ),
+            );
+          } catch (error) {
+            playTrace?.finish(
+              arguments: sequencedPlaybackProfileArguments(
+                profileTimelineArguments: profileVoice?.timelineArguments,
+                sequencedVoiceId: voiceId,
+                additionalArguments: {
+                  'outcome': 'error',
+                  'error_type': error.runtimeType.toString(),
+                  'stage': 'play',
+                },
+              ),
+            );
+            rethrow;
+          }
+        }
+        started = true;
+        if (profileVoice != null) {
+          profileVoice.run.outcome(profileVoice, 'play_future_completed');
+        }
+      } catch (error) {
+        // A platform playback failure should not leave this voice reserved.
+        operationError = error;
+        if (profileVoice != null) {
+          profileVoice.run.outcome(profileVoice, 'error');
+        }
+        playbackProfileInstant(
+          'note_player.voice_terminated',
+          arguments: sequencedPlaybackProfileArguments(
+            profileTimelineArguments: profileVoice?.timelineArguments,
+            sequencedVoiceId: voiceId,
+            additionalArguments: {
+              'player_id': identityHashCode(player),
+              'outcome': 'error',
+              'error_type': error.runtimeType.toString(),
+              'active_voice_count': _activeSequencedVoices.length,
+              'pending_voice_count': _pendingSequencedVoices.length,
+            },
+          ),
+        );
+      } finally {
+        if (_pendingSequencedVoices[player] == voiceId) {
+          _pendingSequencedVoices.remove(player);
+        }
+        if (!started ||
+            generation != _sequencedGeneration ||
+            _activeSequencedVoices[player] != voiceId) {
+          await _stopSequencedVoice(
+            player,
+            voiceId,
+            reason: started
+                ? 'cancelled'
+                : cancelled
+                ? 'cancelled'
+                : 'error_cleanup',
+          );
+        }
+      }
+
+      if (operationError != null) {
+        noteTrace?.finish(
+          arguments: sequencedPlaybackProfileArguments(
+            profileTimelineArguments: profileVoice?.timelineArguments,
+            sequencedVoiceId: sequencedVoiceId,
+            additionalArguments: {
+              'outcome': 'error',
+              'error_type': operationError.runtimeType.toString(),
+              'stage': 'platform_playback',
+            },
+          ),
+        );
         return;
       }
 
-      final cacheKey = 1000000 + midi * 10000000000 + durationMs;
-      if (_needsFile) {
-        final path = await _ensureFile(
-          cacheKey,
-          () => _renderSequencedNote(midi, durationMs),
-        );
-        if (generation != _sequencedGeneration ||
-            _activeSequencedVoices[player] != voiceId) {
-          return;
-        }
-        await player.play(DeviceFileSource(path));
-      } else {
-        final bytes = _bytesCache.putIfAbsent(
-          cacheKey,
-          () => _renderSequencedNote(midi, durationMs),
-        );
-        if (generation != _sequencedGeneration ||
-            _activeSequencedVoices[player] != voiceId) {
-          return;
-        }
-        await player.play(BytesSource(bytes));
-      }
-      started = true;
-    } catch (_) {
-      // A platform playback failure should not leave this voice reserved.
-    } finally {
-      if (_pendingSequencedVoices[player] == voiceId) {
-        _pendingSequencedVoices.remove(player);
-      }
       if (!started ||
           generation != _sequencedGeneration ||
           _activeSequencedVoices[player] != voiceId) {
-        await _stopSequencedVoice(player, voiceId);
+        if (profileVoice != null &&
+            !profileVoice.run.isTerminated(profileVoice)) {
+          profileVoice.run.outcome(profileVoice, 'cancelled');
+        }
+        noteTrace?.finish(
+          arguments: sequencedPlaybackProfileArguments(
+            profileTimelineArguments: profileVoice?.timelineArguments,
+            sequencedVoiceId: sequencedVoiceId,
+            additionalArguments: {
+              'outcome': 'cancelled',
+              'stage': 'play_request',
+              'active_voice_count': _activeSequencedVoices.length,
+              'pending_voice_count': _pendingSequencedVoices.length,
+            },
+          ),
+        );
+        return;
       }
+      noteTrace?.finish(
+        arguments: sequencedPlaybackProfileArguments(
+          profileTimelineArguments: profileVoice?.timelineArguments,
+          sequencedVoiceId: sequencedVoiceId,
+          additionalArguments: {
+            'outcome': 'play_future_completed',
+            if (startWatch != null)
+              'dispatch_to_play_us': startWatch.elapsedMicroseconds,
+            if (profileVoice != null)
+              'dispatch_error_us':
+                  profileVoice.clock.elapsedMicroseconds -
+                  profileVoice.intendedDeadlineUs,
+            'active_voice_count': _activeSequencedVoices.length,
+            'pending_voice_count': _pendingSequencedVoices.length,
+          },
+        ),
+      );
+      unawaited(
+        Future<void>.delayed(Duration(milliseconds: durationMs), () async {
+          await _stopSequencedVoice(
+            player,
+            voiceId,
+            reason: 'natural_completion',
+          );
+        }),
+      );
+    } catch (error, stackTrace) {
+      if (profileVoice != null) profileVoice.run.outcome(profileVoice, 'error');
+      noteTrace?.finish(
+        arguments: sequencedPlaybackProfileArguments(
+          profileTimelineArguments: profileVoice?.timelineArguments,
+          sequencedVoiceId: sequencedVoiceId,
+          additionalArguments: {
+            'outcome': 'error',
+            'error_type': error.runtimeType.toString(),
+            'stage': 'sequenced_setup',
+          },
+        ),
+      );
+      Error.throwWithStackTrace(error, stackTrace);
     }
-
-    if (!started ||
-        generation != _sequencedGeneration ||
-        _activeSequencedVoices[player] != voiceId) {
-      return;
-    }
-    unawaited(
-      Future<void>.delayed(Duration(milliseconds: durationMs), () async {
-        await _stopSequencedVoice(player, voiceId);
-      }),
-    );
   }
 
-  Future<void> _stopSequencedVoice(AudioPlayer player, int voiceId) async {
+  Future<void> _stopSequencedVoice(
+    AudioPlayer player,
+    int voiceId, {
+    String reason = 'cancelled',
+  }) async {
     if (_activeSequencedVoices[player] != voiceId) return;
     final existingStop = _sequencedStops[player];
     if (existingStop != null) {
       await existingStop;
       return;
     }
-    final stopping = _stopSequencedVoiceInternal(player, voiceId);
+    final stopping = _stopSequencedVoiceInternal(
+      player,
+      voiceId,
+      reason: reason,
+    );
     _sequencedStops[player] = stopping;
     await stopping;
     if (identical(_sequencedStops[player], stopping)) {
@@ -571,12 +1219,66 @@ class NotePlayer {
 
   Future<void> _stopSequencedVoiceInternal(
     AudioPlayer player,
-    int voiceId,
-  ) async {
-    await player.stop();
-    if (_activeSequencedVoices[player] == voiceId &&
-        _pendingSequencedVoices[player] != voiceId) {
-      _activeSequencedVoices.remove(player);
+    int voiceId, {
+    required String reason,
+  }) async {
+    final profileVoice = _sequencedProfileVoices[player];
+    final stopTrace = playbackProfilingEnabled
+        ? PlaybackProfileTask.begin(
+            'note_player.sequenced_voice_stop',
+            arguments: sequencedPlaybackProfileArguments(
+              profileTimelineArguments: profileVoice?.timelineArguments,
+              sequencedVoiceId: voiceId,
+              additionalArguments: {
+                'player_id': identityHashCode(player),
+                'reason': reason,
+                'active_voice_count': _activeSequencedVoices.length,
+                'pending_voice_count': _pendingSequencedVoices.length,
+              },
+            ),
+          )
+        : null;
+    try {
+      await player.stop();
+      if (_activeSequencedVoices[player] == voiceId &&
+          _pendingSequencedVoices[player] != voiceId) {
+        _activeSequencedVoices.remove(player);
+      }
+      if (_sequencedProfileVoices[player]?.voiceId == profileVoice?.voiceId) {
+        _sequencedProfileVoices.remove(player);
+      }
+      final outcome = reason == 'natural_completion'
+          ? 'natural_completion'
+          : reason == 'cancelled'
+          ? 'cancelled'
+          : reason;
+      if (profileVoice != null) profileVoice.run.outcome(profileVoice, outcome);
+      stopTrace?.finish(
+        arguments: sequencedPlaybackProfileArguments(
+          profileTimelineArguments: profileVoice?.timelineArguments,
+          sequencedVoiceId: voiceId,
+          additionalArguments: {
+            'outcome': outcome,
+            'stop_future_completed': true,
+            'active_voice_count': _activeSequencedVoices.length,
+            'pending_voice_count': _pendingSequencedVoices.length,
+          },
+        ),
+      );
+    } catch (error) {
+      if (profileVoice != null) profileVoice.run.outcome(profileVoice, 'error');
+      stopTrace?.finish(
+        arguments: sequencedPlaybackProfileArguments(
+          profileTimelineArguments: profileVoice?.timelineArguments,
+          sequencedVoiceId: voiceId,
+          additionalArguments: {
+            'outcome': 'error',
+            'error_type': error.runtimeType.toString(),
+            'stage': 'stop',
+          },
+        ),
+      );
+      rethrow;
     }
   }
 
@@ -603,21 +1305,81 @@ class NotePlayer {
   }
 
   Future<String> _ensureFile(int cacheKey, Uint8List Function() render) {
-    if (_fileCache.containsKey(cacheKey)) {
-      return Future.value(_fileCache[cacheKey]);
+    final cachedPath = _fileCache[cacheKey];
+    if (cachedPath != null) {
+      return Future.value(cachedPath);
     }
-    return _pending.putIfAbsent(cacheKey, () async {
+    final existingWrite = _pending[cacheKey];
+    if (existingWrite != null) {
+      if (!playbackProfilingEnabled) return existingWrite;
+      final pendingTrace = playbackProfilingEnabled
+          ? PlaybackProfileTask.begin(
+              'note_player.wav_file_wait',
+              arguments: {'cache_key': cacheKey},
+            )
+          : null;
+      return () async {
+        try {
+          final path = await existingWrite;
+          pendingTrace?.finish(arguments: {'outcome': 'shared_write_ready'});
+          return path;
+        } catch (error) {
+          pendingTrace?.finishError(error, stage: 'shared_write');
+          rethrow;
+        }
+      }();
+    }
+    final fileTrace = playbackProfilingEnabled
+        ? PlaybackProfileTask.begin(
+            'note_player.wav_file_prepare',
+            arguments: {
+              'cache_key': cacheKey,
+              'pending_write': _pending.containsKey(cacheKey),
+              'wav_cache_hit': _bytesCache.containsKey(cacheKey),
+            },
+          )
+        : null;
+    bool? wavWasCached;
+    int? renderUs;
+    int? byteCount;
+    final writeFuture = _pending.putIfAbsent(cacheKey, () async {
       final name = cacheKey >= 0
           ? 'note_$cacheKey'
           : cacheKey <= -10
           ? 'drum_${-cacheKey}'
           : 'click_${-cacheKey}';
       final path = '${_tempDir!}/$name.wav';
+      wavWasCached = playbackProfilingEnabled
+          ? _bytesCache.containsKey(cacheKey)
+          : false;
+      final renderWatch = playbackProfilingEnabled
+          ? (Stopwatch()..start())
+          : null;
       final bytes = _bytesCache.putIfAbsent(cacheKey, render);
+      renderUs = renderWatch?.elapsedMicroseconds;
+      byteCount = bytes.length;
       await ioWriteIfAbsent(path, bytes); // resolves via note_player_io.dart
       _fileCache[cacheKey] = path;
       _pending.remove(cacheKey);
       return path;
     });
+    return () async {
+      try {
+        final path = await writeFuture;
+        fileTrace?.finish(
+          arguments: {
+            'outcome': 'file_ready',
+            'bytes': byteCount,
+            'wav_cache_hit': wavWasCached,
+            'render_or_cache_lookup_us': renderUs,
+          },
+        );
+        return path;
+      } catch (error) {
+        _pending.remove(cacheKey);
+        fileTrace?.finishError(error, stage: 'file_write');
+        rethrow;
+      }
+    }();
   }
 }

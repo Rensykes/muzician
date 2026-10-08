@@ -9,11 +9,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/save_system.dart';
 import '../../store/save_system_store.dart';
 import '../../store/piano_roll_store.dart';
+import '../../store/settings_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../schema/rules/piano_roll_import_rules.dart' as import_rules;
 import '../../schema/rules/save_system_rules.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
+import '../../utils/note_utils.dart';
 
 // ── Widget ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,9 @@ class _PianoRollSaveStackLoaderState
   Widget build(BuildContext context) {
     final ssState = ref.watch(saveSystemProvider);
     final prState = ref.watch(pianoRollProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final prNotifier = ref.read(pianoRollProvider.notifier);
 
     // Build breadcrumb
@@ -434,7 +439,10 @@ class _PianoRollSaveStackLoaderState
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      note,
+                                      formatRootChoiceLabel(
+                                        note,
+                                        spelling: spelling,
+                                      ),
                                       style: const TextStyle(
                                         color: MuzicianTheme.sky,
                                         fontSize: 12,
@@ -463,7 +471,7 @@ class _PianoRollSaveStackLoaderState
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  'Chord: ${selectedSave.snapshot.pendingChord!.symbol}',
+                  'Chord: ${formatRecognizedChordLabel(symbol: selectedSave.snapshot.pendingChord!.symbol, rootPc: noteToPC[toSharp(selectedSave.snapshot.pendingChord!.root)] ?? -1, quality: selectedSave.snapshot.pendingChord!.quality, spelling: spelling)}',
                   style: const TextStyle(
                     color: MuzicianTheme.violet,
                     fontSize: 12,
@@ -475,7 +483,7 @@ class _PianoRollSaveStackLoaderState
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  'Scale: ${selectedSave.snapshot.pendingScale!.root} ${selectedSave.snapshot.pendingScale!.scaleName}',
+                  'Scale: ${formatRootChoiceLabel(selectedSave.snapshot.pendingScale!.root, spelling: spelling)} ${selectedSave.snapshot.pendingScale!.scaleName}',
                   style: const TextStyle(
                     color: MuzicianTheme.violet,
                     fontSize: 12,

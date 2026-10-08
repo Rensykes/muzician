@@ -52,6 +52,7 @@ void main() {
     expect(snap.numFrets, 12);
     expect(snap.capo, 0);
     expect(snap.viewMode, FretboardViewMode.exact);
+    expect(snap.inputMode, FretboardInputMode.chord);
     expect(snap.selectedNotes.toSet(), {'C', 'E', 'G'});
     expect(snap.selectedCells.length, 5);
   });

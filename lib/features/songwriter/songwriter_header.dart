@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/project_config.dart';
+import '../../models/save_system.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../../store/settings_store.dart';
+import '../../store/save_system_store.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/writer_save_binding_store.dart';
 import '../../ui/project_picker_sheet.dart';
+import '../../ui/core/update_project_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import '../_mockup_shell.dart';
 
@@ -28,11 +34,14 @@ class SongwriterHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(songwriterProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final config = project.config;
     final dirty = ref.watch(writerDirtyProvider);
     final keyLabel = config.keyRoot == null
         ? 'No key'
-        : '${chromaticNotes[config.keyRoot!]} ${config.keyScaleName ?? ''}'
+        : '${formatRootChoiceLabel(chromaticNotes[config.keyRoot!], spelling: spelling)} ${config.keyScaleName ?? ''}'
               .trim();
     // Landscape phones are height-starved: drop the title row and reach the
     // overflow menu from a trailing button on the config strip instead.
@@ -138,9 +147,8 @@ class SongwriterHeader extends ConsumerWidget {
                           icon: Icons.help_outline_rounded,
                           onTap: onStartTour!,
                         ),
-                      IconBtn(
-                        icon: Icons.more_vert,
-                        onTap: () => _showOverflowMenu(context, ref),
+                      _WriterMenuButton(
+                        onPressed: () => _showOverflowMenu(context, ref),
                       ),
                     ],
                   ),
@@ -154,9 +162,6 @@ class SongwriterHeader extends ConsumerWidget {
           tempo: config.tempo,
           onKeyTap: () => _editKey(context, ref),
           onTempoTap: () => _editTempo(context, ref),
-          onNewProject: () async {
-            await showWriterProjectCreationFlow(context, ref);
-          },
           onOverflow: compact ? () => _showOverflowMenu(context, ref) : null,
           onHelp: compact ? onStartTour : null,
         ),
@@ -166,7 +171,8 @@ class SongwriterHeader extends ConsumerWidget {
 
   void _showOverflowMenu(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
-    showWidgetSheet(
+    late final Future<void> sheetClosed;
+    sheetClosed = showWidgetSheet(
       context: context,
       title: 'Writer',
       child: Column(
@@ -191,6 +197,21 @@ class SongwriterHeader extends ConsumerWidget {
                 height: 1.4,
               ),
             ),
+          ),
+          _MenuTile(
+            key: const Key('writerMenuTile_new_project'),
+            icon: Icons.add_box_outlined,
+            label: 'New project',
+            keyboardAccessible: true,
+            onTap: () {
+              Navigator.pop(context);
+              unawaited(
+                sheetClosed.then((_) async {
+                  if (!context.mounted) return;
+                  await showWriterProjectCreationFlow(context, ref);
+                }),
+              );
+            },
           ),
           _MenuTile(
             icon: Icons.undo_rounded,
@@ -260,14 +281,40 @@ class SongwriterHeader extends ConsumerWidget {
   }
 
   void _editKey(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(songwriterProvider.notifier);
-    showWidgetSheet(
+    final initialFolder = ref.read(selectedProjectProvider);
+    final initialProjectConfig =
+        initialFolder?.projectConfig ?? const ProjectConfig();
+    late final Future<void> sheetClosed;
+    void chooseKey(int? root, String? scale) {
+      Navigator.pop(context);
+      unawaited(
+        sheetClosed.then((_) async {
+          if (!context.mounted) return;
+          final currentFolder = ref.read(selectedProjectProvider);
+          if (initialFolder?.id != currentFolder?.id ||
+              initialFolder?.kind != currentFolder?.kind) {
+            return;
+          }
+          if (initialFolder?.kind == SaveFolderKind.project) {
+            await requestProjectKeyChange(
+              context,
+              ref,
+              keyRootPc: root,
+              keyScaleName: scale,
+              expectedProjectId: initialFolder!.id,
+              expectedConfig: initialProjectConfig,
+            );
+            return;
+          }
+          ref.read(songwriterProvider.notifier).setKey(root, scale);
+        }),
+      );
+    }
+
+    sheetClosed = showWidgetSheet(
       context: context,
       title: 'Key',
-      child: _KeySheet(
-        onPick: (root, scale) => notifier.setKey(root, scale),
-        onClear: () => notifier.setKey(null, null),
-      ),
+      child: _KeySheet(onPick: chooseKey, onClear: () => chooseKey(null, null)),
     );
   }
 }
@@ -278,7 +325,6 @@ class _WriterConfigStrip extends ConsumerWidget {
     required this.tempo,
     required this.onKeyTap,
     required this.onTempoTap,
-    required this.onNewProject,
     this.onOverflow,
     this.onHelp,
   });
@@ -286,7 +332,6 @@ class _WriterConfigStrip extends ConsumerWidget {
   final int tempo;
   final VoidCallback onKeyTap;
   final VoidCallback onTempoTap;
-  final VoidCallback onNewProject;
 
   /// Compact (landscape) mode: the title row is hidden, so the strip hosts
   /// the overflow-menu button.
@@ -347,28 +392,13 @@ class _WriterConfigStrip extends ConsumerWidget {
                   .read(settingsProvider.notifier)
                   .setMetronomeEnabled(!metronomeOn),
             ),
-            _stripDivider(),
-            Tooltip(
-              message: 'Create Writer project',
-              child: Semantics(
-                button: true,
-                label: 'Create Writer project',
-                excludeSemantics: true,
-                child: IconBtn(
-                  key: const Key('writerNewProjectButton'),
-                  icon: Icons.add_box_outlined,
-                  onTap: onNewProject,
-                ),
-              ),
-            ),
             if (onHelp != null)
               IconBtn(
                 key: const Key('writerHelpButton'),
                 icon: Icons.help_outline_rounded,
                 onTap: onHelp!,
               ),
-            if (onOverflow != null)
-              IconBtn(icon: Icons.more_vert, onTap: onOverflow!),
+            if (onOverflow != null) _WriterMenuButton(onPressed: onOverflow!),
           ],
         ),
       ),
@@ -377,6 +407,27 @@ class _WriterConfigStrip extends ConsumerWidget {
 
   static Widget _stripDivider() =>
       Container(width: 1, height: 24, color: MuzicianTheme.glassBorder);
+}
+
+class _WriterMenuButton extends StatelessWidget {
+  const _WriterMenuButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Writer menu',
+    child: Semantics(
+      button: true,
+      label: 'Writer menu',
+      excludeSemantics: true,
+      child: IconBtn(
+        key: const Key('writerMenuButton'),
+        icon: Icons.more_vert,
+        onTap: onPressed,
+      ),
+    ),
+  );
 }
 
 class _ConfigReadout extends StatelessWidget {
@@ -502,12 +553,15 @@ class _TempoSheetState extends State<_TempoSheet> {
   }
 }
 
-class _KeySheet extends StatelessWidget {
+class _KeySheet extends ConsumerWidget {
   const _KeySheet({required this.onPick, required this.onClear});
   final void Function(int root, String scale) onPick;
   final VoidCallback onClear;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     const scales = ['major', 'minor'];
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -534,10 +588,12 @@ class _KeySheet extends StatelessWidget {
                 for (var pc = 0; pc < 12; pc++)
                   _GlassPill(
                     key: ValueKey('keyPill_${scale}_$pc'),
-                    label: chromaticNotes[pc],
+                    label: formatRootChoiceLabel(
+                      chromaticNotes[pc],
+                      spelling: spelling,
+                    ),
                     onTap: () {
                       onPick(pc, scale);
-                      Navigator.pop(context);
                     },
                   ),
               ],
@@ -548,7 +604,6 @@ class _KeySheet extends StatelessWidget {
             label: 'Clear key',
             onTap: () {
               onClear();
-              Navigator.pop(context);
             },
           ),
         ],
@@ -609,6 +664,7 @@ class _GlassTextButton extends StatelessWidget {
 
 class _MenuTile extends StatefulWidget {
   const _MenuTile({
+    super.key,
     required this.icon,
     required this.label,
     required this.onTap,

@@ -3,6 +3,12 @@ library;
 
 import '../models/harmonic_analysis.dart';
 
+/// Preferred accidental style for user-facing musical note labels.
+///
+/// Music data and theory calculations remain canonical sharp pitch classes;
+/// this only controls how labels are rendered.
+enum NoteSpelling { sharps, flats }
+
 // ─── Note normalization ───────────────────────────────────────────────────────
 
 const Map<String, String> _flatToSharp = {
@@ -177,7 +183,9 @@ String _romanFor(int degree, String quality) {
   final base = _kRomanUpper[degree - 1];
   final isMinor = quality == 'm' || quality == 'm7' || quality == 'm7b5';
   final stem = isMinor ? base.toLowerCase() : base;
-  if (quality == 'dim' || quality == 'm7b5' || quality == 'dim7') return '$stem°';
+  if (quality == 'dim' || quality == 'm7b5' || quality == 'dim7') {
+    return '$stem°';
+  }
   if (quality == 'aug') return '$stem+';
   return stem;
 }
@@ -347,37 +355,95 @@ List<ScaleDetectionResult> detectScaleResultsFromExactNotes(
   return results;
 }
 
-/// Formats a canonical sharp root as a flat label for display (e.g. `A#` → `Bb`).
-String formatRootChoiceLabel(String canonicalRoot) => switch (canonicalRoot) {
-  'A#' => 'Bb',
-  'C#' => 'Db',
-  'D#' => 'Eb',
-  'G#' => 'Ab',
-  _ => canonicalRoot,
-};
+/// Formats a note name for display without changing its pitch class.
+///
+/// Inputs may use either sharp or flat spelling. Unknown labels are returned
+/// unchanged so this helper is safe at note-name display boundaries.
+String formatRootChoiceLabel(
+  String canonicalRoot, {
+  NoteSpelling spelling = NoteSpelling.sharps,
+}) {
+  final sharpRoot = toSharp(canonicalRoot);
+  if (!noteToPC.containsKey(sharpRoot)) return canonicalRoot;
+  if (spelling == NoteSpelling.sharps) return sharpRoot;
+  return switch (sharpRoot) {
+    'A#' => 'Bb',
+    'C#' => 'Db',
+    'D#' => 'Eb',
+    'F#' => 'Gb',
+    'G#' => 'Ab',
+    _ => sharpRoot,
+  };
+}
 
 /// Formats a MIDI note as a display label with octave, preserving the same
 /// accidental style used by root-choice UI (e.g. `61` -> `Db4`).
-String formatMidiNoteLabel(int midi) {
+String formatMidiNoteLabel(
+  int midi, {
+  NoteSpelling spelling = NoteSpelling.sharps,
+}) {
   final pitchClass = chromaticNotes[((midi % 12) + 12) % 12];
   final octave = (midi ~/ 12) - 1;
-  return '${formatRootChoiceLabel(pitchClass)}$octave';
+  return '${formatRootChoiceLabel(pitchClass, spelling: spelling)}$octave';
 }
 
 /// Formats a [ChordDetectionResult] as a human-readable chord symbol
 /// (e.g. `Cmaj7` or `C/E`).
-String formatChordSymbol(ChordDetectionResult result) {
-  final root = formatRootChoiceLabel(result.root);
-  final bass = result.bass == null ? null : formatRootChoiceLabel(result.bass!);
+String formatChordSymbol(
+  ChordDetectionResult result, {
+  NoteSpelling spelling = NoteSpelling.sharps,
+}) {
+  final root = formatRootChoiceLabel(result.root, spelling: spelling);
+  final bass = result.bass == null
+      ? null
+      : formatRootChoiceLabel(result.bass!, spelling: spelling);
   return bass == null
       ? '$root${result.quality}'
       : '$root${result.quality}/$bass';
 }
 
+/// Formats stored chord text only when its identity metadata verifies it.
+///
+/// A literal or stale label stays untouched. Verified symbols retain their
+/// exact quality suffix and optional valid slash bass while note names follow
+/// [spelling].
+String formatRecognizedChordLabel({
+  required String symbol,
+  required int rootPc,
+  required String quality,
+  required NoteSpelling spelling,
+}) {
+  if (rootPc < 0 || rootPc > 11 || !chordIntervals.containsKey(quality)) {
+    return symbol;
+  }
+  final match = RegExp(
+    r'^([A-G](?:#|b)?)([^/]*)(?:/([A-G](?:#|b)?))?$',
+  ).firstMatch(symbol);
+  if (match == null) return symbol;
+
+  final root = match.group(1)!;
+  final suffix = match.group(2)!;
+  final bass = match.group(3);
+  final rootPitchClass = noteToPC[toSharp(root)];
+  if (rootPitchClass != rootPc || suffix != quality) return symbol;
+  if (bass != null && !noteToPC.containsKey(toSharp(bass))) return symbol;
+
+  final formattedRoot = formatRootChoiceLabel(root, spelling: spelling);
+  final formattedBass = bass == null
+      ? null
+      : formatRootChoiceLabel(bass, spelling: spelling);
+  return formattedBass == null
+      ? '$formattedRoot$suffix'
+      : '$formattedRoot$suffix/$formattedBass';
+}
+
 /// Formats a [ScaleDetectionResult] as a human-readable label
 /// (e.g. `C major` or `Eb dorian`).
-String formatScaleLabel(ScaleDetectionResult result) =>
-    '${formatRootChoiceLabel(result.root)} ${result.scaleName}';
+String formatScaleLabel(
+  ScaleDetectionResult result, {
+  NoteSpelling spelling = NoteSpelling.sharps,
+}) =>
+    '${formatRootChoiceLabel(result.root, spelling: spelling)} ${result.scaleName}';
 
 /// Internal helper that detects chords from a set of pitch-class names.
 List<ChordDetectionResult> _detectChordResultsFromPitchClasses(

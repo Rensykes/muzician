@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project_config.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
+import '../store/settings_store.dart';
 import '../theme/muzician_theme.dart';
 import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
@@ -29,8 +30,7 @@ class ProjectConfigSheet extends ConsumerStatefulWidget {
       );
 
   @override
-  ConsumerState<ProjectConfigSheet> createState() =>
-      _ProjectConfigSheetState();
+  ConsumerState<ProjectConfigSheet> createState() => _ProjectConfigSheetState();
 }
 
 class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
@@ -66,7 +66,8 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
       notifier.renameProject(widget.projectId, name);
     }
     final current = folder.projectConfig ?? const ProjectConfig();
-    final changed = current.tempo != _draft.tempo ||
+    final changed =
+        current.tempo != _draft.tempo ||
         current.beatsPerBar != _draft.beatsPerBar ||
         current.beatUnit != _draft.beatUnit ||
         current.keyRootPc != _draft.keyRootPc ||
@@ -75,8 +76,11 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
       Navigator.of(context).pop();
       return;
     }
-    final affected =
-        getSavesInSubtree(state.folders, state.saves, widget.projectId).length;
+    final affected = getSavesInSubtree(
+      state.folders,
+      state.saves,
+      widget.projectId,
+    ).length;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => MuzicianDialog(
@@ -110,9 +114,7 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
       decoration: const BoxDecoration(
         color: Color(0xFF141826),
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border(
-          top: BorderSide(color: Color(0x33FFFFFF), width: 0.5),
-        ),
+        border: Border(top: BorderSide(color: Color(0x33FFFFFF), width: 0.5)),
       ),
       child: SafeArea(
         top: false,
@@ -298,7 +300,7 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _KeyPicker extends StatelessWidget {
+class _KeyPicker extends ConsumerWidget {
   final int? rootPc;
   final String? scaleName;
   final void Function(int? rootPc, String? scaleName) onChanged;
@@ -309,7 +311,10 @@ class _KeyPicker extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final scales = scaleIntervals.keys.toList();
     final scale = scaleName ?? (scales.isNotEmpty ? scales.first : null);
     return Column(
@@ -333,7 +338,10 @@ class _KeyPicker extends StatelessWidget {
               final pc = i - 1;
               final selected = rootPc == pc;
               return _Pill(
-                label: chromaticNotes[pc],
+                label: formatRootChoiceLabel(
+                  chromaticNotes[pc],
+                  spelling: spelling,
+                ),
                 selected: selected,
                 onTap: () => onChanged(pc, scale),
               );
