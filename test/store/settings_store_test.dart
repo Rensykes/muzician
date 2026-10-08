@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/store/settings_store.dart';
+import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -27,5 +28,19 @@ void main() {
       container.read(settingsProvider).defaultNewProjectHarmonyInstrument,
       HarmonyLaneInstrument.piano,
     );
+  });
+
+  test('setNoteSpelling persists and reloads the preference', () async {
+    final first = ProviderContainer();
+    await first
+        .read(settingsProvider.notifier)
+        .setNoteSpelling(NoteSpelling.flats);
+    expect(first.read(settingsProvider).noteSpelling, NoteSpelling.flats);
+    first.dispose();
+
+    final restored = ProviderContainer();
+    addTearDown(restored.dispose);
+    await restored.read(settingsProvider.notifier).hydrate();
+    expect(restored.read(settingsProvider).noteSpelling, NoteSpelling.flats);
   });
 }

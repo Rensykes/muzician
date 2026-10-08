@@ -767,10 +767,15 @@ class _SongScaleChip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final root = config.scaleRoot;
     final name = config.scaleName;
     final isSet = root != null && name != null;
-    final label = isSet ? '$root ${_scaleLabel(name)}' : 'Set scale';
+    final label = isSet
+        ? '${note_utils.formatRootChoiceLabel(root, spelling: spelling)} ${_scaleLabel(name)}'
+        : 'Set scale';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: GestureDetector(
@@ -861,6 +866,9 @@ class _SongScalePickerSheetState extends ConsumerState<_SongScalePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final scalesForCategory =
         note_utils.scaleGroups[_activeCategory] ?? const [];
     final isActive = _selectedRoot != null && _selectedScale != null;
@@ -889,7 +897,9 @@ class _SongScalePickerSheetState extends ConsumerState<_SongScalePickerSheet> {
             separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (_, i) {
               final note = note_utils.chromaticNotes[i];
-              final active = note == _selectedRoot;
+              final active =
+                  note_utils.noteToPC[note] ==
+                  note_utils.noteToPC[_selectedRoot];
               return GestureDetector(
                 onTap: () => _onRootTap(note),
                 child: Container(
@@ -912,7 +922,7 @@ class _SongScalePickerSheetState extends ConsumerState<_SongScalePickerSheet> {
                     ),
                   ),
                   child: Text(
-                    note,
+                    note_utils.formatRootChoiceLabel(note, spelling: spelling),
                     style: TextStyle(
                       color: active
                           ? MuzicianTheme.sky
@@ -1060,9 +1070,15 @@ class _SongScalePickerSheetState extends ConsumerState<_SongScalePickerSheet> {
       return;
     }
     if (!mounted) return;
+    final spelling = ref.read(settingsProvider).noteSpelling;
+    final displayConflicts = conflicts
+        .map(
+          (note) => note_utils.formatRootChoiceLabel(note, spelling: spelling),
+        )
+        .toList();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
+      builder: (ctx) => ScaleConflictDialog(conflictingNotes: displayConflicts),
     );
     if (confirmed != true) return;
     final notifier = ref.read(songProjectProvider.notifier);

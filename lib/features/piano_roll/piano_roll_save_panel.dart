@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/project_config.dart';
 import '../../models/save_system.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/save_system_store.dart';
@@ -24,7 +25,8 @@ class PianoRollSavePanel extends ConsumerWidget {
     );
     if (selectedId == null) {
       return const ProjectRequiredPlaceholder(
-        message: 'Pick a project (or Dump)\nto save and load piano-roll snapshots.',
+        message:
+            'Pick a project (or Dump)\nto save and load piano-roll snapshots.',
       );
     }
     return SaveBrowserPanel(
@@ -72,16 +74,12 @@ class PianoRollSavePanel extends ConsumerWidget {
   /// Restores piano roll state from a snapshot.
   void _loadSnapshot(WidgetRef ref, InstrumentSnapshot snap) {
     if (snap is! PianoRollSnapshot) return;
-    ref.read(pianoRollProvider.notifier).loadSnapshot(snap);
-    ref.read(pianoRollPendingScaleProvider.notifier).state = null;
-    if (snap.pendingScale != null) {
-      ref.read(pianoRollActiveScaleProvider.notifier).state = (
-        root: snap.pendingScale!.root,
-        scaleName: snap.pendingScale!.scaleName,
-      );
-    } else {
-      ref.read(pianoRollActiveScaleProvider.notifier).state = null;
-    }
+    final folder = ref.read(selectedProjectProvider);
+    final projectConfig = folder?.kind == SaveFolderKind.project
+        ? folder!.projectConfig ?? const ProjectConfig()
+        : null;
+    ref
+        .read(pianoRollProvider.notifier)
+        .loadSnapshot(snap, projectConfig: projectConfig);
   }
 }
-

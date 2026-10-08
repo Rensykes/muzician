@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/instrument_shared/shared_detection_panel.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/store/piano_store.dart';
+import 'package:muzician/store/settings_store.dart';
+import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
+import '../../support/test_settings_notifier.dart';
 
 class FakePianoNotifier extends PianoNotifier {
   FakePianoNotifier(this._initial);
@@ -15,11 +18,14 @@ class FakePianoNotifier extends PianoNotifier {
 }
 
 void main() {
-  testWidgets('shows contextual flat label for a detected scale', (
+  testWidgets('uses the flat spelling preference for a detected scale', (
     tester,
   ) async {
     final container = ProviderContainer(
       overrides: [
+        settingsProvider.overrideWith(
+          () => TestSettingsNotifier(initialSpelling: NoteSpelling.flats),
+        ),
         pianoProvider.overrideWith(
           () => FakePianoNotifier(
             const PianoState(

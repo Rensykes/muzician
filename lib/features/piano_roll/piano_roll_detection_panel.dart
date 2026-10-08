@@ -7,12 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmonic_analysis.dart';
 import '../../models/piano_roll.dart';
 import '../../store/piano_roll_store.dart';
+import '../../store/settings_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../utils/note_utils.dart';
 import '../../theme/muzician_theme.dart';
 
 ({List<String> chords, List<String> scales}) _detect(
   List<PianoRollNote> notes,
+  NoteSpelling spelling,
 ) {
   if (notes.length < 2) return (chords: <String>[], scales: <String>[]);
 
@@ -27,8 +29,14 @@ import '../../theme/muzician_theme.dart';
   final scaleResults = detectScaleResultsFromExactNotes(exactNotes);
 
   return (
-    chords: chordResults.take(8).map(formatChordSymbol).toList(),
-    scales: scaleResults.take(8).map(formatScaleLabel).toList(),
+    chords: chordResults
+        .take(8)
+        .map((result) => formatChordSymbol(result, spelling: spelling))
+        .toList(),
+    scales: scaleResults
+        .take(8)
+        .map((result) => formatScaleLabel(result, spelling: spelling))
+        .toList(),
   );
 }
 
@@ -37,6 +45,9 @@ class PianoRollDetectionPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final state = ref.watch(pianoRollProvider);
     final notifier = ref.read(pianoRollProvider.notifier);
 
@@ -48,7 +59,7 @@ class PianoRollDetectionPanel extends ConsumerWidget {
     );
     if (notesAtTick.isEmpty) return const SizedBox.shrink();
 
-    final detection = _detect(notesAtTick);
+    final detection = _detect(notesAtTick, spelling);
 
     return Container(
       decoration: BoxDecoration(
@@ -118,7 +129,7 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        note.noteWithOctave,
+                        formatMidiNoteLabel(note.midiNote, spelling: spelling),
                         style: TextStyle(
                           color: isSelected
                               ? MuzicianTheme.sky

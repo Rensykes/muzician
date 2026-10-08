@@ -51,9 +51,15 @@ Every top-level folder has a `kind`:
 | `beatUnit` | `int` | 4 |
 | `defaultHarmonyInstrument` | `HarmonyLaneInstrument` | Fretboard |
 
-When a project is selected, tempo / key / time-signature controls on the instrument and arrangement headers are locked. Edit them through the project config sheet, which prompts before retrofitting eligible saves in the project's subtree. Named Writer Song versions are immutable and are not retrofitted; the active Writer session follows the current project config.
+When a project is selected, tempo and time-signature follow its config. The
+project config sheet prompts before retrofitting eligible saves in the project's
+subtree. Writer, Fretboard, and Piano also let the user set, change, or clear
+the project's tonic and scale/mode after confirmation. Cancel keeps the prior
+key. Instrument Save loads retain the active project key, including Piano Roll.
+Named Writer Song versions are immutable and are not retrofitted; the active
+Writer session follows the current project config.
 
-Writer's **New project** action creates and selects an independent project root
+Writer's main-menu **New project** action creates and selects an independent project root
 with an empty Writer session. It asks for Piano or Fretboard on every creation
 and stores that choice in the new project's `ProjectConfig` without changing
 the app-wide default. If the current Writer session differs from its bound
@@ -81,7 +87,7 @@ shown in the startup recovery prompt until the user chooses **Start fresh**.
 | `PendingChord` | Root + quality pending detection (`root`, `quality`, `symbol`) |
 | `PendingScale` | Root + scale name pending detection |
 | `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `HarmonyChordSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot`, `WriterBlockSnapshot`, `DrumLoopSnapshot` |
-| `HarmonyChordSnapshot` | One Harmony chord's symbolic Writer block, native Piano/Fretboard snapshot, and fixed lane instrument identity |
+| `HarmonyChordSnapshot` | Recognized chord or named exact Harmony content, native Piano/Fretboard snapshot, and fixed lane instrument identity |
 | `FretboardSnapshot` | Fretboard save: tuning, capo, selected cells, notes, view mode, pending chord/scale |
 | `PianoSnapshot` | Piano save: key range, selected keys, notes, view mode, pending chord/scale |
 | `PianoRollSnapshot` | Piano roll session: tempo, time signature, notes, range, snap, highlights, derivable chord/scale |
@@ -132,7 +138,22 @@ Each instrument produces a subtype of `InstrumentSnapshot`, stored inside a `Sav
 
 ### FretboardSnapshot (`type: 'fretboard'`)
 
-Captures the fretboard layout (tuning, capo, number of frets), selected fret coordinates, note names, and view mode. `pendingChord` and `pendingScale` are derived from the selected notes.
+Captures the fretboard layout (tuning, capo, number of frets), selected fret
+coordinates, note names, view mode, and `inputMode` (Free/Chord). Loading restores
+that mode. A missing or unknown mode is Free and is not eligible for Writer.
+Free remains available for ordinary Save/load and exploration. Writer requires
+Chord mode with a nonempty valid selection and one position per string.
+
+### HarmonyChordSnapshot (`type: 'harmony_chord'`)
+
+One canonical Save contains its Writer content and native Piano/Fretboard
+realization. Named exact Harmony has a user label and pitch classes, with root,
+quality, and Roman numeral absent; its native snapshot preserves exact MIDI
+notes and positions. Recognition is not a prerequisite for reuse or
+Change/Replace. Native edits update the exact selection without inventing a
+chord identity. Use in Writer promotes an eligible project-root native Save
+under the same ID and folder in the placement's journal transaction; existing
+Save/Voicing links continue resolving its native notes.
 
 ### PianoSnapshot (`type: 'piano'`)
 
@@ -309,6 +330,9 @@ identify both versions from the Writer recovery review without needing to
 interpret internal save IDs. Save Browser header controls provide 44×44px
 targets and button semantics while keeping their compact visual style. Edit-mode
 save delete and reorder controls use the same target size and expose action names.
+Header action chips size to their labels and wrap naturally, rather than each
+occupying a full row. Linked instrument updates remain a full-width action above
+the browser; breadcrumb navigation and folder/save actions remain reachable.
 The header, breadcrumbs, folders, and saves share one vertical scroll area at
 bounded heights; in content-sized instrument sheets, the panel can still grow
 with its contents.
@@ -356,8 +380,15 @@ Stores app-wide preferences persisted to `SharedPreferences`:
 | `suppressOutOfKeyAlert` | `false` | Suppress the out-of-key confirmation dialog |
 | `noteVolume` | `0.8` | Playback volume (0.0–1.0) |
 | `showNoteLabels` | `true` | Render note-name text on instrument canvases |
+| `noteSpelling` | `sharps` | Global musical-label spelling; **Prefer flat note names** selects `flats` |
 | `humSensitivity` | `balanced` | Hum-to-MIDI pitch sensitivity preset |
 | `metronomeEnabled` | `true` | Piano roll metronome toggle |
+
+Spelling is persisted in the existing settings JSON; missing or unknown values
+use Sharps. It is a presentation preference, independent of project config and
+saved musical identity. Recognized chord summaries retain their quality and
+slash bass; custom Save names, exact Harmony labels, lyrics, and pattern names
+stay literal. Switching spelling never rewrites snapshots or the shared key.
 
 ---
 

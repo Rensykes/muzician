@@ -4,6 +4,7 @@ library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
@@ -170,6 +171,9 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final notifier = ref.read(fretboardProvider.notifier);
     final tuning = tunings[state.currentTuning]!;
     final cells = notifier.getFretCells();
@@ -254,6 +258,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
                   controlledMode: widget.controlledMode,
                   controlledNotes: widget.controlledNotes,
                   selectableMidiNote: widget.selectableMidiNote,
+                  spelling: spelling,
                 ),
               ),
             ),
@@ -341,8 +346,14 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
         context: context,
         builder: (ctx) => ProjectOffScaleDialog(
           projectName: project.name,
-          keyLabel: _keyLabelFor(project),
-          noteName: noteName,
+          keyLabel: _keyLabelFor(
+            project,
+            ref.read(settingsProvider).noteSpelling,
+          ),
+          noteName: note_utils.formatRootChoiceLabel(
+            noteName,
+            spelling: ref.read(settingsProvider).noteSpelling,
+          ),
         ),
       );
       if (decision != ProjectOffScaleDecision.switchToDump) return;
@@ -373,10 +384,13 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
     onConfirmed();
   }
 
-  String _keyLabelFor(SaveFolder project) {
+  String _keyLabelFor(SaveFolder project, note_utils.NoteSpelling spelling) {
     final cfg = project.projectConfig;
     if (cfg?.keyRootPc == null) return 'the project key';
-    final root = note_utils.chromaticNotes[cfg!.keyRootPc!];
+    final root = note_utils.formatRootChoiceLabel(
+      note_utils.chromaticNotes[cfg!.keyRootPc!],
+      spelling: spelling,
+    );
     final scale = cfg.keyScaleName ?? '';
     return '$root $scale'.trim();
   }
@@ -549,6 +563,7 @@ class _FretboardPainter extends CustomPainter {
   final bool controlledMode;
   final List<FretboardOverlayNote> controlledNotes;
   final int? selectableMidiNote;
+  final note_utils.NoteSpelling spelling;
 
   final FretboardPalette palette;
 
@@ -566,6 +581,7 @@ class _FretboardPainter extends CustomPainter {
     this.controlledMode = false,
     this.controlledNotes = const [],
     this.selectableMidiNote,
+    this.spelling = note_utils.NoteSpelling.sharps,
   });
 
   static const _naturalColor = Color(0xFF38BDF8);
@@ -591,6 +607,30 @@ class _FretboardPainter extends CustomPainter {
     _drawFretNumbers(canvas);
     _drawNoteBubbles(canvas);
   }
+
+  @override
+  SemanticsBuilderCallback get semanticsBuilder =>
+      (Size size) => [
+        for (final stringCells in cells)
+          for (final cell in stringCells)
+            CustomPainterSemantics(
+              rect: Rect.fromCircle(
+                center: Offset(_noteX(cell.fret), _stringY(cell.stringIndex)),
+                radius: 16,
+              ),
+              properties: SemanticsProperties(
+                label:
+                    '${note_utils.formatMidiNoteLabel(cell.midiNote, spelling: spelling)}, '
+                    'string ${cell.stringIndex + 1}, fret ${cell.fret}',
+                selected: selectedCells.any(
+                  (selected) =>
+                      selected.stringIndex == cell.stringIndex &&
+                      selected.fret == cell.fret,
+                ),
+                textDirection: TextDirection.ltr,
+              ),
+            ),
+      ];
 
   void _drawBoard(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(
@@ -690,7 +730,11 @@ class _FretboardPainter extends CustomPainter {
 
   void _drawStringLabels(Canvas canvas) {
     for (int si = 0; si < tuning.strings.length; si++) {
-      final label = tuning.strings[si].note.replaceAll(RegExp(r'\d'), '');
+      final pitchClass = ((tuning.strings[si].midiNote % 12) + 12) % 12;
+      final label = note_utils.formatRootChoiceLabel(
+        note_utils.chromaticNotes[pitchClass],
+        spelling: spelling,
+      );
       final tp = TextPainter(
         text: TextSpan(
           text: label,
@@ -836,7 +880,10 @@ class _FretboardPainter extends CustomPainter {
         // Draw text
         final tp = TextPainter(
           text: TextSpan(
-            text: cell.noteName,
+            text: note_utils.formatRootChoiceLabel(
+              cell.noteName,
+              spelling: spelling,
+            ),
             style: TextStyle(
               color: textColor.withValues(alpha: opacity),
               fontSize: fs,
@@ -862,6 +909,7 @@ class _FretboardPainter extends CustomPainter {
       old.highlightedNotes != highlightedNotes ||
       old.focusedNotes != focusedNotes ||
       old.controlledMode != controlledMode ||
+      old.spelling != spelling ||
       !_sameOverlayNotes(old.controlledNotes, controlledNotes) ||
       old.selectableMidiNote != selectableMidiNote;
 }

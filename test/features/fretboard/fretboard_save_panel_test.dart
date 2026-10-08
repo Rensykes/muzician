@@ -142,10 +142,8 @@ void main() {
         root: 'C',
         quality: 'major',
       ));
-      expect(container.read(pendingScaleProvider), (
-        root: 'D',
-        scaleName: 'dorian',
-      ));
+      expect(container.read(pendingScaleProvider), isNull);
+      expect(container.read(activeScaleProvider), isNull);
     },
   );
 
@@ -250,6 +248,56 @@ void main() {
     expect(find.byKey(const Key('useWriterSaveAction')), findsNothing);
   });
 
+  testWidgets(
+    'Free Fretboard saves stay out of Writer even when live mode is Chord',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final saveSystem = container.read(saveSystemProvider.notifier);
+      await saveSystem.hydrate();
+      final projectId = saveSystem.createProject(
+        'Free fretboard project',
+        const ProjectConfig(),
+      )!;
+      saveSystem.selectProject(projectId);
+      saveSystem.saveSnapshot(
+        'Free shape',
+        projectId,
+        FretboardSnapshot(
+          tuning: TuningName.standard,
+          numFrets: 12,
+          capo: 0,
+          selectedCells: const [
+            FretCoordinate(stringIndex: 0, fret: 0, noteName: 'E'),
+            FretCoordinate(stringIndex: 1, fret: 0, noteName: 'B'),
+          ],
+          selectedNotes: const ['E', 'B'],
+          viewMode: FretboardViewMode.exact,
+          inputMode: FretboardInputMode.free,
+        ),
+      );
+      container
+          .read(fretboardProvider.notifier)
+          .setInputMode(FretboardInputMode.chord);
+
+      await tester.pumpWidget(_wrap(container));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Free shape'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('useWriterSaveButton')), findsNothing);
+      expect(find.byKey(const Key('useWriterSaveAction')), findsNothing);
+      await tester.tap(find.text('Load'));
+      await tester.pumpAndSettle();
+      expect(
+        container.read(fretboardProvider).inputMode,
+        FretboardInputMode.free,
+      );
+      expect(container.read(fretboardProvider).selectedCells, hasLength(2));
+    },
+  );
+
   testWidgets('removing the final Writer link clears the edit target', (
     tester,
   ) async {
@@ -266,14 +314,8 @@ void main() {
     final writer = container.read(songwriterProvider.notifier);
     writer.addSection(label: 'Verse', lengthBars: 4);
     final section = container.read(songwriterProvider).sections.single;
-    final snapshot = FretboardSnapshot(
-      tuning: TuningName.standard,
-      numFrets: 12,
-      capo: 0,
-      selectedCells: const [],
-      selectedNotes: const [],
-      viewMode: FretboardViewMode.exact,
-    );
+    final snapshot = _eligibleFretboardSnapshot();
+    container.read(fretboardProvider.notifier).loadSnapshot(snapshot);
     final saveId = saveSystem.saveSnapshot(
       'Linked shape',
       projectId,
@@ -284,6 +326,8 @@ void main() {
         sectionId: section.id,
         startBar: 0,
         snapshot: snapshot,
+        asExactHarmony: true,
+        chordSymbol: 'Linked shape',
         saveName: 'Linked shape',
         reuseSaveId: saveId,
       ),
@@ -294,7 +338,7 @@ void main() {
         .sections
         .single
         .lanes
-        .singleWhere((candidate) => candidate.kind == SongLaneKind.save);
+        .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony);
     final block = lane.blocks.single;
 
     await tester.pumpWidget(_wrap(container, linkedEditSaveId: saveId));
@@ -315,6 +359,8 @@ void main() {
   testWidgets(
     'Use in Writer reuses the selected root save without renaming it',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -325,17 +371,10 @@ void main() {
         const ProjectConfig(),
       )!;
       saveSystem.selectProject(projectId);
-      container
-          .read(songwriterProvider.notifier)
-          .addSection(label: 'Verse', lengthBars: 4);
-      final snapshot = FretboardSnapshot(
-        tuning: TuningName.standard,
-        numFrets: 12,
-        capo: 0,
-        selectedCells: const [],
-        selectedNotes: const [],
-        viewMode: FretboardViewMode.exact,
-      );
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final snapshot = _eligibleFretboardSnapshot();
+      container.read(fretboardProvider.notifier).loadSnapshot(snapshot);
       final saveId = saveSystem.saveSnapshot('Root idea', projectId, snapshot)!;
 
       await tester.pumpWidget(_wrap(container));
@@ -345,8 +384,6 @@ void main() {
       await tester.tap(find.byKey(const Key('useWriterSaveButton')));
       await tester.pumpAndSettle();
       final sectionId = container.read(songwriterProvider).sections.single.id;
-      await tester.tap(find.byKey(Key('writerHandoffNewSaveLane_$sectionId')));
-      await tester.pumpAndSettle();
       await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
       await tester.pumpAndSettle();
       final block = container
@@ -354,7 +391,7 @@ void main() {
           .sections
           .single
           .lanes
-          .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+          .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
           .blocks
           .single;
       final reusedSave = container
@@ -364,6 +401,17 @@ void main() {
       expect(block.saveId, saveId);
       expect(reusedSave.name, 'Root idea');
       expect(container.read(saveSystemProvider).saves, hasLength(1));
+      expect(reusedSave.folderId, projectId);
+      expect(reusedSave.snapshot, isA<HarmonyChordSnapshot>());
+      final promoted = reusedSave.snapshot as HarmonyChordSnapshot;
+      expect(promoted.writerBlock.chordSymbol, 'Root idea');
+      expect(promoted.writerBlock.chordRootPc, isNull);
+      expect(promoted.writerBlock.chordQuality, isNull);
+      expect(promoted.instrumentState, isA<FretboardSnapshot>());
+      expect(
+        (promoted.instrumentState as FretboardSnapshot).inputMode,
+        FretboardInputMode.chord,
+      );
       expect(
         container
             .read(saveSystemProvider)
@@ -395,7 +443,7 @@ void main() {
             .sections
             .single
             .lanes
-            .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+            .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
             .blocks
             .single
             .saveId,
@@ -424,17 +472,10 @@ void main() {
         const ProjectConfig(),
       )!;
       saveSystem.selectProject(projectId);
-      container
-          .read(songwriterProvider.notifier)
-          .addSection(label: 'Verse', lengthBars: 4);
-      final snapshot = FretboardSnapshot(
-        tuning: TuningName.standard,
-        numFrets: 12,
-        capo: 0,
-        selectedCells: const [],
-        selectedNotes: const [],
-        viewMode: FretboardViewMode.exact,
-      );
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final snapshot = _eligibleFretboardSnapshot();
+      container.read(fretboardProvider.notifier).loadSnapshot(snapshot);
       final saveId = saveSystem.saveSnapshot('Root idea', projectId, snapshot)!;
 
       await tester.pumpWidget(_wrap(container));
@@ -444,8 +485,6 @@ void main() {
       await tester.tap(find.byKey(const Key('useWriterSaveButton')));
       await tester.pumpAndSettle();
       final sectionId = container.read(songwriterProvider).sections.single.id;
-      await tester.tap(find.byKey(Key('writerHandoffNewSaveLane_$sectionId')));
-      await tester.pumpAndSettle();
       await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
       await tester.pumpAndSettle();
 
@@ -454,11 +493,19 @@ void main() {
           .sections
           .single
           .lanes
-          .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+          .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
           .blocks
           .single;
       expect(block.saveId, saveId);
       expect(container.read(saveSystemProvider).saves, hasLength(1));
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((save) => save.id == saveId)
+            .snapshot,
+        isA<HarmonyChordSnapshot>(),
+      );
 
       container.read(fretboardProvider.notifier).setCapo(3);
       await tester.pumpWidget(_wrap(container, linkedEditSaveId: saveId));
@@ -476,11 +523,12 @@ void main() {
           .sections
           .single
           .lanes
-          .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+          .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
           .blocks
           .single;
-      expect((canonical.snapshot as FretboardSnapshot).capo, 3);
-      expect((updatedBlock.embedded! as FretboardSnapshot).capo, 3);
+      final canonicalHarmony = canonical.snapshot as HarmonyChordSnapshot;
+      expect((canonicalHarmony.instrumentState as FretboardSnapshot).capo, 3);
+      expect(updatedBlock.saveId, saveId);
       await container.read(songwriterSessionsProvider.notifier).flush();
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
@@ -503,24 +551,20 @@ void main() {
     final writer = container.read(songwriterProvider.notifier);
     writer.addSection(label: 'Verse', lengthBars: 4);
     final sectionId = container.read(songwriterProvider).sections.single.id;
-    final snapshot = FretboardSnapshot(
-      tuning: TuningName.standard,
-      numFrets: 12,
-      capo: 0,
-      selectedCells: const [],
-      selectedNotes: const [],
-      viewMode: FretboardViewMode.exact,
-    );
+    final snapshot = _eligibleFretboardSnapshot();
     final saveId = saveSystem.saveSnapshot(
       'Linked shape',
       projectId,
       snapshot,
     )!;
+    container.read(fretboardProvider.notifier).loadSnapshot(snapshot);
     expect(
       writer.insertInstrumentSelectionAtBar(
         sectionId: sectionId,
         startBar: 0,
         snapshot: snapshot,
+        asExactHarmony: true,
+        chordSymbol: 'Linked shape',
         saveName: 'Linked shape',
         reuseSaveId: saveId,
       ),
@@ -542,15 +586,35 @@ void main() {
         .sections
         .single
         .lanes
-        .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+        .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
         .blocks
         .single;
     expect(canonical.id, saveId);
-    expect((canonical.snapshot as FretboardSnapshot).capo, 3);
-    expect((block.embedded! as FretboardSnapshot).capo, 3);
+    expect(canonical.snapshot, isA<HarmonyChordSnapshot>());
+    expect(
+      ((canonical.snapshot as HarmonyChordSnapshot).instrumentState
+              as FretboardSnapshot)
+          .capo,
+      3,
+    );
+    expect(block.saveId, saveId);
     await container.read(songwriterSessionsProvider.notifier).flush();
   });
 }
+
+FretboardSnapshot _eligibleFretboardSnapshot() => FretboardSnapshot(
+  tuning: TuningName.standard,
+  numFrets: 12,
+  capo: 0,
+  selectedCells: const [
+    FretCoordinate(stringIndex: 0, fret: 0, noteName: 'E'),
+    FretCoordinate(stringIndex: 1, fret: 0, noteName: 'B'),
+    FretCoordinate(stringIndex: 2, fret: 0, noteName: 'G'),
+  ],
+  selectedNotes: const ['E', 'B', 'G'],
+  viewMode: FretboardViewMode.exact,
+  inputMode: FretboardInputMode.chord,
+);
 
 HarmonyChordSnapshot _fretboardHarmonySnapshot({
   int capo = 0,
@@ -561,15 +625,23 @@ HarmonyChordSnapshot _fretboardHarmonySnapshot({
   harmonyInstrument: HarmonyLaneInstrument.fretboard,
   writerBlock: WriterBlockSnapshot(
     laneKind: SongLaneKind.harmony,
+    chordSymbol: 'C',
+    chordQuality: '',
+    chordRootPc: 0,
     chordNotes: selectedNotes,
   ),
   instrumentState: FretboardSnapshot(
     tuning: TuningName.standard,
     numFrets: 12,
     capo: capo,
-    selectedCells: const [],
+    selectedCells: const [
+      FretCoordinate(stringIndex: 3, fret: 10, noteName: 'C'),
+      FretCoordinate(stringIndex: 2, fret: 9, noteName: 'E'),
+      FretCoordinate(stringIndex: 1, fret: 8, noteName: 'G'),
+    ],
     selectedNotes: selectedNotes,
     viewMode: FretboardViewMode.exact,
+    inputMode: FretboardInputMode.chord,
     pendingChord: pendingChord,
     pendingScale: pendingScale,
   ),

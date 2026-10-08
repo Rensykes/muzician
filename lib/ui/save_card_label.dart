@@ -15,13 +15,32 @@ class SaveCardLabel {
 /// Derives a glanceable identity for a save card from data already on the
 /// snapshot. Resolution order: chord, scale, notes, then a literal
 /// "Highlight" fallback for selections with no derivable chord/scale.
-SaveCardLabel saveCardLabel(InstrumentSnapshot snapshot) {
+SaveCardLabel saveCardLabel(
+  InstrumentSnapshot snapshot, {
+  NoteSpelling spelling = NoteSpelling.sharps,
+}) {
   if (snapshot is WriterBlockSnapshot) {
     if (snapshot.chordSymbol != null && snapshot.chordSymbol!.isNotEmpty) {
-      return SaveCardLabel(SaveCardLabelKind.chord, text: snapshot.chordSymbol);
+      return SaveCardLabel(
+        SaveCardLabelKind.chord,
+        text: snapshot.chordRootPc == null || snapshot.chordQuality == null
+            ? snapshot.chordSymbol
+            : formatRecognizedChordLabel(
+                symbol: snapshot.chordSymbol!,
+                rootPc: snapshot.chordRootPc!,
+                quality: snapshot.chordQuality!,
+                spelling: spelling,
+              ),
+      );
     }
     if (snapshot.chordNotes.isNotEmpty) {
-      return SaveCardLabel(SaveCardLabelKind.notes, notes: snapshot.chordNotes);
+      return SaveCardLabel(
+        SaveCardLabelKind.notes,
+        notes: [
+          for (final note in snapshot.chordNotes)
+            formatRootChoiceLabel(note, spelling: spelling),
+        ],
+      );
     }
     final label = switch (snapshot.laneKind) {
       SongLaneKind.harmony => snapshot.isSilent ? 'Lyrics' : 'Harmony',
@@ -37,19 +56,31 @@ SaveCardLabel saveCardLabel(InstrumentSnapshot snapshot) {
 
   final chord = snapshot.pendingChord;
   if (chord != null) {
-    return SaveCardLabel(SaveCardLabelKind.chord, text: chord.symbol);
+    return SaveCardLabel(
+      SaveCardLabelKind.chord,
+      text: formatRecognizedChordLabel(
+        symbol: chord.symbol,
+        rootPc: noteToPC[toSharp(chord.root)] ?? -1,
+        quality: chord.quality,
+        spelling: spelling,
+      ),
+    );
   }
   final scale = snapshot.pendingScale;
   if (scale != null) {
     return SaveCardLabel(
       SaveCardLabelKind.scale,
-      text: '${scale.root} ${scale.scaleName}',
+      text:
+          '${formatRootChoiceLabel(scale.root, spelling: spelling)} ${scale.scaleName}',
     );
   }
   if (snapshot.selectedNotes.isNotEmpty) {
     return SaveCardLabel(
       SaveCardLabelKind.notes,
-      notes: snapshot.selectedNotes,
+      notes: [
+        for (final note in snapshot.selectedNotes)
+          formatRootChoiceLabel(note, spelling: spelling),
+      ],
     );
   }
   return const SaveCardLabel(SaveCardLabelKind.highlight, text: 'Highlight');

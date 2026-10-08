@@ -2,24 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/instrument_shared/writer_handoff.dart';
+import 'package:muzician/features/instrument_shared/instrument_binding.dart';
+import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/harmonic_analysis.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 import 'package:muzician/store/fretboard_store.dart';
+import 'package:muzician/store/piano_store.dart';
 import 'package:muzician/store/save_system_store.dart';
+import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
+import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _chord = ChordDetectionResult(root: 'C', quality: '');
 
 class _HandoffTestApp extends StatelessWidget {
-  const _HandoffTestApp({this.reuseSave});
+  const _HandoffTestApp({
+    this.reuseSave,
+    this.binding,
+    this.onTransferComplete,
+    this.chordResults = const [_chord],
+  });
 
   final SaveEntry? reuseSave;
+  final InstrumentBinding? binding;
+  final VoidCallback? onTransferComplete;
+  final List<ChordDetectionResult> chordResults;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -31,9 +45,9 @@ class _HandoffTestApp extends StatelessWidget {
             onPressed: () => startWriterHandoff(
               context: context,
               ref: ref,
-              binding: fretboardBinding,
-              chordResults: const [_chord],
-              onTransferComplete: () {},
+              binding: binding ?? fretboardBinding,
+              chordResults: chordResults,
+              onTransferComplete: onTransferComplete ?? () {},
               reuseSave: reuseSave,
             ),
             child: const Text('Start handoff'),
@@ -60,15 +74,52 @@ Future<String> _createProject(ProviderContainer container, String name) async {
 
 Future<void> _chooseChord(
   WidgetTester tester,
-  ProviderContainer container,
-) async {
+  ProviderContainer container, {
+  String choiceLabel = 'Add C as harmony',
+}) async {
   final fretboard = container.read(fretboardProvider.notifier);
+  fretboard.setInputMode(FretboardInputMode.chord);
+  fretboard.clearSelectedNotes();
   fretboard.toggleCell(4, 3, 'C');
   fretboard.toggleCell(3, 2, 'E');
   fretboard.toggleCell(2, 0, 'G');
   await tester.tap(find.byKey(const Key('startHandoff')));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Add C as harmony'));
+  await tester.tap(find.text(choiceLabel));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _chooseDSharpMinorSlashChord(
+  WidgetTester tester,
+  ProviderContainer container, {
+  required String choiceLabel,
+}) async {
+  final fretboard = container.read(fretboardProvider.notifier);
+  fretboard.setInputMode(FretboardInputMode.chord);
+  fretboard.clearSelectedNotes();
+  fretboard.toggleCell(4, 3, 'D#');
+  fretboard.toggleCell(3, 2, 'F#');
+  fretboard.toggleCell(2, 0, 'A#');
+  await tester.tap(find.byKey(const Key('startHandoff')));
+  await tester.pumpAndSettle();
+  expect(find.text(choiceLabel), findsOneWidget);
+  await tester.tap(find.text(choiceLabel));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _chooseExactHarmony(
+  WidgetTester tester,
+  ProviderContainer container,
+) async {
+  final fretboard = container.read(fretboardProvider.notifier);
+  fretboard.setInputMode(FretboardInputMode.chord);
+  fretboard.clearSelectedNotes();
+  fretboard.toggleCell(4, 3, 'C');
+  fretboard.toggleCell(3, 2, 'E');
+  fretboard.toggleCell(2, 0, 'G');
+  await tester.tap(find.byKey(const Key('startHandoff')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Add exact notes as Harmony'));
   await tester.pumpAndSettle();
 }
 
@@ -86,12 +137,21 @@ Future<void> _confirmImportName(WidgetTester tester, {String? name}) async {
 
 Future<void> _mountHandoffApp(
   WidgetTester tester,
-  ProviderContainer container,
-) async {
+  ProviderContainer container, {
+  InstrumentBinding? binding,
+  VoidCallback? onTransferComplete,
+  SaveEntry? reuseSave,
+  List<ChordDetectionResult> chordResults = const [_chord],
+}) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const _HandoffTestApp(),
+      child: _HandoffTestApp(
+        reuseSave: reuseSave,
+        binding: binding,
+        onTransferComplete: onTransferComplete,
+        chordResults: chordResults,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -139,7 +199,92 @@ void main() {
   }
 
   testWidgets(
-    'native handoff skips incompatible Save lanes and stages a matching one',
+    'slash chord transfer keeps canonical music across live spelling changes',
+    (tester) async {
+      final container = await _newContainer();
+      addTearDown(container.dispose);
+      await _createProject(container, 'Slash chord spelling');
+      container
+          .read(songwriterProvider.notifier)
+          .addSection(label: 'Verse', lengthBars: 4);
+      await container
+          .read(settingsProvider.notifier)
+          .setNoteSpelling(NoteSpelling.sharps);
+      await _mountHandoffApp(
+        tester,
+        container,
+        chordResults: const [
+          ChordDetectionResult(root: 'D#', quality: 'm', bass: 'A#'),
+        ],
+      );
+
+      final sectionId = container.read(songwriterProvider).sections.single.id;
+      final fretboard = container.read(fretboardProvider.notifier);
+      fretboard.setInputMode(FretboardInputMode.chord);
+      fretboard.clearSelectedNotes();
+      fretboard.toggleCell(4, 3, 'D#');
+      fretboard.toggleCell(3, 2, 'F#');
+      fretboard.toggleCell(2, 0, 'A#');
+      await tester.tap(find.byKey(const Key('startHandoff')));
+      await tester.pumpAndSettle();
+      expect(find.text('Add D#m/A# as harmony'), findsOneWidget);
+      await container
+          .read(settingsProvider.notifier)
+          .setNoteSpelling(NoteSpelling.flats);
+      await tester.pumpAndSettle();
+      expect(find.text('Add D#m/A# as harmony'), findsNothing);
+      expect(find.text('Add Ebm/Bb as harmony'), findsOneWidget);
+      await tester.tap(find.text('Add Ebm/Bb as harmony'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
+      await tester.pumpAndSettle();
+      await _confirmImportName(tester, name: 'D# idea');
+
+      await container
+          .read(settingsProvider.notifier)
+          .setNoteSpelling(NoteSpelling.sharps);
+      await tester.pumpAndSettle();
+      await _chooseDSharpMinorSlashChord(
+        tester,
+        container,
+        choiceLabel: 'Add D#m/A# as harmony',
+      );
+      await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_1')));
+      await tester.pumpAndSettle();
+      await _confirmImportName(tester, name: 'D# idea');
+
+      final section = container.read(songwriterProvider).sections.single;
+      final lane = section.lanes.singleWhere(
+        (candidate) =>
+            candidate.kind == SongLaneKind.harmony &&
+            candidate.harmonyInstrument == HarmonyLaneInstrument.fretboard,
+      );
+      final blocks = lane.blocks.toList()
+        ..sort((a, b) => a.startBar.compareTo(b.startBar));
+      expect(blocks, hasLength(2));
+      for (final block in blocks) {
+        expect(block.chordSymbol, 'D#m/A#');
+        expect(block.chordRootPc, 3);
+        expect(block.chordQuality, 'm');
+        expect(block.chordNotes.toSet(), {'D#', 'F#', 'A#'});
+      }
+      final saves = container.read(saveSystemProvider).saves;
+      final linkedSaves = blocks
+          .map((block) => saves.singleWhere((save) => save.id == block.saveId))
+          .toList();
+      expect(linkedSaves.map((save) => save.name), ['D# idea', 'D# idea']);
+      expect(
+        linkedSaves.map(
+          (save) =>
+              (save.snapshot as HarmonyChordSnapshot).writerBlock.chordSymbol,
+        ),
+        ['D#m/A#', 'D#m/A#'],
+      );
+    },
+  );
+
+  testWidgets(
+    'exact handoff creates Harmony with the chosen name and native shape',
     (tester) async {
       final container = await _newContainer();
       addTearDown(container.dispose);
@@ -147,6 +292,13 @@ void main() {
       final writer = container.read(songwriterProvider.notifier);
       writer.addSection(label: 'Verse', lengthBars: 4);
       final section = container.read(songwriterProvider).sections.single;
+      final fretboardHarmonyId = section.lanes
+          .singleWhere(
+            (lane) =>
+                lane.kind == SongLaneKind.harmony &&
+                lane.harmonyInstrument == HarmonyLaneInstrument.fretboard,
+          )
+          .id;
       final pianoHarmonyId = writer.addLane(
         sectionId: section.id,
         kind: SongLaneKind.harmony,
@@ -163,26 +315,13 @@ void main() {
       );
       await _mountHandoffApp(tester, container);
 
-      final fretboard = container.read(fretboardProvider.notifier);
-      fretboard.toggleCell(4, 3, 'C');
-      fretboard.toggleCell(3, 2, 'E');
-      fretboard.toggleCell(2, 0, 'G');
-      await tester.tap(find.byKey(const Key('startHandoff')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Add exact voicing'));
-      await tester.pumpAndSettle();
+      await _chooseExactHarmony(tester, container);
 
       expect(
         find.byKey(Key('writerHandoffLane_${section.id}_$pianoSaveLaneId')),
         findsNothing,
       );
-      final stagedLane = find.byKey(
-        Key('writerHandoffNewSaveLane_${section.id}'),
-      );
-      expect(stagedLane, findsOneWidget);
-      expect(find.text('Create Fretboard Voicing lane'), findsOneWidget);
-      await tester.tap(stagedLane);
-      await tester.pumpAndSettle();
+      expect(fretboardHarmonyId, isNotEmpty);
       await tester.tap(find.byKey(Key('writerHandoffBar_${section.id}_0')));
       await tester.pumpAndSettle();
       await _confirmImportName(tester, name: 'Fretboard C');
@@ -192,24 +331,155 @@ void main() {
         (lane) => lane.id == pianoSaveLaneId,
       );
       expect(pianoSaveLane.blocks, isEmpty);
-      final fretboardSaveLane = currentSection.lanes.singleWhere(
-        (lane) => lane.kind == SongLaneKind.save && lane.blocks.isNotEmpty,
+      final fretboardHarmonyLane = currentSection.lanes.singleWhere(
+        (lane) =>
+            lane.kind == SongLaneKind.harmony &&
+            lane.harmonyInstrument == HarmonyLaneInstrument.fretboard,
       );
-      expect(fretboardSaveLane.anchorLaneId, isNull);
-      expect(fretboardSaveLane.blocks.single.startBar, 0);
-      final saveId = fretboardSaveLane.blocks.single.saveId;
+      final block = fretboardHarmonyLane.blocks.single;
+      expect(block.startBar, 0);
+      expect(block.chordSymbol, 'Fretboard C');
+      expect(block.chordRootPc, isNull);
+      expect(block.chordQuality, isNull);
+      final save = container
+          .read(saveSystemProvider)
+          .saves
+          .singleWhere((save) => save.id == block.saveId);
+      expect(save.name, 'Fretboard C');
+      expect(save.snapshot, isA<HarmonyChordSnapshot>());
+      final harmony = save.snapshot as HarmonyChordSnapshot;
+      expect(harmony.writerBlock.chordRootPc, isNull);
+      expect(harmony.writerBlock.chordQuality, isNull);
+      expect(harmony.writerBlock.chordSymbol, 'Fretboard C');
+      expect(harmony.instrumentState, isA<FretboardSnapshot>());
       expect(
-        container
-            .read(saveSystemProvider)
-            .saves
-            .singleWhere((save) => save.id == saveId)
-            .snapshot
-            .instrument,
-        'fretboard',
+        (harmony.instrumentState as FretboardSnapshot).inputMode,
+        FretboardInputMode.chord,
+      );
+      expect(
+        (harmony.instrumentState as FretboardSnapshot).selectedCells,
+        hasLength(3),
       );
       await container.read(songwriterSessionsProvider.notifier).flush();
     },
   );
+
+  testWidgets('Piano exact handoff keeps its native selection in Harmony', (
+    tester,
+  ) async {
+    final container = await _newContainer();
+    addTearDown(container.dispose);
+    await _createProject(container, 'Piano exact handoff');
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    writer.addHarmonyLane(
+      sectionId: section.id,
+      harmonyInstrument: HarmonyLaneInstrument.piano,
+    );
+    container.read(pianoProvider.notifier).loadExactMidis(const [60, 64, 67]);
+    await _mountHandoffApp(tester, container, binding: pianoBinding);
+
+    await tester.tap(find.byKey(const Key('startHandoff')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add exact notes as Harmony'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('writerHandoffBar_${section.id}_0')));
+    await tester.pumpAndSettle();
+    await _confirmImportName(tester, name: 'Piano cluster');
+
+    final placedLane = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere(
+          (lane) =>
+              lane.kind == SongLaneKind.harmony &&
+              lane.harmonyInstrument == HarmonyLaneInstrument.piano,
+        );
+    final block = placedLane.blocks.single;
+    expect(block.chordSymbol, 'Piano cluster');
+    expect(block.chordRootPc, isNull);
+    expect(block.chordQuality, isNull);
+    final saved = container
+        .read(saveSystemProvider)
+        .saves
+        .singleWhere((save) => save.id == block.saveId);
+    expect(saved.name, 'Piano cluster');
+    expect(saved.snapshot, isA<HarmonyChordSnapshot>());
+    final harmony = saved.snapshot as HarmonyChordSnapshot;
+    expect(harmony.harmonyInstrument, HarmonyLaneInstrument.piano);
+    expect(harmony.writerBlock.chordSymbol, 'Piano cluster');
+    expect(harmony.writerBlock.chordRootPc, isNull);
+    expect(harmony.writerBlock.chordQuality, isNull);
+    expect(harmony.writerBlock.chordNotes.toSet(), {'C', 'E', 'G'});
+    expect(harmony.instrumentState, isA<PianoSnapshot>());
+    expect(
+      (harmony.instrumentState as PianoSnapshot).selectedKeys,
+      hasLength(3),
+    );
+    await container.read(songwriterSessionsProvider.notifier).flush();
+  });
+
+  testWidgets('rejected Piano Harmony Save explains its eligibility issue', (
+    tester,
+  ) async {
+    final container = await _newContainer();
+    addTearDown(container.dispose);
+    final projectId = await _createProject(container, 'Invalid Piano Harmony');
+    final piano = PianoSnapshot(
+      currentRange: PianoRangeName.key88,
+      selectedKeys: const [
+        PianoCoordinate(keyIndex: 39, midiNote: 60, noteName: 'C'),
+        PianoCoordinate(keyIndex: 41, midiNote: 62, noteName: 'D'),
+        PianoCoordinate(keyIndex: 44, midiNote: 65, noteName: 'F'),
+      ],
+      selectedNotes: const ['C', 'D', 'F'],
+      viewMode: PianoViewMode.exact,
+    );
+    final saveId = container
+        .read(saveSystemProvider.notifier)
+        .saveSnapshot(
+          'Mismatched Piano Harmony',
+          projectId,
+          HarmonyChordSnapshot(
+            harmonyInstrument: HarmonyLaneInstrument.piano,
+            writerBlock: const WriterBlockSnapshot(
+              laneKind: SongLaneKind.harmony,
+              chordSymbol: 'C',
+              chordQuality: '',
+              chordRootPc: 0,
+              chordNotes: ['C', 'E', 'G'],
+            ),
+            instrumentState: piano,
+          ),
+        );
+    expect(saveId, isNotNull);
+    final save = container
+        .read(saveSystemProvider)
+        .saves
+        .singleWhere((candidate) => candidate.id == saveId);
+    await _mountHandoffApp(
+      tester,
+      container,
+      binding: pianoBinding,
+      reuseSave: save,
+    );
+
+    await tester.tap(find.byKey(const Key('startHandoff')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Piano Harmony saves need valid selected keys and matching Harmony notes to enter Writer.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Fretboard'), findsNothing);
+    expect(find.text('Choose a Writer section and bar'), findsNothing);
+    expect(find.byKey(const Key('writerImportNameField')), findsNothing);
+  });
 
   testWidgets('no-project picker cancel leaves both workspaces untouched', (
     tester,
@@ -465,6 +735,243 @@ void main() {
     expect(block.chordNotes, ['C', 'E', 'G']);
     await container.read(songwriterSessionsProvider.notifier).flush();
   });
+
+  testWidgets('occupied exact replacement completes once with changed notes', (
+    tester,
+  ) async {
+    final container = await _newContainer();
+    addTearDown(container.dispose);
+    final projectId = await _createProject(container, 'Exact replacement');
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final lane = section.lanes.single;
+    final originalNative = FretboardSnapshot(
+      tuning: TuningName.standard,
+      numFrets: 12,
+      capo: 0,
+      selectedCells: const [
+        FretCoordinate(stringIndex: 0, fret: 2, noteName: 'F#'),
+        FretCoordinate(stringIndex: 1, fret: 3, noteName: 'D'),
+        FretCoordinate(stringIndex: 2, fret: 2, noteName: 'A'),
+      ],
+      selectedNotes: const ['D', 'F#', 'A'],
+      viewMode: FretboardViewMode.exact,
+      inputMode: FretboardInputMode.chord,
+    );
+    expect(
+      writer.insertInstrumentSelectionAtBar(
+        sectionId: section.id,
+        laneId: lane.id,
+        startBar: 0,
+        snapshot: originalNative,
+        asExactHarmony: true,
+        chordSymbol: 'Old exact notes',
+        saveName: 'Old exact notes',
+        harmonyInstrument: HarmonyLaneInstrument.fretboard,
+        expectedProjectId: projectId,
+      ),
+      isTrue,
+    );
+    await writer.reconcileCurrentProject();
+    final original = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    var transferCount = 0;
+    await _mountHandoffApp(
+      tester,
+      container,
+      onTransferComplete: () => transferCount++,
+    );
+
+    await _chooseExactHarmony(tester, container);
+    await tester.tap(find.byKey(Key('writerHandoffBar_${section.id}_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Replace…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Replace block'));
+    await tester.pumpAndSettle();
+    await _confirmImportName(tester, name: 'New exact notes');
+
+    final replaced = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    expect(replaced.id, original.id);
+    expect(replaced.chordSymbol, 'New exact notes');
+    expect(replaced.chordRootPc, isNull);
+    expect(replaced.chordQuality, isNull);
+    expect(replaced.chordNotes.toSet(), {'C', 'E', 'G'});
+    expect(transferCount, 1);
+    expect(find.text('Choose a Writer section and bar'), findsNothing);
+    expect(find.byKey(const Key('writerImportNameField')), findsNothing);
+  });
+
+  testWidgets('occupied Piano D-sharp 4 exact Harmony replaces once with D4', (
+    tester,
+  ) async {
+    final container = await _newContainer();
+    addTearDown(container.dispose);
+    final saves = container.read(saveSystemProvider.notifier);
+    final projectId = saves.createProject(
+      'Piano exact replacement',
+      const ProjectConfig(
+        defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+      ),
+    )!;
+    saves.selectProject(projectId);
+    final writer = container.read(songwriterProvider.notifier);
+    await writer.reconcileCurrentProject();
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final lane = section.lanes.single;
+    final dSharp = PianoSnapshot(
+      currentRange: PianoRangeName.key88,
+      selectedKeys: const [
+        PianoCoordinate(keyIndex: 42, midiNote: 63, noteName: 'D#'),
+      ],
+      selectedNotes: const ['D#'],
+      viewMode: PianoViewMode.exact,
+    );
+    expect(
+      writer.insertInstrumentSelectionAtBar(
+        sectionId: section.id,
+        laneId: lane.id,
+        startBar: 0,
+        snapshot: dSharp,
+        asExactHarmony: true,
+        chordSymbol: 'D sharp four',
+        saveName: 'D sharp four',
+        harmonyInstrument: HarmonyLaneInstrument.piano,
+        expectedProjectId: projectId,
+      ),
+      isTrue,
+    );
+    await writer.reconcileCurrentProject();
+    final original = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    container.read(pianoProvider.notifier).loadExactMidis(const [62]);
+    var transferCount = 0;
+    await _mountHandoffApp(
+      tester,
+      container,
+      binding: pianoBinding,
+      onTransferComplete: () => transferCount++,
+    );
+
+    await tester.tap(find.byKey(const Key('startHandoff')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add exact notes as Harmony'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('writerHandoffBar_${section.id}_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Replace…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Replace block'));
+    await tester.pumpAndSettle();
+    await _confirmImportName(tester, name: 'D4 exact');
+
+    final replaced = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    expect(replaced.id, original.id);
+    expect(replaced.chordSymbol, 'D4 exact');
+    expect(replaced.chordRootPc, isNull);
+    expect(replaced.chordQuality, isNull);
+    expect(replaced.chordNotes, ['D']);
+    final native = (replaced.embedded as HarmonyChordSnapshot).instrumentState;
+    expect((native as PianoSnapshot).selectedKeys.single.midiNote, 62);
+    expect(transferCount, 1);
+    expect(find.text('Choose a Writer section and bar'), findsNothing);
+  });
+
+  testWidgets(
+    'failed exact replacement gives feedback and does not reopen picker',
+    (tester) async {
+      final container = await _newContainer();
+      addTearDown(container.dispose);
+      await _createProject(container, 'Rejected replacement');
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final section = container.read(songwriterProvider).sections.single;
+      final lane = section.lanes.single;
+      writer.addHarmonyBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        block: makeHarmonyBlock(
+          startBar: 0,
+          spanBars: 1,
+          chordSymbol: 'F',
+          chordQuality: '',
+          chordRootPc: 5,
+          chordNotes: const ['F', 'A', 'C'],
+        ),
+      );
+      var transferCount = 0;
+      await _mountHandoffApp(
+        tester,
+        container,
+        onTransferComplete: () => transferCount++,
+      );
+
+      await _chooseExactHarmony(tester, container);
+      await tester.tap(find.byKey(Key('writerHandoffBar_${section.id}_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Replace…'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Replace block'));
+      await tester.pumpAndSettle();
+
+      final occupied = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .single
+          .blocks
+          .single;
+      writer.removeBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        blockId: occupied.id,
+      );
+      await _confirmImportName(tester, name: 'Cannot place');
+
+      expect(find.text('Choose a Writer section and bar'), findsNothing);
+      expect(find.byKey(const Key('writerImportNameField')), findsNothing);
+      expect(
+        find.text(
+          'That Writer bar is no longer available. Start again to choose another bar.',
+        ),
+        findsOneWidget,
+      );
+      expect(transferCount, 0);
+      expect(
+        container.read(songwriterProvider).sections.single.lanes.single.blocks,
+        isEmpty,
+      );
+    },
+  );
 
   testWidgets('choosing another bar preserves the occupied block', (
     tester,

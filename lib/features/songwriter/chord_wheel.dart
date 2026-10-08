@@ -1,8 +1,11 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart'
+    show OrdinalSortKey, SemanticsProperties;
 
 import '../../schema/rules/songwriter_rules.dart';
+import '../../utils/note_utils.dart';
 
 const _wedgeCount = 7;
 const _innerRadiusFraction = 0.3;
@@ -36,20 +39,27 @@ class ChordWheel extends StatelessWidget {
     super.key,
     required this.keyRootPc,
     required this.scaleName,
+    this.spelling = NoteSpelling.sharps,
     required this.onPick,
   });
   final int keyRootPc;
   final String scaleName;
+  final NoteSpelling spelling;
   final ValueChanged<DiatonicTriad> onPick;
 
   @override
   Widget build(BuildContext context) {
     final triads = diatonicTriads(keyRootPc, scaleName);
     if (triads.isEmpty) {
-      return const Center(child: Text('Set a key to use the chord wheel'));
+      return const Center(
+        child: Text(
+          'This scale does not support the seven-degree chord wheel.',
+        ),
+      );
     }
     final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
+      excludeFromSemantics: true,
       onTapUp: (details) {
         final size = context.size;
         if (size == null) return;
@@ -60,11 +70,17 @@ class ChordWheel extends StatelessWidget {
       },
       child: CustomPaint(
         painter: _ChordWheelPainter(
+          keyRootPc: keyRootPc,
+          scaleName: scaleName,
           triads: triads,
           majorColor: scheme.primary,
           minorColor: scheme.secondary,
           dimColor: Colors.grey.shade600,
           textColor: Colors.white,
+          spelling: spelling,
+          textScaler: MediaQuery.textScalerOf(context),
+          textDirection: Directionality.of(context),
+          onPick: onPick,
         ),
         size: Size.infinite,
       ),
@@ -74,17 +90,85 @@ class ChordWheel extends StatelessWidget {
 
 class _ChordWheelPainter extends CustomPainter {
   _ChordWheelPainter({
+    required this.keyRootPc,
+    required this.scaleName,
     required this.triads,
     required this.majorColor,
     required this.minorColor,
     required this.dimColor,
     required this.textColor,
+    required this.spelling,
+    required this.textScaler,
+    required this.textDirection,
+    required this.onPick,
   });
+  final int keyRootPc;
+  final String scaleName;
   final List<DiatonicTriad> triads;
   final Color majorColor;
   final Color minorColor;
   final Color dimColor;
   final Color textColor;
+  final NoteSpelling spelling;
+  final TextScaler textScaler;
+  final TextDirection textDirection;
+  final ValueChanged<DiatonicTriad> onPick;
+
+  @override
+  SemanticsBuilderCallback get semanticsBuilder => (Size size) {
+    final outerRadius = size.shortestSide / 2 - 4;
+    final innerRadius = outerRadius * _innerRadiusFraction;
+    return <CustomPainterSemantics>[
+      for (var degree = 0; degree < triads.length; degree++)
+        _degreeSemantics(
+          degree,
+          triads[degree],
+          size,
+          innerRadius,
+          outerRadius,
+        ),
+    ];
+  };
+
+  CustomPainterSemantics _degreeSemantics(
+    int degree,
+    DiatonicTriad triad,
+    Size size,
+    double innerRadius,
+    double outerRadius,
+  ) {
+    final symbol = formatRecognizedChordLabel(
+      symbol: triad.symbol,
+      rootPc: triad.rootPc,
+      quality: triad.quality,
+      spelling: spelling,
+    );
+    return CustomPainterSemantics(
+      key: ValueKey('chord-wheel-degree-$degree'),
+      rect: _semanticTargetRect(
+        _degreeLabelCenter(degree, size, innerRadius, outerRadius),
+        size,
+      ),
+      properties: SemanticsProperties(
+        label: '${triad.romanNumeral}, $symbol chord',
+        button: true,
+        textDirection: textDirection,
+        sortKey: OrdinalSortKey(degree.toDouble()),
+        onTap: () => onPick(triad),
+      ),
+    );
+  }
+
+  Rect _semanticTargetRect(Offset center, Size size) {
+    final width = min(44.0, size.width);
+    final height = min(44.0, size.height);
+    return Rect.fromLTWH(
+      (center.dx - width / 2).clamp(0.0, size.width - width).toDouble(),
+      (center.dy - height / 2).clamp(0.0, size.height - height).toDouble(),
+      width,
+      height,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -129,16 +213,16 @@ class _ChordWheelPainter extends CustomPainter {
           ..strokeWidth = 1.5,
       );
 
-      final midAngle = startAngle + wedgeAngle / 2;
-      final labelRadius = (innerRadius + outerRadius) / 2;
-      final labelCenter = Offset(
-        center.dx + labelRadius * cos(midAngle),
-        center.dy + labelRadius * sin(midAngle),
-      );
+      final labelCenter = _degreeLabelCenter(d, size, innerRadius, outerRadius);
 
       final symbolPainter = TextPainter(
         text: TextSpan(
-          text: triad.symbol,
+          text: formatRecognizedChordLabel(
+            symbol: triad.symbol,
+            rootPc: triad.rootPc,
+            quality: triad.quality,
+            spelling: spelling,
+          ),
           style: TextStyle(
             color: textColor,
             fontSize: 13,
@@ -146,6 +230,7 @@ class _ChordWheelPainter extends CustomPainter {
           ),
         ),
         textDirection: TextDirection.ltr,
+        textScaler: textScaler,
       )..layout();
       symbolPainter.paint(
         canvas,
@@ -161,6 +246,7 @@ class _ChordWheelPainter extends CustomPainter {
           ),
         ),
         textDirection: TextDirection.ltr,
+        textScaler: textScaler,
       )..layout();
       numeralPainter.paint(
         canvas,
@@ -181,5 +267,33 @@ class _ChordWheelPainter extends CustomPainter {
       old.majorColor != majorColor ||
       old.minorColor != minorColor ||
       old.dimColor != dimColor ||
-      old.textColor != textColor;
+      old.textColor != textColor ||
+      old.spelling != spelling ||
+      old.textScaler != textScaler;
+
+  @override
+  bool shouldRebuildSemantics(_ChordWheelPainter old) =>
+      old.keyRootPc != keyRootPc ||
+      old.scaleName != scaleName ||
+      old.triads != triads ||
+      old.spelling != spelling ||
+      old.textScaler != textScaler ||
+      old.textDirection != textDirection ||
+      old.onPick != onPick;
+}
+
+Offset _degreeLabelCenter(
+  int degree,
+  Size size,
+  double innerRadius,
+  double outerRadius,
+) {
+  final wedgeAngle = 2 * pi / _wedgeCount;
+  final midAngle = -pi / 2 + (degree + 0.5) * wedgeAngle;
+  final labelRadius = (innerRadius + outerRadius) / 2;
+  final center = Offset(size.width / 2, size.height / 2);
+  return Offset(
+    center.dx + labelRadius * cos(midAngle),
+    center.dy + labelRadius * sin(midAngle),
+  );
 }

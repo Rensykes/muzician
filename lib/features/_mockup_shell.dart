@@ -178,7 +178,7 @@ class ModeSegment<T extends Object> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: 52,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
@@ -220,45 +220,50 @@ class _Segment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(
-            color: selected
-                ? Colors.white.withValues(alpha: 0.22)
-                : Colors.transparent,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
+    return SizedBox.expand(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          child: AnimatedContainer(
+            width: double.infinity,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
               color: selected
-                  ? MuzicianTheme.textPrimary
-                  : MuzicianTheme.textMuted,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
+                  ? Colors.white.withValues(alpha: 0.16)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
                 color: selected
-                    ? MuzicianTheme.textPrimary
-                    : MuzicianTheme.textMuted,
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : Colors.transparent,
               ),
             ),
-          ],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 14,
+                  color: selected
+                      ? MuzicianTheme.textPrimary
+                      : MuzicianTheme.textMuted,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected
+                        ? MuzicianTheme.textPrimary
+                        : MuzicianTheme.textMuted,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -385,6 +390,8 @@ class DockTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveColor = warning ? MuzicianTheme.orange : color;
+    final labelScale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    final verticalPadding = (7 - (labelScale - 1) * 5).clamp(0.0, 7.0);
     return Expanded(
       flex: flex,
       child: GestureDetector(
@@ -392,7 +399,7 @@ class DockTab extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 7),
+          padding: EdgeInsets.symmetric(vertical: verticalPadding),
           decoration: BoxDecoration(
             color: warning
                 ? MuzicianTheme.orange.withValues(alpha: 0.10)

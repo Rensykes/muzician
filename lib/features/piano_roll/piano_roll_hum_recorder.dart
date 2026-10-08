@@ -9,8 +9,8 @@ import '../../store/hum_to_midi_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
-import '../../schema/rules/mono_pitch_rules.dart' as rules;
 import '../../schema/rules/mono_pitch_rules.dart' show HumSensitivity;
+import '../../utils/note_utils.dart';
 
 class PianoRollHumRecorderPanel extends ConsumerStatefulWidget {
   final bool isWeb;
@@ -73,6 +73,7 @@ class _PianoRollHumRecorderPanelState
     final sensitivity = ref.watch(
       settingsProvider.select((s) => s.humSensitivity),
     );
+    final spelling = ref.watch(settingsProvider.select((s) => s.noteSpelling));
     final canChangeSensitivity =
         state.status != HumToMidiStatus.recording &&
         state.status != HumToMidiStatus.processing;
@@ -81,7 +82,7 @@ class _PianoRollHumRecorderPanelState
       status: state.status,
       liveNoteLabel: state.liveMidiNote == null
           ? 'No pitch'
-          : rules.midiToNoteLabel(state.liveMidiNote!),
+          : formatMidiNoteLabel(state.liveMidiNote!, spelling: spelling),
       statusLabel: switch (state.status) {
         HumToMidiStatus.recording =>
           state.liveMidiNote == null ? 'No pitch' : 'Stable',

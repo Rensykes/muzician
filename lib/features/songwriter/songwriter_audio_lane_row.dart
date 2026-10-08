@@ -5,9 +5,11 @@ import '../../models/song_project.dart' show AudioAsset;
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart' show laneKindFallbackLabel;
 import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_utils.dart';
 import '../song/song_audio_clip_body.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_audio_actions.dart';
@@ -40,6 +42,9 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
     final saveState = ref.watch(saveSystemProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final ownerByBar = <int, SongBlock>{};
     for (final b in lane.blocks) {
       for (var i = b.startBar; i < b.endBar; i++) {
@@ -186,7 +191,19 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                           bottom: 2,
                           child: Text(
                             clip.segments
-                                .map((s) => s.chordSymbol ?? '◆')
+                                .map(
+                                  (s) => s.chordSymbol == null
+                                      ? '◆'
+                                      : s.chordRootPc == null ||
+                                            s.chordQuality == null
+                                      ? s.chordSymbol!
+                                      : formatRecognizedChordLabel(
+                                          symbol: s.chordSymbol!,
+                                          rootPc: s.chordRootPc!,
+                                          quality: s.chordQuality!,
+                                          spelling: spelling,
+                                        ),
+                                )
                                 .join('  '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

@@ -140,13 +140,15 @@ Required behavior:
 - shared formatter functions produce display labels from those canonical values
 - user-selected canonical roots from existing pickers remain stable, but visible labels can prefer a more musical flat form where appropriate
 
-Initial heuristic:
+Initial heuristic (superseded by the October 7 global spelling preference):
 
 - preserve natural notes as-is
 - preserve `F#` as sharp in common contexts
 - prefer flat display forms for canonical `A#`, `D#`, `G#`, and `C#` on harmonic labels unless a caller explicitly asks for canonical-sharp output
 
-This is intentionally a conservative first pass. It improves common readability without rewriting the full note-naming system.
+The current policy uses the persistent Settings Sharps/Flats preference for all
+musical display labels, including F#/Gb. Canonical data and literal user names
+remain unchanged; see [the correction plan](../plans/2026-10-07-spelling-harmony-replacement-playback.md).
 
 ### 4. Fretboard integration
 

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/fretboard.dart';
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/song_project.dart';
@@ -15,6 +16,9 @@ void main() {
           id: 'b1',
           startBar: 0,
           spanBars: 1,
+          chordSymbol: 'G',
+          chordQuality: '',
+          chordRootPc: 7,
           chordNotes: ['G', 'B', 'D'],
         );
         // G4=67, B4=71, D above B -> D5=74.
@@ -86,6 +90,79 @@ void main() {
     });
   });
 
+  group('Harmony playback resolution', () {
+    test('exact Harmony plays the captured native MIDI pitches', () {
+      final snapshot = HarmonyChordSnapshot(
+        harmonyInstrument: HarmonyLaneInstrument.piano,
+        writerBlock: const WriterBlockSnapshot(
+          laneKind: SongLaneKind.harmony,
+          chordSymbol: 'C cluster',
+          chordNotes: ['C', 'D#', 'G'],
+        ),
+        instrumentState: PianoSnapshot(
+          currentRange: PianoRangeName.key88,
+          selectedKeys: const [
+            PianoCoordinate(keyIndex: 27, midiNote: 48, noteName: 'C'),
+            PianoCoordinate(keyIndex: 42, midiNote: 63, noteName: 'D#'),
+            PianoCoordinate(keyIndex: 58, midiNote: 79, noteName: 'G'),
+          ],
+          selectedNotes: const ['C', 'D#', 'G'],
+          viewMode: PianoViewMode.exact,
+        ),
+      );
+      final block = SongBlock(
+        id: 'exact',
+        startBar: 0,
+        spanBars: 1,
+        chordSymbol: 'C cluster',
+        chordNotes: const ['C', 'D#', 'G'],
+        embedded: snapshot,
+      );
+
+      expect(
+        harmonyBlockMidiNotes(
+          block,
+          const [],
+          projectId: null,
+          folders: const [],
+        ),
+        [48, 63, 79],
+      );
+    });
+
+    test('Writer Save playback silences Free Fretboard captures', () {
+      final snapshot = FretboardSnapshot(
+        tuning: TuningName.standard,
+        numFrets: 12,
+        capo: 0,
+        selectedCells: const [
+          FretCoordinate(stringIndex: 0, fret: 0, noteName: 'E'),
+          FretCoordinate(stringIndex: 1, fret: 1, noteName: 'C'),
+        ],
+        selectedNotes: const ['E', 'C'],
+        viewMode: FretboardViewMode.exact,
+        inputMode: FretboardInputMode.free,
+      );
+      final block = SongBlock(
+        id: 'free-save',
+        startBar: 0,
+        spanBars: 1,
+        embedded: snapshot,
+      );
+
+      expect(snapshotMidiNotes(snapshot), [60, 64]);
+      expect(
+        writerSaveBlockMidiNotes(
+          block,
+          const [],
+          projectId: null,
+          folders: const [],
+        ),
+        isEmpty,
+      );
+    });
+  });
+
   group('flattenPlaybackEvents', () {
     SongwriterProjectSnapshot projectWith({
       required List<SongSection> sections,
@@ -111,6 +188,9 @@ void main() {
         id: 'b1',
         startBar: 1,
         spanBars: 2,
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
         chordNotes: ['C', 'E', 'G'],
       );
       const lane = SongLane(
@@ -139,6 +219,9 @@ void main() {
         id: 'b1',
         startBar: 0,
         spanBars: 1,
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
         chordNotes: ['C'],
       );
       const lane = SongLane(
@@ -167,6 +250,9 @@ void main() {
         id: 'b1',
         startBar: 1,
         spanBars: 5, // section is only 2 bars long
+        chordSymbol: 'C',
+        chordQuality: '',
+        chordRootPc: 0,
         chordNotes: ['C'],
       );
       const lane = SongLane(
@@ -332,6 +418,9 @@ void main() {
               id: 'c',
               startBar: 0,
               spanBars: 1,
+              chordSymbol: 'C',
+              chordQuality: '',
+              chordRootPc: 0,
               chordNotes: ['C', 'E', 'G'],
             ),
           ],
@@ -345,6 +434,9 @@ void main() {
               id: 'g',
               startBar: 0,
               spanBars: 1,
+              chordSymbol: 'G',
+              chordQuality: '',
+              chordRootPc: 7,
               chordNotes: ['G', 'B', 'D'],
             ),
           ],
@@ -401,7 +493,15 @@ void main() {
           kind: SongLaneKind.harmony,
           order: 0,
           blocks: [
-            SongBlock(id: 'c', startBar: 0, spanBars: 1, chordNotes: ['C']),
+            SongBlock(
+              id: 'c',
+              startBar: 0,
+              spanBars: 1,
+              chordSymbol: 'C',
+              chordQuality: '',
+              chordRootPc: 0,
+              chordNotes: ['C'],
+            ),
           ],
         );
         const emptyAnchor = SongLane(
@@ -458,6 +558,9 @@ void main() {
             id: 'chord',
             startBar: 0,
             spanBars: 1,
+            chordSymbol: 'C',
+            chordQuality: '',
+            chordRootPc: 0,
             chordNotes: ['C', 'E', 'G'],
           ),
         ],
@@ -525,6 +628,9 @@ void main() {
                 id: 'chord',
                 startBar: 0,
                 spanBars: 1,
+                chordSymbol: 'C',
+                chordQuality: '',
+                chordRootPc: 0,
                 chordNotes: ['C', 'E', 'G'],
               ),
             ],
@@ -664,7 +770,15 @@ void main() {
         kind: SongLaneKind.harmony,
         order: 0,
         blocks: [
-          SongBlock(id: 'b1', startBar: 0, spanBars: 1, chordNotes: ['C']),
+          SongBlock(
+            id: 'b1',
+            startBar: 0,
+            spanBars: 1,
+            chordSymbol: 'C',
+            chordQuality: '',
+            chordRootPc: 0,
+            chordNotes: ['C'],
+          ),
         ],
       );
       const drums = SongLane(

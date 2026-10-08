@@ -57,9 +57,14 @@ void main() {
         tuning: TuningName.standard,
         numFrets: 12,
         capo: 0,
-        selectedCells: const [],
-        selectedNotes: const [],
+        selectedCells: const [
+          FretCoordinate(stringIndex: 0, fret: 8, noteName: 'C'),
+          FretCoordinate(stringIndex: 2, fret: 0, noteName: 'G'),
+          FretCoordinate(stringIndex: 3, fret: 2, noteName: 'E'),
+        ],
+        selectedNotes: const ['C', 'G', 'E'],
         viewMode: FretboardViewMode.exact,
+        inputMode: FretboardInputMode.chord,
       );
       final linkedSaveId = saves.saveSnapshot(
         'Linked shape',
@@ -172,9 +177,14 @@ void main() {
         tuning: TuningName.standard,
         numFrets: 12,
         capo: 0,
-        selectedCells: const [],
-        selectedNotes: const [],
+        selectedCells: const [
+          FretCoordinate(stringIndex: 0, fret: 8, noteName: 'C'),
+          FretCoordinate(stringIndex: 2, fret: 0, noteName: 'G'),
+          FretCoordinate(stringIndex: 3, fret: 2, noteName: 'E'),
+        ],
+        selectedNotes: const ['C', 'G', 'E'],
         viewMode: FretboardViewMode.exact,
+        inputMode: FretboardInputMode.chord,
       );
       final saveId = saves.saveSnapshot('Linked shape', projectId, snapshot)!;
       expect(

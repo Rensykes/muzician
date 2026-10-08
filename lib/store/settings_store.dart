@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/harmony_lane_instrument.dart';
 import '../models/save_system.dart';
 import '../schema/rules/mono_pitch_rules.dart';
+import '../utils/note_utils.dart' show NoteSpelling;
 
 const settingsStorageKey = '@muzician/settings/v1';
 
@@ -47,6 +48,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setShowNoteLabels(bool show) async {
     state = state.copyWith(showNoteLabels: show);
+    await _persist();
+  }
+
+  Future<void> setNoteSpelling(NoteSpelling spelling) async {
+    state = state.copyWith(noteSpelling: spelling);
     await _persist();
   }
 

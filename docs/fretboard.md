@@ -2,6 +2,12 @@
 
 An interactive guitar fretboard rendered entirely with `CustomPainter`. Supports multiple tunings, capo, chord voicing loading, scale highlighting, and a landscape modal view.
 
+When height is tight, including landscape and compact screens with enlarged
+text, the header, mode selector, fretboard, and detection area scroll above the
+fixed Scale/Chord dock. The board retains its full size; scroll to reach lower
+strings or detection controls. Mode, chord-picker, and scale-picker controls
+provide at least 44×44px tap regions, including scale categories and clear actions.
+
 ---
 
 ## Architecture
@@ -131,11 +137,15 @@ Chord tones are computed from a semitone-interval map (`_chordIntervals`) rather
 
 ### `NoteDetectionPanel`
 Reads `pendingChordProvider` and `pendingScaleProvider`. Displays:
-- The detected chord name (e.g. `"C/E"` or `"Cmaj7"`) using shared contextual flat spelling
-- The detected scale name (e.g. `"Eb dorian"`) using shared contextual flat spelling
+- The detected chord name (e.g. `"C/E"` or `"Cmaj7"`) using the global Sharps/Flats preference
+- The detected scale name (e.g. `"Eb dorian"` in Flats mode) using the same preference as board notes and the Scale dock
 - A "Clear" button that resets both providers
 
 Detection uses the shared exact-note-aware API (`detectChordResultsFromExactNotes` / `detectScaleResultsFromExactNotes`) from `note_utils.dart`, supporting inversion-aware slash-chord results and the full picker scale catalog. Tapping a chip writes canonical root/quality or root/scaleName into the pending providers.
+
+**Settings → Prefer flat note names** persists across restarts and updates note
+labels, scale/chord controls, and project key labels immediately. Pitches,
+positions, and custom Save/unknown Harmony names stay unchanged.
 
 ---
 
@@ -227,16 +237,19 @@ showAppInfoPanel(context, initialTab: 0); // 0 = Fretboard, 1 = Piano, 2 = Piano
 
 ## Project lock
 
-When a project is selected, the instrument inherits its key / tempo /
-time-signature (where applicable) and the corresponding controls are disabled.
-Change the values through the project config sheet from the project chip in
-the header. Dump and "no project" leave controls free.
+When a project is selected, the instrument inherits its tonic and scale/mode,
+tempo, and time-signature where applicable. The scale picker can set, change,
+or clear the project key after confirmation, including the first key on an
+unkeyed project. Cancel keeps the previous key; confirming updates Writer,
+Fretboard, and Piano without transposing selected notes. Instrument Save loads
+retain the project key. Tempo and meter use the project config sheet from the
+project chip in the header. Dump and "no project" leave scale choices local.
 
 **Scale dock label:** The Scale dock tab shows the active project key (e.g.
 "C major") as its label when the selected project has a key configured. When
-no project key is active, the label falls back to the user-selected active
-scale (set via `SharedScalePicker`), and to the default `"Scale"` when
-neither is present. See `_resolveScaleDockState()` in `lib/main.dart`.
+the real project has no key, the label is `"Scale"`. In Dump or with no project,
+the label uses the local active scale or `"Scale"` when none is present.
+See `_resolveScaleDockState()` in `lib/main.dart`.
 
 **chordOffKey warning:** When the committed chord contains notes outside the
 active project key, the Scale dock tab turns orange and shows a warning icon.
@@ -246,7 +259,7 @@ is passed as `scaleOffKey` to `InstrumentScreen` → `DockTab.warning`.
 
 **Shared scale picker:** The scale picker (`SharedScalePicker` in
 `lib/features/instrument_shared/shared_scale_picker.dart`) reads
-`activeProjectKeyProvider` and merges it with the user-set active scale. The
+`activeProjectKeyProvider` and treats the real project key as authoritative. The
 active-scale chip turns orange when the committed chord is off-key and the
 project is locked (`chordOffKey && isProjectLocked`).
 
@@ -257,14 +270,28 @@ badge. Used by both the Fretboard and Piano chord pickers.
 
 ## Saves and Writer handoff
 
-Saving a fretboard voicing outside Writer stores a free idea in the selected
-project root. In the save browser, **Use in Writer** explicitly links that
+Saving a fretboard selection outside Writer stores an idea in the selected
+project root, including its Free or Chord input mode. Loading restores that
+mode. Free remains savable, loadable, and playable for exploration on the
+instrument. Writer accepts only Chord mode with a nonempty valid selection
+and at most one position per string; changing modes does not silently delete
+duplicate-string notes. Free is excluded from Writer handoff, saved-source
+reuse, linked editing, playback, and import into Song. Free-to-melody conversion
+is outside this phase.
+
+In the save browser, **Use in Writer** explicitly links that
 existing project-root save to a selected Writer section and placement without
-moving or copying it; Dump-root ideas stay in Dump. A fresh **Add to Writer**
+moving or copying it; its ID and root folder stay unchanged as it becomes a
+Harmony Save. Dump-root ideas stay in Dump. A fresh **Add to Writer**
 handoff creates a new named save after the destination is chosen. Harmony
 chord saves keep the symbolic Writer chord together with its native Fretboard
-realization. The selected fretboard pitch classes must match that chord, and
-the saved pending-chord label is normalized to the Writer chord on update.
+realization. **Add exact notes as Harmony** accepts valid Chord selections
+even when the app recognizes no chord, preserving native positions and the
+chosen name for Harmony Library reuse. Unknown Harmony offers Change chord,
+Replace chord, and native editing; theory actions wait for a symbolic chord
+identity. Symbolic Harmony native edits must match its chord pitch classes
+and normalize the pending-chord label. Exact Harmony native edits preserve
+the name and update its notes without inventing a root or quality.
 
 If a linked Save is used by multiple Writer blocks, updating it offers
 **Update all placements** or **Create a unique instance**. The unique choice

@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
+import '../../utils/note_utils.dart';
 
 const _categories = [
   TuningCategory.standard,
@@ -53,6 +55,9 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final notifier = ref.read(fretboardProvider.notifier);
     final color = _catColor[_activeCategory]!;
     final bg = _catBg[_activeCategory]!;
@@ -138,7 +143,7 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
                     ),
                   ),
                   child: Text(
-                    t.displayName,
+                    _displayTuningName(t, spelling),
                     style: TextStyle(
                       color: isActive ? color : const Color(0xFF64748B),
                       fontSize: 13,
@@ -154,5 +159,12 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
         const SizedBox(height: 12),
       ],
     );
+  }
+
+  String _displayTuningName(Tuning tuning, NoteSpelling spelling) {
+    if (tuning.name == TuningName.ebStandard) {
+      return '${formatRootChoiceLabel('Eb', spelling: spelling)} Standard';
+    }
+    return tuning.displayName;
   }
 }

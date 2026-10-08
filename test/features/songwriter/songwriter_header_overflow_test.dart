@@ -10,8 +10,9 @@ import 'package:muzician/theme/muzician_theme.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('header does not overflow at a narrow phone width',
-      (tester) async {
+  testWidgets('header does not overflow at a narrow phone width', (
+    tester,
+  ) async {
     // Force a narrow logical width (≈ small phone). A RenderFlex overflow in
     // the header Row would be reported as a FlutterError and fail this test.
     tester.view.physicalSize = const Size(360, 800);
@@ -25,10 +26,12 @@ void main() {
     container.read(songwriterProvider.notifier).setKey(10, 'major');
     container.read(songwriterProvider.notifier).setTempo(120);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 600)); // drain debounce
     await tester.pumpAndSettle();
 
@@ -56,7 +59,7 @@ void main() {
         .singleWhere((semantics) => semantics.properties.label == label);
 
     Future<void> openMenu() async {
-      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.tap(find.byKey(const Key('writerMenuButton')));
       await tester.pumpAndSettle();
     }
 
@@ -118,4 +121,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(songwriterProvider).config.tempo, initialTempo);
   });
+
+  testWidgets(
+    'New project is accessible from the menu on compact and wide layouts',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      for (final size in [const Size(320, 480), const Size(1280, 800)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: Scaffold(body: SongwriterHeader())),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('writerNewProjectButton')), findsNothing);
+        expect(find.byTooltip('Writer menu'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('writerMenuButton')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('writerMenuTile_new_project')),
+          findsOneWidget,
+        );
+        final newProjectSemantics = tester
+            .widgetList<Semantics>(find.byType(Semantics))
+            .singleWhere((item) => item.properties.label == 'New project');
+        expect(newProjectSemantics.properties.button, isTrue);
+        expect(newProjectSemantics.properties.enabled, isTrue);
+        expect(tester.takeException(), isNull);
+
+        await tester.tap(find.byIcon(Icons.close_rounded));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    },
+  );
 }

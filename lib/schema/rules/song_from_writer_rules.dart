@@ -186,7 +186,12 @@ SongProject songFromSongwriter(
     )) {
       if (bar >= harmonyBlock.startBar &&
           bar < math.min(harmonyBlock.endBar, section.lengthBars)) {
-        return chordMidiNotes(harmonyBlock);
+        return harmonyBlockMidiNotes(
+          harmonyBlock,
+          saves,
+          projectId: projectId,
+          folders: folders,
+        );
       }
     }
     return const [];
@@ -333,7 +338,12 @@ SongProject songFromSongwriter(
             // Audio lanes are not exported to the Song arrangement.
             break;
           case SongLaneKind.harmony:
-            final midiNotes = chordMidiNotes(block);
+            final midiNotes = harmonyBlockMidiNotes(
+              block,
+              saves,
+              projectId: projectId,
+              folders: folders,
+            );
             if (midiNotes.isEmpty) break;
             final hIdx = harmonyIndexByLaneId[lane.id]!;
             final track = harmonyTrackByIndex.putIfAbsent(
@@ -365,13 +375,11 @@ SongProject songFromSongwriter(
               startTick: startTick,
             );
           case SongLaneKind.save:
-            final midiNotes = snapshotMidiNotes(
-              resolveBlockSnapshot(
-                block,
-                saves,
-                projectId: projectId,
-                folders: folders,
-              ),
+            final midiNotes = writerSaveBlockMidiNotes(
+              block,
+              saves,
+              projectId: projectId,
+              folders: folders,
             );
             if (midiNotes.isEmpty) break;
             final trackId = saveTrackIdByLane.putIfAbsent(lane.id, () {

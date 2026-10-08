@@ -3,6 +3,7 @@ import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/ui/save_card_label.dart';
+import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 
 FretboardSnapshot _snap({
   PendingChord? chord,
@@ -28,6 +29,33 @@ void main() {
     );
     expect(l.kind, SaveCardLabelKind.chord);
     expect(l.text, 'Cmaj7');
+  });
+
+  test('recognized save chords use the selected spelling and keep bass', () {
+    final label = saveCardLabel(
+      _snap(
+        chord: const PendingChord(root: 'D#', quality: 'm', symbol: 'D#m/A#'),
+      ),
+      spelling: NoteSpelling.flats,
+    );
+
+    expect(label.text, 'Ebm/Bb');
+  });
+
+  test('flat chord roots retain verified identity in both spellings', () {
+    const flatRoot = PendingChord(root: 'Bb', quality: '', symbol: 'Bb');
+    const sharpRoot = PendingChord(root: 'A#', quality: '', symbol: 'A#');
+
+    expect(saveCardLabel(_snap(chord: flatRoot)).text, 'A#');
+    expect(
+      saveCardLabel(_snap(chord: flatRoot), spelling: NoteSpelling.flats).text,
+      'Bb',
+    );
+    expect(saveCardLabel(_snap(chord: sharpRoot)).text, 'A#');
+    expect(
+      saveCardLabel(_snap(chord: sharpRoot), spelling: NoteSpelling.flats).text,
+      'Bb',
+    );
   });
 
   test('scale when no chord', () {
@@ -61,6 +89,28 @@ void main() {
     );
     expect(l.kind, SaveCardLabelKind.chord);
     expect(l.text, 'Am7');
+  });
+
+  test('Writer exact labels stay literal while recognized labels format', () {
+    final exact = saveCardLabel(
+      const WriterBlockSnapshot(
+        laneKind: SongLaneKind.harmony,
+        chordSymbol: 'D# idea',
+      ),
+      spelling: NoteSpelling.flats,
+    );
+    final recognized = saveCardLabel(
+      const WriterBlockSnapshot(
+        laneKind: SongLaneKind.harmony,
+        chordSymbol: 'D#m/A#',
+        chordRootPc: 3,
+        chordQuality: 'm',
+      ),
+      spelling: NoteSpelling.flats,
+    );
+
+    expect(exact.text, 'D# idea');
+    expect(recognized.text, 'Ebm/Bb');
   });
 
   test('silent Writer block has a readable label', () {

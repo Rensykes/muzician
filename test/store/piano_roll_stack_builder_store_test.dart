@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/piano_roll_stack_builder.dart';
 import 'package:muzician/store/piano_roll_stack_builder_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';
+import 'package:muzician/store/settings_store.dart';
+import 'package:muzician/utils/note_utils.dart';
+import '../support/test_settings_notifier.dart';
 
 void main() {
   // ── Default state ───────────────────────────────────────────────────────
@@ -123,9 +126,31 @@ void main() {
     addTearDown(container.dispose);
 
     final notifier = container.read(pianoRollStackBuilderProvider.notifier);
-    expect(notifier.addAbsoluteNote(61), true);
-    expect(notifier.addAbsoluteNote(61), false);
+    expect(notifier.addAbsoluteNote(61, spelling: NoteSpelling.flats), true);
+    expect(notifier.addAbsoluteNote(61, spelling: NoteSpelling.flats), false);
 
+    expect(
+      container.read(pianoRollStackBuilderProvider).errorMessage,
+      contains('Db4'),
+    );
+  });
+
+  test('existing display error updates when note spelling changes', () {
+    final settings = TestSettingsNotifier();
+    final container = ProviderContainer(
+      overrides: [settingsProvider.overrideWith(() => settings)],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(pianoRollStackBuilderProvider.notifier);
+    notifier.addAbsoluteNote(61);
+    notifier.addAbsoluteNote(61);
+    expect(
+      container.read(pianoRollStackBuilderProvider).errorMessage,
+      contains('C#4'),
+    );
+
+    settings.changeSpelling(NoteSpelling.flats);
     expect(
       container.read(pianoRollStackBuilderProvider).errorMessage,
       contains('Db4'),

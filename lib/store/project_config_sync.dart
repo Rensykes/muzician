@@ -9,6 +9,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/piano_roll.dart' show TimeSignature;
+import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../store/fretboard_store.dart';
 import '../store/piano_roll_store.dart';
@@ -31,33 +32,60 @@ final activeProjectKeyProvider = Provider<({String root, String scaleName})?>((
   if (cfg == null) return null;
   final rootPc = cfg.keyRootPc;
   final scaleName = cfg.keyScaleName;
-  if (rootPc == null || scaleName == null) return null;
+  if (rootPc == null || scaleName == null || rootPc < 0 || rootPc >= 12) {
+    return null;
+  }
   return (root: chromaticNotes[rootPc], scaleName: scaleName);
 });
 
 /// Mount once on app start (read it from `main.dart`). The provider has no
 /// state — its body wires the listeners.
 final projectConfigSyncProvider = Provider<void>((ref) {
+  var revision = 0;
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
   ref.listen<SaveFolder?>(selectedProjectProvider, (prev, next) {
     // Defer state mutations so they don't happen during this provider's
     // build phase — Riverpod forbids modifying other providers on build.
-    Future.microtask(() => _apply(ref, next));
+    final scheduledRevision = ++revision;
+    Future.microtask(() {
+      if (disposed || scheduledRevision != revision) return;
+      final current = ref.read(selectedProjectProvider);
+      if (!_sameSelection(current, next)) return;
+      _apply(ref, next);
+    });
   }, fireImmediately: true);
 });
 
 void _apply(Ref ref, SaveFolder? folder) {
-  if (folder == null || folder.kind != SaveFolderKind.project) return;
-  final cfg = folder.projectConfig;
-  if (cfg == null) return;
+  if (folder == null || folder.kind != SaveFolderKind.project) {
+    _clearProjectKeyContext(ref);
+    return;
+  }
+  final cfg = folder.projectConfig ?? const ProjectConfig();
 
-  final scaleNotes = _scaleNotesFor(cfg.keyRootPc, cfg.keyScaleName);
-  final keyString = cfg.keyRootPc == null
-      ? null
-      : chromaticNotes[cfg.keyRootPc!];
+  final rootPc = cfg.keyRootPc;
+  final scaleName = cfg.keyScaleName;
+  final hasKey =
+      rootPc != null &&
+      rootPc >= 0 &&
+      rootPc < chromaticNotes.length &&
+      scaleName != null;
+  final scaleNotes = hasKey
+      ? _scaleNotesFor(rootPc, scaleName)
+      : const <String>[];
+  final keyString = hasKey ? chromaticNotes[rootPc] : null;
+  final activeScale = hasKey
+      ? (root: chromaticNotes[rootPc], scaleName: scaleName)
+      : null;
 
   // Fretboard + Piano live highlight
   ref.read(fretboardProvider.notifier).setHighlightedNotes(scaleNotes);
   ref.read(pianoProvider.notifier).setHighlightedNotes(scaleNotes);
+  ref.read(activeScaleProvider.notifier).state = activeScale;
+  ref.read(pendingScaleProvider.notifier).state = null;
+  ref.read(pianoActiveScaleProvider.notifier).state = activeScale;
+  ref.read(pianoPendingScaleProvider.notifier).state = null;
 
   // Piano Roll: config + highlight
   final roll = ref.read(pianoRollProvider.notifier);
@@ -67,6 +95,8 @@ void _apply(Ref ref, SaveFolder? folder) {
   );
   roll.setKey(keyString);
   roll.setHighlightedNotes(scaleNotes);
+  ref.read(pianoRollActiveScaleProvider.notifier).state = activeScale;
+  ref.read(pianoRollPendingScaleProvider.notifier).state = null;
 
   // Song
   final song = ref.read(songProjectProvider.notifier);
@@ -86,13 +116,73 @@ void _apply(Ref ref, SaveFolder? folder) {
     tempo: cfg.tempo,
     beatsPerBar: cfg.beatsPerBar,
     beatUnit: cfg.beatUnit,
-    keyRoot: cfg.keyRootPc,
-    keyScaleName: cfg.keyScaleName,
+    keyRoot: hasKey ? rootPc : null,
+    keyScaleName: hasKey ? scaleName : null,
   );
 }
 
+void _clearProjectKeyContext(Ref ref) {
+  ref.read(fretboardProvider.notifier).setHighlightedNotes(const []);
+  ref.read(pianoProvider.notifier).setHighlightedNotes(const []);
+  ref.read(activeScaleProvider.notifier).state = null;
+  ref.read(pendingScaleProvider.notifier).state = null;
+  ref.read(pianoActiveScaleProvider.notifier).state = null;
+  ref.read(pianoPendingScaleProvider.notifier).state = null;
+
+  final roll = ref.read(pianoRollProvider.notifier);
+  roll.setKey(null);
+  roll.setHighlightedNotes(const []);
+  ref.read(pianoRollActiveScaleProvider.notifier).state = null;
+  ref.read(pianoRollPendingScaleProvider.notifier).state = null;
+
+  final songState = ref.read(songProjectProvider);
+  final songConfig = songState.config;
+  ref
+      .read(songProjectProvider.notifier)
+      .syncProjectConfig(
+        tempo: songConfig.tempo,
+        timeSignature: songConfig.timeSignature,
+        scaleRoot: null,
+        scaleName: null,
+      );
+
+  final writerConfig = ref.read(songwriterProvider).config;
+  ref
+      .read(songwriterProvider.notifier)
+      .syncProjectConfig(
+        tempo: writerConfig.tempo,
+        beatsPerBar: writerConfig.beatsPerBar,
+        beatUnit: writerConfig.beatUnit,
+        keyRoot: null,
+        keyScaleName: null,
+      );
+}
+
+bool _sameSelection(SaveFolder? current, SaveFolder? expected) {
+  if (current?.id != expected?.id || current?.kind != expected?.kind) {
+    return false;
+  }
+  final currentConfig = current?.projectConfig;
+  final expectedConfig = expected?.projectConfig;
+  if (currentConfig == null || expectedConfig == null) {
+    return currentConfig == null && expectedConfig == null;
+  }
+  return currentConfig.keyRootPc == expectedConfig.keyRootPc &&
+      currentConfig.keyScaleName == expectedConfig.keyScaleName &&
+      currentConfig.tempo == expectedConfig.tempo &&
+      currentConfig.beatsPerBar == expectedConfig.beatsPerBar &&
+      currentConfig.beatUnit == expectedConfig.beatUnit &&
+      currentConfig.defaultHarmonyInstrument ==
+          expectedConfig.defaultHarmonyInstrument;
+}
+
 List<String> _scaleNotesFor(int? rootPc, String? scaleName) {
-  if (rootPc == null || scaleName == null) return const [];
+  if (rootPc == null ||
+      rootPc < 0 ||
+      rootPc >= chromaticNotes.length ||
+      scaleName == null) {
+    return const [];
+  }
   final intervals = scaleIntervals[scaleName];
   if (intervals == null) return const [];
   return intervals.map((i) => chromaticNotes[(rootPc + i) % 12]).toList();

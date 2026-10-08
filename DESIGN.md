@@ -151,6 +151,7 @@ Components use familiar touch targets and low-contrast containers. Keep control 
 - **Dialog actions:** normal actions use secondary text; primary actions use sky; destructive actions use red.
 - **Focus and disabled states:** preserve a visible keyboard-focus indication and sufficient contrast; disabled color must not carry essential information.
 - **Undo and redo:** expose them in each workspace's overflow menu with clear text labels and disabled states. A temporary Writer delete snackbar may offer the same history undo action.
+- **Writer project creation:** expose New project in the main menu on compact and wide layouts; keep session protection in the existing creation flow.
 
 ### Chips
 - **Status chips:** translucent white fill, fine white border, pill radius, compact single-line label.
@@ -163,11 +164,15 @@ Components use familiar touch targets and low-contrast containers. Keep control 
 ### Inputs / Fields
 - Follow Material input behavior and labels. Show errors next to the field or action that needs attention and preserve entered work when correcting an error.
 - Confirm replacement of a non-empty Song before opening the bundle picker; explain that a successful import can be undone.
+- Confirm a project's first key, key change, or key removal before updating all instrument views. Cancel retains the confirmed key and selected notes.
 
 ### Navigation and Instrument Surfaces
 - Keep the current workspace identifiable and the instrument canvas visually dominant.
 - Instrument labels and highlights must remain readable at compact widths and with text scaling enabled.
+- On short screens, let instrument content scroll above the Scale/Chord dock while preserving board size and touch gestures.
+- Apply the global Sharps/Flats preference consistently to musical labels, including canvas notes, detected scales, project keys, and chord tools. Preserve literal user names and slash-chord bass notes. An unsupported chord wheel opens the root/quality picker instead of showing a false missing-key state.
 - Expose essential gestures with visible controls or contextual help.
+- Treat named exact Harmony like other playable Harmony blocks for editing and reuse; omit theory controls when no chord identity exists. Explain the Chord-mode requirement beside an unavailable Fretboard handoff. Hide strum targets already assigned to another lane while retaining the current source.
 
 ### Named Rules
 **The Empty-State Hierarchy Rule.** Name the empty state, surface the contextually likely next action, preserve an alternate creation action, and state transfer boundaries in brief copy.

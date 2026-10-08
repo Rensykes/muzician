@@ -12,6 +12,9 @@ void main() {
     id: id,
     startBar: 0,
     spanBars: 1,
+    chordSymbol: 'C',
+    chordQuality: '',
+    chordRootPc: 0,
     chordNotes: const ['C', 'E', 'G'],
   );
 

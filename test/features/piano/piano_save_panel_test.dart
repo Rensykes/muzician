@@ -100,7 +100,9 @@ void main() {
       await saveSystem.hydrate();
       final projectId = saveSystem.createProject(
         'Piano project',
-        const ProjectConfig(),
+        const ProjectConfig(
+          defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+        ),
       )!;
       saveSystem.selectProject(projectId);
 
@@ -141,14 +143,8 @@ void main() {
         root: 'C',
         quality: 'major',
       ));
-      expect(container.read(pianoPendingScaleProvider), (
-        root: 'D',
-        scaleName: 'dorian',
-      ));
-      expect(container.read(pianoActiveScaleProvider), (
-        root: 'D',
-        scaleName: 'dorian',
-      ));
+      expect(container.read(pianoPendingScaleProvider), isNull);
+      expect(container.read(pianoActiveScaleProvider), isNull);
     },
   );
 
@@ -264,18 +260,16 @@ void main() {
     await saveSystem.hydrate();
     final projectId = saveSystem.createProject(
       'Piano project',
-      const ProjectConfig(),
+      const ProjectConfig(
+        defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+      ),
     )!;
     saveSystem.selectProject(projectId);
     final writer = container.read(songwriterProvider.notifier);
     writer.addSection(label: 'Verse', lengthBars: 4);
     final section = container.read(songwriterProvider).sections.single;
-    final snapshot = PianoSnapshot(
-      currentRange: PianoRangeName.key61,
-      selectedKeys: const [],
-      selectedNotes: const [],
-      viewMode: PianoViewMode.exact,
-    );
+    final snapshot = _eligiblePianoSnapshot();
+    container.read(pianoProvider.notifier).loadSnapshot(snapshot);
     final saveId = saveSystem.saveSnapshot(
       'Linked piano',
       projectId,
@@ -286,6 +280,8 @@ void main() {
         sectionId: section.id,
         startBar: 0,
         snapshot: snapshot,
+        asExactHarmony: true,
+        chordSymbol: 'Linked piano',
         saveName: 'Linked piano',
         reuseSaveId: saveId,
       ),
@@ -296,7 +292,7 @@ void main() {
         .sections
         .single
         .lanes
-        .singleWhere((candidate) => candidate.kind == SongLaneKind.save);
+        .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony);
     final block = lane.blocks.single;
 
     await tester.pumpWidget(_wrap(container, linkedEditSaveId: saveId));
@@ -317,6 +313,8 @@ void main() {
   testWidgets('Use in Writer reuses a root Piano save and can update it', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     SharedPreferences.setMockInitialValues({});
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -324,18 +322,15 @@ void main() {
     await saveSystem.hydrate();
     final projectId = saveSystem.createProject(
       'Piano project',
-      const ProjectConfig(),
+      const ProjectConfig(
+        defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+      ),
     )!;
     saveSystem.selectProject(projectId);
     container
         .read(songwriterProvider.notifier)
         .addSection(label: 'Verse', lengthBars: 4);
-    final snapshot = PianoSnapshot(
-      currentRange: PianoRangeName.key61,
-      selectedKeys: const [],
-      selectedNotes: const [],
-      viewMode: PianoViewMode.exact,
-    );
+    final snapshot = _eligiblePianoSnapshot();
     final saveId = saveSystem.saveSnapshot('Piano idea', projectId, snapshot)!;
 
     await tester.pumpWidget(_wrap(container));
@@ -345,8 +340,6 @@ void main() {
     await tester.tap(find.byKey(const Key('useWriterSaveButton')));
     await tester.pumpAndSettle();
     final sectionId = container.read(songwriterProvider).sections.single.id;
-    await tester.tap(find.byKey(Key('writerHandoffNewSaveLane_$sectionId')));
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
     await tester.pumpAndSettle();
     final block = container
@@ -354,7 +347,7 @@ void main() {
         .sections
         .single
         .lanes
-        .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+        .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
         .blocks
         .single;
     expect(block.saveId, saveId);
@@ -382,13 +375,14 @@ void main() {
           .sections
           .single
           .lanes
-          .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+          .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
           .blocks
           .single
           .saveId,
       saveId,
     );
 
+    container.read(pianoProvider.notifier).loadSnapshot(snapshot);
     container.read(pianoProvider.notifier).setRange(PianoRangeName.key88);
     await tester.pumpWidget(_wrap(container, linkedEditSaveId: saveId));
     await tester.pumpAndSettle();
@@ -399,7 +393,9 @@ void main() {
         .saves
         .singleWhere((save) => save.id == saveId);
     expect(
-      (canonical.snapshot as PianoSnapshot).currentRange,
+      ((canonical.snapshot as HarmonyChordSnapshot).instrumentState
+              as PianoSnapshot)
+          .currentRange,
       PianoRangeName.key88,
     );
     await container.read(songwriterSessionsProvider.notifier).flush();
@@ -421,18 +417,15 @@ void main() {
       await saveSystem.hydrate();
       final projectId = saveSystem.createProject(
         'Piano project',
-        const ProjectConfig(),
+        const ProjectConfig(
+          defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+        ),
       )!;
       saveSystem.selectProject(projectId);
       container
           .read(songwriterProvider.notifier)
           .addSection(label: 'Verse', lengthBars: 4);
-      final snapshot = PianoSnapshot(
-        currentRange: PianoRangeName.key61,
-        selectedKeys: const [],
-        selectedNotes: const [],
-        viewMode: PianoViewMode.exact,
-      );
+      final snapshot = _eligiblePianoSnapshot();
       final saveId = saveSystem.saveSnapshot('Root idea', projectId, snapshot)!;
 
       await tester.pumpWidget(_wrap(container));
@@ -442,8 +435,6 @@ void main() {
       await tester.tap(find.byKey(const Key('useWriterSaveButton')));
       await tester.pumpAndSettle();
       final sectionId = container.read(songwriterProvider).sections.single.id;
-      await tester.tap(find.byKey(Key('writerHandoffNewSaveLane_$sectionId')));
-      await tester.pumpAndSettle();
       await tester.tap(find.byKey(Key('writerHandoffBar_${sectionId}_0')));
       await tester.pumpAndSettle();
 
@@ -452,12 +443,13 @@ void main() {
           .sections
           .single
           .lanes
-          .singleWhere((candidate) => candidate.kind == SongLaneKind.save)
+          .singleWhere((candidate) => candidate.kind == SongLaneKind.harmony)
           .blocks
           .single;
       expect(block.saveId, saveId);
       expect(container.read(saveSystemProvider).saves, hasLength(1));
 
+      container.read(pianoProvider.notifier).loadSnapshot(snapshot);
       container.read(pianoProvider.notifier).setRange(PianoRangeName.key88);
       await tester.pumpWidget(_wrap(container, linkedEditSaveId: saveId));
       await tester.pumpAndSettle();
@@ -470,7 +462,9 @@ void main() {
           .saves
           .singleWhere((save) => save.id == saveId);
       expect(
-        (canonical.snapshot as PianoSnapshot).currentRange,
+        ((canonical.snapshot as HarmonyChordSnapshot).instrumentState
+                as PianoSnapshot)
+            .currentRange,
         PianoRangeName.key88,
       );
       await container.read(songwriterSessionsProvider.notifier).flush();
@@ -489,16 +483,38 @@ HarmonyChordSnapshot _pianoHarmonySnapshot({
   harmonyInstrument: HarmonyLaneInstrument.piano,
   writerBlock: WriterBlockSnapshot(
     laneKind: SongLaneKind.harmony,
+    chordSymbol: 'C',
+    chordQuality: '',
+    chordRootPc: 0,
     chordNotes: selectedNotes,
   ),
   instrumentState: PianoSnapshot(
     currentRange: currentRange,
-    selectedKeys: const [],
+    selectedKeys: selectedNotes.isEmpty
+        ? const []
+        : const [
+            PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+            PianoCoordinate(keyIndex: 1, midiNote: 64, noteName: 'E'),
+            PianoCoordinate(keyIndex: 2, midiNote: 67, noteName: 'G'),
+          ],
     selectedNotes: selectedNotes,
     viewMode: PianoViewMode.exact,
     pendingChord: pendingChord,
     pendingScale: pendingScale,
   ),
+);
+
+PianoSnapshot _eligiblePianoSnapshot({
+  PianoRangeName range = PianoRangeName.key61,
+}) => PianoSnapshot(
+  currentRange: range,
+  selectedKeys: const [
+    PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+    PianoCoordinate(keyIndex: 1, midiNote: 64, noteName: 'E'),
+    PianoCoordinate(keyIndex: 2, midiNote: 67, noteName: 'G'),
+  ],
+  selectedNotes: const ['C', 'E', 'G'],
+  viewMode: PianoViewMode.exact,
 );
 
 HarmonyChordSnapshot _fretboardHarmonySnapshot() => HarmonyChordSnapshot(

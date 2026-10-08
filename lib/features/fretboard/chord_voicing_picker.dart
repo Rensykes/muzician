@@ -10,6 +10,7 @@ import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../store/project_config_sync.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
 import '../../utils/note_utils.dart';
@@ -199,6 +200,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
   Future<bool> _confirmIfOffKey(
     List<String> chordNotes,
     ({String root, String scaleName})? activeKey,
+    NoteSpelling spelling,
   ) async {
     if (activeKey == null) return true;
     final outOfKey = chordPitchClassesOutOfKey(
@@ -208,14 +210,16 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
     );
     if (outOfKey.isEmpty) return true;
     if (!mounted) return false;
-    final notes = outOfKey.map(formatRootChoiceLabel).join(', ');
+    final notes = outOfKey
+        .map((note) => formatRootChoiceLabel(note, spelling: spelling))
+        .join(', ');
     final result = await showDialog<OutOfKeyResult>(
       context: context,
       builder: (ctx) => OutOfKeyDialog(
         title: 'Chord outside the key',
         message:
             'This chord contains $notes, which fall outside '
-            '${activeKey.root} ${activeKey.scaleName}. Apply anyway?',
+            '${formatRootChoiceLabel(activeKey.root, spelling: spelling)} ${activeKey.scaleName}. Apply anyway?',
         showSuppressOption: false,
       ),
     );
@@ -225,6 +229,9 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(fretboardProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final notifier = ref.read(fretboardProvider.notifier);
 
     installChordSync(fretboardBinding);
@@ -249,7 +256,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
         .map((midi) => getPitchClassAtFret(midi, 0))
         .toList();
     final chordName = _selectedRoot != null
-        ? '$_selectedRoot$_selectedQuality'
+        ? '${formatRootChoiceLabel(_selectedRoot!, spelling: spelling)}$_selectedQuality'
         : null;
     final chordNotes = _selectedRoot != null
         ? getChordNotes(_selectedRoot!, _selectedQuality)
@@ -281,7 +288,8 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
             child: DiatonicChordsHeader(
-              keyLabel: '${activeKey!.root} ${activeKey.scaleName}',
+              keyLabel:
+                  '${formatRootChoiceLabel(activeKey!.root, spelling: spelling)} ${activeKey.scaleName}',
             ),
           ),
           DiatonicChordsRow(
@@ -351,6 +359,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
                   final apply = await _confirmIfOffKey(
                     chordNotes,
                     activeKey,
+                    spelling,
                   );
                   if (!apply) return;
                   setState(() {

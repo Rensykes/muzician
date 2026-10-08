@@ -43,9 +43,112 @@ void main() {
       );
       const scale = ScaleDetectionResult(root: 'D#', scaleName: 'dorian');
 
-      expect(formatChordSymbol(chord), 'Bbmaj7/D');
-      expect(formatScaleLabel(scale), 'Eb dorian');
-      expect(formatRootChoiceLabel('C#'), 'Db');
+      expect(
+        formatChordSymbol(chord, spelling: NoteSpelling.flats),
+        'Bbmaj7/D',
+      );
+      expect(
+        formatScaleLabel(scale, spelling: NoteSpelling.flats),
+        'Eb dorian',
+      );
+      expect(formatRootChoiceLabel('C#', spelling: NoteSpelling.flats), 'Db');
+    });
+  });
+
+  group('note spelling preference', () {
+    test('formats every pitch class as sharps or flats', () {
+      const expectedFlats = [
+        'C',
+        'Db',
+        'D',
+        'Eb',
+        'E',
+        'F',
+        'Gb',
+        'G',
+        'Ab',
+        'A',
+        'Bb',
+        'B',
+      ];
+
+      for (var pitchClass = 0; pitchClass < 12; pitchClass++) {
+        final sharp = chromaticNotes[pitchClass];
+        expect(formatRootChoiceLabel(sharp), sharp);
+        expect(
+          formatRootChoiceLabel(sharp, spelling: NoteSpelling.flats),
+          expectedFlats[pitchClass],
+        );
+        expect(formatMidiNoteLabel(60 + pitchClass), '${sharp}4');
+        expect(
+          formatMidiNoteLabel(60 + pitchClass, spelling: NoteSpelling.flats),
+          '${expectedFlats[pitchClass]}4',
+        );
+      }
+    });
+
+    test('formats chord root and slash bass without changing quality', () {
+      const chord = ChordDetectionResult(
+        root: 'D#',
+        quality: 'm7b5',
+        bass: 'F#',
+      );
+
+      expect(formatChordSymbol(chord), 'D#m7b5/F#');
+      expect(
+        formatChordSymbol(chord, spelling: NoteSpelling.flats),
+        'Ebm7b5/Gb',
+      );
+    });
+
+    test('formats stored chord text only when identity metadata matches', () {
+      expect(
+        formatRecognizedChordLabel(
+          symbol: 'D#m/A#',
+          rootPc: 3,
+          quality: 'm',
+          spelling: NoteSpelling.flats,
+        ),
+        'Ebm/Bb',
+      );
+      expect(
+        formatRecognizedChordLabel(
+          symbol: 'D#m/A#',
+          rootPc: 3,
+          quality: 'm',
+          spelling: NoteSpelling.sharps,
+        ),
+        'D#m/A#',
+      );
+      for (final label in ['D#m/A#', 'D# idea', 'D#maj7']) {
+        expect(
+          formatRecognizedChordLabel(
+            symbol: label,
+            rootPc: 2,
+            quality: 'm',
+            spelling: NoteSpelling.flats,
+          ),
+          label,
+        );
+      }
+      expect(
+        formatRecognizedChordLabel(
+          symbol: 'D#m/invalid',
+          rootPc: 3,
+          quality: 'm',
+          spelling: NoteSpelling.flats,
+        ),
+        'D#m/invalid',
+      );
+      expect(
+        formatRecognizedChordLabel(
+          symbol: 'D#m',
+          rootPc: 3,
+          quality: 'exact',
+          spelling: NoteSpelling.flats,
+        ),
+        'D#m',
+      );
     });
   });
 

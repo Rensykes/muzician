@@ -102,7 +102,11 @@ void main() {
       projectId,
       PianoSnapshot(
         currentRange: PianoRangeName.key61,
-        selectedKeys: const [],
+        selectedKeys: const [
+          PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+          PianoCoordinate(keyIndex: 1, midiNote: 64, noteName: 'E'),
+          PianoCoordinate(keyIndex: 2, midiNote: 67, noteName: 'G'),
+        ],
         selectedNotes: const ['C4', 'E4', 'G4'],
         viewMode: PianoViewMode.exact,
       ),
@@ -217,7 +221,11 @@ void main() {
         projectId,
         PianoSnapshot(
           currentRange: PianoRangeName.key61,
-          selectedKeys: const [],
+          selectedKeys: const [
+            PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+            PianoCoordinate(keyIndex: 1, midiNote: 64, noteName: 'E'),
+            PianoCoordinate(keyIndex: 2, midiNote: 67, noteName: 'G'),
+          ],
           selectedNotes: const ['C4', 'E4', 'G4'],
           viewMode: PianoViewMode.exact,
         ),
@@ -718,6 +726,142 @@ void main() {
     },
   );
 
+  testWidgets('exact-note Harmony stays reusable without chord theory tools', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final saveSystem = container.read(saveSystemProvider.notifier);
+    final projectId = saveSystem.createProject(
+      'Writer project',
+      const ProjectConfig(
+        defaultHarmonyInstrument: HarmonyLaneInstrument.piano,
+      ),
+    )!;
+    saveSystem.selectProject(projectId);
+    final sourceId = saveSystem.saveSnapshot(
+      'Mystery voicing',
+      projectId,
+      _exactPianoHarmony('Mystery voicing'),
+    )!;
+    final replacementId = saveSystem.saveSnapshot(
+      'Unnamed shape',
+      projectId,
+      _exactPianoHarmony('Distant cluster'),
+    )!;
+
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final lane = section.lanes.single;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: sourceId,
+        sectionId: section.id,
+        laneKind: SongLaneKind.harmony,
+        laneId: lane.id,
+        startBar: 0,
+        spanBars: 2,
+      ),
+      isTrue,
+    );
+    final target = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .single;
+    writer.setBlockLyric(
+      sectionId: section.id,
+      laneId: lane.id,
+      blockId: target.id,
+      verseIndex: 0,
+      text: 'Keep this lyric',
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SongwriterScreenSheet(onEditInstrumentSave: (_) {}),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('Mystery voicing'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('barActionChangeChord')), findsOneWidget);
+    expect(find.byKey(const Key('barActionReplaceChord')), findsOneWidget);
+    expect(find.text('Voicings & library'), findsNothing);
+    expect(find.byKey(const Key('barActionVoicings')), findsNothing);
+    expect(find.text('Edit in Piano'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('barActionReplaceChord')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(Key('harmonyLibrarySave_$replacementId')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(Key('harmonyLibrarySave_$replacementId')));
+    await tester.pumpAndSettle();
+
+    SongBlock currentTarget() => container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .singleWhere((block) => block.id == target.id);
+
+    expect(currentTarget().saveId, replacementId);
+    expect(currentTarget().chordSymbol, 'Distant cluster');
+    expect(currentTarget().chordRootPc, isNull);
+    expect(currentTarget().chordQuality, isNull);
+    expect(currentTarget().startBar, 0);
+    expect(currentTarget().spanBars, 2);
+    expect(currentTarget().lyrics, ['Keep this lyric']);
+
+    await tester.tap(find.text('·').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('barActionAddLibrary')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(Key('harmonyLibrarySave_$sourceId')), findsOneWidget);
+    expect(
+      find.byKey(Key('harmonyLibrarySave_$replacementId')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(Key('harmonyLibrarySave_$sourceId')));
+    await tester.pumpAndSettle();
+
+    final inserted = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .single
+        .blocks
+        .singleWhere((block) => block.startBar == 2);
+    expect(inserted.saveId, sourceId);
+    expect(inserted.chordSymbol, 'Mystery voicing');
+    expect(inserted.chordRootPc, isNull);
+    expect(inserted.chordQuality, isNull);
+    expect(
+      container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .where((candidate) => candidate.kind == SongLaneKind.save),
+      isEmpty,
+    );
+  });
+
   testWidgets('secondary lane header deletes the lane after confirm', (
     tester,
   ) async {
@@ -1072,3 +1216,22 @@ void main() {
     expect(find.byKey(Key('saveCell_${blockId}_0')), findsOneWidget);
   });
 }
+
+HarmonyChordSnapshot _exactPianoHarmony(String label) => HarmonyChordSnapshot(
+  harmonyInstrument: HarmonyLaneInstrument.piano,
+  writerBlock: WriterBlockSnapshot(
+    laneKind: SongLaneKind.harmony,
+    chordSymbol: label,
+    chordNotes: const ['C', 'D#', 'G'],
+  ),
+  instrumentState: PianoSnapshot(
+    currentRange: PianoRangeName.key61,
+    selectedKeys: const [
+      PianoCoordinate(keyIndex: 0, midiNote: 60, noteName: 'C'),
+      PianoCoordinate(keyIndex: 1, midiNote: 63, noteName: 'D#'),
+      PianoCoordinate(keyIndex: 2, midiNote: 67, noteName: 'G'),
+    ],
+    selectedNotes: const ['C', 'D#', 'G'],
+    viewMode: PianoViewMode.exact,
+  ),
+);

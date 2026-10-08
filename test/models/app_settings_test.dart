@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/save_system.dart';
+import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 
 void main() {
   test('saveBrowserGrid defaults to false and round-trips', () {
@@ -9,6 +10,26 @@ void main() {
     final json = s.copyWith(saveBrowserGrid: true).toJson();
     final back = AppSettings.fromJson(json);
     expect(back.saveBrowserGrid, true);
+  });
+
+  test('note spelling defaults to sharps and round-trips', () {
+    const defaults = AppSettings();
+    expect(defaults.noteSpelling, NoteSpelling.sharps);
+
+    final restored = AppSettings.fromJson(
+      defaults.copyWith(noteSpelling: NoteSpelling.flats).toJson(),
+    );
+    expect(restored.noteSpelling, NoteSpelling.flats);
+  });
+
+  test('missing or unknown spelling falls back to sharps', () {
+    expect(AppSettings.fromJson(const {}).noteSpelling, NoteSpelling.sharps);
+    expect(
+      AppSettings.fromJson(const {
+        'noteSpelling': 'doubleAccidentals',
+      }).noteSpelling,
+      NoteSpelling.sharps,
+    );
   });
 
   test('last content workspace defaults to Writer and round-trips', () {

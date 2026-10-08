@@ -1577,6 +1577,9 @@ class _BarRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
     final saveState = ref.watch(saveSystemProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final bars = section.lengthBars < 1 ? 1 : section.lengthBars;
     final activeBar = ref.watch(
       songwriterActivePositionProvider.select(
@@ -1633,6 +1636,12 @@ class _BarRow extends ConsumerWidget {
                   key: activeKey(i, span),
                   flex: span,
                   block: owner,
+                  displayChordSymbol: _displayChordSymbol(
+                    owner.chordSymbol,
+                    owner.chordRootPc,
+                    owner.chordQuality,
+                    spelling,
+                  ),
                   blockName: writerSaveEntryForBlock(saveState, owner)?.name,
                   brokenReference:
                       owner.saveId != null &&
@@ -1641,6 +1650,7 @@ class _BarRow extends ConsumerWidget {
                     owner,
                     writerSaveEntryForBlock(saveState, owner)?.name,
                     i,
+                    spelling,
                   ),
                   onBrokenDelete: () => notifier.removeBlock(
                     sectionId: section.id,
@@ -1693,6 +1703,7 @@ class _BarRow extends ConsumerWidget {
                       save,
                       writerSaveEntryForBlock(saveState, save)?.name,
                       i,
+                      spelling,
                     ),
                     onBrokenDelete: () => _removeSave(context, ref, save),
                     saveIcon: _saveIcon(ref, save),
@@ -1916,10 +1927,9 @@ class _BarRow extends ConsumerWidget {
   void _onTapBlock(BuildContext context, WidgetRef ref, SongBlock block) {
     final notifier = ref.read(songwriterProvider.notifier);
     final entry = writerSaveEntryForBlock(ref.read(saveSystemProvider), block);
-    final isChord =
-        !block.isSilent &&
-        block.chordRootPc != null &&
-        block.chordQuality != null;
+    final isHarmony = !block.isSilent && hasHarmonyBlockContent(block);
+    final isRecognizedChord =
+        isHarmony && block.chordRootPc != null && block.chordQuality != null;
     final harmonySave = entry?.snapshot;
     final save = _anchoredSaveLanes()
         .expand((l) => l.blocks)
@@ -1928,7 +1938,15 @@ class _BarRow extends ConsumerWidget {
 
     showBarActionSheet(
       context: context,
-      title: isChord ? (block.chordSymbol ?? 'Chord') : 'Bar',
+      title: isHarmony
+          ? _displayChordSymbol(
+                  block.chordSymbol,
+                  block.chordRootPc,
+                  block.chordQuality,
+                  ref.read(settingsProvider).noteSpelling,
+                ) ??
+                'Harmony'
+          : 'Bar',
       actions: [
         BarAction(
           key: const Key('barActionPlayFromHere'),
@@ -1936,21 +1954,21 @@ class _BarRow extends ConsumerWidget {
           icon: Icons.play_arrow,
           onTap: () => _playFromBar(ref, block.startBar),
         ),
-        if (isChord)
+        if (isHarmony)
           BarAction(
             key: const Key('barActionChangeChord'),
             label: 'Change chord',
             icon: Icons.edit,
             onTap: () => _editBlock(context, ref, block),
           ),
-        if (isChord)
+        if (isRecognizedChord)
           BarAction(
             key: const Key('barActionVoicings'),
             label: 'Voicings & library',
             icon: Icons.library_music,
             onTap: () => _openHarmonyTools(context, ref, block),
           ),
-        if (isChord)
+        if (isHarmony)
           BarAction(
             key: const Key('barActionReplaceChord'),
             label: 'Replace chord',
@@ -2027,7 +2045,7 @@ class _BarRow extends ConsumerWidget {
           ),
         BarAction(
           key: const Key('barActionRemove'),
-          label: isChord ? 'Remove chord' : 'Remove',
+          label: isHarmony ? 'Remove chord' : 'Remove',
           icon: Icons.delete_outline,
           destructive: true,
           onTap: () => _removeBlock(context, notifier, block),
@@ -2077,6 +2095,7 @@ class _BarRow extends ConsumerWidget {
     showHarmonyBlockSheet(
       context,
       block: block,
+      spelling: ref.read(settingsProvider).noteSpelling,
       voicings: voicings,
       thirdAbove: compatibleThirdAbove,
       chordMatches: matches.chordMatches,
@@ -2216,12 +2235,19 @@ class _BarRow extends ConsumerWidget {
             .where(
               (entry) =>
                   entry.snapshot is HarmonyChordSnapshot &&
+                  hasHarmonyContent(
+                    (entry.snapshot as HarmonyChordSnapshot).writerBlock,
+                  ) &&
+                  isWriterEligibleHarmonySnapshot(
+                    entry.snapshot as HarmonyChordSnapshot,
+                  ) &&
                   (entry.snapshot as HarmonyChordSnapshot).harmonyInstrument ==
                       instrument &&
                   resolveSaveInProject(saveState, projectId, entry.id) != null,
             )
             .toList()
           ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final spelling = ref.read(settingsProvider).noteSpelling;
     showWidgetSheet(
       context: context,
       title: title,
@@ -2250,9 +2276,18 @@ class _BarRow extends ConsumerWidget {
                 ),
                 title: Text(entry.name),
                 subtitle: Text(
-                  (entry.snapshot as HarmonyChordSnapshot)
-                          .writerBlock
-                          .chordSymbol ??
+                  _displayChordSymbol(
+                        (entry.snapshot as HarmonyChordSnapshot)
+                            .writerBlock
+                            .chordSymbol,
+                        (entry.snapshot as HarmonyChordSnapshot)
+                            .writerBlock
+                            .chordRootPc,
+                        (entry.snapshot as HarmonyChordSnapshot)
+                            .writerBlock
+                            .chordQuality,
+                        spelling,
+                      ) ??
                       'Harmony chord',
                 ),
                 onTap: () {
@@ -2516,6 +2551,7 @@ class _BarCell extends StatelessWidget {
     super.key,
     required this.flex,
     required this.block,
+    this.displayChordSymbol,
     required this.instanceIndex,
     required this.onTap,
     required this.semanticsLabel,
@@ -2532,6 +2568,7 @@ class _BarCell extends StatelessWidget {
   });
   final int flex;
   final SongBlock? block;
+  final String? displayChordSymbol;
   final String? blockName;
   final bool brokenReference;
   final VoidCallback? onBrokenDelete;
@@ -2746,7 +2783,10 @@ class _BarCell extends StatelessWidget {
         else ...[
           const Spacer(),
           Text(
-            block!.chordSymbol ?? '?',
+            displayChordSymbol ?? block!.chordSymbol ?? '?',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: MuzicianTheme.textPrimary,
               fontWeight: FontWeight.w700,
@@ -2808,9 +2848,36 @@ class _BarCell extends StatelessWidget {
   }
 }
 
-String _barCellSemanticsLabel(SongBlock block, String? name, int startBar) {
+String? _displayChordSymbol(
+  String? symbol,
+  int? rootPc,
+  String? quality,
+  NoteSpelling spelling,
+) {
+  if (symbol == null) return null;
+  return formatRecognizedChordLabel(
+    symbol: symbol,
+    rootPc: rootPc ?? -1,
+    quality: quality ?? '',
+    spelling: spelling,
+  );
+}
+
+String _barCellSemanticsLabel(
+  SongBlock block,
+  String? name,
+  int startBar,
+  NoteSpelling spelling,
+) {
   final label =
-      name ?? block.chordSymbol ?? (block.isSilent ? 'Silence' : 'Block');
+      name ??
+      _displayChordSymbol(
+        block.chordSymbol,
+        block.chordRootPc,
+        block.chordQuality,
+        spelling,
+      ) ??
+      (block.isSilent ? 'Silence' : 'Block');
   final broken = block.saveId != null && name == null
       ? ', broken save reference'
       : '';
@@ -3040,7 +3107,7 @@ class _PatternLaneRow extends ConsumerWidget {
             for (final pattern in project.guitarStrumPatterns)
               pattern.id: pattern.name,
           };
-    final harmonyLanes = section.lanes
+    final allFretboardHarmonyLanes = section.lanes
         .where(
           (candidate) =>
               candidate.kind == SongLaneKind.harmony &&
@@ -3048,6 +3115,19 @@ class _PatternLaneRow extends ConsumerWidget {
                   HarmonyLaneInstrument.fretboard,
         )
         .toList();
+    final harmonyLanes = isMelody
+        ? const <SongLane>[]
+        : availableGuitarStrumHarmonyLanes(
+            section,
+            projectDefault: projectDefault,
+            excludingLaneId: lane.id,
+          );
+    final fallbackHarmonyLaneLabels = {
+      for (var index = 0; index < allFretboardHarmonyLanes.length; index++)
+        allFretboardHarmonyLanes[index].id: index == 0
+            ? 'Primary Fretboard'
+            : 'Fretboard ${index + 1}',
+    };
     final resolvedAnchor = isMelody
         ? null
         : guitarStrumAnchorLane(
@@ -3291,9 +3371,8 @@ class _PatternLaneRow extends ConsumerWidget {
                             value: harmonyLanes[index].id,
                             child: Text(
                               harmonyLanes[index].label ??
-                                  (index == 0
-                                      ? 'Primary Fretboard'
-                                      : 'Fretboard ${index + 1}'),
+                                  fallbackHarmonyLaneLabels[harmonyLanes[index]
+                                      .id]!,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -3342,6 +3421,9 @@ class _PatternLaneRow extends ConsumerWidget {
                       : project.guitarStrumPatterns
                             .where((pattern) => pattern.id == owner.patternId)
                             .firstOrNull;
+                  final saveEntry = writerSaveEntryForBlock(saveState, owner);
+                  final hasBrokenReference =
+                      owner.saveId != null && saveEntry == null;
                   final patternDuration = melodyPattern == null
                       ? null
                       : _formatMusicDuration(
@@ -3360,6 +3442,90 @@ class _PatternLaneRow extends ConsumerWidget {
                       : isMelody
                       ? 'Edit melody pattern $displayName. Pattern duration $patternDuration. Placed bars ${owner.startBar + 1} through ${owner.endBar}. $playbackSummary.'
                       : 'Edit guitar strum pattern $displayName';
+                  Widget? melodyActions;
+                  if (isMelody && !isContinuation) {
+                    final menu = PopupMenuButton<String>(
+                      key: Key('melodyBlockActions_${owner.id}_$instanceIndex'),
+                      tooltip: saveEntry == null
+                          ? 'Melody block actions'
+                          : 'Actions for ${saveEntry.name}',
+                      padding: EdgeInsets.zero,
+                      child: const SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Icon(
+                          Icons.more_vert,
+                          size: 18,
+                          color: MuzicianTheme.textSecondary,
+                        ),
+                      ),
+                      onSelected: (action) {
+                        if (action == 'placement') {
+                          _showPatternPlacementDialog(
+                            context,
+                            ref,
+                            section,
+                            lane,
+                            owner,
+                          );
+                        } else if (action == 'performance' &&
+                            owner.patternId != null) {
+                          onEditMelodyPerformance?.call(owner.patternId!);
+                        } else if (action == 'rename' && saveEntry != null) {
+                          renameWriterBlockSave(context, ref, saveEntry);
+                        } else if (action == 'unique' && saveEntry != null) {
+                          makeWriterBlockUnique(
+                            context,
+                            ref,
+                            section: section,
+                            lane: lane,
+                            block: owner,
+                            entry: saveEntry,
+                          );
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'placement',
+                          child: ListTile(
+                            leading: Icon(Icons.open_with),
+                            title: Text('Adjust placement'),
+                            dense: true,
+                          ),
+                        ),
+                        if (onEditMelodyPerformance != null)
+                          const PopupMenuItem(
+                            value: 'performance',
+                            child: ListTile(
+                              leading: Icon(Icons.piano),
+                              title: Text('Edit performance'),
+                              dense: true,
+                            ),
+                          ),
+                        if (saveEntry != null) ...[
+                          const PopupMenuDivider(height: 8),
+                          PopupMenuItem(
+                            key: Key('writerRename_${owner.id}'),
+                            value: 'rename',
+                            child: const Text('Rename'),
+                          ),
+                          PopupMenuItem(
+                            key: Key('writerMakeUnique_${owner.id}'),
+                            value: 'unique',
+                            child: const Text('Make Unique'),
+                          ),
+                        ],
+                      ],
+                    );
+                    melodyActions = saveEntry == null
+                        ? menu
+                        : Semantics(
+                            key: Key('writerBlockActions_${owner.id}'),
+                            label: 'Actions for ${saveEntry.name}',
+                            explicitChildNodes: true,
+                            child: menu,
+                          );
+                  }
                   cells.add(
                     Expanded(
                       flex: span,
@@ -3427,61 +3593,27 @@ class _PatternLaneRow extends ConsumerWidget {
                                           ),
                                         ),
                                       ),
-                                      if (isMelody && !isContinuation)
-                                        PopupMenuButton<String>(
-                                          key: Key(
-                                            'melodyBlockActions_${owner.id}_$instanceIndex',
+                                      ?melodyActions,
+                                      if (!isMelody &&
+                                          !isContinuation &&
+                                          saveEntry != null)
+                                        writerLinkedBlockActionsMenu(
+                                          context,
+                                          ref,
+                                          section: section,
+                                          lane: lane,
+                                          block: owner,
+                                          entry: saveEntry,
+                                        ),
+                                      if (!isContinuation && hasBrokenReference)
+                                        writerBrokenReferenceAction(
+                                          context,
+                                          block: owner,
+                                          onDelete: () => notifier.removeBlock(
+                                            sectionId: section.id,
+                                            laneId: lane.id,
+                                            blockId: owner.id,
                                           ),
-                                          tooltip: 'Melody block actions',
-                                          padding: EdgeInsets.zero,
-                                          child: const SizedBox(
-                                            width: 44,
-                                            height: 44,
-                                            child: Icon(
-                                              Icons.more_vert,
-                                              size: 18,
-                                              color:
-                                                  MuzicianTheme.textSecondary,
-                                            ),
-                                          ),
-                                          onSelected: (action) {
-                                            if (action == 'placement') {
-                                              _showPatternPlacementDialog(
-                                                context,
-                                                ref,
-                                                section,
-                                                lane,
-                                                owner,
-                                              );
-                                            } else if (action ==
-                                                    'performance' &&
-                                                owner.patternId != null) {
-                                              onEditMelodyPerformance?.call(
-                                                owner.patternId!,
-                                              );
-                                            }
-                                          },
-                                          itemBuilder: (_) => [
-                                            const PopupMenuItem(
-                                              value: 'placement',
-                                              child: ListTile(
-                                                leading: Icon(Icons.open_with),
-                                                title: Text('Adjust placement'),
-                                                dense: true,
-                                              ),
-                                            ),
-                                            if (onEditMelodyPerformance != null)
-                                              const PopupMenuItem(
-                                                value: 'performance',
-                                                child: ListTile(
-                                                  leading: Icon(Icons.piano),
-                                                  title: Text(
-                                                    'Edit performance',
-                                                  ),
-                                                  dense: true,
-                                                ),
-                                              ),
-                                          ],
                                         ),
                                     ],
                                   ),

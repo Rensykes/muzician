@@ -202,6 +202,7 @@ final pianoBinding = InstrumentBinding(
   activeChord: pianoActiveChordProvider,
   manualEdit: pianoManualEditProvider,
   chordCommitted: pianoChordCommittedProvider,
+  eligibilityState: pianoProvider,
   captureSnapshot: (ref) {
     final piano = ref.read(pianoProvider);
     final chord = ref.read(pianoPendingChordProvider);

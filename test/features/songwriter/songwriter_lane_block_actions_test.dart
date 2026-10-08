@@ -9,7 +9,7 @@ import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
-import 'package:muzician/models/song_project.dart' show AudioAsset;
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 import 'package:muzician/store/save_system_store.dart';
@@ -59,7 +59,11 @@ void main() {
       projectId,
       PianoSnapshot(
         currentRange: PianoRangeName.key61,
-        selectedKeys: const [],
+        selectedKeys: const [
+          PianoCoordinate(keyIndex: 24, midiNote: 60, noteName: 'C'),
+          PianoCoordinate(keyIndex: 28, midiNote: 64, noteName: 'E'),
+          PianoCoordinate(keyIndex: 31, midiNote: 67, noteName: 'G'),
+        ],
         selectedNotes: const ['C4', 'E4', 'G4'],
         viewMode: PianoViewMode.exact,
       ),
@@ -161,21 +165,26 @@ void main() {
       spanBars: 1,
     );
 
-    final pianoSaveId = saveSystem.saveSnapshot(
+    final fretboardSaveId = saveSystem.saveSnapshot(
       'Fretboard save',
       projectId,
       FretboardSnapshot(
         tuning: TuningName.standard,
         numFrets: 12,
         capo: 0,
-        selectedCells: const [],
+        selectedCells: const [
+          FretCoordinate(stringIndex: 0, fret: 8, noteName: 'C'),
+          FretCoordinate(stringIndex: 2, fret: 0, noteName: 'G'),
+          FretCoordinate(stringIndex: 3, fret: 2, noteName: 'E'),
+        ],
         selectedNotes: const ['C', 'E', 'G'],
         viewMode: FretboardViewMode.exact,
+        inputMode: FretboardInputMode.chord,
       ),
     )!;
     writer.addLibraryBlockAt(
       sectionId: sectionId,
-      saveId: pianoSaveId,
+      saveId: fretboardSaveId,
       startBar: 2,
       anchorLaneId: harmonyLaneId,
     );
@@ -184,63 +193,139 @@ void main() {
       sectionId: sectionId,
       kind: SongLaneKind.drum,
     );
-    final drumPatternId = writer.addDrumPattern(name: 'Beat');
-    writer.addDrumBlock(
-      sectionId: sectionId,
-      laneId: drumLaneId,
-      patternId: drumPatternId,
-      startBar: 0,
-      spanBars: 1,
+    final drumSaveId = saveSystem.saveSnapshot(
+      'Beat',
+      projectId,
+      WriterBlockSnapshot(
+        laneKind: SongLaneKind.drum,
+        drumPattern: const DrumPattern(
+          id: 'linked-drum',
+          name: 'Beat',
+          lengthTicks: 16,
+          lanes: [
+            DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
+          ],
+        ),
+      ),
+    )!;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: drumSaveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.drum,
+        laneId: drumLaneId,
+        startBar: 0,
+      ),
+      isTrue,
     );
 
     final melodyLaneId = writer.addLane(
       sectionId: sectionId,
       kind: SongLaneKind.melody,
     );
-    final melodyPatternId = writer.addMelodyPattern(name: 'Melody');
-    writer.addMelodyBlock(
-      sectionId: sectionId,
-      laneId: melodyLaneId,
-      patternId: melodyPatternId,
-      startBar: 0,
-      spanBars: 1,
+    final melodySaveId = saveSystem.saveSnapshot(
+      'Melody',
+      projectId,
+      WriterBlockSnapshot(
+        laneKind: SongLaneKind.melody,
+        melodyPattern: const NotePattern(
+          id: 'linked-melody',
+          name: 'Melody',
+          lengthTicks: 16,
+          notes: [
+            NotePatternNote(
+              id: 'melody-note',
+              midiNote: 67,
+              startTick: 0,
+              durationTicks: 8,
+            ),
+          ],
+          pitchRangeStart: 48,
+          pitchRangeEnd: 84,
+          snapTicks: 1,
+          highlightedNotes: ['G'],
+        ),
+        melodyPerformance: const WriterMelodyPerformance(
+          instrument: HarmonyLaneInstrument.piano,
+        ),
+      ),
+    )!;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: melodySaveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        laneId: melodyLaneId,
+        startBar: 0,
+      ),
+      isTrue,
     );
 
     final strumLaneId = writer.addLane(
       sectionId: sectionId,
       kind: SongLaneKind.guitarStrum,
     );
-    final strumPatternId = writer.addGuitarStrumPattern(name: 'Strum');
-    writer.addGuitarStrumBlock(
-      sectionId: sectionId,
-      laneId: strumLaneId,
-      patternId: strumPatternId,
-      startBar: 0,
-      spanBars: 1,
+    final strumSaveId = saveSystem.saveSnapshot(
+      'Strum',
+      projectId,
+      WriterBlockSnapshot(
+        laneKind: SongLaneKind.guitarStrum,
+        guitarStrumPattern: const GuitarStrumPattern(
+          id: 'linked-strum',
+          name: 'Strum',
+          lengthTicks: 16,
+          events: [
+            GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down),
+          ],
+        ),
+      ),
+    )!;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: strumSaveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.guitarStrum,
+        laneId: strumLaneId,
+        startBar: 0,
+        anchorLaneId: harmonyLaneId,
+      ),
+      isTrue,
     );
 
     final audioLaneId = writer.addLane(
       sectionId: sectionId,
       kind: SongLaneKind.audio,
     );
-    writer.addAudioAsset(
-      const AudioAsset(
-        id: 'asset',
-        durationMs: 4000,
-        sampleRate: 44100,
-        channels: 1,
-        format: 'wav',
-        peaks: [10, 20],
-        sourceLabel: 'Recording',
+    final audioSaveId = saveSystem.saveSnapshot(
+      'Recording',
+      projectId,
+      const WriterBlockSnapshot(
+        laneKind: SongLaneKind.audio,
+        audioClip: AudioClip(
+          id: 'linked-audio-clip',
+          assetId: 'asset',
+          trimEndMs: 4000,
+        ),
+        audioAsset: AudioAsset(
+          id: 'asset',
+          durationMs: 4000,
+          sampleRate: 44100,
+          channels: 1,
+          format: 'wav',
+          peaks: [10, 20],
+          sourceLabel: 'Recording',
+        ),
       ),
-    );
-    final audioClipId = writer.addAudioClip(assetId: 'asset', durationMs: 4000);
-    writer.addAudioBlock(
-      sectionId: sectionId,
-      laneId: audioLaneId,
-      audioClipId: audioClipId,
-      startBar: 0,
-      spanBars: 1,
+    )!;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: audioSaveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.audio,
+        laneId: audioLaneId,
+        startBar: 0,
+      ),
+      isTrue,
     );
     await writer.reconcileCurrentProject();
 

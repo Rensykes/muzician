@@ -655,6 +655,7 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
         selectedCells: snap.selectedCells,
         selectedNotes: snap.selectedNotes,
         viewMode: snap.viewMode,
+        inputMode: snap.inputMode,
         pendingChord: snap.pendingChord,
         pendingScale: snap.pendingScale,
       );
@@ -682,7 +683,12 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
         selectedColumnTick: snap.selectedColumnTick,
         snapTicks: snap.snapTicks,
         highlightedNotes: scaleNotes,
-        pendingScale: snap.pendingScale,
+        pendingScale: cfg.keyRootPc == null || cfg.keyScaleName == null
+            ? null
+            : PendingScale(
+                root: chromaticNotes[cfg.keyRootPc!],
+                scaleName: cfg.keyScaleName!,
+              ),
       );
     }
     if (snap is SongProjectSnapshot) {

@@ -5,12 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmonic_analysis.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../utils/note_utils.dart';
 import 'instrument_binding.dart';
 
 /// Header row: section title on the left, active-chord badge on the right.
-class ChordPickerHeader extends StatelessWidget {
+class ChordPickerHeader extends ConsumerWidget {
   final String title;
   final String? root;
   final String quality;
@@ -22,7 +23,10 @@ class ChordPickerHeader extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     return Row(
       children: [
         Text(
@@ -45,6 +49,7 @@ class ChordPickerHeader extends StatelessWidget {
             child: Text(
               formatChordSymbol(
                 ChordDetectionResult(root: root!, quality: quality),
+                spelling: spelling,
               ),
               style: const TextStyle(
                 color: MuzicianTheme.violet,
@@ -59,7 +64,7 @@ class ChordPickerHeader extends StatelessWidget {
 }
 
 /// Horizontal row of the 12 chromatic root pills.
-class RootPillRow extends StatelessWidget {
+class RootPillRow extends ConsumerWidget {
   final String? selectedRoot;
   final Color accent;
   final ValueChanged<String> onTap;
@@ -73,9 +78,12 @@ class RootPillRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     return SizedBox(
-      height: 38,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: padding,
@@ -84,32 +92,44 @@ class RootPillRow extends StatelessWidget {
         itemBuilder: (_, i) {
           final root = chromaticNotes[i];
           final active = selectedRoot == root;
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              onTap(root);
-            },
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: active
-                    ? accent.withValues(alpha: 0.15)
-                    : Colors.white.withValues(alpha: 0.05),
-                border: Border.all(
-                  color: active
-                      ? accent.withValues(alpha: 0.4)
-                      : Colors.white.withValues(alpha: 0.1),
-                  width: 0.5,
-                ),
-              ),
-              child: Text(
-                formatRootChoiceLabel(root),
-                style: TextStyle(
-                  color: active ? accent : const Color(0xFF64748B),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+          return SizedBox(
+            height: 44,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  onTap(root);
+                },
+                child: Center(
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 13,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      color: active
+                          ? accent.withValues(alpha: 0.15)
+                          : Colors.white.withValues(alpha: 0.05),
+                      border: Border.all(
+                        color: active
+                            ? accent.withValues(alpha: 0.4)
+                            : Colors.white.withValues(alpha: 0.1),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Text(
+                      formatRootChoiceLabel(root, spelling: spelling),
+                      style: TextStyle(
+                        color: active ? accent : const Color(0xFF64748B),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -123,7 +143,7 @@ class RootPillRow extends StatelessWidget {
 /// Horizontal row of diatonic chord chips for the active key. Renders one
 /// chip per scale degree (Roman numeral + chord symbol) and reports taps
 /// back as `(root, quality)` so the picker can populate itself.
-class DiatonicChordsRow extends StatelessWidget {
+class DiatonicChordsRow extends ConsumerWidget {
   final List<DiatonicChord> chords;
   final String? selectedRoot;
   final String selectedQuality;
@@ -141,9 +161,17 @@ class DiatonicChordsRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
+    final textScaler = MediaQuery.textScalerOf(context);
+    // Two stacked text lines plus their 1px gap need about 31 logical pixels
+    // at 1×. Chip padding and border add another 13px.
+    final scaledChipHeight = textScaler.scale(31) + 13;
+    final rowHeight = scaledChipHeight > 46 ? scaledChipHeight : 46.0;
     return SizedBox(
-      height: 46,
+      height: rowHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: padding,
@@ -152,48 +180,59 @@ class DiatonicChordsRow extends StatelessWidget {
         itemBuilder: (_, i) {
           final c = chords[i];
           final active = selectedRoot == c.root && selectedQuality == c.quality;
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              onTap(c.root, c.quality);
-            },
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                color: active
-                    ? accent.withValues(alpha: 0.18)
-                    : MuzicianTheme.emerald.withValues(alpha: 0.06),
-                border: Border.all(
-                  color: active
-                      ? accent.withValues(alpha: 0.5)
-                      : MuzicianTheme.emerald.withValues(alpha: 0.25),
-                  width: 0.5,
+          return SizedBox(
+            height: rowHeight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  onTap(c.root, c.quality);
+                },
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: active
+                          ? accent.withValues(alpha: 0.18)
+                          : MuzicianTheme.emerald.withValues(alpha: 0.06),
+                      border: Border.all(
+                        color: active
+                            ? accent.withValues(alpha: 0.5)
+                            : MuzicianTheme.emerald.withValues(alpha: 0.25),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          c.romanNumeral,
+                          style: TextStyle(
+                            color: active ? accent : MuzicianTheme.emerald,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          '${formatRootChoiceLabel(c.root, spelling: spelling)}${c.quality}',
+                          style: TextStyle(
+                            color: active ? accent : const Color(0xFFE2E8F0),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    c.romanNumeral,
-                    style: TextStyle(
-                      color: active ? accent : MuzicianTheme.emerald,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    '${formatRootChoiceLabel(c.root)}${c.quality}',
-                    style: TextStyle(
-                      color: active ? accent : const Color(0xFFE2E8F0),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
               ),
             ),
           );
@@ -251,7 +290,7 @@ class QualityPillRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 34,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: padding,
@@ -260,32 +299,44 @@ class QualityPillRow extends StatelessWidget {
         itemBuilder: (_, i) {
           final (symbol, label) = qualities[i];
           final active = selectedQuality == symbol;
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              onTap(symbol);
-            },
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: active
-                    ? accent.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.04),
-                border: Border.all(
-                  color: active
-                      ? accent.withValues(alpha: 0.5)
-                      : Colors.white.withValues(alpha: 0.08),
-                  width: 0.5,
-                ),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: active ? accent : const Color(0xFF475569),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+          return SizedBox(
+            height: 44,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  onTap(symbol);
+                },
+                child: Center(
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: active
+                          ? accent.withValues(alpha: 0.2)
+                          : Colors.white.withValues(alpha: 0.04),
+                      border: Border.all(
+                        color: active
+                            ? accent.withValues(alpha: 0.5)
+                            : Colors.white.withValues(alpha: 0.08),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: active ? accent : const Color(0xFF475569),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

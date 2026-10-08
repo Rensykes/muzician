@@ -24,7 +24,11 @@ String _createPianoSave(ProviderContainer container) {
     projectId,
     PianoSnapshot(
       currentRange: PianoRangeName.key61,
-      selectedKeys: const [],
+      selectedKeys: const [
+        PianoCoordinate(keyIndex: 24, midiNote: 60, noteName: 'C'),
+        PianoCoordinate(keyIndex: 28, midiNote: 64, noteName: 'E'),
+        PianoCoordinate(keyIndex: 31, midiNote: 67, noteName: 'G'),
+      ],
       selectedNotes: const ['C4', 'E4', 'G4'],
       viewMode: PianoViewMode.exact,
     ),

@@ -7,6 +7,7 @@ import 'package:muzician/schema/rules/songwriter_playback_rules.dart';
 import 'package:muzician/store/drum_pattern_playback_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
+import 'package:muzician/utils/playback_profiling.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -355,6 +356,9 @@ void main() {
                           id: 'b1',
                           startBar: 0,
                           spanBars: 1,
+                          chordSymbol: 'C',
+                          chordQuality: '',
+                          chordRootPc: 0,
                           chordNotes: ['C', 'E', 'G'],
                         ),
                       ],
@@ -410,6 +414,86 @@ void main() {
       }
     },
   );
+
+  test('profile event IDs match zero-based manifest event indexes', () async {
+    final profiledVoices = <PlaybackProfileVoiceContext>[];
+    final container = ProviderContainer(
+      overrides: [
+        songwriterNoteSinkProvider.overrideWithValue((notes, volume, pan) {
+          for (final _ in notes) {
+            profiledVoices.add(playbackProfileVoiceContext()!);
+          }
+        }),
+        songwriterMetronomeSinkProvider.overrideWithValue(
+          ({required bool accent}) async {},
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container
+        .read(songwriterProvider.notifier)
+        .loadProject(
+          const SongwriterProjectSnapshot(
+            config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+            sections: [
+              SongSection(
+                id: 's1',
+                lengthBars: 2,
+                order: 0,
+                lanes: [
+                  SongLane(
+                    id: 'harmony',
+                    kind: SongLaneKind.harmony,
+                    order: 0,
+                    blocks: [
+                      SongBlock(
+                        id: 'c',
+                        startBar: 0,
+                        spanBars: 1,
+                        chordSymbol: 'C',
+                        chordQuality: '',
+                        chordRootPc: 0,
+                        chordNotes: ['C', 'E', 'G'],
+                      ),
+                      SongBlock(
+                        id: 'g',
+                        startBar: 1,
+                        spanBars: 1,
+                        chordSymbol: 'G',
+                        chordQuality: '',
+                        chordRootPc: 7,
+                        chordNotes: ['G', 'B', 'D'],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+
+    await container
+        .read(songwriterPlaybackProvider.notifier)
+        .startPlayback(tickDurationOverride: Duration.zero, scoreTickLimit: 17);
+
+    expect(profiledVoices.map((voice) => voice.eventId).toList(), [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+    ]);
+    expect(profiledVoices.map((voice) => voice.voiceId).toList(), [
+      'r1-e0-v0',
+      'r1-e0-v1',
+      'r1-e0-v2',
+      'r1-e1-v0',
+      'r1-e1-v1',
+      'r1-e1-v2',
+    ]);
+  });
 
   test(
     'tick clock is wall-anchored: body cost does not accumulate as drift',
@@ -533,6 +617,117 @@ void main() {
       SongwriterPlaybackStatus.completed,
     );
   });
+
+  test(
+    'completed profile records its actual final tick and score boundary',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .addSection(label: 'A', lengthBars: 1);
+
+      await container
+          .read(songwriterPlaybackProvider.notifier)
+          .startPlayback(
+            tickDurationOverride: Duration.zero,
+            scoreTickLimit: 2,
+          );
+
+      final sample = container
+          .read(songwriterPlaybackProfileRunProvider)!
+          .scoreBoundarySample!;
+      final lastTickObservedUs = sample['last_tick_observed_us']! as int;
+      final scoreBoundaryObservedUs =
+          sample['score_boundary_observed_us']! as int;
+      expect(sample['last_dispatched_tick'], 1);
+      expect(sample['last_tick_deadline_us'], 0);
+      expect(
+        sample['last_tick_dispatch_error_us'],
+        lastTickObservedUs - (sample['last_tick_deadline_us']! as int),
+      );
+      expect(sample['score_boundary_deadline_us'], 0);
+      expect(
+        sample['completion_vs_score_boundary_error_us'],
+        scoreBoundaryObservedUs -
+            (sample['score_boundary_deadline_us']! as int),
+      );
+      expect(scoreBoundaryObservedUs, greaterThanOrEqualTo(lastTickObservedUs));
+    },
+  );
+
+  test(
+    'stop during dispatch does not record a completed boundary sample',
+    () async {
+      late SongwriterPlaybackNotifier transport;
+      final container = ProviderContainer(
+        overrides: [
+          songwriterNoteSinkProvider.overrideWithValue((notes, volume, pan) {
+            transport.stopPlayback();
+          }),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      transport = container.read(songwriterPlaybackProvider.notifier);
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(
+            const SongwriterProjectSnapshot(
+              config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+              sections: [
+                SongSection(
+                  id: 's1',
+                  lengthBars: 1,
+                  order: 0,
+                  lanes: [
+                    SongLane(
+                      id: 'harmony',
+                      kind: SongLaneKind.harmony,
+                      order: 0,
+                      blocks: [
+                        SongBlock(
+                          id: 'c',
+                          startBar: 0,
+                          spanBars: 1,
+                          chordSymbol: 'C',
+                          chordQuality: '',
+                          chordRootPc: 0,
+                          chordNotes: ['C', 'E', 'G'],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+
+      await transport.startPlayback(
+        tickDurationOverride: const Duration(milliseconds: 100),
+        scoreTickLimit: 2,
+      );
+
+      expect(
+        container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.idle,
+      );
+      expect(
+        container
+            .read(songwriterPlaybackProfileRunProvider)!
+            .scoreBoundarySample,
+        isNull,
+      );
+    },
+  );
 
   test(
     'startPlayback(startTick:) past the end completes without firing',

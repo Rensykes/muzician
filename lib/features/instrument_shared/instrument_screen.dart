@@ -8,6 +8,25 @@ import '../_mockup_shell.dart';
 import 'instrument_binding.dart';
 import 'shared_detection_panel.dart';
 
+const _appBarHeight = 44.0;
+const _modeSegmentHeight = 60.0;
+const _dockedToolbarHeight = 80.0;
+const _compactDetectionViewportHeight = 160.0;
+const _insightIconSize = 56.0;
+const _insightIconSpacing = 14.0;
+const _insightTitleSpacing = 4.0;
+const _insightSubtitleHorizontalPadding = 48.0;
+const _insightTitleStyle = TextStyle(
+  color: MuzicianTheme.textSecondary,
+  fontSize: 14,
+  fontWeight: FontWeight.w700,
+);
+const _insightSubtitleStyle = TextStyle(
+  color: MuzicianTheme.textMuted,
+  fontSize: 12,
+  height: 1.4,
+);
+
 class InstrumentScreen extends ConsumerWidget {
   final InstrumentBinding binding;
   final String title;
@@ -69,6 +88,60 @@ class InstrumentScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedNotes = ref.watch(binding.selectedNotes);
+    final appBar = CompactAppBar(
+      title: title,
+      chipLabel: appBarChipLabel,
+      actions: appBarActions,
+    );
+    final detection = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+        child: SlideTransition(
+          position:
+              Tween<Offset>(
+                begin: const Offset(0, -0.08),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
+          child: child,
+        ),
+      ),
+      child: selectedNotes.isNotEmpty
+          ? SharedDetectionPanel(
+              key: detectionKey,
+              binding: binding,
+              onChordPanelRequested: onChordPanelRequested,
+              onHandoffCompleted: onHandoffCompleted,
+            )
+          : InstrumentInsightHint(
+              key: ValueKey('${detectionKey.value}-empty'),
+              title: emptyTitle,
+              subtitle: emptySubtitle,
+            ),
+    );
+    final dock = DockedToolbar(
+      children: [
+        DockTab(
+          icon: Icons.stacked_line_chart,
+          label: scaleLabel,
+          color: MuzicianTheme.emerald,
+          hasValue: scaleHasValue,
+          warning: scaleOffKey,
+          onTap: onScalePanelRequested,
+        ),
+        DockTab(
+          icon: Icons.library_music_outlined,
+          label: 'Chord',
+          color: MuzicianTheme.violet,
+          hasValue: chordHasValue,
+          onTap: onChordPanelRequested,
+        ),
+      ],
+    );
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -79,72 +152,64 @@ class InstrumentScreen extends ConsumerWidget {
       ),
       child: SafeArea(
         bottom: false,
-        child: Column(
-          children: [
-            CompactAppBar(
-              title: title,
-              chipLabel: appBarChipLabel,
-              actions: appBarActions,
-            ),
-            ?modeSegment,
-            SizedBox(height: boardHeight, child: board),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                reverseDuration: const Duration(milliseconds: 220),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOut,
-                  ),
-                  child: SlideTransition(
-                    position:
-                        Tween<Offset>(
-                          begin: const Offset(0, -0.08),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                          ),
-                        ),
-                    child: child,
-                  ),
-                ),
-                child: selectedNotes.isNotEmpty
-                    ? SharedDetectionPanel(
-                        key: detectionKey,
-                        binding: binding,
-                        onChordPanelRequested: onChordPanelRequested,
-                        onHandoffCompleted: onHandoffCompleted,
-                      )
-                    : InstrumentInsightHint(
-                        key: ValueKey('${detectionKey.value}-empty'),
-                        title: emptyTitle,
-                        subtitle: emptySubtitle,
-                      ),
-              ),
-            ),
-            DockedToolbar(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Text can wrap to several lines at large system scales. Reserve
+            // its measured height so short screens route the hint through the
+            // page scroll instead of overflowing the detection column.
+            final hintHeight = InstrumentInsightHint._requiredHeight(
+              context,
+              maxWidth: constraints.maxWidth,
+              title: emptyTitle,
+              subtitle: emptySubtitle,
+            );
+            final minimumDetectionHeight =
+                hintHeight > _compactDetectionViewportHeight
+                ? hintHeight
+                : _compactDetectionViewportHeight;
+            final compactThreshold =
+                _appBarHeight +
+                (modeSegment == null ? 0 : _modeSegmentHeight) +
+                boardHeight +
+                minimumDetectionHeight +
+                _dockedToolbarHeight;
+            if (constraints.maxHeight >= compactThreshold) {
+              return Column(
+                children: [
+                  appBar,
+                  ?modeSegment,
+                  SizedBox(height: boardHeight, child: board),
+                  Expanded(child: detection),
+                  dock,
+                ],
+              );
+            }
+
+            // Keep the instrument at its designed size in short windows. The
+            // page scrolls above the fixed dock so every string/key and the
+            // detection panel remain reachable without clipping gestures.
+            return Column(
               children: [
-                DockTab(
-                  icon: Icons.stacked_line_chart,
-                  label: scaleLabel,
-                  color: MuzicianTheme.emerald,
-                  hasValue: scaleHasValue,
-                  warning: scaleOffKey,
-                  onTap: onScalePanelRequested,
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        appBar,
+                        ?modeSegment,
+                        SizedBox(height: boardHeight, child: board),
+                        SizedBox(
+                          height: minimumDetectionHeight,
+                          child: detection,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                DockTab(
-                  icon: Icons.library_music_outlined,
-                  label: 'Chord',
-                  color: MuzicianTheme.violet,
-                  hasValue: chordHasValue,
-                  onTap: onChordPanelRequested,
-                ),
+                dock,
               ],
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -164,6 +229,46 @@ class InstrumentInsightHint extends StatelessWidget {
     required this.subtitle,
   });
 
+  static double _requiredHeight(
+    BuildContext context, {
+    required double maxWidth,
+    required String title,
+    required String subtitle,
+  }) {
+    final defaultStyle = DefaultTextStyle.of(context).style;
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final locale = Localizations.maybeLocaleOf(context);
+
+    double measureText(String text, TextStyle style, double width) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: defaultStyle.merge(style)),
+        textDirection: textDirection,
+        textScaler: textScaler,
+        locale: locale,
+      )..layout(maxWidth: width);
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    final titleHeight = measureText(title, _insightTitleStyle, maxWidth);
+    final subtitleWidth = (maxWidth - _insightSubtitleHorizontalPadding * 2)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final subtitleHeight = measureText(
+      subtitle,
+      _insightSubtitleStyle,
+      subtitleWidth,
+    );
+
+    return _insightIconSize +
+        _insightIconSpacing +
+        titleHeight +
+        _insightTitleSpacing +
+        subtitleHeight;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -171,8 +276,8 @@ class InstrumentInsightHint extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: _insightIconSize,
+            height: _insightIconSize,
             decoration: BoxDecoration(
               color: MuzicianTheme.sky.withValues(alpha: 0.08),
               shape: BoxShape.circle,
@@ -187,26 +292,17 @@ class InstrumentInsightHint extends StatelessWidget {
               size: 26,
             ),
           ),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: _insightIconSpacing),
+          Text(title, style: _insightTitleStyle),
+          const SizedBox(height: _insightTitleSpacing),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48),
+            padding: const EdgeInsets.symmetric(
+              horizontal: _insightSubtitleHorizontalPadding,
+            ),
             child: Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
-                fontSize: 12,
-                height: 1.4,
-              ),
+              style: _insightSubtitleStyle,
             ),
           ),
         ],

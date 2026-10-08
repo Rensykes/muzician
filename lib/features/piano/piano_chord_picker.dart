@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../store/settings_store.dart';
 import '../../store/piano_store.dart';
 import '../../store/project_config_sync.dart';
 import '../../theme/muzician_theme.dart';
@@ -121,6 +122,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
   Future<bool> _confirmIfOffKey(
     List<String> chordNotes,
     ({String root, String scaleName})? activeKey,
+    NoteSpelling spelling,
   ) async {
     if (activeKey == null) return true;
     final outOfKey = chordPitchClassesOutOfKey(
@@ -130,14 +132,16 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
     );
     if (outOfKey.isEmpty) return true;
     if (!mounted) return false;
-    final notes = outOfKey.map(formatRootChoiceLabel).join(', ');
+    final notes = outOfKey
+        .map((note) => formatRootChoiceLabel(note, spelling: spelling))
+        .join(', ');
     final result = await showDialog<OutOfKeyResult>(
       context: context,
       builder: (ctx) => OutOfKeyDialog(
         title: 'Chord outside the key',
         message:
             'This chord contains $notes, which fall outside '
-            '${activeKey.root} ${activeKey.scaleName}. Apply anyway?',
+            '${formatRootChoiceLabel(activeKey.root, spelling: spelling)} ${activeKey.scaleName}. Apply anyway?',
         showSuppressOption: false,
       ),
     );
@@ -146,6 +150,9 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
 
   @override
   Widget build(BuildContext context) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final notifier = ref.read(pianoProvider.notifier);
     final keyMidis = notifier.getKeys().map((k) => k.midiNote).toSet();
 
@@ -189,7 +196,8 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
           const SizedBox(height: 10),
           if (diatonic.isNotEmpty) ...[
             DiatonicChordsHeader(
-              keyLabel: '${activeKey!.root} ${activeKey.scaleName}',
+              keyLabel:
+                  '${formatRootChoiceLabel(activeKey!.root, spelling: spelling)} ${activeKey.scaleName}',
             ),
             const SizedBox(height: 6),
             DiatonicChordsRow(
@@ -297,13 +305,19 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
                         ? noteToPC[_selectedRoot!]
                         : null,
                     label: v.label,
-                    noteLabels: chordNotes,
+                    noteLabels: chordNotes
+                        .map(
+                          (note) =>
+                              formatRootChoiceLabel(note, spelling: spelling),
+                        )
+                        .toList(),
                     isSelected: _selectedVoicingIdx == i,
                     onPress: () async {
                       HapticFeedback.mediumImpact();
                       final apply = await _confirmIfOffKey(
                         chordNotes,
                         activeKey,
+                        spelling,
                       );
                       if (!apply) return;
                       setState(() {

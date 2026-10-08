@@ -199,6 +199,7 @@ class FretboardSnapshot extends InstrumentSnapshot {
   @override
   final List<String> selectedNotes;
   final FretboardViewMode viewMode;
+  final FretboardInputMode inputMode;
   @override
   final PendingChord? pendingChord;
   @override
@@ -211,6 +212,7 @@ class FretboardSnapshot extends InstrumentSnapshot {
     required this.selectedCells,
     required this.selectedNotes,
     required this.viewMode,
+    this.inputMode = FretboardInputMode.free,
     this.pendingChord,
     this.pendingScale,
   });
@@ -224,6 +226,7 @@ class FretboardSnapshot extends InstrumentSnapshot {
     'selectedCells': selectedCells.map((c) => c.toJson()).toList(),
     'selectedNotes': selectedNotes,
     'viewMode': viewMode.name,
+    'inputMode': inputMode.name,
     'pendingChord': pendingChord?.toJson(),
     'pendingScale': pendingScale?.toJson(),
   };
@@ -256,6 +259,10 @@ class FretboardSnapshot extends InstrumentSnapshot {
           orElse: () => FretboardViewMode.exact,
         );
       }(),
+      inputMode: FretboardInputMode.values.firstWhere(
+        (mode) => mode.name == json['inputMode'],
+        orElse: () => FretboardInputMode.free,
+      ),
       pendingChord: json['pendingChord'] != null
           ? PendingChord.fromJson(json['pendingChord'] as Map<String, dynamic>)
           : null,
@@ -909,6 +916,9 @@ class AppSettings {
   /// When true the save browser renders saves as a grid; false shows a list.
   final bool saveBrowserGrid;
 
+  /// Preferred note spelling for user-facing musical labels.
+  final NoteSpelling noteSpelling;
+
   /// Record-time monitoring (Songwriter audio lane). All default OFF — playback
   /// bleeds into the mic on speakers; intended for headphones.
   final bool recordMonitorBacking; // loop the section bed + other audio clips
@@ -926,6 +936,7 @@ class AppSettings {
     this.humSensitivity = HumSensitivity.balanced,
     this.metronomeEnabled = true,
     this.saveBrowserGrid = false,
+    this.noteSpelling = NoteSpelling.sharps,
     this.recordMonitorBacking = false,
     this.recordMonitorMetronome = false,
     this.recordCountIn = false,
@@ -940,6 +951,7 @@ class AppSettings {
     HumSensitivity? humSensitivity,
     bool? metronomeEnabled,
     bool? saveBrowserGrid,
+    NoteSpelling? noteSpelling,
     bool? recordMonitorBacking,
     bool? recordMonitorMetronome,
     bool? recordCountIn,
@@ -952,6 +964,7 @@ class AppSettings {
     humSensitivity: humSensitivity ?? this.humSensitivity,
     metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
     saveBrowserGrid: saveBrowserGrid ?? this.saveBrowserGrid,
+    noteSpelling: noteSpelling ?? this.noteSpelling,
     recordMonitorBacking: recordMonitorBacking ?? this.recordMonitorBacking,
     recordMonitorMetronome:
         recordMonitorMetronome ?? this.recordMonitorMetronome,
@@ -972,6 +985,7 @@ class AppSettings {
     'humSensitivity': humSensitivity.name,
     'metronomeEnabled': metronomeEnabled,
     'saveBrowserGrid': saveBrowserGrid,
+    'noteSpelling': noteSpelling.name,
     'recordMonitorBacking': recordMonitorBacking,
     'recordMonitorMetronome': recordMonitorMetronome,
     'recordCountIn': recordCountIn,
@@ -987,6 +1001,10 @@ class AppSettings {
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
     metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,
     saveBrowserGrid: json['saveBrowserGrid'] as bool? ?? false,
+    noteSpelling: NoteSpelling.values.firstWhere(
+      (spelling) => spelling.name == json['noteSpelling'],
+      orElse: () => NoteSpelling.sharps,
+    ),
     recordMonitorBacking: json['recordMonitorBacking'] as bool? ?? false,
     recordMonitorMetronome: json['recordMonitorMetronome'] as bool? ?? false,
     recordCountIn: json['recordCountIn'] as bool? ?? false,

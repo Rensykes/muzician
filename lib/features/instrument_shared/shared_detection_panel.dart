@@ -9,9 +9,18 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/fretboard.dart';
 import '../../models/harmonic_analysis.dart';
+import '../../models/project_config.dart';
+import '../../models/save_system.dart';
+import '../../schema/rules/songwriter_rules.dart'
+    show isWriterEligibleNativeSelection;
+import '../../store/project_config_sync.dart';
+import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
+import '../../ui/core/update_project_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import 'instrument_binding.dart';
 import 'writer_handoff.dart';
@@ -38,15 +47,56 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
+    final selectedFolder = ref.watch(selectedProjectProvider);
+    final projectKey = ref.watch(activeProjectKeyProvider);
+    final isProject = selectedFolder?.kind == SaveFolderKind.project;
+    if (isProject) {
+      _activeScaleChip = projectKey == null
+          ? null
+          : '${projectKey.root} ${projectKey.scaleName}';
+    }
+
     final selectedNotes = ref.watch(widget.binding.selectedNotes);
     final focusedNotes = ref.watch(widget.binding.focusedNotes);
     final exactNotes = ref.watch(widget.binding.exactNotes);
+    final eligibilityState = widget.binding.eligibilityState;
+    if (eligibilityState != null) ref.watch(eligibilityState);
+    final handoffSnapshot = widget.binding.captureSnapshot(ref);
+    final canHandoff =
+        exactNotes.isNotEmpty &&
+        isWriterEligibleNativeSelection(handoffSnapshot);
+    final handoffUnavailableReason = handoffSnapshot is FretboardSnapshot
+        ? handoffSnapshot.inputMode == FretboardInputMode.free
+              ? 'Switch to Chord mode and keep one note per string to add this selection to Writer.'
+              : 'Chord mode requires one valid note per string. Remove extra or invalid positions to add this selection to Writer.'
+        : null;
     final actions = widget.binding.selectionActions(ref);
 
     ref.listen(widget.binding.highlightedNotes, (_, next) {
       if (next.isEmpty && _activeScaleChip != null) {
         setState(() => _activeScaleChip = null);
       }
+    });
+    ref.listen(selectedProjectProvider, (_, next) {
+      if (next?.kind != SaveFolderKind.project) {
+        setState(() => _activeScaleChip = null);
+        return;
+      }
+      final config = next?.projectConfig;
+      final rootPc = config?.keyRootPc;
+      final scaleName = config?.keyScaleName;
+      setState(() {
+        _activeScaleChip =
+            rootPc == null ||
+                rootPc < 0 ||
+                rootPc >= chromaticNotes.length ||
+                scaleName == null
+            ? null
+            : '${chromaticNotes[rootPc]} $scaleName';
+      });
     });
 
     final hasNotes = selectedNotes.isNotEmpty;
@@ -180,7 +230,7 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                               ),
                             ),
                             child: Text(
-                              note,
+                              formatRootChoiceLabel(note, spelling: spelling),
                               style: TextStyle(
                                 color: isFocused
                                     ? Colors.white
@@ -271,7 +321,7 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                                   ),
                                 ),
                                 child: Text(
-                                  formatChordSymbol(result),
+                                  formatChordSymbol(result, spelling: spelling),
                                   style: const TextStyle(
                                     color: Color(0xFFE2E8F0),
                                     fontSize: 12,
@@ -319,7 +369,11 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                             return GestureDetector(
                               onTap: () {
                                 HapticFeedback.lightImpact();
-                                _tryApplyScale(result.root, result.scaleName);
+                                _tryApplyScale(
+                                  result.root,
+                                  result.scaleName,
+                                  spelling,
+                                );
                               },
                               child: Container(
                                 margin: const EdgeInsets.only(right: 6),
@@ -342,7 +396,7 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                                   ),
                                 ),
                                 child: Text(
-                                  formatScaleLabel(result),
+                                  formatScaleLabel(result, spelling: spelling),
                                   style: TextStyle(
                                     color: isActive
                                         ? Colors.white
@@ -373,16 +427,19 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         key: const Key('addInstrumentSelectionToWriter'),
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          startWriterHandoff(
-                            context: context,
-                            ref: ref,
-                            binding: widget.binding,
-                            chordResults: chordResults,
-                            onTransferComplete: widget.onHandoffCompleted!,
-                          );
-                        },
+                        onPressed: canHandoff
+                            ? () {
+                                HapticFeedback.lightImpact();
+                                startWriterHandoff(
+                                  context: context,
+                                  ref: ref,
+                                  binding: widget.binding,
+                                  chordResults: chordResults,
+                                  onTransferComplete:
+                                      widget.onHandoffCompleted!,
+                                );
+                              }
+                            : null,
                         icon: const Icon(Icons.drive_file_move_outline),
                         label: const Text('Add to Writer'),
                         style: OutlinedButton.styleFrom(
@@ -394,6 +451,17 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                         ),
                       ),
                     ),
+                    if (!canHandoff && handoffUnavailableReason != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        handoffUnavailableReason,
+                        key: const Key('writerHandoffUnavailableReason'),
+                        style: const TextStyle(
+                          color: MuzicianTheme.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -402,12 +470,72 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
     );
   }
 
-  Future<void> _tryApplyScale(String root, String scaleName) async {
+  Future<void> _tryApplyScale(
+    String root,
+    String scaleName,
+    NoteSpelling spelling,
+  ) async {
     final chipKey = '$root $scaleName';
+    final selectedFolder = ref.read(selectedProjectProvider);
+    if (selectedFolder?.kind == SaveFolderKind.project) {
+      final projectKey = ref.read(activeProjectKeyProvider);
+      final config = selectedFolder!.projectConfig ?? const ProjectConfig();
+      if (projectKey?.root == root && projectKey?.scaleName == scaleName) {
+        if (_activeScaleChip != chipKey) {
+          setState(() => _activeScaleChip = chipKey);
+          return;
+        }
+        final cleared = await requestProjectKeyChange(
+          context,
+          ref,
+          keyRootPc: null,
+          keyScaleName: null,
+          expectedProjectId: selectedFolder.id,
+          expectedConfig: config,
+        );
+        if (!mounted) return;
+        if (cleared) {
+          setState(() => _activeScaleChip = null);
+          ref.read(widget.binding.activeScale.notifier).state = null;
+          ref.read(widget.binding.pendingScale.notifier).state = null;
+        }
+        return;
+      }
+
+      final changed = await requestProjectKeyChange(
+        context,
+        ref,
+        keyRootPc: chromaticNotes.indexOf(root),
+        keyScaleName: scaleName,
+        expectedProjectId: selectedFolder.id,
+        expectedConfig: config,
+      );
+      if (!mounted) return;
+      if (changed) {
+        setState(() => _activeScaleChip = chipKey);
+        ref.read(widget.binding.activeScale.notifier).state = (
+          root: root,
+          scaleName: scaleName,
+        );
+        ref.read(widget.binding.pendingScale.notifier).state = null;
+      } else {
+        final confirmedKey = ref.read(activeProjectKeyProvider);
+        setState(() {
+          _activeScaleChip = confirmedKey == null
+              ? null
+              : '${confirmedKey.root} ${confirmedKey.scaleName}';
+        });
+      }
+      return;
+    }
+
+    final expectedFolderId = selectedFolder?.id;
+    final expectedFolderKind = selectedFolder?.kind;
     if (_activeScaleChip == chipKey) {
       setState(() => _activeScaleChip = null);
       widget.binding.selectionActions(ref).setHighlightedNotes([]);
       ref.read(widget.binding.activeScale.notifier).state = null;
+      ref.read(widget.binding.pendingScale.notifier).state = null;
       return;
     }
     final scaleNotes = getScaleNotes(root, scaleName);
@@ -432,8 +560,18 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => ScaleConflictDialog(conflictingNotes: conflicts),
+      builder: (ctx) => ScaleConflictDialog(
+        conflictingNotes: conflicts
+            .map((note) => formatRootChoiceLabel(note, spelling: spelling))
+            .toList(),
+      ),
     );
+    final currentFolder = ref.read(selectedProjectProvider);
+    if (!mounted ||
+        currentFolder?.id != expectedFolderId ||
+        currentFolder?.kind != expectedFolderKind) {
+      return;
+    }
     if (confirmed == true) {
       widget.binding.selectionActions(ref).removeNotesByPitchClass(conflicts);
       setState(() => _activeScaleChip = chipKey);

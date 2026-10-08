@@ -3,6 +3,7 @@ import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/schema/rules/songwriter_rules.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
@@ -41,7 +42,7 @@ void main() {
   });
 
   test(
-    'deleting a Harmony source removes linked Save lanes and clears strum source',
+    'deleting a Harmony source removes linked Save lanes and leaves strum unresolved',
     () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
@@ -80,7 +81,15 @@ void main() {
       );
       expect(section.lanes.any((lane) => lane.id == saveLaneId), isFalse);
       final strum = section.lanes.singleWhere((lane) => lane.id == strumLaneId);
-      expect(strum.anchorLaneId, isNull);
+      expect(strum.anchorLaneId, secondaryHarmonyId);
+      expect(
+        guitarStrumAnchorLane(
+          section,
+          strum,
+          projectDefault: HarmonyLaneInstrument.fretboard,
+        ),
+        isNull,
+      );
 
       expect(n.undo(), isTrue);
       section = c.read(songwriterProvider).sections.single;
@@ -145,8 +154,27 @@ void main() {
             .lanes
             .singleWhere((candidate) => candidate.id == strumLaneId)
             .anchorLaneId,
+        editableLaneId,
+      );
+      final unresolvedSection = c.read(songwriterProvider).sections.single;
+      final unresolvedStrum = unresolvedSection.lanes.singleWhere(
+        (candidate) => candidate.id == strumLaneId,
+      );
+      expect(
+        guitarStrumAnchorLane(
+          unresolvedSection,
+          unresolvedStrum,
+          projectDefault: HarmonyLaneInstrument.fretboard,
+        ),
         isNull,
       );
+      final beforeInvalidAssignment = n.historyRevision;
+      n.setLaneAnchorLane(
+        sectionId: sectionId,
+        laneId: strumLaneId,
+        harmonyLaneId: editableLaneId,
+      );
+      expect(n.historyRevision, beforeInvalidAssignment);
 
       final blockedByBlockId = n.addLane(
         sectionId: sectionId,
@@ -200,6 +228,218 @@ void main() {
       expect(lane.harmonyInstrument, HarmonyLaneInstrument.fretboard);
     },
   );
+
+  group('Guitar Strum anchor assignment', () {
+    test(
+      'rejects occupied targets and releases sources after reassignment/delete',
+      () {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final n = c.read(songwriterProvider.notifier);
+        n.addSection(label: 'Verse', lengthBars: 4);
+        final sectionId = c.read(songwriterProvider).sections.single.id;
+        final primaryId = c
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .single
+            .id;
+        n.setHarmonyLaneInstrument(
+          sectionId: sectionId,
+          laneId: primaryId,
+          instrument: HarmonyLaneInstrument.fretboard,
+        );
+        final secondaryId = n.addLane(
+          sectionId: sectionId,
+          kind: SongLaneKind.harmony,
+          harmonyInstrument: HarmonyLaneInstrument.fretboard,
+        );
+        final firstStrumId = n.addLane(
+          sectionId: sectionId,
+          kind: SongLaneKind.guitarStrum,
+        );
+        final secondStrumId = n.addLane(
+          sectionId: sectionId,
+          kind: SongLaneKind.guitarStrum,
+        );
+        n.setLaneAnchorLane(
+          sectionId: sectionId,
+          laneId: firstStrumId,
+          harmonyLaneId: primaryId,
+        );
+        n.setLaneAnchorLane(
+          sectionId: sectionId,
+          laneId: secondStrumId,
+          harmonyLaneId: secondaryId,
+        );
+
+        final beforeRejectedAssignment = n.historyRevision;
+        n.setLaneAnchorLane(
+          sectionId: sectionId,
+          laneId: secondStrumId,
+          harmonyLaneId: primaryId,
+        );
+        var section = c.read(songwriterProvider).sections.single;
+        expect(
+          section.lanes
+              .singleWhere((lane) => lane.id == secondStrumId)
+              .anchorLaneId,
+          secondaryId,
+        );
+        expect(n.historyRevision, beforeRejectedAssignment);
+
+        n.setLaneAnchorLane(
+          sectionId: sectionId,
+          laneId: secondStrumId,
+          harmonyLaneId: null,
+        );
+        n.setLaneAnchorLane(
+          sectionId: sectionId,
+          laneId: firstStrumId,
+          harmonyLaneId: secondaryId,
+        );
+        n.setLaneAnchorLane(
+          sectionId: sectionId,
+          laneId: secondStrumId,
+          harmonyLaneId: primaryId,
+        );
+        section = c.read(songwriterProvider).sections.single;
+        expect(
+          section.lanes
+              .singleWhere((lane) => lane.id == firstStrumId)
+              .anchorLaneId,
+          secondaryId,
+        );
+        expect(
+          section.lanes
+              .singleWhere((lane) => lane.id == secondStrumId)
+              .anchorLaneId,
+          primaryId,
+        );
+
+        n.removeLane(sectionId: sectionId, laneId: secondStrumId);
+        section = c.read(songwriterProvider).sections.single;
+        expect(
+          availableGuitarStrumHarmonyLanes(
+            section,
+            projectDefault: HarmonyLaneInstrument.fretboard,
+            excludingLaneId: firstStrumId,
+          ).map((lane) => lane.id),
+          [primaryId, secondaryId],
+        );
+      },
+    );
+
+    test('allows multiple Unassigned lanes without consuming a source', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = c.read(songwriterProvider).sections.single.id;
+      final sourceId = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .single
+          .id;
+      n.setHarmonyLaneInstrument(
+        sectionId: sectionId,
+        laneId: sourceId,
+        instrument: HarmonyLaneInstrument.fretboard,
+      );
+
+      expect(n.canAddGuitarStrumLane(sectionId), isTrue);
+      final first = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.guitarStrum,
+      );
+      final second = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.guitarStrum,
+      );
+      expect(first, isNotEmpty);
+      expect(second, isNotEmpty);
+      expect(n.canAddGuitarStrumLane(sectionId), isTrue);
+      expect(
+        c
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .where((lane) => lane.kind == SongLaneKind.guitarStrum)
+            .every((lane) => lane.anchorLaneId == null),
+        isTrue,
+      );
+
+      n.setLaneAnchorLane(
+        sectionId: sectionId,
+        laneId: first,
+        harmonyLaneId: sourceId,
+      );
+      expect(n.canAddGuitarStrumLane(sectionId), isFalse);
+      expect(
+        n.addLane(sectionId: sectionId, kind: SongLaneKind.guitarStrum),
+        isEmpty,
+      );
+      expect(
+        c
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .where((lane) => lane.kind == SongLaneKind.guitarStrum)
+            .length,
+        2,
+      );
+    });
+
+    test('reusing a pattern within one lane does not claim another source', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final section = c.read(songwriterProvider).sections.single;
+      n.setHarmonyLaneInstrument(
+        sectionId: section.id,
+        laneId: section.lanes.single.id,
+        instrument: HarmonyLaneInstrument.fretboard,
+      );
+      final laneId = n.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.guitarStrum,
+      );
+      final patternId = n.addGuitarStrumPattern();
+      n.addGuitarStrumBlock(
+        sectionId: section.id,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      n.addGuitarStrumBlock(
+        sectionId: section.id,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 1,
+        spanBars: 1,
+      );
+
+      final lane = c
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((candidate) => candidate.id == laneId);
+      expect(lane.blocks, hasLength(2));
+      expect(lane.blocks.map((block) => block.patternId), [
+        patternId,
+        patternId,
+      ]);
+      expect(lane.anchorLaneId, isNull);
+    });
+  });
 
   group('renameLane', () {
     test('sets, replaces and clears the label', () {

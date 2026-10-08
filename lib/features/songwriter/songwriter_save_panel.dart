@@ -7,6 +7,7 @@ import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/save_system_rules.dart';
 import '../../store/save_system_store.dart';
+import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/muzician_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
@@ -110,9 +111,13 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
     }
     if (snapshot.config.keyRoot != current.keyRootPc ||
         snapshot.config.keyScaleName != current.keyScaleName) {
+      final spelling = ref.read(settingsProvider).noteSpelling;
       String keyLabel(int? root, String? scale) {
         if (root == null) return 'No key';
-        final note = chromaticNotes[root % chromaticNotes.length];
+        final note = formatRootChoiceLabel(
+          chromaticNotes[root % chromaticNotes.length],
+          spelling: spelling,
+        );
         return scale == null ? note : '$note $scale';
       }
 

@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/save_system.dart';
+import '../../store/project_config_sync.dart';
 import '../../store/piano_store.dart';
 import '../../store/save_system_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 import '../../schema/rules/save_system_rules.dart';
+import '../../schema/rules/songwriter_rules.dart'
+    show isWriterEligibleHarmonySnapshot, isWriterEligibleNativeSelection;
+import '../../utils/note_utils.dart';
 import '../instrument_shared/harmony_save_edit_dialog.dart';
 import '../instrument_shared/writer_handoff.dart';
 
@@ -147,6 +151,11 @@ class _PianoSavePanelState extends ConsumerState<PianoSavePanel> {
           onLoadSaveId: _onSaveLoaded,
           canUseInWriter: (save) =>
               selectedProjectRoot &&
+              (save.snapshot is HarmonyChordSnapshot
+                  ? isWriterEligibleHarmonySnapshot(
+                      save.snapshot as HarmonyChordSnapshot,
+                    )
+                  : isWriterEligibleNativeSelection(save.snapshot)) &&
               _pianoSnapshotFor(save.snapshot) != null &&
               (save.snapshot is HarmonyChordSnapshot
                   ? isFolderInProject(
@@ -298,6 +307,9 @@ void loadPianoSnapshot(WidgetRef ref, InstrumentSnapshot snapshot) {
   final pianoSnapshot = _pianoSnapshotFor(snapshot);
   if (pianoSnapshot == null) return;
 
+  final selectedFolder = ref.read(selectedProjectProvider);
+  final isProject = selectedFolder?.kind == SaveFolderKind.project;
+  final projectKey = isProject ? ref.read(activeProjectKeyProvider) : null;
   ref.read(pianoProvider.notifier).loadSnapshot(pianoSnapshot);
   if (pianoSnapshot.pendingChord != null) {
     ref.read(pianoPendingChordProvider.notifier).state = (
@@ -310,7 +322,14 @@ void loadPianoSnapshot(WidgetRef ref, InstrumentSnapshot snapshot) {
     ref.read(pianoChordCommittedProvider.notifier).state = false;
   }
 
-  if (pianoSnapshot.pendingScale != null) {
+  if (isProject) {
+    final notes = projectKey == null
+        ? const <String>[]
+        : getScaleNotes(projectKey.root, projectKey.scaleName);
+    ref.read(pianoProvider.notifier).setHighlightedNotes(notes);
+    ref.read(pianoActiveScaleProvider.notifier).state = projectKey;
+    ref.read(pianoPendingScaleProvider.notifier).state = null;
+  } else if (pianoSnapshot.pendingScale != null) {
     ref.read(pianoPendingScaleProvider.notifier).state = (
       root: pianoSnapshot.pendingScale!.root,
       scaleName: pianoSnapshot.pendingScale!.scaleName,
