@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../store/persisted_data_recovery_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import 'recovery_export.dart';
 
@@ -12,45 +12,48 @@ class DataRecoveryPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final palette = StudioPalette.of(context);
     final backups = ref.watch(dataRecoveryProvider);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
+        color: palette.glassBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
+        border: Border.all(color: palette.glassBorder, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.restore_page_outlined, color: MuzicianTheme.sky),
-              SizedBox(width: 8),
-              Text(
-                'Data Recovery',
-                style: TextStyle(
-                  color: MuzicianTheme.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              Icon(Icons.restore_page_outlined, color: palette.sky),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Data Recovery',
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Preserved original data stays here until you delete that backup.',
             style: TextStyle(
-              color: MuzicianTheme.textSecondary,
+              color: palette.textSecondary,
               fontSize: 12,
               height: 1.4,
             ),
           ),
           const SizedBox(height: 10),
           if (backups.isEmpty)
-            const Text(
+            Text(
               'No preserved data.',
-              style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+              style: TextStyle(color: palette.textMuted, fontSize: 12),
             )
           else
             for (final backup in backups)
@@ -71,19 +74,20 @@ class _RecoveryBackupEntry extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final palette = StudioPalette.of(context);
     final exportAnchorKey = GlobalKey();
     return ExpansionTile(
       key: Key('recoveryEntry_${backup.storageKey}'),
       tilePadding: EdgeInsets.zero,
       title: Text(
         backup.label,
-        style: const TextStyle(color: MuzicianTheme.textPrimary, fontSize: 13),
+        style: TextStyle(color: palette.textPrimary, fontSize: 13),
       ),
       subtitle: Text(
         'Original key: ${backup.sourceKey}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: MuzicianTheme.textMuted, fontSize: 11),
+        style: TextStyle(color: palette.textMuted, fontSize: 11),
       ),
       children: [
         Container(
@@ -92,16 +96,20 @@ class _RecoveryBackupEntry extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: MuzicianTheme.surface,
+            color: palette.surface,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            border: Border.all(
+              color: palette.isStudio
+                  ? palette.glassBorder
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
           ),
           child: SingleChildScrollView(
             child: SelectableText(
               backup.raw,
               key: Key('recoveryRaw_${backup.storageKey}'),
-              style: const TextStyle(
-                color: MuzicianTheme.textSecondary,
+              style: TextStyle(
+                color: palette.textSecondary,
                 fontFamily: 'monospace',
                 fontSize: 11,
               ),
@@ -115,7 +123,7 @@ class _RecoveryBackupEntry extends ConsumerWidget {
             TextButton.icon(
               key: Key('recoveryCopy_${backup.storageKey}'),
               onPressed: () => _copy(context),
-              icon: const Icon(Icons.copy_outlined, size: 18),
+              icon: Icon(Icons.copy_outlined, size: 18),
               label: const Text('Copy'),
             ),
             Align(
@@ -125,21 +133,17 @@ class _RecoveryBackupEntry extends ConsumerWidget {
               child: TextButton.icon(
                 key: Key('recoveryExport_${backup.storageKey}'),
                 onPressed: () => _export(context, exportAnchorKey),
-                icon: const Icon(Icons.file_download_outlined, size: 18),
+                icon: Icon(Icons.file_download_outlined, size: 18),
                 label: const Text('Export'),
               ),
             ),
             TextButton.icon(
               key: Key('recoveryDelete_${backup.storageKey}'),
               onPressed: () => _confirmDelete(context, ref),
-              icon: const Icon(
-                Icons.delete_outline,
-                size: 18,
-                color: MuzicianTheme.red,
-              ),
-              label: const Text(
+              icon: Icon(Icons.delete_outline, size: 18, color: palette.red),
+              label: Text(
                 'Delete backup',
-                style: TextStyle(color: MuzicianTheme.red),
+                style: TextStyle(color: palette.red),
               ),
             ),
           ],
@@ -183,22 +187,25 @@ class _RecoveryBackupEntry extends ConsumerWidget {
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => MuzicianDialog(
-        title: 'Delete recovery backup?',
-        content: const Text(
-          'This removes only this preserved copy. The active project and other recovery entries stay as they are.',
+      builder: StudioRouteTheme.builder(
+        context,
+        (dialogContext) => MuzicianDialog(
+          title: 'Delete recovery backup?',
+          content: const Text(
+            'This removes only this preserved copy. The active project and other recovery entries stay as they are.',
+          ),
+          actions: [
+            MuzicianDialogButton(
+              'Cancel',
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            MuzicianDialogButton(
+              'Delete backup',
+              emphasis: MuzicianDialogEmphasis.destructive,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+            ),
+          ],
         ),
-        actions: [
-          MuzicianDialogButton(
-            'Cancel',
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-          ),
-          MuzicianDialogButton(
-            'Delete backup',
-            emphasis: MuzicianDialogEmphasis.destructive,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-          ),
-        ],
       ),
     );
     if (confirmed != true || !context.mounted) return;

@@ -9,7 +9,7 @@ import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
 import '../store/settings_store.dart';
 import '../store/songwriter_store.dart';
-import '../theme/muzician_theme.dart';
+import '../theme/studio_theme.dart';
 import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
 import 'project_config_sheet.dart';
@@ -25,9 +25,8 @@ class ProjectPickerSheet extends ConsumerWidget {
   const ProjectPickerSheet({super.key, this.allowDump = true});
 
   static Future<void> show(BuildContext context, {bool allowDump = true}) {
-    return showModalBottomSheet<void>(
+    return showStudioModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => ProjectPickerSheet(allowDump: allowDump),
     );
@@ -51,8 +50,8 @@ class ProjectPickerSheet extends ConsumerWidget {
               .firstOrNull;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF141826),
+      decoration: BoxDecoration(
+        color: StudioPalette.of(context).dialogBg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         border: Border(top: BorderSide(color: Color(0x33FFFFFF), width: 0.5)),
       ),
@@ -69,13 +68,13 @@ class ProjectPickerSheet extends ConsumerWidget {
               _SectionHeader(label: 'PROJECTS'),
               const SizedBox(height: 8),
               if (projects.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
                     'No projects yet.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: MuzicianTheme.textMuted,
+                      color: StudioPalette.of(context).textMuted,
                       fontSize: 12,
                       fontStyle: FontStyle.italic,
                     ),
@@ -98,7 +97,7 @@ class ProjectPickerSheet extends ConsumerWidget {
               _PrimaryAction(
                 icon: Icons.add,
                 label: 'New project',
-                accent: MuzicianTheme.sky,
+                accent: StudioPalette.of(context).sky,
                 onTap: () async {
                   final name = await _promptName(context, title: 'New project');
                   if (name == null || name.isEmpty || !context.mounted) return;
@@ -129,7 +128,7 @@ class ProjectPickerSheet extends ConsumerWidget {
                 _PrimaryAction(
                   icon: Icons.tune,
                   label: 'Edit project config',
-                  accent: MuzicianTheme.violet,
+                  accent: StudioPalette.of(context).violet,
                   onTap: () {
                     Navigator.of(context).pop();
                     ProjectConfigSheet.show(context, activeProjectFolder.id);
@@ -155,7 +154,7 @@ class ProjectPickerSheet extends ConsumerWidget {
                   _PrimaryAction(
                     icon: Icons.archive_outlined,
                     label: 'Use Dump',
-                    accent: MuzicianTheme.textSecondary,
+                    accent: StudioPalette.of(context).textSecondary,
                     onTap: () {
                       final id = ref
                           .read(saveSystemProvider.notifier)
@@ -179,7 +178,7 @@ Future<WriterProjectCreationResult?> showWriterProjectCreationFlow(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final details = await showDialog<_WriterProjectDetails>(
+  final details = await showStudioDialog<_WriterProjectDetails>(
     context: context,
     builder: (_) => const _WriterProjectDetailsDialog(),
   );
@@ -193,10 +192,11 @@ Future<WriterProjectCreationResult?> showWriterProjectCreationFlow(
   );
   if (!context.mounted) return result;
   if (result.status == WriterProjectCreationStatus.dispositionRequired) {
-    final disposition = await showDialog<WriterProjectCreationDisposition>(
-      context: context,
-      builder: (_) => const _WriterProjectDispositionDialog(),
-    );
+    final disposition =
+        await showStudioDialog<WriterProjectCreationDisposition>(
+          context: context,
+          builder: (_) => const _WriterProjectDispositionDialog(),
+        );
     if (!context.mounted) return result;
     result = await notifier.createSaveProject(
       name: details.name,
@@ -210,7 +210,7 @@ Future<WriterProjectCreationResult?> showWriterProjectCreationFlow(
     return result;
   }
 
-  await showDialog<void>(
+  await showStudioDialog<void>(
     context: context,
     builder: (dialogContext) => MuzicianDialog(
       title: 'Could not create Writer project',
@@ -309,7 +309,9 @@ class _WriterProjectDetailsDialogState
                   autofocus: true,
                   maxLength: 60,
                   textCapitalization: TextCapitalization.sentences,
-                  style: const TextStyle(color: MuzicianTheme.textPrimary),
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textPrimary,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Project name',
                     hintText: 'Name this project',
@@ -320,10 +322,10 @@ class _WriterProjectDetailsDialogState
                   onFieldSubmitted: (_) => _submit(),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Starting Harmony instrument',
                   style: TextStyle(
-                    color: MuzicianTheme.textSecondary,
+                    color: StudioPalette.of(context).textSecondary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -355,7 +357,7 @@ class _WriterProjectDetailsDialogState
                             instrument == HarmonyLaneInstrument.fretboard
                                 ? Icons.music_note
                                 : Icons.piano,
-                            color: MuzicianTheme.sky,
+                            color: StudioPalette.of(context).sky,
                           ),
                           contentPadding: EdgeInsets.zero,
                           visualDensity: VisualDensity.standard,
@@ -364,11 +366,14 @@ class _WriterProjectDetailsDialogState
                   ),
                 ),
                 if (_showInstrumentError)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(left: 12, top: 2),
                     child: Text(
                       'Choose Piano or Fretboard to continue.',
-                      style: TextStyle(color: MuzicianTheme.red, fontSize: 12),
+                      style: TextStyle(
+                        color: StudioPalette.of(context).red,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
               ],
@@ -431,9 +436,8 @@ class _WriterProjectDispositionDialog extends StatelessWidget {
 
 Future<HarmonyLaneInstrument?> _promptHarmonyInstrument(
   BuildContext context,
-) => showModalBottomSheet<HarmonyLaneInstrument>(
+) => showStudioModalBottomSheet<HarmonyLaneInstrument>(
   context: context,
-  backgroundColor: const Color(0xFF141826),
   builder: (context) => SafeArea(
     child: Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
@@ -446,9 +450,12 @@ Future<HarmonyLaneInstrument?> _promptHarmonyInstrument(
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'New sections in this project will start with this Harmony instrument.',
-            style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
+              fontSize: 12,
+            ),
           ),
           const SizedBox(height: 14),
           for (final instrument in HarmonyLaneInstrument.values)
@@ -457,7 +464,7 @@ Future<HarmonyLaneInstrument?> _promptHarmonyInstrument(
                 instrument == HarmonyLaneInstrument.fretboard
                     ? Icons.music_note
                     : Icons.piano,
-                color: MuzicianTheme.sky,
+                color: StudioPalette.of(context).sky,
               ),
               title: Text(
                 instrument == HarmonyLaneInstrument.fretboard
@@ -484,7 +491,7 @@ class _DragHandle extends StatelessWidget {
         width: 36,
         height: 4,
         decoration: BoxDecoration(
-          color: MuzicianTheme.textDim,
+          color: StudioPalette.of(context).textMuted,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -499,8 +506,8 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: const TextStyle(
-        color: MuzicianTheme.textDim,
+      style: TextStyle(
+        color: StudioPalette.of(context).textMuted,
         fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.4,
@@ -542,7 +549,9 @@ class _ProjectTile extends ConsumerWidget {
       settingsProvider.select((settings) => settings.noteSpelling),
     );
     final isDump = folder.kind == SaveFolderKind.dump;
-    final accent = isDump ? MuzicianTheme.textSecondary : MuzicianTheme.emerald;
+    final accent = isDump
+        ? StudioPalette.of(context).textSecondary
+        : StudioPalette.of(context).emerald;
     final subtitle = _subtitle(spelling);
     return Material(
       color: Colors.transparent,
@@ -554,11 +563,15 @@ class _ProjectTile extends ConsumerWidget {
           decoration: BoxDecoration(
             color: isActive
                 ? accent.withValues(alpha: 0.14)
-                : Colors.white.withValues(alpha: 0.04),
+                : (StudioPalette.of(context).isStudio
+                      ? StudioPalette.of(context).glassBg
+                      : Colors.white.withValues(alpha: 0.04)),
             border: Border.all(
               color: isActive
                   ? accent.withValues(alpha: 0.55)
-                  : Colors.white.withValues(alpha: 0.08),
+                  : (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).glassBg
+                        : Colors.white.withValues(alpha: 0.08)),
               width: 0.6,
             ),
             borderRadius: BorderRadius.circular(12),
@@ -588,8 +601,8 @@ class _ProjectTile extends ConsumerWidget {
                       folder.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: MuzicianTheme.textPrimary,
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -601,8 +614,8 @@ class _ProjectTile extends ConsumerWidget {
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MuzicianTheme.textMuted,
+                          style: TextStyle(
+                            color: StudioPalette.of(context).textMuted,
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
@@ -644,7 +657,9 @@ class _ProjectTile extends ConsumerWidget {
                   tooltip: 'Delete project',
                   icon: Icon(
                     Icons.delete_outline,
-                    color: MuzicianTheme.red.withValues(alpha: 0.85),
+                    color: StudioPalette.of(
+                      context,
+                    ).red.withValues(alpha: 0.85),
                   ),
                   onPressed: onDelete,
                 ),
@@ -673,7 +688,7 @@ Future<void> _confirmDeleteProject(
             '${saves.length} save${saves.length == 1 ? '' : 's'}'
             '${folderCount > 0 ? ' and $folderCount subfolder${folderCount == 1 ? '' : 's'}' : ''}.\n\n'
             'This cannot be undone.';
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showStudioDialog<bool>(
     context: context,
     builder: (ctx) => MuzicianDialog(
       title: 'Delete project?',
@@ -749,17 +764,17 @@ Future<String?> _promptName(
   required String title,
 }) async {
   final ctrl = TextEditingController();
-  return showDialog<String>(
+  return showStudioDialog<String>(
     context: context,
     builder: (ctx) => MuzicianDialog(
       title: title,
       content: TextField(
         controller: ctrl,
         autofocus: true,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
-        decoration: const InputDecoration(
+        style: TextStyle(color: StudioPalette.of(context).textPrimary),
+        decoration: InputDecoration(
           hintText: 'Project name…',
-          hintStyle: TextStyle(color: MuzicianTheme.textMuted),
+          hintStyle: TextStyle(color: StudioPalette.of(context).textMuted),
         ),
         onSubmitted: (_) => Navigator.pop(ctx, ctrl.text.trim()),
       ),

@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
+import '../../theme/studio_theme.dart';
 import 'drum_machine_editor.dart';
 import 'song_note_pattern_editor.dart';
 
@@ -21,16 +22,23 @@ Future<void> openClipEditor(
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) =>
-            SongNotePatternEditor(clipId: clip.id, patternId: clip.patternId),
+        builder: (_) => StudioRouteTheme(
+          isStudio: false,
+          child: SongNotePatternEditor(
+            clipId: clip.id,
+            patternId: clip.patternId,
+          ),
+        ),
       ),
     );
   }
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
       fullscreenDialog: true,
-      builder: (_) =>
-          DrumMachineEditor(clipId: clip.id, patternId: clip.patternId),
+      builder: (_) => StudioRouteTheme(
+        isStudio: false,
+        child: DrumMachineEditor(clipId: clip.id, patternId: clip.patternId),
+      ),
     ),
   );
 }

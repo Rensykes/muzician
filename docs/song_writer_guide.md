@@ -323,7 +323,7 @@ changed to Piano, its saved anchor shows **Unresolved** and stays silent until
 you choose another Guitar Harmony lane. An unassigned anchor shows
 **Unassigned** and never follows the primary Harmony lane. Section category
 folders are managed by Writer; deleting a block
-removes its link while keeping recoverable content. Named Song versions retain
+removes its link while keeping recoverable content. Named Writer versions retain
 the block content as saved. Loading an older version forks content whose shared
 save has since changed, while keeping the current project's tempo, meter, and
 key after showing any differences.
@@ -393,9 +393,23 @@ sizes in either orientation.
   height than the timeline has, that content scrolls vertically.
 - **Piano/Fretboard detection** — the shared results panel scrolls vertically
   when it exceeds the available height.
-- **Writer** — in landscape the title row is dropped and the overflow button
-  moves into the config strip; when the viewport is wide enough the section
-  cards flow in **two columns**.
+- **Writer** uses the selected Studio appearance, with project context first,
+  then the full Writer title, **Save version**, and labelled Undo/Redo and
+  **Writer versions** icons. A compact key/BPM/play/metronome strip follows;
+  controls wrap at larger text sizes and remain in the Writer menu too. Drafts persist
+  automatically; **Draft changed** describes a difference from a named Writer
+  version. A single section fills the available width. Multiple sections use
+  two columns at 1100 logical pixels or wider. Chord sheets put common actions
+  first and retain all advanced actions. Section controls share a compact row;
+  **Section actions** contains Remove section, recoverable with Undo. Chord
+  rows use 64-pixel filled cells and 44-pixel add slots, growing for lyrics,
+  distinct Save names, and larger text. Guitar Strum shows an explicit Source
+  beside its title and neutral placement strips with accented direction previews,
+  keeps Unassigned silent, and groups its 44-pixel 16th steps by the project's
+  canonical beat grid (four per quarter-note beat, two per eighth-note beat).
+  Steps can wrap within their labelled group on compact screens; no group crosses a bar boundary.
+  Open Writer sheets and isolated melody editors follow live theme changes
+  while retaining edits.
 
 **Code:** `lib/features/song/song_screen.dart`,
 `lib/features/songwriter/songwriter_header.dart`,
@@ -422,3 +436,5 @@ and gracefully skips any step whose target isn't on screen.
   pre-existing, tracked separately, not part of this work.
 - Audio trim is numeric-slider only; waveform-drag handles and fade in/out are
   future polish.
+
+Studio Harmony cells in a mixed row share the tallest cell’s height so their top and bottom edges align. Entirely empty rows retain compact 44-pixel slots; scaled text, lyrics and Save names can increase row height.

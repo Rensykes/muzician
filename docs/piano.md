@@ -1,211 +1,122 @@
 # Piano
 
-An interactive piano keyboard rendered with `CustomPainter`. Supports three range sizes (49 / 61 / 88 keys), chord and scale highlighting, note detection, and a landscape modal view.
+The Studio Piano is a playable MIDI keyboard for selecting exact keys,
+exploring voicings and saving ideas. `PianoKeyboard` uses a widget `Stack`,
+with white keys first and black keys overlaid above them. Its compact chord
+previews use `CustomPainter`. The default range is 61 keys, C2–C7.
 
-When height is tight, including landscape and compact screens with enlarged
-text, the header, keyboard, and detection area scroll above the fixed
-Scale/Chord dock. The keyboard retains its full size and horizontal scroll
-gestures. Chord-picker and scale-picker controls provide at least 44×44px tap
-regions, including scale categories and clear actions.
+## Workspace
 
----
+Project context has its own row above the full Piano title. The **?** action
+opens shared help. Setup in the inspector exposes the current range, and the
+Instrument setup footer action shows its full range label in a tooltip.
 
-## Architecture
+Below the keyboard, a compact summary shows the first detected chord or
+**Exact selection**, plus selected MIDI notes with their octaves. **Save
+idea** is outlined and opens the existing save browser/naming flow. The filled
+**Add to Writer** action keeps
+recognized-chord and exact-note handoff, including unrecognized combinations.
+**Library** opens the same browser for loading, renaming and linked-Save
+updates. **Scale** opens the shared picker, displays the active key and warns
+when a committed chord contains notes outside the project key.
 
-```
-lib/
-  models/piano.dart               ← data types
-  schema/rules/piano_rules.dart   ← ranges, MIDI helpers, key generation
-  store/piano_store.dart          ← Riverpod NotifierProvider
-  features/piano/
-    piano_keyboard.dart           ← CustomPainter keyboard (PianoKeyboard)
-    piano_feature.dart            ← Piano tab screen shell
-    piano_screen_v2_mockup.dart   ← landscape-optimized mockup variant
-    piano_save_panel.dart         ← save/load panel (wraps SaveBrowserPanel)
-    piano_chord_picker.dart       ← chord root + quality → highlight keys
-    piano_scale_picker.dart       ← scale root + type → highlight keys
-    piano_note_detection_panel.dart ← detect chord/scale from selected keys
-    piano_range_selector.dart     ← 49 / 61 / 88 range pill picker
-```
+The inline inspector defaults to **Voicings** and can collapse without
+clearing selected MIDI keys or resetting its local picker state. Underlined
+Notes / Voicings / Setup tabs replace a separate inspector heading. Compact
+root/quality selectors share one row with a labelled octave dropdown and lead
+directly to native inversion previews, followed by project-key suggestions.
+Scale, Library and Instrument setup remain available in its compact footer:
 
----
+| Tab | Controls |
+| --- | --- |
+| Notes | Pitch-class focus, inversion-aware chord detection, compatible scales, Clear |
+| Voicings | Project-key diatonic chords, chromatic root/quality, octave selector and root/first/second inversion diagrams |
+| Setup | Exact/Solo view and 49/61/88-key ranges; subdued Clear all selections action below the settings |
 
-## Data Model (`lib/models/piano.dart`)
+Selecting a detected chord switches to the one existing inline picker.
+Committed voicings override detection until a manual keyboard edit. Notes
+Clear deselects keys; Setup Clear all also removes local filters and stays in
+the workspace. The octave dropdown has a 48px target. Studio voicing cards
+are 102×100px at
+standard text size, with 6px corners and native 86×44px keyboards. All three
+inversions fit a 390px viewport. Cards grow with text scale and scroll
+horizontally; legacy cards retain their original 142px minimum width.
 
-| Type | Description |
-|---|---|
-| `PianoRangeName` | Enum — `key49`, `key61`, `key88` |
-| `PianoRange` | Named range: `name`, `startMidi`, `endMidi`, `displayName` |
-| `PianoKeyCell` | One key: `midiNote`, `pitchClass`, `octave`, `isBlack`, `isSelected`, `isHighlighted`, `isRoot` |
-| `PianoCoordinate` | A selected key: `midiNote`, `pitchClass`, `octave` |
-| `PianoState` | Full state: `currentRange`, `keys`, `selectedKeys`, `highlightedKeys`, `rootNote`, `viewMode` |
-| `PianoViewMode` | Enum — `exact`, `exactFocus` |
+Notes starts directly below its tab and sizes to its results. Compact screens
+use the page's vertical scroll, while wide screens use the bounded inspector
+rail, without a second vertical scroller inside detection. Setup labels the
+native range control once and keeps Clear all selections after the settings
+as a text action with a 44px minimum touch target.
 
----
+At widths of at least 700px with at least 500px available height, content and
+a 316–360px inspector column sit beside one another with independent scrolling.
+Compact and short windows use a scrolling page. The Studio keyboard canvas is
+226px tall: white keys are 42×190px and black keys 26×118px. Horizontal key
+positions and hit testing remain native; scrolling reveals the remaining range.
+Legacy hosts retain 42×210px white keys and 26×130px black keys. Named controls
+use at least 44px tap regions, while native black-key widths remain smaller.
+Short landscape scrolls the full page rather than further shrinking keys.
 
-## Schema / Rules (`lib/schema/rules/piano_rules.dart`)
+Studio and Studio Muzician share the layout. The keyboard, diagrams, sheets
+and controls consume the inherited palette. Switching themes retains project,
+selected MIDI keys, focus and picker state. Unthemed legacy hosts retain the
+previous Scale/Chord dock composition.
 
-| Export | Description |
-|---|---|
-| `pianoRanges` | `Map<PianoRangeName, PianoRange>` — 49 (C3–C7), 61 (C2–C7), 88 (A0–C8) |
-| `midiToPitchClass(midi)` | Returns pitch class string (e.g. `"C#"`) |
-| `midiToNoteWithOctave(midi)` | Returns note + octave (e.g. `"C#4"`) |
-| `generateKeys(range)` | Builds `List<PianoKeyCell>` for the given range |
-| `getDefaultPianoState()` | Returns 49-key state, no selection |
+## Ranges and interaction
 
----
+| Preset | MIDI bounds | Note bounds |
+| --- | --- | --- |
+| 49 keys | 36–84 | C2–C6 |
+| 61 keys (default) | 36–96 | C2–C7 |
+| 88 keys | 21–108 | A0–C8 |
 
-## Store (`lib/store/piano_store.dart`)
+Tap a key to audition and select/deselect it. Horizontal drag scrolls the
+keyboard. There is no glissando or added global transport. White-key x is
+`whiteIndex * 42`; black-key x is `whiteIndex * 42 - 13`, and black keys
+remain above whites for hit testing.
 
-Provider: `pianoProvider` (Riverpod `NotifierProvider<PianoNotifier, PianoState>`)
+Selected/focused keys receive the palette accent; ordinary keys keep their
+white/black physical identity. Studio keeps black keys opaque when scale
+highlights or pitch-class focus dim unrelated content, preserving a readable
+physical keyboard. **Solo** hides unrelated keys when a selection exists;
+**Exact** retains the full keyboard. Voicings load exact MIDI keys in the
+current range and use the existing one-shot scroll-to-MIDI signal.
 
-Auxiliary providers:
-- `pianoPendingChordProvider` — `StateProvider<({String root, String quality})?>` 
-- `pianoPendingScaleProvider` — `StateProvider<({String root, String scaleName})?>` 
+## Project key and spelling
 
-### Key actions
+A selected project's tonic and scale/mode are canonical for Writer, Piano and
+Fretboard. Setting, changing or clearing that key from Scale or a compatible
+scale chip requires confirmation, including the first key on an unkeyed
+project. Cancel keeps the previous key. Confirming updates the shared key
+without transposing selected MIDI notes. Instrument Save loads retain the
+project key. Dump or no project keeps scale choices local. Tempo/meter remain
+available from the project context chip.
 
-| Method | Description |
-|---|---|
-| `toggleKey(midiNote)` | Select / deselect a piano key |
-| `setRange(rangeName)` | Switch to 49 / 61 / 88 key layout |
-| `setViewMode(mode)` | Switch display mode |
-| `highlightChord(root, quality)` | Mark chord tones as highlighted, set root note |
-| `highlightScale(root, scaleName)` | Mark scale tones as highlighted, set root note |
-| `clearHighlights()` | Remove all highlights and root marker |
-| `clearSelectedNotes()` | Deselect all keys |
-| `reset()` | Restore defaults |
+Local scale conflicts ask before removing selected keys. Adding a key outside
+an active local scale uses the existing out-of-key dialog and persistent
+suppression preference; real projects use the project off-scale safeguard.
 
----
+Settings → Prefer flat note names affects keyboard labels, roots, voicings,
+detection and scale/project-key labels only. Slash bass and octaves remain
+visible. MIDI pitches, custom Save names and exact Harmony labels do not
+change.
 
-## Widgets
+## Implementation
 
-### `PianoKeyboard`
-The main keyboard widget. Rendered with `CustomPainter` + `RepaintBoundary` inside a horizontal `SingleChildScrollView` (scrollable for 61 / 88 key ranges).
-
-**Painter logic:**
-- White keys drawn first as filled rectangles with black borders
-- Black keys drawn on top — narrower, shorter
-- Selected keys fill with `sky` accent colour and show note name
-- Highlighted keys use `teal` fill (scale) or `violet` (chord)
-- Root note key uses `emerald` fill
-- Note labels drawn on wide-enough keys only
-
-**Interaction:**
-- `GestureDetector.onTapUp` and `onPanUpdate` → `toggleKey(midi)` with `lightImpact` haptic
-- Horizontal pan scrolls when no key is directly tapped
-
-**Layout:**
-- White key width computed from available width ÷ number of white keys in range
-- `LayoutBuilder` keeps proportions correct at any screen size
-
----
-
-### `PianoRangeSelector`
-A `Wrap` of pill buttons for the three range presets (49-key, 61-key, 88-key). Active range is highlighted in `sky`. Tapping calls `pianoProvider.notifier.setRange()`.
-
----
-
-### `PianoChordPicker`
-Root (12 chromatic notes) + chord quality selector. Same chord qualities as the fretboard picker (major, minor, 7, maj7, m7, dim, aug, sus2, sus4). Tapping "Highlight" calls `highlightChord()` and writes to `pianoPendingChordProvider`.
-
-Chord tones computed from a semitone-interval map (`_chordIntervals`).
-
----
-
-### `PianoScalePicker`
-Root + scale type selector. Tapping "Highlight" calls `highlightScale()` and writes to `pianoPendingScaleProvider`.
-
----
-
-### `PianoNoteDetectionPanel`
-Reading `pianoPendingChordProvider` and `pianoPendingScaleProvider`, displays the detected chord and scale for active selected keys using shared `formatChordSymbol` / `formatScaleLabel` helpers with the global Sharps/Flats preference. Supports inversion-aware slash chords (e.g. `"C/E"`) and the full scale catalog. Includes a "Clear" button that resets both providers and clears highlights.
-
-**Settings → Prefer flat note names** also updates keyboard notes, voicing labels,
-root choices, Scale dock, and project key labels. The setting persists across
-restarts; MIDI notes, octaves, custom Save names, and exact Harmony labels stay
-unchanged.
-
----
-
-## State Flow
-
-```
-PianoRangeSelector → pianoProvider.setRange()
-                            │
-                  PianoKeyboard repaints
-                            │
-            User taps key → toggleKey(midi)
-                            │
-    PianoNoteDetectionPanel reads pianoPendingChordProvider
-```
-
-## Behaviour Notes
-
-- Out-of-key confirmation: When a scale highlight is active and the user tries to add a key outside that scale, the app shows an out-of-key confirmation dialog with a "Don't show again" option persisted to settings. See implementation: [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
-
-- View-mode control: The piano provides an in-page view-mode control (`exact` / `exactFocus`) for local display preference; chord/scale tools do not force the view mode. Relevant files: [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
-
-- Scale highlight & conflicts: Applying a scale highlights pitch classes and will prompt to remove conflicting selected keys if necessary. See: [lib/features/piano/piano_scale_picker.dart](lib/features/piano/piano_scale_picker.dart).
-
-
----
-
-## Info Panel
-
-File: `lib/ui/core/app_info_panel.dart`
-
-A shared, dismissible help overlay. Opened by tapping the **?** button in the top-right corner of the Piano screen header (opens the info sheet pre-selected on the Piano tab).
-
-### Entry point
-
-```dart
-showAppInfoPanel(context, initialTab: 1); // 0 = Fretboard, 1 = Piano, 2 = Piano Roll
-```
-
-### Piano tab sections
-
-| Section | Content |
-|---|---|
-| **Gestures** | Tap key to select / deselect; pan / drag to scroll (61 / 88-key layouts) |
-| **Panels & Tools** | Range selector (49 / 61 / 88 keys), Chord picker, Scale picker, Detection, Saves |
-| **Behaviour Notes** | Out-of-key alert, colour coding (sky / teal / violet / emerald) |
-
-The shared detection panel scrolls vertically when its content is taller than
-the space available below the keyboard.
-
-## Project lock
-
-When a project is selected, the instrument inherits its tonic and scale/mode,
-tempo, and time-signature where applicable. The scale picker can set, change,
-or clear the project key after confirmation, including the first key on an
-unkeyed project. Cancel keeps the previous key; confirming updates Writer,
-Fretboard, and Piano without transposing selected notes. Instrument Save loads
-retain the project key. Tempo and meter use the project config sheet from the
-project chip in the header. Dump and "no project" leave scale choices local.
-
-**Scale dock label:** The Scale dock tab shows the active project key (e.g.
-"C major") as its label when the selected project has a key configured. When
-the real project has no key, the label is `"Scale"`. In Dump or with no project,
-the label uses the local active scale or `"Scale"` when none is present.
-See `_resolveScaleDockState()` in `lib/main.dart`.
-
-**chordOffKey warning:** When the committed chord contains notes outside the
-active project key, the Scale dock tab turns orange and shows a warning icon.
-This is driven by `InstrumentBinding.chordOffKey`, computed by
-`pianoChordOffKeyProvider` in `lib/store/piano_store.dart`. The flag is
-passed as `scaleOffKey` to `InstrumentScreen` → `DockTab.warning`.
-
-**Shared scale picker:** The scale picker (`SharedScalePicker` in
-`lib/features/instrument_shared/shared_scale_picker.dart`) reads
-`activeProjectKeyProvider` and treats the real project key as authoritative. The
-active-scale chip turns orange when the committed chord is off-key and the
-project is locked (`chordOffKey && isProjectLocked`).
-
-**Chord picker header:** The shared chord picker parts in
-`lib/features/instrument_shared/chord_picker_parts.dart` provide
-`ChordPickerHeader` — a reusable header row showing the active chord as a
-badge. Used by both the Fretboard and Piano chord pickers.
+- `lib/main.dart`: instrument composition and existing setup/save builders.
+- `lib/features/instrument_shared/instrument_screen.dart`: Studio summary,
+  inspector and legacy fallback.
+- `shared_detection_panel.dart`, `shared_scale_picker.dart`,
+  `chord_picker_parts.dart`: instrument bindings, canonical callbacks and
+  project-key confirmation.
+- `lib/features/piano/piano_keyboard.dart`: widget keyboard, taps, dimming and
+  one-shot MIDI scroll.
+- `piano_chord_picker.dart` / `piano_chord_diagram.dart`: octave/inversions and
+  immutable palette-aware miniature painter.
+- `piano_range_selector.dart` / `piano_save_panel.dart`: range and existing
+  Save browser/native linked-Save behavior.
+- `lib/models/piano.dart`, `lib/schema/rules/piano_rules.dart`,
+  `lib/store/piano_store.dart`: immutable model, range rules and state.
 
 ## Saves and Writer handoff
 

@@ -141,7 +141,7 @@ void main() {
     await tester.tap(find.byKey(const Key('writerSaveButton')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('writerSaveOverwrite')), findsNothing);
-    expect(find.text('Browse saves'), findsOneWidget);
+    expect(find.text('Writer saves'), findsOneWidget);
   });
 
   testWidgets('save-as-new opens the Save/Load panel', (tester) async {
@@ -152,7 +152,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('writerSaveAsNew')));
     await tester.pumpAndSettle();
-    expect(find.text('Browse saves'), findsOneWidget);
+    expect(find.text('Writer saves'), findsOneWidget);
     expect(find.bySemanticsLabel('Close'), findsOneWidget);
     final closeSemantics = tester
         .getSemantics(find.bySemanticsLabel('Close'))
@@ -161,7 +161,7 @@ void main() {
     expect(closeSemantics.hasAction(SemanticsAction.tap), isTrue);
     await tester.tap(find.bySemanticsLabel('Close'));
     await tester.pumpAndSettle();
-    expect(find.text('Browse saves'), findsNothing);
+    expect(find.text('Writer saves'), findsNothing);
     semantics.dispose();
   });
 }

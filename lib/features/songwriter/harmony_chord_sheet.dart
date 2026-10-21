@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/save_system_rules.dart' show generateId;
 import '../../schema/rules/songwriter_rules.dart';
@@ -40,15 +40,14 @@ Future<SongBlock?> showHarmonyChordSheet(
   bool showLyrics = true,
   VoidCallback? onPickFromLibrary,
 }) {
-  return showModalBottomSheet<SongBlock>(
+  return showStudioModalBottomSheet<SongBlock>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => Container(
+    builder: (context) => Container(
       decoration: BoxDecoration(
-        color: MuzicianTheme.surface,
+        color: StudioPalette.of(context).surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
       ),
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.75,
@@ -228,16 +227,20 @@ class _HarmonySheetState extends ConsumerState<_HarmonySheet> {
               child: TextField(
                 key: const Key('lyricInput'),
                 controller: _lyricController,
-                style: const TextStyle(color: MuzicianTheme.textPrimary),
+                style: TextStyle(color: StudioPalette.of(context).textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Verse ${widget.instanceIndex + 1}',
-                  labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
+                  labelStyle: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
+                  ),
                   filled: true,
-                  fillColor: MuzicianTheme.glassBg,
+                  fillColor: StudioPalette.of(context).glassBg,
                   isDense: true,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+                    borderSide: BorderSide(
+                      color: StudioPalette.of(context).glassBorder,
+                    ),
                   ),
                 ),
               ),
@@ -271,10 +274,10 @@ class _HarmonySheetState extends ConsumerState<_HarmonySheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Root',
           style: TextStyle(
-            color: MuzicianTheme.textSecondary,
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -297,10 +300,10 @@ class _HarmonySheetState extends ConsumerState<_HarmonySheet> {
           ],
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'Quality',
           style: TextStyle(
-            color: MuzicianTheme.textSecondary,
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -356,13 +359,15 @@ class _GlassPickerChip extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: selected
-                    ? Colors.white.withValues(alpha: 0.10)
-                    : Colors.white.withValues(alpha: 0.04),
+                    ? StudioPalette.of(context).sky.withValues(alpha: 0.10)
+                    : StudioPalette.of(
+                        context,
+                      ).textPrimary.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: selected
-                      ? Colors.white.withValues(alpha: 0.30)
-                      : MuzicianTheme.glassBorder,
+                      ? StudioPalette.of(context).sky
+                      : StudioPalette.of(context).glassBorder,
                 ),
               ),
               child: Padding(
@@ -377,8 +382,8 @@ class _GlassPickerChip extends StatelessWidget {
                     label,
                     style: TextStyle(
                       color: enabled
-                          ? MuzicianTheme.textPrimary
-                          : MuzicianTheme.textDim,
+                          ? StudioPalette.of(context).textPrimary
+                          : StudioPalette.of(context).textDim,
                       fontSize: 13,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),

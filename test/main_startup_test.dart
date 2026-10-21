@@ -41,7 +41,7 @@ void main() {
     await _pumpUntil(tester, find.byType(IndexedStack));
 
     expect(
-      tester.widget<IndexedStack>(find.byType(IndexedStack)).index,
+      tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
       index,
       reason: 'The app should restore $workspace on a $viewport view.',
     );
@@ -73,7 +73,10 @@ void main() {
       await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
       await _pumpUntil(tester, find.byType(IndexedStack));
 
-      expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 4);
+      expect(
+        tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+        4,
+      );
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(settingsStorageKey), isNull);
     },
@@ -116,7 +119,10 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
     await _pumpUntil(tester, find.byType(IndexedStack));
 
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 4);
+    expect(
+      tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+      4,
+    );
   });
 
   testWidgets('visiting Settings does not replace the restored workspace', (
@@ -128,11 +134,17 @@ void main() {
 
     await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
     await _pumpUntil(tester, find.byType(IndexedStack));
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 3);
+    expect(
+      tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+      3,
+    );
 
     await tester.tap(find.byKey(const ValueKey('nav_Settings')));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 5);
+    expect(
+      tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+      5,
+    );
     final prefs = await SharedPreferences.getInstance();
     expect(
       AppSettings.fromJson(
@@ -146,7 +158,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
     await _pumpUntil(tester, find.byType(IndexedStack));
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 3);
+    expect(
+      tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+      3,
+    );
   });
 
   testWidgets('Settings exposes the persistent flat spelling switch', (
@@ -193,7 +208,10 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       await tester.tap(find.text('Retry'));
       await _pumpUntil(tester, find.byType(IndexedStack));
-      expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 4);
+      expect(
+        tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+        4,
+      );
     },
   );
 
@@ -210,6 +228,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await tester.tap(find.text('Retry'));
     await _pumpUntil(tester, find.byType(IndexedStack));
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 4);
+    expect(
+      tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+      4,
+    );
   });
 }

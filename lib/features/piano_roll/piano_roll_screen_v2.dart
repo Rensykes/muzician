@@ -1,7 +1,7 @@
 /// Piano Roll V2 — Adaptive landscape/portrait screen shell.
 ///
 /// Landscape: grid on left, inspector/utility rail on right.
-/// Portrait: grid as primary surface with collapsible expandable panels.
+/// Studio uses a bounded inspector; legacy hosts retain their existing shell.
 library;
 
 import 'package:flutter/material.dart';
@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/piano_roll.dart';
+import '../../models/piano_roll_stack_builder.dart';
 import '../../models/piano_roll_playback.dart';
 import '../../models/save_system.dart' show AppSettings;
 import '../../schema/rules/piano_roll_rules.dart' as rules;
@@ -16,7 +17,7 @@ import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_stack_builder_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/project_chip.dart';
 import '../../ui/transport_strip.dart' as transport;
 import '../../ui/core/app_info_panel.dart';
@@ -79,80 +80,308 @@ class PianoRollScreenV2 extends ConsumerStatefulWidget {
 }
 
 class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
+  int _inspectorTab = 0;
+  bool _inspectorExpanded = true;
+
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isLandscape = size.width > _landscapeWidthThreshold;
-
-    // V2 is hosted as a top-level tab body — the parent app scaffold owns
-    // the bottom navigation, so we render only the gradient surface here.
-    final body = isLandscape ? _buildLandscape() : _buildPortrait();
-    if (!widget.showBackground) {
-      return Theme(data: MuzicianTheme.dark(), child: body);
-    }
-    return Theme(
-      data: MuzicianTheme.dark(),
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: MuzicianTheme.gradientColors,
-          ),
+    final palette = StudioPalette.of(context);
+    final body = LayoutBuilder(
+      builder: (context, constraints) {
+        if (palette.isStudio) return _buildStudio(constraints);
+        return constraints.maxWidth > _landscapeWidthThreshold
+            ? _buildLandscape()
+            : _buildPortrait();
+      },
+    );
+    if (!widget.showBackground) return body;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: palette.gradientColors,
         ),
-        child: SafeArea(bottom: false, child: body),
       ),
+      child: SafeArea(bottom: false, child: body),
     );
   }
+
+  Widget _buildStudio(BoxConstraints constraints) {
+    final state = ref.watch(pianoRollProvider);
+    final palette = StudioPalette.of(context);
+    final wide = constraints.maxWidth >= 700;
+    final short = constraints.maxHeight < 500;
+    final inspectorHeight = (constraints.maxHeight * .33).clamp(80.0, 220.0);
+    final grid = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Expanded(child: PianoRollGrid()),
+        if (!short &&
+            constraints.maxHeight >= 650 &&
+            _inspectorTab != 1 &&
+            (state.selectedColumnTick != null ||
+                state.selectedNoteIds.isNotEmpty))
+          Container(
+            key: const ValueKey('studio-column-summary'),
+            constraints: const BoxConstraints(minHeight: 44),
+            decoration: BoxDecoration(
+              color: palette.surface,
+              border: Border(top: BorderSide(color: palette.glassBorder)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      'Column ${transport.tickToBarBeatDisplay(state.selectedColumnTick, state.config.timeSignature)} · ${_headerChipLabel(state)}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+                _SelectionActions(state: state, compact: true),
+              ],
+            ),
+          ),
+      ],
+    );
+    final inspector = _StudioInspector(
+      state: state,
+      tab: _inspectorTab,
+      expanded: _inspectorExpanded,
+      onTab: (index) => setState(() {
+        _inspectorTab = index;
+        _inspectorExpanded = true;
+      }),
+      onToggle: () => setState(() => _inspectorExpanded = !_inspectorExpanded),
+    );
+    return Column(
+      key: const ValueKey('studio-piano-roll'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (short)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Piano Roll',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                ...[
+                  const ProjectChip(),
+                  IconButton(
+                    tooltip: 'Piano Roll help',
+                    icon: const Icon(Icons.help_outline_rounded),
+                    onPressed: () => _openPanel('help'),
+                  ),
+                  IconButton(
+                    tooltip: 'Roll Settings',
+                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: () => _openPanel('settings'),
+                  ),
+                ],
+              ],
+            ),
+          )
+        else
+          WorkspaceHeader(
+            title: 'Piano Roll',
+            actions: [
+              const ProjectChip(),
+              IconButton(
+                tooltip: 'Piano Roll help',
+                icon: const Icon(Icons.help_outline_rounded),
+                onPressed: () => _openPanel('help'),
+              ),
+              IconButton(
+                tooltip: 'Roll Settings',
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => _openPanel('settings'),
+              ),
+            ],
+          ),
+        _TransportStrip(
+          bpm: state.config.tempo,
+          barBeat: transport.tickToBarBeatDisplay(
+            state.selectedColumnTick,
+            state.config.timeSignature,
+          ),
+          timeSig: state.config.timeSignature,
+        ),
+        _StudioToolRow(trailing: short ? _studioUtilityActions() : const []),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: wide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: grid),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: _inspectorExpanded ? 320 : 56,
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  _inspectorTab == 0 &&
+                                      ref
+                                              .watch(
+                                                pianoRollStackBuilderProvider,
+                                              )
+                                              .activeView ==
+                                          PianoRollStackBuilderView.canonical
+                                  ? 260
+                                  : double.infinity,
+                            ),
+                            child: inspector,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: grid),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: _inspectorExpanded ? inspectorHeight : 48,
+                        child: inspector,
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+        if (!short)
+          Container(
+            decoration: BoxDecoration(
+              color: palette.surface,
+              border: Border(top: BorderSide(color: palette.glassBorder)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, bounds) {
+                final fit =
+                    bounds.maxWidth >= 390 &&
+                    bounds.maxWidth < 700 &&
+                    MediaQuery.textScalerOf(context).scale(14) <= 15;
+                final actions = _studioUtilityActions(compact: fit);
+                if (fit) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        for (final action in actions) Expanded(child: action),
+                      ],
+                    ),
+                  );
+                }
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(children: actions),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  List<Widget> _studioUtilityActions({bool compact = false}) => [
+    _StudioAction(
+      label: 'Quick',
+      compact: compact,
+      stacked: compact,
+      icon: Icons.content_paste_rounded,
+      onTap: () =>
+          ref.read(pianoRollStackBuilderProvider.notifier).quickAddStack(),
+    ),
+    if (widget.showScale)
+      _StudioAction(
+        label: 'Scale',
+        compact: compact,
+        stacked: compact,
+        icon: Icons.piano_rounded,
+        onTap: () => _openPanel('scale'),
+      ),
+    _StudioAction(
+      label: 'Hum recorder',
+      compact: compact,
+      stacked: compact,
+      compactLabel: 'Hum',
+      icon: Icons.mic_rounded,
+      onTap: () => _openPanel('hum'),
+    ),
+    if (widget.showSavePanels) ...[
+      _StudioAction(
+        label: 'Save',
+        compact: compact,
+        stacked: compact,
+        icon: Icons.save_outlined,
+        onTap: () => _openPanel('save'),
+      ),
+      _StudioAction(
+        label: 'Import',
+        compact: compact,
+        stacked: compact,
+        icon: Icons.folder_open_rounded,
+        onTap: () => _openPanel('import'),
+      ),
+    ],
+  ];
+
+  Future<void> _showPanel(String title, Widget panel) => showWidgetSheet(
+    context: context,
+    title: title,
+    child: UncontrolledProviderScope(
+      container: ProviderScope.containerOf(context),
+      child: panel,
+    ),
+  );
 
   void _openPanel(String key) {
     HapticFeedback.selectionClick();
     switch (key) {
       case 'scale':
         if (!widget.showScale) return;
-        showWidgetSheet(
-          context: context,
-          title: 'Scale Highlight',
-          child: SharedScalePicker(binding: pianoRollScaleBinding),
+        _showPanel(
+          'Scale Highlight',
+          SharedScalePicker(binding: pianoRollScaleBinding),
         );
       case 'hum':
-        showWidgetSheet(
-          context: context,
-          title: 'Hum Recorder',
-          child: const PianoRollHumRecorderPanel(),
-        );
+        _showPanel('Hum Recorder', const PianoRollHumRecorderPanel());
       case 'save':
         if (!widget.showSavePanels) return;
-        showWidgetSheet(
-          context: context,
-          title: 'Save / Load',
-          child: const PianoRollSavePanel(),
-        );
+        _showPanel('Save / Load', const PianoRollSavePanel());
       case 'import':
         if (!widget.showSavePanels) return;
-        showWidgetSheet(
-          context: context,
-          title: 'Import from Saves',
-          child: const PianoRollSaveStackLoader(),
-        );
+        _showPanel('Import from Saves', const PianoRollSaveStackLoader());
       case 'stack_builder':
-        showWidgetSheet(
-          context: context,
-          title: 'Stack Builder',
-          child: const PianoRollStackBuilder(dismissOnAdd: true),
+        _showPanel(
+          'Stack Builder',
+          const PianoRollStackBuilder(dismissOnAdd: true),
         );
       case 'detection':
-        showWidgetSheet(
-          context: context,
-          title: 'Detection',
-          child: const PianoRollDetectionPanel(),
-        );
+        _showPanel('Detection', const PianoRollDetectionPanel());
       case 'settings':
-        showWidgetSheet(
-          context: context,
-          title: 'Roll Settings',
-          child: const _SettingsSheet(),
-        );
+        _showPanel('Roll Settings', const _SettingsSheet());
       case 'help':
         showAppInfoPanel(context, initialTab: 2);
     }
@@ -202,9 +431,11 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                   key: const ValueKey('v2-utility-panel'),
                   margin: const EdgeInsets.fromLTRB(4, 4, 12, 4),
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.glassBg,
+                    color: StudioPalette.of(context).glassBg,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: MuzicianTheme.glassBorder),
+                    border: Border.all(
+                      color: StudioPalette.of(context).glassBorder,
+                    ),
                   ),
                   child: ListView(
                     padding: const EdgeInsets.all(8),
@@ -216,37 +447,37 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
                       _QuickButton(),
                       const SizedBox(height: 12),
                       const _PanelSectionHeader('Selection'),
-                      Divider(color: MuzicianTheme.glassBorder),
+                      Divider(color: StudioPalette.of(context).glassBorder),
                       _SelectionStatus(state: state),
                       _SelectionActions(state: state),
                       const SizedBox(height: 12),
                       const _PanelSectionHeader('Edit & Pitch'),
-                      Divider(color: MuzicianTheme.glassBorder),
+                      Divider(color: StudioPalette.of(context).glassBorder),
                       _EditPitchControls(state: state),
                       const SizedBox(height: 12),
                       if (widget.showScale) ...[
                         const _PanelSectionHeader('Scale'),
-                        Divider(color: MuzicianTheme.glassBorder),
+                        Divider(color: StudioPalette.of(context).glassBorder),
                         SharedScalePicker(binding: pianoRollScaleBinding),
                       ],
                       if (state.selectedColumnTick != null) ...[
                         const SizedBox(height: 12),
                         const _PanelSectionHeader('Detection'),
-                        Divider(color: MuzicianTheme.glassBorder),
+                        Divider(color: StudioPalette.of(context).glassBorder),
                         const PianoRollDetectionPanel(),
                       ],
                       const SizedBox(height: 12),
                       const _PanelSectionHeader('Hum Recorder'),
-                      Divider(color: MuzicianTheme.glassBorder),
+                      Divider(color: StudioPalette.of(context).glassBorder),
                       const PianoRollHumRecorderPanel(),
                       if (widget.showSavePanels) ...[
                         const SizedBox(height: 12),
                         const _PanelSectionHeader('Save / Load'),
-                        Divider(color: MuzicianTheme.glassBorder),
+                        Divider(color: StudioPalette.of(context).glassBorder),
                         const PianoRollSavePanel(),
                         const SizedBox(height: 12),
                         const _PanelSectionHeader('Import from Saves'),
-                        Divider(color: MuzicianTheme.glassBorder),
+                        Divider(color: StudioPalette.of(context).glassBorder),
                         const PianoRollSaveStackLoader(),
                       ],
                       const SizedBox(height: 24),
@@ -330,9 +561,9 @@ class _PortraitActionBar extends ConsumerWidget {
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
+        color: StudioPalette.of(context).glassBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -354,14 +585,14 @@ class _PortraitActionBar extends ConsumerWidget {
               _QuickChip(
                 label: 'Stack Builder',
                 icon: Icons.add_rounded,
-                color: MuzicianTheme.violet,
+                color: StudioPalette.of(context).violet,
                 onTap: () => onOpenPanel('stack_builder'),
               ),
               const SizedBox(width: 6),
               _QuickChip(
                 label: 'Quick',
                 icon: Icons.content_paste_rounded,
-                color: MuzicianTheme.emerald,
+                color: StudioPalette.of(context).emerald,
                 onTap: () {
                   HapticFeedback.mediumImpact();
                   ref
@@ -374,7 +605,7 @@ class _PortraitActionBar extends ConsumerWidget {
                 _QuickChip(
                   label: 'Scale',
                   icon: Icons.piano_rounded,
-                  color: MuzicianTheme.teal,
+                  color: StudioPalette.of(context).teal,
                   onTap: () => onOpenPanel('scale'),
                 ),
               ],
@@ -383,8 +614,8 @@ class _PortraitActionBar extends ConsumerWidget {
                 label: 'Detect',
                 icon: Icons.graphic_eq_rounded,
                 color: hasSelection
-                    ? MuzicianTheme.sky
-                    : MuzicianTheme.textMuted,
+                    ? StudioPalette.of(context).sky
+                    : StudioPalette.of(context).textMuted,
                 onTap: hasSelection ? () => onOpenPanel('detection') : null,
               ),
             ],
@@ -395,7 +626,7 @@ class _PortraitActionBar extends ConsumerWidget {
               _QuickChip(
                 label: 'Record',
                 icon: Icons.mic_rounded,
-                color: MuzicianTheme.orange,
+                color: StudioPalette.of(context).orange,
                 onTap: () => onOpenPanel('hum'),
               ),
               if (showSavePanels) ...[
@@ -403,14 +634,14 @@ class _PortraitActionBar extends ConsumerWidget {
                 _QuickChip(
                   label: 'Save',
                   icon: Icons.save_rounded,
-                  color: MuzicianTheme.sky,
+                  color: StudioPalette.of(context).sky,
                   onTap: () => onOpenPanel('save'),
                 ),
                 const SizedBox(width: 6),
                 _QuickChip(
                   label: 'Import',
                   icon: Icons.folder_open_rounded,
-                  color: MuzicianTheme.emerald,
+                  color: StudioPalette.of(context).emerald,
                   onTap: () => onOpenPanel('import'),
                 ),
               ],
@@ -446,11 +677,11 @@ class _SettingsSheet extends ConsumerWidget {
           },
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Plays a click on every beat during playback. Accent on the '
           'downbeat (beat 1).',
           style: TextStyle(
-            color: MuzicianTheme.textMuted,
+            color: StudioPalette.of(context).textMuted,
             fontSize: 11,
             height: 1.4,
           ),
@@ -507,17 +738,20 @@ class _TransportStrip extends ConsumerWidget {
       await showWidgetSheet(
         context: context,
         title: 'Tempo',
-        child: Consumer(
-          builder: (_, sheetRef, _) {
-            final tempo = sheetRef.watch(
-              pianoRollProvider.select((s) => s.config.tempo),
-            );
-            return transport.BpmSheet(
-              currentBpm: tempo,
-              onChanged: (v) =>
-                  sheetRef.read(pianoRollProvider.notifier).setTempo(v),
-            );
-          },
+        child: UncontrolledProviderScope(
+          container: ProviderScope.containerOf(context),
+          child: Consumer(
+            builder: (_, sheetRef, _) {
+              final tempo = sheetRef.watch(
+                pianoRollProvider.select((s) => s.config.tempo),
+              );
+              return transport.BpmSheet(
+                currentBpm: tempo,
+                onChanged: (v) =>
+                    sheetRef.read(pianoRollProvider.notifier).setTempo(v),
+              );
+            },
+          ),
         ),
       );
     }
@@ -592,7 +826,7 @@ class _SelectionStatus extends StatelessWidget {
                       Icon(
                         Icons.my_location_rounded,
                         size: 14,
-                        color: MuzicianTheme.sky,
+                        color: StudioPalette.of(context).sky,
                       ),
                       const SizedBox(width: 4),
                     ],
@@ -601,8 +835,8 @@ class _SelectionStatus extends StatelessWidget {
                         statusLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MuzicianTheme.sky,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).sky,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           fontFeatures: [FontFeature.tabularFigures()],
@@ -618,8 +852,8 @@ class _SelectionStatus extends StatelessWidget {
               children: [
                 Text(
                   hasSelectedNotes ? 'Selection' : 'Column: $barBeat',
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     fontFeatures: [FontFeature.tabularFigures()],
@@ -628,8 +862,8 @@ class _SelectionStatus extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '$noteCount note${noteCount == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
                   ),
@@ -670,21 +904,21 @@ class _SelectionActions extends ConsumerWidget {
             _SelectionActionIcon(
               icon: Icons.select_all_rounded,
               label: 'Select column',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
               onTap: selectColumnNotes,
             ),
           if (hasSelectedNotes)
             _SelectionActionIcon(
               icon: Icons.deselect_rounded,
               label: 'Clear note selection',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
               onTap: notifier.clearSelection,
             ),
           if (hasSelectedNotes)
             _SelectionActionIcon(
               icon: Icons.delete_outline_rounded,
               label: 'Delete selected notes',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
               onTap: notifier.deleteSelectedNotes,
             ),
           const SizedBox(width: 8),
@@ -698,7 +932,7 @@ class _SelectionActions extends ConsumerWidget {
           _QuickChip(
             label: 'Select column',
             icon: Icons.select_all_rounded,
-            color: MuzicianTheme.sky,
+            color: StudioPalette.of(context).sky,
             onTap: selectColumnNotes,
           ),
         if (hasColumnNotes && hasSelectedNotes) const SizedBox(width: 6),
@@ -706,7 +940,7 @@ class _SelectionActions extends ConsumerWidget {
           _QuickChip(
             label: 'Clear',
             icon: Icons.deselect_rounded,
-            color: MuzicianTheme.teal,
+            color: StudioPalette.of(context).teal,
             onTap: notifier.clearSelection,
           ),
         if (hasSelectedNotes) const SizedBox(width: 6),
@@ -714,7 +948,7 @@ class _SelectionActions extends ConsumerWidget {
           _QuickChip(
             label: 'Delete',
             icon: Icons.delete_outline_rounded,
-            color: MuzicianTheme.orange,
+            color: StudioPalette.of(context).orange,
             onTap: notifier.deleteSelectedNotes,
           ),
       ],
@@ -776,6 +1010,9 @@ class _EditPitchControls extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(pianoRollProvider.notifier);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
     final tool = state.activeTool;
     final snap = state.snapTicks;
     final prStart = state.pitchRangeStart;
@@ -784,10 +1021,10 @@ class _EditPitchControls extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Tool & Snap',
           style: TextStyle(
-            color: MuzicianTheme.textSecondary,
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
@@ -818,6 +1055,18 @@ class _EditPitchControls extends ConsumerWidget {
                 notifier.setActiveTool(PianoRollTool.scissors);
               },
             ),
+            if (StudioPalette.of(context).isStudio) ...[
+              _ToolPill(
+                label: 'Paint',
+                active: tool == PianoRollTool.paint,
+                onTap: () => notifier.setActiveTool(PianoRollTool.paint),
+              ),
+              _ToolPill(
+                label: 'Delete',
+                active: tool == PianoRollTool.delete,
+                onTap: () => notifier.setActiveTool(PianoRollTool.delete),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 6),
@@ -834,10 +1083,10 @@ class _EditPitchControls extends ConsumerWidget {
           }).toList(),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Pitch Range',
           style: TextStyle(
-            color: MuzicianTheme.textSecondary,
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
@@ -863,9 +1112,11 @@ class _EditPitchControls extends ConsumerWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Range: C$prStart – C$prEnd',
-          style: const TextStyle(
-            color: MuzicianTheme.textMuted,
+          StudioPalette.of(context).isStudio
+              ? '${formatMidiNoteLabel(prStart, spelling: spelling)} – ${formatMidiNoteLabel(prEnd, spelling: spelling)}'
+              : 'Range: C$prStart – C$prEnd',
+          style: TextStyle(
+            color: StudioPalette.of(context).textMuted,
             fontSize: 10,
             fontWeight: FontWeight.w500,
           ),
@@ -890,22 +1141,31 @@ class _ToolPill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: BoxConstraints(
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+          minWidth: StudioPalette.of(context).isStudio ? 44 : 0,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? MuzicianTheme.sky.withValues(alpha: 0.16)
-              : Colors.white.withValues(alpha: 0.04),
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.16)
+              : (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).textPrimary
+                        : Colors.white)
+                    .withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: active
-                ? MuzicianTheme.sky.withValues(alpha: 0.45)
-                : MuzicianTheme.glassBorder,
+                ? StudioPalette.of(context).sky.withValues(alpha: 0.45)
+                : StudioPalette.of(context).glassBorder,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+            color: active
+                ? StudioPalette.of(context).sky
+                : StudioPalette.of(context).textSecondary,
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -930,22 +1190,31 @@ class _SnapPill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: BoxConstraints(
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+          minWidth: StudioPalette.of(context).isStudio ? 44 : 0,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: active
-              ? MuzicianTheme.teal.withValues(alpha: 0.16)
-              : Colors.white.withValues(alpha: 0.04),
+              ? StudioPalette.of(context).teal.withValues(alpha: 0.16)
+              : (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).textPrimary
+                        : Colors.white)
+                    .withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: active
-                ? MuzicianTheme.teal.withValues(alpha: 0.45)
-                : MuzicianTheme.glassBorder,
+                ? StudioPalette.of(context).teal.withValues(alpha: 0.45)
+                : StudioPalette.of(context).glassBorder,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? MuzicianTheme.teal : MuzicianTheme.textSecondary,
+            color: active
+                ? StudioPalette.of(context).teal
+                : StudioPalette.of(context).textSecondary,
             fontSize: 10,
             fontWeight: FontWeight.w600,
           ),
@@ -965,16 +1234,24 @@ class _PitchShiftBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: BoxConstraints(
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+          minWidth: StudioPalette.of(context).isStudio ? 44 : 0,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
+          color:
+              (StudioPalette.of(context).isStudio
+                      ? StudioPalette.of(context).textPrimary
+                      : Colors.white)
+                  .withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: MuzicianTheme.textSecondary,
+          style: TextStyle(
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -996,8 +1273,8 @@ class _PanelSectionHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Text(
         label,
-        style: const TextStyle(
-          color: MuzicianTheme.textMuted,
+        style: TextStyle(
+          color: StudioPalette.of(context).textMuted,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.8,
@@ -1007,15 +1284,12 @@ class _PanelSectionHeader extends StatelessWidget {
   }
 }
 
-/// Icon-only segmented control for the four piano-roll tap modes.
+/// Legacy icon-only segmented control for the five piano-roll tools.
 ///
 /// Sits inside the action bar's status row (left = status, right = segment)
 /// so the grid height is not affected. Stays in sync with
 /// [PianoRollState.activeTool] — selection persists across panel sheets.
 ///
-/// Grid wiring currently honours only Draw and Split; Paint and Delete are
-/// surfaced here so the placement can be reviewed before binding them to
-/// gesture handlers in `piano_roll_grid.dart`.
 class _ToolModeSegment extends ConsumerWidget {
   const _ToolModeSegment();
 
@@ -1033,11 +1307,15 @@ class _ToolModeSegment extends ConsumerWidget {
     final notifier = ref.read(pianoRollProvider.notifier);
 
     return Container(
-      height: 36,
+      height: StudioPalette.of(context).isStudio ? 44 : 36,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color:
+            (StudioPalette.of(context).isStudio
+                    ? StudioPalette.of(context).textPrimary
+                    : Colors.white)
+                .withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -1045,7 +1323,11 @@ class _ToolModeSegment extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (var i = 0; i < _entries.length; i++) ...[
-              if (i > 0) Container(width: 1, color: MuzicianTheme.glassBorder),
+              if (i > 0)
+                Container(
+                  width: 1,
+                  color: StudioPalette.of(context).glassBorder,
+                ),
               _ToolSegmentItem(
                 icon: _entries[i].$2,
                 label: _entries[i].$3,
@@ -1089,13 +1371,15 @@ class _ToolSegmentItem extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 44),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           color: active
-              ? MuzicianTheme.sky.withValues(alpha: 0.18)
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.18)
               : Colors.transparent,
           alignment: Alignment.center,
           child: Icon(
             icon,
             size: 16,
-            color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted,
+            color: active
+                ? StudioPalette.of(context).sky
+                : StudioPalette.of(context).textMuted,
           ),
         ),
       ),
@@ -1118,19 +1402,19 @@ class _QuickButton extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: MuzicianTheme.emerald.withValues(alpha: 0.14),
+          color: StudioPalette.of(context).emerald.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: MuzicianTheme.emerald.withValues(alpha: 0.35),
+            color: StudioPalette.of(context).emerald.withValues(alpha: 0.35),
           ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.content_paste_rounded,
               size: 14,
-              color: MuzicianTheme.emerald,
+              color: StudioPalette.of(context).emerald,
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -1141,7 +1425,7 @@ class _QuickButton extends ConsumerWidget {
                 softWrap: true,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: MuzicianTheme.emerald,
+                  color: StudioPalette.of(context).emerald,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1203,6 +1487,391 @@ class _QuickChip extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+const _studioTools = <(PianoRollTool, IconData, String)>[
+  (PianoRollTool.draw, Icons.edit_rounded, 'Draw'),
+  (PianoRollTool.select, Icons.select_all_rounded, 'Select'),
+  (PianoRollTool.scissors, Icons.content_cut_rounded, 'Split'),
+  (PianoRollTool.paint, Icons.brush_rounded, 'Paint'),
+  (PianoRollTool.delete, Icons.delete_outline_rounded, 'Delete'),
+];
+
+class _StudioToolRow extends ConsumerWidget {
+  const _StudioToolRow({this.trailing = const []});
+  final List<Widget> trailing;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(pianoRollProvider);
+    final p = StudioPalette.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 700;
+        return SingleChildScrollView(
+          key: const ValueKey('studio-roll-tools'),
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              for (final (tool, icon, label) in _studioTools)
+                SizedBox(
+                  width:
+                      compact &&
+                          MediaQuery.textScalerOf(context).scale(12) <= 13
+                      ? (state.activeTool == tool ? 88 : 44)
+                      : null,
+                  child: _StudioAction(
+                    key: ValueKey('studio-tool-${tool.name}'),
+                    label: label,
+                    icon: icon,
+                    showLabel: !compact || state.activeTool == tool,
+                    compact: compact,
+                    selected: state.activeTool == tool,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      ref.read(pianoRollProvider.notifier).setActiveTool(tool);
+                    },
+                  ),
+                ),
+              const SizedBox(width: 4),
+              SizedBox(
+                width:
+                    compact && MediaQuery.textScalerOf(context).scale(12) <= 13
+                    ? 84
+                    : null,
+                child: TextButton(
+                  key: const ValueKey('studio-roll-snap'),
+                  onPressed: () async {
+                    final snap = await showStudioDialog<int>(
+                      context: context,
+                      builder: (dialogContext) => SimpleDialog(
+                        title: Row(
+                          children: [
+                            const Expanded(child: Text('Snap')),
+                            IconButton(
+                              tooltip: 'Close Snap',
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                        children: [
+                          for (final ticks in _snapOptions)
+                            SimpleDialogOption(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(ticks),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 14,
+                              ),
+                              child: Text('${ticks}t'),
+                            ),
+                        ],
+                      ),
+                    );
+                    if (context.mounted && snap != null) {
+                      ref.read(pianoRollProvider.notifier).setSnapTicks(snap);
+                    }
+                  },
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(44, 44),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    foregroundColor: p.textPrimary,
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Snap ${state.snapTicks}t',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.expand_more_rounded, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              if (trailing.isNotEmpty) const SizedBox(width: 12),
+              ...trailing,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StudioAction extends StatelessWidget {
+  const _StudioAction({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.selected = false,
+    this.showLabel = true,
+    this.compact = false,
+    this.stacked = false,
+    this.compactLabel,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool selected;
+  final bool showLabel;
+  final bool compact;
+  final bool stacked;
+  final String? compactLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = StudioPalette.of(context);
+    final style = TextButton.styleFrom(
+      minimumSize: const Size(44, 44),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: selected ? p.onAccent : p.textSecondary,
+      backgroundColor: selected ? p.sky : Colors.transparent,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 10),
+      textStyle: TextStyle(fontSize: compact ? 12 : 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+    return Padding(
+      padding: EdgeInsets.only(right: compact ? 0 : 4),
+      child: Tooltip(
+        message: label,
+        child: Semantics(
+          label: showLabel ? null : label,
+          selected: selected,
+          child: TextButton(
+            onPressed: onTap,
+            style: style,
+            child: stacked
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 18),
+                      const SizedBox(height: 2),
+                      Text(
+                        compactLabel ?? label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 18),
+                      if (showLabel) ...[
+                        SizedBox(width: compact ? 4 : 8),
+                        Flexible(
+                          child: Text(
+                            compact ? compactLabel ?? label : label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StudioInspector extends ConsumerWidget {
+  const _StudioInspector({
+    required this.state,
+    required this.tab,
+    required this.expanded,
+    required this.onTab,
+    required this.onToggle,
+  });
+  final PianoRollState state;
+  final int tab;
+  final bool expanded;
+  final ValueChanged<int> onTab;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = StudioPalette.of(context);
+    return DecoratedBox(
+      key: const ValueKey('studio-roll-inspector'),
+      decoration: BoxDecoration(
+        color: p.dialogBg,
+        border: Border.all(color: p.glassBorder),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 100) {
+            return Align(
+              alignment: Alignment.topCenter,
+              child: IconButton(
+                tooltip: 'Expand inspector',
+                onPressed: onToggle,
+                icon: const Icon(Icons.tune_rounded),
+              ),
+            );
+          }
+          return Column(
+            children: [
+              SizedBox(
+                height: 46,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final (i, label) in [
+                              'Stack Builder',
+                              'Selection',
+                              'Tools',
+                            ].indexed)
+                              TextButton(
+                                key: ValueKey('studio-inspector-$i'),
+                                onPressed: () => onTab(i),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: tab == i
+                                      ? p.sky
+                                      : p.textSecondary,
+                                  minimumSize: const Size(44, 44),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  shape: const RoundedRectangleBorder(),
+                                  textStyle: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: tab == i
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: tab == i
+                                            ? p.sky
+                                            : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(label),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: expanded
+                          ? 'Collapse inspector'
+                          : 'Expand inspector',
+                      onPressed: onToggle,
+                      icon: Icon(
+                        expanded ? Icons.expand_more : Icons.expand_less,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (expanded) ...[
+                Divider(height: 1, color: p.glassBorder),
+                Expanded(
+                  child: IndexedStack(
+                    index: tab,
+                    children: [
+                      const PianoRollStackBuilder(),
+                      SingleChildScrollView(
+                        key: const ValueKey('studio-roll-selection'),
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _SelectionStatus(state: state),
+                            Text(
+                              state.selectedColumnTick == null
+                                  ? 'Tap the ruler to choose a time column. Use Select to choose notes.'
+                                  : 'Column ${transport.tickToBarBeatDisplay(state.selectedColumnTick, state.config.timeSignature)}',
+                              style: TextStyle(
+                                color: p.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: [
+                                _StudioAction(
+                                  label: 'Select column',
+                                  icon: Icons.select_all_rounded,
+                                  onTap: state.selectedColumnTick == null
+                                      ? null
+                                      : () => ref
+                                            .read(pianoRollProvider.notifier)
+                                            .selectNotesAtTick(
+                                              state.selectedColumnTick!,
+                                            ),
+                                ),
+                                _StudioAction(
+                                  label: 'Clear selection',
+                                  icon: Icons.deselect_rounded,
+                                  onTap: state.selectedNoteIds.isEmpty
+                                      ? null
+                                      : ref
+                                            .read(pianoRollProvider.notifier)
+                                            .clearSelection,
+                                ),
+                                _StudioAction(
+                                  label: 'Delete selection',
+                                  icon: Icons.delete_outline_rounded,
+                                  onTap: state.selectedNoteIds.isEmpty
+                                      ? null
+                                      : ref
+                                            .read(pianoRollProvider.notifier)
+                                            .deleteSelectedNotes,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const PianoRollDetectionPanel(),
+                          ],
+                        ),
+                      ),
+                      SingleChildScrollView(
+                        key: const ValueKey('studio-roll-edit-pitch'),
+                        padding: const EdgeInsets.all(12),
+                        child: _EditPitchControls(state: state),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }

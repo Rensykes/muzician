@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/project_config.dart';
 import '../../models/save_system.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../../store/settings_store.dart';
 import '../../store/save_system_store.dart';
@@ -43,6 +43,135 @@ class SongwriterHeader extends ConsumerWidget {
         ? 'No key'
         : '${formatRootChoiceLabel(chromaticNotes[config.keyRoot!], spelling: spelling)} ${config.keyScaleName ?? ''}'
               .trim();
+    if (StudioPalette.of(context).isStudio) {
+      final palette = StudioPalette.of(context);
+      final notifier = ref.read(songwriterProvider.notifier);
+      final selectedProjectId = ref.watch(
+        saveSystemProvider.select((state) => state.selectedProjectId),
+      );
+      final hasNamedVersion =
+          ref
+              .watch(writerSaveBindingProvider)[selectedProjectId]
+              ?.activeSaveId !=
+          null;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Tooltip(
+                    message: project.name,
+                    child: InkWell(
+                      onTap: () => _editProjectName(context, ref, project.name),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            project.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: palette.textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: dirty && hasNamedVersion
+                      ? 'Draft is saved automatically. Changes differ from the named Writer version.'
+                      : 'Draft is saved automatically. Save version creates or updates a named Writer version.',
+                  child: Text(
+                    dirty && hasNamedVersion ? 'Draft changed' : 'Draft',
+                    key: dirty ? const Key('writerUnsavedBadge') : null,
+                    style: TextStyle(
+                      color: dirty && hasNamedVersion
+                          ? palette.orange
+                          : palette.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                if (onStartTour != null)
+                  IconButton(
+                    key: const Key('writerHelpButton'),
+                    tooltip: 'Writer help',
+                    onPressed: onStartTour,
+                    icon: const Icon(Icons.help_outline_rounded, size: 19),
+                  ),
+                _WriterMenuButton(
+                  onPressed: () => _showOverflowMenu(context, ref),
+                ),
+              ],
+            ),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                Text(
+                  'Writer',
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (onSave != null)
+                      OutlinedButton(
+                        key: const Key('writerSaveButton'),
+                        onPressed: onSave,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                        child: const Text('Save version'),
+                      ),
+                    IconButton(
+                      key: const Key('writerUndoButton'),
+                      tooltip: 'Undo',
+                      onPressed: notifier.canUndo ? notifier.undo : null,
+                      icon: const Icon(Icons.undo_rounded, size: 20),
+                    ),
+                    IconButton(
+                      key: const Key('writerRedoButton'),
+                      tooltip: 'Redo',
+                      onPressed: notifier.canRedo ? notifier.redo : null,
+                      icon: const Icon(Icons.redo_rounded, size: 20),
+                    ),
+                    IconButton(
+                      key: const Key('writerVersionsButton'),
+                      tooltip: 'Writer versions',
+                      onPressed: onOpenSaveLoad,
+                      icon: const Icon(Icons.folder_open_rounded, size: 20),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            _WriterConfigStrip(
+              keyLabel: keyLabel,
+              tempo: config.tempo,
+              onKeyTap: () => _editKey(context, ref),
+              onTempoTap: () => _editTempo(context, ref),
+            ),
+          ],
+        ),
+      );
+    }
     // Landscape phones are height-starved: drop the title row and reach the
     // overflow menu from a trailing button on the config strip instead.
     final compact = MediaQuery.sizeOf(context).height < 500;
@@ -67,10 +196,10 @@ class SongwriterHeader extends ConsumerWidget {
                     children: [
                       GestureDetector(
                         onTap: () => _showOverflowMenu(context, ref),
-                        child: const Text(
+                        child: Text(
                           'Writer',
                           style: TextStyle(
-                            color: MuzicianTheme.textPrimary,
+                            color: StudioPalette.of(context).textPrimary,
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.3,
@@ -87,8 +216,8 @@ class SongwriterHeader extends ConsumerWidget {
                           ),
                           child: Text(
                             project.name,
-                            style: const TextStyle(
-                              color: MuzicianTheme.textMuted,
+                            style: TextStyle(
+                              color: StudioPalette.of(context).textMuted,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -105,24 +234,28 @@ class SongwriterHeader extends ConsumerWidget {
                             child: Container(
                               key: const Key('writerUnsavedBadge'),
                               child: narrow
-                                  ? const Icon(
+                                  ? Icon(
                                       Icons.circle,
                                       size: 8,
-                                      color: MuzicianTheme.orange,
+                                      color: StudioPalette.of(context).orange,
                                     )
                                   : Row(
                                       mainAxisSize: MainAxisSize.min,
-                                      children: const [
+                                      children: [
                                         Icon(
                                           Icons.circle,
                                           size: 8,
-                                          color: MuzicianTheme.orange,
+                                          color: StudioPalette.of(
+                                            context,
+                                          ).orange,
                                         ),
                                         SizedBox(width: 4),
                                         Text(
                                           'Unsaved',
                                           style: TextStyle(
-                                            color: MuzicianTheme.orange,
+                                            color: StudioPalette.of(
+                                              context,
+                                            ).orange,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -137,8 +270,8 @@ class SongwriterHeader extends ConsumerWidget {
                           key: const Key('writerSaveButton'),
                           icon: Icons.save_rounded,
                           color: dirty
-                              ? MuzicianTheme.orange
-                              : MuzicianTheme.textDim,
+                              ? StudioPalette.of(context).orange
+                              : StudioPalette.of(context).textDim,
                           onTap: onSave!,
                         ),
                       if (onStartTour != null)
@@ -175,97 +308,124 @@ class SongwriterHeader extends ConsumerWidget {
     sheetClosed = showWidgetSheet(
       context: context,
       title: 'Writer',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: MuzicianTheme.sky.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: MuzicianTheme.sky.withValues(alpha: 0.2),
+      child: Builder(
+        builder: (sheetContext) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: StudioPalette.of(
+                  sheetContext,
+                ).sky.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: StudioPalette.of(
+                    sheetContext,
+                  ).sky.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Text(
+                'Sketch sections with chords and lyrics. Send a Fretboard or Piano selection to place it in a Writer bar.',
+                style: TextStyle(
+                  color: StudioPalette.of(sheetContext).textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
               ),
             ),
-            child: const Text(
-              'Sketch sections with chords and lyrics. Send a Fretboard or Piano selection to place it in a Writer bar.',
-              style: TextStyle(
-                color: MuzicianTheme.textSecondary,
-                fontSize: 13,
-                height: 1.4,
-              ),
+            _MenuTile(
+              key: const Key('writerMenuTile_new_project'),
+              icon: Icons.add_box_outlined,
+              label: 'New project',
+              keyboardAccessible: true,
+              onTap: () {
+                Navigator.pop(context);
+                unawaited(
+                  sheetClosed.then((_) async {
+                    if (!context.mounted) return;
+                    await showWriterProjectCreationFlow(context, ref);
+                  }),
+                );
+              },
             ),
-          ),
-          _MenuTile(
-            key: const Key('writerMenuTile_new_project'),
-            icon: Icons.add_box_outlined,
-            label: 'New project',
-            keyboardAccessible: true,
-            onTap: () {
-              Navigator.pop(context);
-              unawaited(
-                sheetClosed.then((_) async {
-                  if (!context.mounted) return;
-                  await showWriterProjectCreationFlow(context, ref);
-                }),
-              );
-            },
-          ),
-          _MenuTile(
-            icon: Icons.undo_rounded,
-            label: 'Undo',
-            enabled: notifier.canUndo,
-            keyboardAccessible: true,
-            onTap: () {
-              Navigator.pop(context);
-              notifier.undo();
-            },
-          ),
-          _MenuTile(
-            icon: Icons.redo_rounded,
-            label: 'Redo',
-            enabled: notifier.canRedo,
-            keyboardAccessible: true,
-            onTap: () {
-              Navigator.pop(context);
-              notifier.redo();
-            },
-          ),
-          _MenuTile(
-            icon: Icons.save_rounded,
-            label: 'Save',
-            onTap: () {
-              Navigator.pop(context);
-              onSave?.call();
-            },
-          ),
-          _MenuTile(
-            icon: Icons.folder_open_rounded,
-            label: 'Browse saves',
-            onTap: () {
-              Navigator.pop(context);
-              onOpenSaveLoad?.call();
-            },
-          ),
-          _MenuTile(
-            icon: Icons.account_tree_rounded,
-            label: 'Edit structure',
-            onTap: () {
-              Navigator.pop(context);
-              onOpenStructure?.call();
-            },
-          ),
-          _MenuTile(
-            icon: Icons.edit_rounded,
-            label: 'Rename project',
-            onTap: () {
-              Navigator.pop(context);
-              _editProjectName(context, ref, ref.read(songwriterProvider).name);
-            },
-          ),
-        ],
+            _MenuTile(
+              icon: Icons.undo_rounded,
+              label: 'Undo',
+              enabled: notifier.canUndo,
+              keyboardAccessible: true,
+              onTap: () {
+                Navigator.pop(context);
+                notifier.undo();
+              },
+            ),
+            _MenuTile(
+              icon: Icons.redo_rounded,
+              label: 'Redo',
+              enabled: notifier.canRedo,
+              keyboardAccessible: true,
+              onTap: () {
+                Navigator.pop(context);
+                notifier.redo();
+              },
+            ),
+            _MenuTile(
+              icon: Icons.save_rounded,
+              label: StudioPalette.of(sheetContext).isStudio
+                  ? 'Save version'
+                  : 'Save',
+              onTap: () {
+                Navigator.pop(context);
+                onSave?.call();
+              },
+            ),
+            _MenuTile(
+              icon: Icons.folder_open_rounded,
+              label: StudioPalette.of(sheetContext).isStudio
+                  ? 'Writer versions'
+                  : 'Browse saves',
+              onTap: () {
+                Navigator.pop(context);
+                onOpenSaveLoad?.call();
+              },
+            ),
+            _MenuTile(
+              icon: Icons.account_tree_rounded,
+              label: 'Edit structure',
+              onTap: () {
+                Navigator.pop(context);
+                onOpenStructure?.call();
+              },
+            ),
+            if (onStartTour != null)
+              _MenuTile(
+                icon: Icons.help_outline_rounded,
+                label: 'Writer help',
+                onTap: () {
+                  Navigator.pop(context);
+                  unawaited(
+                    sheetClosed.then((_) {
+                      onStartTour?.call();
+                    }),
+                  );
+                },
+              ),
+            _MenuTile(
+              icon: Icons.edit_rounded,
+              label: 'Rename project',
+              onTap: () {
+                Navigator.pop(context);
+                _editProjectName(
+                  context,
+                  ref,
+                  ref.read(songwriterProvider).name,
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -350,15 +510,70 @@ class _WriterConfigStrip extends ConsumerWidget {
     final metronomeOn = ref.watch(
       settingsProvider.select((s) => s.metronomeEnabled),
     );
+    if (StudioPalette.of(context).isStudio) {
+      final palette = StudioPalette.of(context);
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.surface,
+          border: Border.all(color: palette.glassBorder),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 4,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: _ConfigReadout(
+                  label: 'KEY',
+                  value: keyLabel,
+                  onTap: onKeyTap,
+                ),
+              ),
+              _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
+              IconButton(
+                key: const Key('songwriterPlay'),
+                tooltip: playing ? 'Stop Writer' : 'Play Writer',
+                icon: Icon(
+                  playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                ),
+                onPressed: () {
+                  final transport = ref.read(
+                    songwriterPlaybackProvider.notifier,
+                  );
+                  if (playing) {
+                    transport.stopPlayback();
+                  } else {
+                    transport.startPlayback(
+                      startTick: ref.read(songwriterStartTickProvider),
+                    );
+                  }
+                },
+              ),
+              IconButton(
+                tooltip: metronomeOn ? 'Metronome on' : 'Metronome off',
+                icon: Icon(metronomeOn ? Icons.music_note : Icons.music_off),
+                color: metronomeOn ? palette.sky : palette.textSecondary,
+                onPressed: () => ref
+                    .read(settingsProvider.notifier)
+                    .setMetronomeEnabled(!metronomeOn),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Container(
-        height: 56,
+        constraints: const BoxConstraints(minHeight: 56),
         padding: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          color: MuzicianTheme.glassBg,
+          color: StudioPalette.of(context).glassBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
         ),
         child: Row(
           children: [
@@ -369,9 +584,9 @@ class _WriterConfigStrip extends ConsumerWidget {
                 onTap: onKeyTap,
               ),
             ),
-            _stripDivider(),
+            _stripDivider(context),
             _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
-            _stripDivider(),
+            _stripDivider(context),
             IconBtn(
               key: const Key('songwriterPlay'),
               icon: playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
@@ -405,8 +620,11 @@ class _WriterConfigStrip extends ConsumerWidget {
     );
   }
 
-  static Widget _stripDivider() =>
-      Container(width: 1, height: 24, color: MuzicianTheme.glassBorder);
+  static Widget _stripDivider(BuildContext context) => Container(
+    width: 1,
+    height: 24,
+    color: StudioPalette.of(context).glassBorder,
+  );
 }
 
 class _WriterMenuButton extends StatelessWidget {
@@ -442,6 +660,34 @@ class _ConfigReadout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (StudioPalette.of(context).isStudio) {
+      return Semantics(
+        button: true,
+        label: '$label $value',
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  label == 'BPM' ? '$value BPM' : value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -455,8 +701,8 @@ class _ConfigReadout extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.8,
@@ -467,8 +713,8 @@ class _ConfigReadout extends StatelessWidget {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
+              style: TextStyle(
+                color: StudioPalette.of(context).textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -482,31 +728,30 @@ class _ConfigReadout extends StatelessWidget {
 
 void _editProjectName(BuildContext context, WidgetRef ref, String current) {
   final controller = TextEditingController(text: current);
-  showDialog<void>(
+  showStudioDialog<void>(
     context: context,
-    builder: (dialogCtx) => MuzicianDialog(
+    builder: (context) => MuzicianDialog(
       title: 'Project name',
       content: TextField(
         key: const Key('projectNameField'),
         controller: controller,
         autofocus: true,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        style: TextStyle(color: StudioPalette.of(context).textPrimary),
         decoration: InputDecoration(
           labelText: 'Name',
-          labelStyle: const TextStyle(color: MuzicianTheme.textMuted),
+          labelStyle: TextStyle(color: StudioPalette.of(context).textMuted),
           enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: MuzicianTheme.glassBorder),
+            borderSide: BorderSide(
+              color: StudioPalette.of(context).glassBorder,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: MuzicianTheme.sky),
+            borderSide: BorderSide(color: StudioPalette.of(context).sky),
           ),
         ),
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(dialogCtx),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(context)),
         MuzicianDialogButton(
           'Save',
           emphasis: MuzicianDialogEmphasis.primary,
@@ -514,7 +759,7 @@ void _editProjectName(BuildContext context, WidgetRef ref, String current) {
             ref
                 .read(songwriterProvider.notifier)
                 .setProjectName(controller.text);
-            Navigator.pop(dialogCtx);
+            Navigator.pop(context);
           },
         ),
       ],
@@ -574,8 +819,8 @@ class _KeySheet extends ConsumerWidget {
               scale.isEmpty
                   ? scale
                   : scale[0].toUpperCase() + scale.substring(1),
-              style: const TextStyle(
-                color: MuzicianTheme.textSecondary,
+              style: TextStyle(
+                color: StudioPalette.of(context).textSecondary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -624,14 +869,14 @@ class _GlassPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
+          color: StudioPalette.of(context).textPrimary.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: MuzicianTheme.textPrimary,
+          style: TextStyle(
+            color: StudioPalette.of(context).textPrimary,
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
@@ -652,8 +897,8 @@ class _GlassTextButton extends StatelessWidget {
       onTap: onTap,
       child: Text(
         label,
-        style: const TextStyle(
-          color: MuzicianTheme.textSecondary,
+        style: TextStyle(
+          color: StudioPalette.of(context).textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
@@ -695,11 +940,15 @@ class _MenuTileState extends State<_MenuTile> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: _showFocusHighlight
-              ? MuzicianTheme.sky.withValues(alpha: 0.08)
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.08)
               : null,
           border: _showFocusHighlight
-              ? Border.all(color: MuzicianTheme.sky, width: 1.5)
-              : Border(bottom: BorderSide(color: MuzicianTheme.glassBorder)),
+              ? Border.all(color: StudioPalette.of(context).sky, width: 1.5)
+              : Border(
+                  bottom: BorderSide(
+                    color: StudioPalette.of(context).glassBorder,
+                  ),
+                ),
         ),
         child: Row(
           children: [
@@ -707,16 +956,16 @@ class _MenuTileState extends State<_MenuTile> {
               widget.icon,
               size: 20,
               color: widget.enabled
-                  ? MuzicianTheme.textSecondary
-                  : MuzicianTheme.textDim,
+                  ? StudioPalette.of(context).textSecondary
+                  : StudioPalette.of(context).textDim,
             ),
             const SizedBox(width: 14),
             Text(
               widget.label,
               style: TextStyle(
                 color: widget.enabled
-                    ? MuzicianTheme.textPrimary
-                    : MuzicianTheme.textDim,
+                    ? StudioPalette.of(context).textPrimary
+                    : StudioPalette.of(context).textDim,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),

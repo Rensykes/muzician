@@ -1,14 +1,14 @@
 /// Shared modal dialog primitives for Muzician.
 ///
 /// [MuzicianDialog] is a thin wrapper over [AlertDialog] that inherits its
-/// surface, shape and text styles from [MuzicianTheme]'s [DialogThemeData], so
-/// callers only supply a title, content and actions and get a consistent glass
+/// surface, shape and text styles from the current [DialogThemeData], so
+/// callers only supply a title, content and actions and get a consistent scoped
 /// dialog. [MuzicianDialogButton] and [MuzicianDialogCheckbox] cover the action
 /// and "don't ask again" rows that previously diverged across the codebase.
 library;
 
 import 'package:flutter/material.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 /// Visual weight for a [MuzicianDialogButton].
 enum MuzicianDialogEmphasis {
@@ -22,7 +22,7 @@ enum MuzicianDialogEmphasis {
   destructive,
 }
 
-/// A glass modal dialog. Pulls background, border, radius and the title/content
+/// A palette-aware modal dialog. Pulls background, border, radius and the title/content
 /// text styles from the app [DialogThemeData]; supply only [title]/[content]/
 /// [actions].
 class MuzicianDialog extends StatelessWidget {
@@ -86,14 +86,20 @@ class MuzicianDialogButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final (Color base, FontWeight weight) = switch (emphasis) {
       MuzicianDialogEmphasis.normal => (
-        MuzicianTheme.textSecondary,
+        StudioPalette.of(context).textSecondary,
         FontWeight.w500,
       ),
-      MuzicianDialogEmphasis.primary => (MuzicianTheme.sky, FontWeight.w700),
-      MuzicianDialogEmphasis.destructive => (MuzicianTheme.red, FontWeight.w700),
+      MuzicianDialogEmphasis.primary => (
+        StudioPalette.of(context).sky,
+        FontWeight.w700,
+      ),
+      MuzicianDialogEmphasis.destructive => (
+        StudioPalette.of(context).red,
+        FontWeight.w700,
+      ),
     };
     final resolved = onPressed == null
-        ? MuzicianTheme.textDim
+        ? StudioPalette.of(context).textDim
         : (color ?? base);
     return TextButton(
       key: buttonKey,
@@ -127,38 +133,51 @@ class MuzicianDialogCheckbox extends StatelessWidget {
       key: checkboxKey,
       behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
-      child: Row(
-        children: [
-          Container(
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              color: value
-                  ? MuzicianTheme.sky.withValues(alpha: 0.2)
-                  : Colors.white.withValues(alpha: 0.04),
-              border: Border.all(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
                 color: value
-                    ? MuzicianTheme.sky
-                    : Colors.white.withValues(alpha: 0.2),
-                width: 1,
+                    ? StudioPalette.of(context).sky.withValues(alpha: 0.2)
+                    : (StudioPalette.of(context).isStudio
+                          ? StudioPalette.of(context).glassBg
+                          : Colors.white.withValues(alpha: 0.04)),
+                border: Border.all(
+                  color: value
+                      ? StudioPalette.of(context).sky
+                      : StudioPalette.of(context).isStudio
+                      ? StudioPalette.of(context).textMuted
+                      : Colors.white.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+              child: value
+                  ? Icon(
+                      Icons.check,
+                      size: 12,
+                      color: StudioPalette.of(context).sky,
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
+                  fontSize: 12,
+                ),
               ),
             ),
-            child: value
-                ? const Icon(Icons.check, size: 12, color: MuzicianTheme.sky)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: MuzicianTheme.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

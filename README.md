@@ -20,15 +20,19 @@ Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESI
 
 ## Features
 
+The bottom navigation is labeled **Fretboard**, **Piano**, **Roll**, **Song**, **Writer**, and **Settings**. Save System is a shared project feature rather than a bottom-navigation destination.
+
+Fretboard and Piano inspectors fit their content: Notes scrolls with the workspace, and Setup groups configuration controls above a secondary Clear all selections action.
+
 | Feature | Description | Docs |
 |---|---|---|
-| **Fretboard** | Guitar exploration with tunings, capo, saved Free/Chord mode, shared project key, scrollable compact layouts, and Chord-only Writer Harmony handoff | [docs/fretboard.md](docs/fretboard.md) |
-| **Piano** | Piano keyboard (49 / 61 / 88 keys), shared project key, scrollable compact layouts, and reusable Writer Harmony from recognized chords or exact notes | [docs/piano.md](docs/piano.md) |
-| **Piano Roll** | Quantized timeline note editor with four tool modes, pinch-zoom, beat snapping, hum-to-MIDI, metronome | [docs/piano_roll.md](docs/piano_roll.md) |
-| **Writer** | Section sketch with recognized or named exact Harmony, shared Saves and Change/Replace actions; exclusive Guitar Harmony strum sources/previews; reusable melodies with saved instrument positions; confirmed project key changes, New project in the main menu, playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Fretboard** | Studio guitar workspace with a compact Notes / Voicings / Setup inspector, tuning and capo, Scale and Library shortcuts, Save idea, and Chord-only Writer Harmony handoff | [docs/fretboard.md](docs/fretboard.md) |
+| **Piano** | Studio piano workspace with a compact Notes / Voicings / Setup inspector, 49 / 61 / 88-key ranges, Scale and Library shortcuts, Save idea, and recognized or exact-note Writer Harmony | [docs/piano.md](docs/piano.md) |
+| **Piano Roll** | Studio timeline editor (navigation label **Roll**) with all five tools, a Stack Builder / Selection / Tools inspector, Quick, snap and range controls, and the mobile **Hum recorder** | [docs/piano_roll.md](docs/piano_roll.md) |
+| **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; contextual Harmony and lane editing, source-bound Guitar Strum, reusable melodies, playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Song** | Clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
-| **Settings** | Persistent Sharps/Flats spelling shared by musical labels across instruments and workspaces, retaining pitches and custom names | [docs/save_system.md](docs/save_system.md) |
+| **Settings** | Device-local Studio / Studio Muzician appearance and persistent Sharps/Flats spelling for musical labels, retaining pitches and custom names | [docs/save_system.md](docs/save_system.md) |
 
 ## Project Structure
 
@@ -36,7 +40,8 @@ Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESI
 lib/
   main.dart                   ← App shell, tab navigation, screen layouts
   theme/
-    muzician_theme.dart       ← Colours, gradients, glassmorphism helpers
+    studio_theme.dart         ← Immutable Studio palettes and semantic UI colors
+    muzician_theme.dart       ← Legacy palette retained for Song and compatibility views
   models/                     ← Immutable data types
   schema/rules/               ← Validation, music math, default state factories
   store/                      ← Riverpod providers and project-scoped undo history
@@ -77,6 +82,8 @@ docs/
 - **Out-of-key confirmation:** When a scale highlight is active and the user tries to add a note that falls outside the highlighted scale, the app shows an "out-of-key" confirmation dialog (with a "Don't show again" option). See [lib/ui/core/out_of_key_dialog.dart](lib/ui/core/out_of_key_dialog.dart).
 
 - **View modes:** Both fretboard and piano support `exact` (note name only) and `exactFocus` (note name with focus highlighting) display modes. See [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
+
+- **Appearance:** Settings → **Appearance** switches between **Studio** (default graphite / mint) and **Studio Muzician** (night / sky / teal / violet). The choice is saved on this device and applies to Fretboard, Piano, Piano Roll, Writer, and shared panels. Song remains on its existing layout and palette in this redesign.
 
 
 ## Running the App

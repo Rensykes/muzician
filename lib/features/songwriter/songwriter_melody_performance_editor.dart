@@ -16,7 +16,7 @@ import '../../store/fretboard_store.dart';
 import '../../store/piano_store.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart' show NoteSpelling, formatMidiNoteLabel;
 import '../fretboard/fretboard.dart';
 import '../piano/piano_keyboard.dart';
@@ -28,7 +28,10 @@ Future<void> showSongwriterMelodyPerformanceEditor({
 }) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) => SongwriterMelodyPerformanceEditor(patternId: patternId),
+    builder: StudioRouteTheme.builder(
+      context,
+      (_) => SongwriterMelodyPerformanceEditor(patternId: patternId),
+    ),
   ),
 );
 
@@ -145,9 +148,9 @@ class _SongwriterMelodyPerformanceEditorState
     }
 
     return Scaffold(
-      backgroundColor: MuzicianTheme.surface,
+      backgroundColor: StudioPalette.of(context).surface,
       appBar: AppBar(
-        backgroundColor: MuzicianTheme.surface,
+        backgroundColor: StudioPalette.of(context).surface,
         title: Text('${pattern.name} performance'),
         leading: IconButton(
           tooltip: 'Close performance editor',
@@ -159,10 +162,10 @@ class _SongwriterMelodyPerformanceEditorState
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: [
-            const Text(
+            Text(
               'Play this pattern on',
               style: TextStyle(
-                color: MuzicianTheme.textSecondary,
+                color: StudioPalette.of(context).textSecondary,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -209,8 +212,8 @@ class _SongwriterMelodyPerformanceEditorState
                 HarmonyLaneInstrument.piano) ...[
               Text(
                 'MIDI keys in ${pianoRanges[pianoState.currentRange]!.displayName}',
-                style: const TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -245,8 +248,8 @@ class _SongwriterMelodyPerformanceEditorState
               Text(
                 'Tap a blue matching note position to move the selected note. '
                 'Green markers show saved positions.',
-                style: const TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -298,8 +301,8 @@ class _SongwriterMelodyPerformanceEditorState
                 const SizedBox(height: 8),
                 Text(
                   'Valid positions for ${formatMidiNoteLabel(selectedNote.midiNote, spelling: spelling)}',
-                  style: const TextStyle(
-                    color: MuzicianTheme.textSecondary,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
@@ -448,16 +451,16 @@ class _TargetButton extends StatelessWidget {
         label: Text(label),
         style: OutlinedButton.styleFrom(
           foregroundColor: selected
-              ? MuzicianTheme.sky
-              : MuzicianTheme.textSecondary,
+              ? StudioPalette.of(context).sky
+              : StudioPalette.of(context).textSecondary,
           side: BorderSide(
             color: selected
-                ? MuzicianTheme.sky.withValues(alpha: 0.65)
-                : Colors.white.withValues(alpha: 0.12),
+                ? StudioPalette.of(context).sky.withValues(alpha: 0.65)
+                : StudioPalette.of(context).textPrimary.withValues(alpha: 0.12),
           ),
           backgroundColor: selected
-              ? MuzicianTheme.sky.withValues(alpha: 0.1)
-              : Colors.white.withValues(alpha: 0.025),
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.1)
+              : StudioPalette.of(context).textPrimary.withValues(alpha: 0.025),
         ),
       ),
     ),
@@ -479,15 +482,18 @@ class _UnavailableInstrumentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-    color: const Color(0xFF251B21),
+    color: StudioPalette.of(context).red.withValues(alpha: .10),
     child: Padding(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: MuzicianTheme.red),
+              Icon(
+                Icons.warning_amber_rounded,
+                color: StudioPalette.of(context).red,
+              ),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -501,7 +507,7 @@ class _UnavailableInstrumentCard extends StatelessWidget {
           Text(
             '${instrument == HarmonyLaneInstrument.piano ? 'Piano' : 'Fretboard'} '
             'view is unavailable for: ${notes.map((note) => formatMidiNoteLabel(note.midiNote, spelling: spelling)).join(', ')}.',
-            style: const TextStyle(color: MuzicianTheme.textSecondary),
+            style: TextStyle(color: StudioPalette.of(context).textSecondary),
           ),
           const SizedBox(height: 8),
           Align(
@@ -564,10 +570,10 @@ class _PatternNoteList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Pattern notes',
           style: TextStyle(
-            color: MuzicianTheme.textSecondary,
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -630,8 +636,8 @@ class _PatternNoteRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
         color: selected
-            ? MuzicianTheme.sky.withValues(alpha: 0.1)
-            : Colors.white.withValues(alpha: 0.025),
+            ? StudioPalette.of(context).sky.withValues(alpha: 0.1)
+            : StudioPalette.of(context).textPrimary.withValues(alpha: 0.025),
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -656,15 +662,17 @@ class _PatternNoteRow extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: selected
-                              ? MuzicianTheme.sky
-                              : Colors.white.withValues(alpha: 0.08),
+                              ? StudioPalette.of(context).sky
+                              : StudioPalette.of(
+                                  context,
+                                ).textPrimary.withValues(alpha: 0.08),
                         ),
                         child: Text(
                           '${index + 1}',
                           style: TextStyle(
                             color: selected
-                                ? MuzicianTheme.scaffoldBg
-                                : MuzicianTheme.textSecondary,
+                                ? StudioPalette.of(context).scaffoldBg
+                                : StudioPalette.of(context).textSecondary,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -688,8 +696,8 @@ class _PatternNoteRow extends StatelessWidget {
                                 performance.instrument ==
                                         HarmonyLaneInstrument.piano ||
                                     validPosition
-                                ? MuzicianTheme.textSecondary
-                                : MuzicianTheme.orange,
+                                ? StudioPalette.of(context).textSecondary
+                                : StudioPalette.of(context).orange,
                             fontSize: 11,
                           ),
                         ),
@@ -739,16 +747,18 @@ class _PositionChip extends StatelessWidget {
         label: Text(label),
         onPressed: onPressed,
         labelStyle: TextStyle(
-          color: selected ? MuzicianTheme.sky : MuzicianTheme.textPrimary,
+          color: selected
+              ? StudioPalette.of(context).sky
+              : StudioPalette.of(context).textPrimary,
           fontSize: 12,
         ),
         backgroundColor: selected
-            ? MuzicianTheme.sky.withValues(alpha: 0.12)
-            : Colors.white.withValues(alpha: 0.04),
+            ? StudioPalette.of(context).sky.withValues(alpha: 0.12)
+            : StudioPalette.of(context).textPrimary.withValues(alpha: 0.04),
         side: BorderSide(
           color: selected
-              ? MuzicianTheme.sky.withValues(alpha: 0.55)
-              : Colors.white.withValues(alpha: 0.12),
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.55)
+              : StudioPalette.of(context).textPrimary.withValues(alpha: 0.12),
         ),
         materialTapTargetSize: MaterialTapTargetSize.padded,
       ),
@@ -766,19 +776,21 @@ class _InstructionCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.035),
+      color: StudioPalette.of(context).textPrimary.withValues(alpha: 0.035),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      border: Border.all(
+        color: StudioPalette.of(context).textPrimary.withValues(alpha: 0.08),
+      ),
     ),
     child: Row(
       children: [
-        Icon(icon, color: MuzicianTheme.sky, size: 18),
+        Icon(icon, color: StudioPalette.of(context).sky, size: 18),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
+            style: TextStyle(
+              color: StudioPalette.of(context).textSecondary,
               fontSize: 12,
             ),
           ),

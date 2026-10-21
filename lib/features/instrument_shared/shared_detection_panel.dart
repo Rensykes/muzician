@@ -18,7 +18,7 @@ import '../../schema/rules/songwriter_rules.dart'
 import '../../store/project_config_sync.dart';
 import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/core/update_project_key_dialog.dart';
 import '../../utils/note_utils.dart';
@@ -30,11 +30,15 @@ class SharedDetectionPanel extends ConsumerStatefulWidget {
   final VoidCallback? onChordPanelRequested;
   final VoidCallback? onHandoffCompleted;
 
+  /// Lets the enclosing workspace own vertical scrolling and content height.
+  final bool embedded;
+
   const SharedDetectionPanel({
     super.key,
     required this.binding,
     this.onChordPanelRequested,
     this.onHandoffCompleted,
+    this.embedded = false,
   });
 
   @override
@@ -116,6 +120,12 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
       reverseDuration: const Duration(milliseconds: 220),
+      layoutBuilder: widget.embedded
+          ? (child, previous) => Stack(
+              alignment: Alignment.topLeft,
+              children: [...previous, ?child],
+            )
+          : AnimatedSwitcher.defaultLayoutBuilder,
       transitionBuilder: (child, animation) {
         final slide =
             Tween<Offset>(
@@ -130,7 +140,7 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
         );
       },
       child: hasNotes
-          ? SingleChildScrollView(
+          ? _content(
               key: const ValueKey(true),
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
               child: Column(
@@ -140,60 +150,44 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                   // Header
                   Row(
                     children: [
-                      const Text(
-                        'DETECTION',
-                        style: TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
+                      Expanded(
+                        child: Text(
+                          'DETECTION',
+                          style: TextStyle(
+                            color: StudioPalette.of(context).textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () => actions.clearSelectedNotes(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.white.withValues(alpha: 0.06),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.12),
-                              width: 0.5,
-                            ),
-                          ),
-                          child: const Text(
-                            'Clear',
-                            style: TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+
+                      TextButton(
+                        onPressed: () => actions.clearSelectedNotes(),
+                        child: const Text('Clear'),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   // Selected notes chips
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         'Notes',
                         style: TextStyle(
-                          color: Color(0xFF64748B),
+                          color: StudioPalette.of(context).textMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Text(
+                      Text(
                         'tap to focus',
                         style: TextStyle(
-                          color: Color(0xFF334155),
+                          color: StudioPalette.of(context).textMuted,
                           fontSize: 10,
                           fontStyle: FontStyle.italic,
                         ),
@@ -212,6 +206,11 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                             actions.toggleFocusedNote(note);
                           },
                           child: Container(
+                            constraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 44,
+                            ),
+                            alignment: Alignment.center,
                             margin: const EdgeInsets.only(right: 6),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 11,
@@ -220,12 +219,14 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
                               color: isFocused
-                                  ? MuzicianTheme.sky
-                                  : MuzicianTheme.sky.withValues(alpha: 0.15),
+                                  ? StudioPalette.of(context).sky
+                                  : StudioPalette.of(
+                                      context,
+                                    ).sky.withValues(alpha: 0.15),
                               border: Border.all(
-                                color: MuzicianTheme.sky.withValues(
-                                  alpha: 0.65,
-                                ),
+                                color: StudioPalette.of(
+                                  context,
+                                ).sky.withValues(alpha: 0.65),
                                 width: 1,
                               ),
                             ),
@@ -233,8 +234,8 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                               formatRootChoiceLabel(note, spelling: spelling),
                               style: TextStyle(
                                 color: isFocused
-                                    ? Colors.white
-                                    : MuzicianTheme.sky,
+                                    ? StudioPalette.of(context).onAccent
+                                    : StudioPalette.of(context).sky,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.3,
@@ -248,32 +249,35 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                   const SizedBox(height: 8),
                   // Results
                   if (selectedNotes.length < 2)
-                    const Text(
+                    Text(
                       'Tap at least 2 notes to detect.',
                       style: TextStyle(
-                        color: Color(0xFF475569),
+                        color: StudioPalette.of(context).textMuted,
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
                       ),
                     )
                   else if (hasResults) ...[
                     if (chordResults.isNotEmpty) ...[
-                      Row(
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          const Text(
+                          Text(
                             'Chords',
                             style: TextStyle(
-                              color: Color(0xFF64748B),
+                              color: StudioPalette.of(context).textMuted,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.5,
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Text(
+                          Text(
                             'tap to select voicing',
                             style: TextStyle(
-                              color: Color(0xFF334155),
+                              color: StudioPalette.of(context).textMuted,
                               fontSize: 10,
                               fontStyle: FontStyle.italic,
                             ),
@@ -303,6 +307,11 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                                 widget.onChordPanelRequested?.call();
                               },
                               child: Container(
+                                constraints: const BoxConstraints(
+                                  minWidth: 44,
+                                  minHeight: 44,
+                                ),
+                                alignment: Alignment.center,
                                 margin: const EdgeInsets.only(right: 6),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -310,20 +319,22 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                                 ),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(10),
-                                  color: MuzicianTheme.violet.withValues(
-                                    alpha: 0.12,
-                                  ),
+                                  color: StudioPalette.of(
+                                    context,
+                                  ).violet.withValues(alpha: 0.12),
                                   border: Border.all(
-                                    color: MuzicianTheme.violet.withValues(
-                                      alpha: 0.45,
-                                    ),
+                                    color: StudioPalette.of(
+                                      context,
+                                    ).violet.withValues(alpha: 0.45),
                                     width: 1,
                                   ),
                                 ),
                                 child: Text(
                                   formatChordSymbol(result, spelling: spelling),
-                                  style: const TextStyle(
-                                    color: Color(0xFFE2E8F0),
+                                  style: TextStyle(
+                                    color: StudioPalette.of(
+                                      context,
+                                    ).textPrimary,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -336,22 +347,25 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                     ],
                     if (scaleResults.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Row(
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          const Text(
+                          Text(
                             'Scales',
                             style: TextStyle(
-                              color: Color(0xFF64748B),
+                              color: StudioPalette.of(context).textMuted,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.5,
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Text(
+                          Text(
                             'tap to highlight',
                             style: TextStyle(
-                              color: Color(0xFF334155),
+                              color: StudioPalette.of(context).textMuted,
                               fontSize: 10,
                               fontStyle: FontStyle.italic,
                             ),
@@ -376,6 +390,11 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                                 );
                               },
                               child: Container(
+                                constraints: const BoxConstraints(
+                                  minWidth: 44,
+                                  minHeight: 44,
+                                ),
+                                alignment: Alignment.center,
                                 margin: const EdgeInsets.only(right: 6),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -384,14 +403,15 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(10),
                                   color: isActive
-                                      ? MuzicianTheme.emerald
-                                      : MuzicianTheme.emerald.withValues(
-                                          alpha: 0.10,
-                                        ),
+                                      ? StudioPalette.of(context).emerald
+                                      : StudioPalette.of(
+                                          context,
+                                        ).emerald.withValues(alpha: 0.10),
                                   border: Border.all(
-                                    color: MuzicianTheme.emerald.withValues(
-                                      alpha: isActive ? 1.0 : 0.35,
-                                    ),
+                                    color: StudioPalette.of(context).emerald
+                                        .withValues(
+                                          alpha: isActive ? 1.0 : 0.35,
+                                        ),
                                     width: 1,
                                   ),
                                 ),
@@ -399,8 +419,8 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                                   formatScaleLabel(result, spelling: spelling),
                                   style: TextStyle(
                                     color: isActive
-                                        ? Colors.white
-                                        : const Color(0xFFE2E8F0),
+                                        ? StudioPalette.of(context).onAccent
+                                        : StudioPalette.of(context).textPrimary,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -412,10 +432,10 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                       ),
                     ],
                   ] else
-                    const Text(
+                    Text(
                       'No exact match — try adding more notes.',
                       style: TextStyle(
-                        color: Color(0xFF475569),
+                        color: StudioPalette.of(context).textMuted,
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
                       ),
@@ -444,9 +464,11 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                         label: const Text('Add to Writer'),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
-                          foregroundColor: MuzicianTheme.sky,
+                          foregroundColor: StudioPalette.of(context).sky,
                           side: BorderSide(
-                            color: MuzicianTheme.sky.withValues(alpha: 0.55),
+                            color: StudioPalette.of(
+                              context,
+                            ).sky.withValues(alpha: 0.55),
                           ),
                         ),
                       ),
@@ -456,8 +478,8 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
                       Text(
                         handoffUnavailableReason,
                         key: const Key('writerHandoffUnavailableReason'),
-                        style: const TextStyle(
-                          color: MuzicianTheme.textMuted,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textMuted,
                           fontSize: 12,
                         ),
                       ),
@@ -468,6 +490,17 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
             )
           : const SizedBox.shrink(key: ValueKey(false)),
     );
+  }
+
+  Widget _content({
+    required Key key,
+    required EdgeInsets padding,
+    required Widget child,
+  }) {
+    if (widget.embedded) {
+      return Padding(key: key, padding: padding, child: child);
+    }
+    return SingleChildScrollView(key: key, padding: padding, child: child);
   }
 
   Future<void> _tryApplyScale(
@@ -558,7 +591,7 @@ class _SharedDetectionPanelState extends ConsumerState<SharedDetectionPanel> {
       return;
     }
     if (!mounted) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showStudioDialog<bool>(
       context: context,
       builder: (ctx) => ScaleConflictDialog(
         conflictingNotes: conflicts

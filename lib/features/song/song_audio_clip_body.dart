@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 class AudioClipBody extends StatelessWidget {
   final String name;
@@ -27,23 +27,20 @@ class AudioClipBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: Stack(
         children: [
           Positioned.fill(
             child: CustomPaint(
-              painter: AudioWaveformPainter(
-                peaks: peaks,
-                accent: const Color(0xFF3FA9F5),
-                background: const Color(0xFF13314A),
-              ),
+              painter: AudioWaveformPainter(peaks: peaks, palette: palette),
             ),
           ),
           if (isBroken)
             Positioned.fill(
               key: const ValueKey('audio-clip-broken'),
-              child: CustomPaint(painter: _BrokenStripePainter()),
+              child: CustomPaint(painter: _BrokenStripePainter(palette)),
             ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -60,8 +57,8 @@ class AudioClipBody extends StatelessWidget {
                       child: Text(
                         name,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MuzicianTheme.textPrimary,
+                        style: TextStyle(
+                          color: palette.textPrimary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -69,8 +66,8 @@ class AudioClipBody extends StatelessWidget {
                     if (showMeta) ...[
                       Text(
                         _durationLabel(),
-                        style: const TextStyle(
-                          color: MuzicianTheme.textSecondary,
+                        style: TextStyle(
+                          color: palette.textSecondary,
                           fontSize: 11,
                         ),
                       ),
@@ -86,8 +83,8 @@ class AudioClipBody extends StatelessWidget {
                         ),
                         child: Text(
                           format.toUpperCase(),
-                          style: const TextStyle(
-                            color: MuzicianTheme.textPrimary,
+                          style: TextStyle(
+                            color: palette.textPrimary,
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                           ),
@@ -107,14 +104,13 @@ class AudioClipBody extends StatelessWidget {
 
 class AudioWaveformPainter extends CustomPainter {
   final List<int> peaks;
-  final Color accent;
-  final Color background;
+  final StudioPalette palette;
 
-  const AudioWaveformPainter({
-    required this.peaks,
-    required this.accent,
-    required this.background,
-  });
+  const AudioWaveformPainter({required this.peaks, required this.palette});
+
+  Color get accent => palette.isStudio ? palette.teal : const Color(0xFF3FA9F5);
+  Color get background =>
+      palette.isStudio ? palette.surface : const Color(0xFF13314A);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -139,16 +135,20 @@ class AudioWaveformPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant AudioWaveformPainter old) =>
-      old.peaks != peaks ||
-      old.accent != accent ||
-      old.background != background;
+      old.peaks != peaks || old.palette != palette;
 }
 
 class _BrokenStripePainter extends CustomPainter {
+  const _BrokenStripePainter(this.palette);
+
+  final StudioPalette palette;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xCCB23A3A)
+      ..color = palette.isStudio
+          ? palette.red.withValues(alpha: 0.8)
+          : const Color(0xCCB23A3A)
       ..strokeWidth = 2.0;
     for (var x = -size.height.toInt(); x < size.width; x += 12) {
       canvas.drawLine(
@@ -160,5 +160,6 @@ class _BrokenStripePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
+  bool shouldRepaint(covariant _BrokenStripePainter old) =>
+      old.palette != palette;
 }

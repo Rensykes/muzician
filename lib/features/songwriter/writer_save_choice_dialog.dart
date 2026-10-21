@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 
 enum WriterSaveAction { overwrite, saveAsNew }
@@ -14,11 +15,10 @@ class WriterSaveChoice {
 Future<WriterSaveChoice?> showWriterSaveChoiceDialog(
   BuildContext context, {
   required String saveName,
-}) =>
-    showDialog<WriterSaveChoice>(
-      context: context,
-      builder: (_) => _WriterSaveChoiceDialog(saveName: saveName),
-    );
+}) => showStudioDialog<WriterSaveChoice>(
+  context: context,
+  builder: (context) => _WriterSaveChoiceDialog(saveName: saveName),
+);
 
 class _WriterSaveChoiceDialog extends StatefulWidget {
   const _WriterSaveChoiceDialog({required this.saveName});
@@ -42,10 +42,7 @@ class _WriterSaveChoiceDialogState extends State<_WriterSaveChoiceDialog> {
         label: 'Always overwrite for this project',
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(context),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(context)),
         MuzicianDialogButton(
           'Save as new…',
           buttonKey: const Key('writerSaveAsNew'),

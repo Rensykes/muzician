@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/save_system/data_recovery_panel.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/app_theme_variant.dart';
 import 'package:muzician/store/persisted_data_recovery_store.dart';
 import 'package:muzician/store/save_system_store.dart';
+import 'package:muzician/theme/studio_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 String _recoveryKey(String sourceKey, int index) {
@@ -18,9 +20,63 @@ String _recoveryKey(String sourceKey, int index) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets(
+    'Settings recovery theme switch retains expanded original data and live delete dialog',
+    (tester) async {
+      final backupKey = _recoveryKey('@muzician/writer', 0);
+      const raw = '{ original: unchanged }';
+      SharedPreferences.setMockInitialValues({backupKey: raw});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(dataRecoveryProvider.notifier).hydrate();
+      final variant = ValueNotifier(AppThemeVariant.studio);
+      addTearDown(variant.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: ValueListenableBuilder<AppThemeVariant>(
+            valueListenable: variant,
+            builder: (context, value, _) => StudioThemeSource(
+              variant: value,
+              child: MaterialApp(
+                theme: StudioTheme.data(value),
+                home: const Scaffold(
+                  body: SingleChildScrollView(child: DataRecoveryPanel()),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(Key('recoveryEntry_$backupKey')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('recoveryDelete_$backupKey')));
+      await tester.pumpAndSettle();
+      final dialog = find.text('Delete recovery backup?');
+      expect(StudioPalette.of(tester.element(dialog)), StudioPalette.studio);
+      variant.value = AppThemeVariant.studioMuzician;
+      await tester.pumpAndSettle();
+      expect(
+        StudioPalette.of(tester.element(dialog)),
+        StudioPalette.studioMuzician,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(Key('recoveryRaw_$backupKey')), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text('Data Recovery')).style!.color,
+        StudioPalette.studioMuzician.textPrimary,
+      );
+      expect(container.read(dataRecoveryProvider).single.raw, raw);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(backupKey), raw);
+    },
+  );
+
   for (final viewport in const [
-    (name: 'compact portrait', size: Size(390, 844)),
-    (name: 'wide landscape', size: Size(1180, 820)),
+    (name: 'compact portrait', size: Size(390, 844), textScale: 1.0),
+    (name: 'wide landscape', size: Size(1180, 820), textScale: 1.0),
+    (name: 'narrow large text', size: Size(320, 844), textScale: 1.5),
   ]) {
     testWidgets('Data Recovery actions fit ${viewport.name}', (tester) async {
       tester.view.physicalSize = viewport.size;
@@ -38,9 +94,19 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(
-            home: Scaffold(
-              body: SingleChildScrollView(child: DataRecoveryPanel()),
+          child: MaterialApp(
+            theme: StudioTheme.data(AppThemeVariant.studio),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(viewport.textScale)),
+              child: child!,
+            ),
+            home: const Scaffold(
+              body: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: 32),
+                child: DataRecoveryPanel(),
+              ),
             ),
           ),
         ),

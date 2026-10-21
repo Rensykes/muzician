@@ -5,6 +5,7 @@ library;
 import '../schema/rules/mono_pitch_rules.dart';
 import '../schema/rules/piano_roll_rules.dart' as pr_rules;
 import '../utils/note_utils.dart';
+import 'app_theme_variant.dart';
 import 'fretboard.dart';
 import 'harmony_lane_instrument.dart';
 import 'piano.dart';
@@ -894,6 +895,9 @@ class SaveSystemState {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 class AppSettings {
+  /// Theme selected for this device. It does not belong to a project or save.
+  final AppThemeVariant themeVariant;
+
   final bool suppressOutOfKeyAlert;
   // 0.0 (silent) … 1.0 (full volume). Default 0.8.
   final double noteVolume;
@@ -930,6 +934,7 @@ class AppSettings {
   final HarmonyLaneInstrument? defaultNewProjectHarmonyInstrument;
 
   const AppSettings({
+    this.themeVariant = AppThemeVariant.studio,
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
     this.showNoteLabels = true,
@@ -945,6 +950,7 @@ class AppSettings {
   });
 
   AppSettings copyWith({
+    AppThemeVariant? themeVariant,
     bool? suppressOutOfKeyAlert,
     double? noteVolume,
     bool? showNoteLabels,
@@ -958,6 +964,7 @@ class AppSettings {
     String? Function()? lastContentWorkspace,
     HarmonyLaneInstrument? Function()? defaultNewProjectHarmonyInstrument,
   }) => AppSettings(
+    themeVariant: themeVariant ?? this.themeVariant,
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
     showNoteLabels: showNoteLabels ?? this.showNoteLabels,
@@ -979,6 +986,7 @@ class AppSettings {
   );
 
   Map<String, dynamic> toJson() => {
+    'themeVariant': themeVariant.name,
     'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
     'noteVolume': noteVolume,
     'showNoteLabels': showNoteLabels,
@@ -995,6 +1003,7 @@ class AppSettings {
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
+    themeVariant: _appThemeVariantFromName(json['themeVariant']),
     suppressOutOfKeyAlert: json['suppressOutOfKeyAlert'] as bool? ?? false,
     noteVolume: (json['noteVolume'] as num?)?.toDouble() ?? 0.8,
     showNoteLabels: json['showNoteLabels'] as bool? ?? true,
@@ -1013,6 +1022,13 @@ class AppSettings {
       json['defaultNewProjectHarmonyInstrument'] as String?,
     ),
   );
+}
+
+AppThemeVariant _appThemeVariantFromName(Object? raw) {
+  for (final variant in AppThemeVariant.values) {
+    if (variant.name == raw) return variant;
+  }
+  return AppThemeVariant.studio;
 }
 
 SongLaneKind? _writerLaneKindFromName(String? raw) {

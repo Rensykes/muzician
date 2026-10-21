@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:muzician/models/app_theme_variant.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
@@ -42,5 +43,53 @@ void main() {
     addTearDown(restored.dispose);
     await restored.read(settingsProvider.notifier).hydrate();
     expect(restored.read(settingsProvider).noteSpelling, NoteSpelling.flats);
+  });
+
+  test('theme preference persists and rehydrates other settings', () async {
+    final first = ProviderContainer();
+    await first
+        .read(settingsProvider.notifier)
+        .setNoteSpelling(NoteSpelling.flats);
+    await first.read(settingsProvider.notifier).setSaveBrowserGrid(true);
+    await first
+        .read(settingsProvider.notifier)
+        .setThemeVariant(AppThemeVariant.studioMuzician);
+
+    final changed = first.read(settingsProvider);
+    expect(changed.themeVariant, AppThemeVariant.studioMuzician);
+    expect(changed.noteSpelling, NoteSpelling.flats);
+    expect(changed.saveBrowserGrid, true);
+    first.dispose();
+
+    final restored = ProviderContainer();
+    addTearDown(restored.dispose);
+    await restored.read(settingsProvider.notifier).hydrate();
+
+    final hydrated = restored.read(settingsProvider);
+    expect(hydrated.themeVariant, AppThemeVariant.studioMuzician);
+    expect(hydrated.noteSpelling, NoteSpelling.flats);
+    expect(hydrated.saveBrowserGrid, true);
+  });
+
+  test('rapid theme changes persist the latest selection', () async {
+    final first = ProviderContainer();
+    await Future.wait([
+      first
+          .read(settingsProvider.notifier)
+          .setThemeVariant(AppThemeVariant.studioMuzician),
+      first
+          .read(settingsProvider.notifier)
+          .setThemeVariant(AppThemeVariant.studio),
+    ]);
+    expect(first.read(settingsProvider).themeVariant, AppThemeVariant.studio);
+    first.dispose();
+
+    final restored = ProviderContainer();
+    addTearDown(restored.dispose);
+    await restored.read(settingsProvider.notifier).hydrate();
+    expect(
+      restored.read(settingsProvider).themeVariant,
+      AppThemeVariant.studio,
+    );
   });
 }

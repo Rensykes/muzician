@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/app_theme_variant.dart';
 import '../models/harmony_lane_instrument.dart';
 import '../models/save_system.dart';
 import '../schema/rules/mono_pitch_rules.dart';
@@ -53,6 +54,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setNoteSpelling(NoteSpelling spelling) async {
     state = state.copyWith(noteSpelling: spelling);
+    await _persist();
+  }
+
+  Future<void> setThemeVariant(AppThemeVariant variant) async {
+    state = state.copyWith(themeVariant: variant);
     await _persist();
   }
 

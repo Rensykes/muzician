@@ -6,7 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import 'muzician_dialog.dart';
 
 enum ProjectOffScaleDecision { switchToDump, cancel }
@@ -33,8 +33,8 @@ class ProjectOffScaleDialog extends StatelessWidget {
         children: [
           Text(
             '"$noteName" is not in $keyLabel.',
-            style: const TextStyle(
-              color: MuzicianTheme.textPrimary,
+            style: TextStyle(
+              color: StudioPalette.of(context).textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -54,7 +54,7 @@ class ProjectOffScaleDialog extends StatelessWidget {
         MuzicianDialogButton(
           'Switch to Dump',
           emphasis: MuzicianDialogEmphasis.primary,
-          color: MuzicianTheme.orange,
+          color: StudioPalette.of(context).orange,
           onPressed: () =>
               Navigator.of(context).pop(ProjectOffScaleDecision.switchToDump),
         ),

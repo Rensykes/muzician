@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
 import '../../store/songwriter_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../_mockup_shell.dart';
 
 Future<void> showGuitarStrumPatternSheet({
@@ -38,6 +38,8 @@ class _GuitarStrumPatternBody extends ConsumerWidget {
     final bars = (pattern.lengthTicks / project.config.measureTicks)
         .round()
         .clamp(1, 16);
+    final ticksPerBeat = project.config.ticksPerBeat;
+    final measureTicks = project.config.measureTicks;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
       child: Column(
@@ -46,18 +48,18 @@ class _GuitarStrumPatternBody extends ConsumerWidget {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              const instruction = Text(
+              final instruction = Text(
                 'Tap a 16th step to cycle down, up, and off.',
                 style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 12,
                 ),
               );
               final lengthSelector = DropdownButton<int>(
                 key: const Key('guitarStrumPatternLength'),
                 value: bars,
-                dropdownColor: MuzicianTheme.surface,
-                style: const TextStyle(color: MuzicianTheme.textPrimary),
+                dropdownColor: StudioPalette.of(context).surface,
+                style: TextStyle(color: StudioPalette.of(context).textPrimary),
                 underline: const SizedBox.shrink(),
                 items: const [1, 2, 4].map((count) {
                   return DropdownMenuItem(
@@ -88,7 +90,7 @@ class _GuitarStrumPatternBody extends ConsumerWidget {
               }
               return Row(
                 children: [
-                  const Expanded(child: instruction),
+                  Expanded(child: instruction),
                   const SizedBox(width: 8),
                   lengthSelector,
                 ],
@@ -96,47 +98,101 @@ class _GuitarStrumPatternBody extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 5,
-            runSpacing: 6,
-            children: [
-              for (var tick = 0; tick < pattern.lengthTicks; tick++)
-                _StrumStep(
-                  tick: tick,
-                  event: pattern.events
-                      .where((event) => event.tick == tick)
-                      .firstOrNull,
-                  onTap: () {
-                    final current = pattern.events
-                        .where((event) => event.tick == tick)
-                        .firstOrNull;
-                    final next = switch (current?.direction) {
-                      null => GuitarStrumDirection.down,
-                      GuitarStrumDirection.down => GuitarStrumDirection.up,
-                      GuitarStrumDirection.up => null,
-                    };
-                    final updatedEvents = pattern.events
-                        .where((event) => event.tick != tick)
-                        .toList();
-                    if (next != null) {
-                      updatedEvents.add(
-                        GuitarStrumEvent(tick: tick, direction: next),
-                      );
-                    }
-                    updatedEvents.sort((a, b) => a.tick.compareTo(b.tick));
-                    ref
-                        .read(songwriterProvider.notifier)
-                        .updateGuitarStrumPattern(
-                          pattern.copyWith(events: updatedEvents),
-                        );
-                  },
-                ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) => Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (
+                  var beatStart = 0;
+                  beatStart < pattern.lengthTicks;
+                  beatStart += ticksPerBeat
+                )
+                  SizedBox(
+                    width: (ticksPerBeat * 48.0).clamp(
+                      0.0,
+                      constraints.maxWidth,
+                    ),
+                    child: Column(
+                      key: Key('guitarStrumBeat_${beatStart ~/ ticksPerBeat}'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Bar ${beatStart ~/ project.config.measureTicks + 1} · Beat ${(beatStart % project.config.measureTicks) ~/ ticksPerBeat + 1}',
+                          style: TextStyle(
+                            color: StudioPalette.of(context).textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          runSpacing: 4,
+                          children: [
+                            for (
+                              var tick = beatStart;
+                              tick < beatStart + ticksPerBeat &&
+                                  tick <
+                                      (beatStart ~/ measureTicks + 1) *
+                                          measureTicks &&
+                                  tick < pattern.lengthTicks;
+                              tick++
+                            )
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: _StrumStep(
+                                  tick: tick,
+                                  event: pattern.events
+                                      .where((event) => event.tick == tick)
+                                      .firstOrNull,
+                                  onTap: () {
+                                    final current = pattern.events
+                                        .where((event) => event.tick == tick)
+                                        .firstOrNull;
+                                    final next = switch (current?.direction) {
+                                      null => GuitarStrumDirection.down,
+                                      GuitarStrumDirection.down =>
+                                        GuitarStrumDirection.up,
+                                      GuitarStrumDirection.up => null,
+                                    };
+                                    final updatedEvents = pattern.events
+                                        .where((event) => event.tick != tick)
+                                        .toList();
+                                    if (next != null) {
+                                      updatedEvents.add(
+                                        GuitarStrumEvent(
+                                          tick: tick,
+                                          direction: next,
+                                        ),
+                                      );
+                                    }
+                                    updatedEvents.sort(
+                                      (a, b) => a.tick.compareTo(b.tick),
+                                    );
+                                    ref
+                                        .read(songwriterProvider.notifier)
+                                        .updateGuitarStrumPattern(
+                                          pattern.copyWith(
+                                            events: updatedEvents,
+                                          ),
+                                        );
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Strums use a half-beat gate with 12 ms between strings.',
-            style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 11),
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
+              fontSize: 11,
+            ),
           ),
         ],
       ),
@@ -165,9 +221,9 @@ class _StrumStepState extends State<_StrumStep> {
   Widget build(BuildContext context) {
     final direction = widget.event?.direction;
     final color = switch (direction) {
-      GuitarStrumDirection.down => MuzicianTheme.sky,
-      GuitarStrumDirection.up => MuzicianTheme.emerald,
-      null => MuzicianTheme.glassBorder,
+      GuitarStrumDirection.down => StudioPalette.of(context).sky,
+      GuitarStrumDirection.up => StudioPalette.of(context).emerald,
+      null => StudioPalette.of(context).textMuted,
     };
     final symbol = switch (direction) {
       GuitarStrumDirection.down => '↓',
@@ -204,7 +260,7 @@ class _StrumStepState extends State<_StrumStep> {
               color: color.withValues(alpha: direction == null ? .05 : .18),
               border: Border.all(
                 color: _showFocusHighlight
-                    ? MuzicianTheme.textPrimary
+                    ? StudioPalette.of(context).textPrimary
                     : color.withValues(alpha: .75),
                 width: _showFocusHighlight ? 2 : 1,
               ),
@@ -219,13 +275,15 @@ class _StrumStepState extends State<_StrumStep> {
                     color: color,
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
+                    height: 1,
                   ),
                 ),
                 Text(
                   '${widget.tick + 1}',
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
                     fontSize: 9,
+                    height: 1,
                   ),
                 ),
               ],

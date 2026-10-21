@@ -1,193 +1,92 @@
 ---
-name: Muzician
-description: A songwriting workspace connecting guitar, piano, and song arrangement.
-colors:
-  background: "#0A0A1E"
-  gradient-violet: "#1A1034"
-  gradient-indigo: "#16213E"
-  gradient-blue: "#0F3460"
-  surface: "#0A0F1E"
-  dialog: "#161B2E"
-  text-primary: "#F1F5F9"
-  text-secondary: "#94A3B8"
-  text-muted: "#8B9DC3"
-  text-dim: "#334155"
-  accent-sky: "#38BDF8"
-  accent-teal: "#4ECDC4"
-  accent-violet: "#A78BFA"
-  accent-purple: "#C084FC"
-  accent-emerald: "#34D399"
-  accent-orange: "#FB923C"
-  accent-red: "#F87171"
-  glass-fill: "#08FFFFFF"
-  glass-border: "#12FFFFFF"
-typography:
-  display:
-    fontFamily: "Flutter Material default"
-    fontSize: "32px"
-    fontWeight: 800
-  title:
-    fontFamily: "Flutter Material default"
-    fontSize: "20px"
-    fontWeight: 700
-  body:
-    fontFamily: "Flutter Material default"
-    fontSize: "14px"
-    fontWeight: 400
-  label:
-    fontFamily: "Flutter Material default"
-    fontSize: "11px"
-    fontWeight: 600
-rounded:
-  sm: "10px"
-  md: "14px"
-  lg: "16px"
-  sheet: "20px"
-spacing:
-  xs: "4px"
-  sm: "8px"
-  md: "12px"
-  lg: "16px"
-  xl: "24px"
-  2xl: "28px"
-  3xl: "36px"
-components:
-  icon-button:
-    textColor: "{colors.text-secondary}"
-    size: "44px"
-    height: "44px"
-  status-chip:
-    backgroundColor: "{colors.glass-fill}"
-    textColor: "{colors.text-primary}"
-    rounded: "999px"
-    padding: "5px 10px"
-  glass-panel:
-    backgroundColor: "{colors.glass-fill}"
-    rounded: "{rounded.md}"
-  dialog:
-    backgroundColor: "{colors.dialog}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
+name: Muzician Studio
+description: A touch-first songwriting workbench with two interchangeable dark palettes.
+register: product
+default-theme: studio
+status: implemented-refined
 ---
 
-# Design System: Muzician
+# Muzician — Studio design system
 
-## 1. Overview
+Chosen direction: Studio original, 18 October 2026. Implementation and review evidence are in [PROGRESS.md](docs/studio-redesign/PROGRESS.md); the four Studio workspaces and shared theme system are implemented. [PRODUCT.md](PRODUCT.md) governs music and persistence contracts.
 
-**Creative North Star: "The Songwriter's Workbench"**
+## Scene and visual intent
 
-Muzician is used with an instrument nearby: a songwriter checks a chord shape, captures a lyric, and listens back in the same session. The current interface uses a dark, layered canvas with compact controls so the musical surface remains central. This document records the existing visual language; it does not mandate that every screen use glass effects or prevent a future light theme.
+A guitarist or pianist writes during rehearsal in moderate/dim light, holding an instrument and reaching for a phone or tablet. Use a graphite workbench, a large musical surface, restrained emphasis and explicit controls. Avoid a full DAW console, decorative glow, default glass effects, card-within-card layouts and gradients in text. The original Studio triptych and Roll concept are visual references in `docs/design-exploration/2026-10-16/mockups/02-studio.png` and `06-studio-piano-roll.png`. Correct diagrams come from existing renderers, never from image pixels.
 
-The interface should feel focused, tactile, and musically legible. Keep high information density inside instrument and timeline workspaces, and use clearer grouping around the primary action. Prefer familiar Flutter controls and direct manipulation over decorative treatment.
+## Themes and semantic roles
 
-**Key Characteristics:**
-- Dark blue-violet surfaces with restrained semantic accents.
-- Compact typography with larger screen titles and concise labels.
-- Rounded panels, chips, and dialogs with subtle borders.
-- Accent colors indicate musical or interaction state.
+Both themes share layout, typography and behavior. Settings → Appearance exposes Studio and Studio Muzician; Studio is default, including old/unknown preference values. No system/light mode in this phase. Song remains legacy-scoped; shared components resolve the nearest inherited palette so a Song dialog is not silently restyled by a global mutable singleton.
 
-## 2. Colors
+| Role | Studio | Studio Muzician |
+| --- | --- | --- |
+| Canvas | #171C1B (flat) | #0A0A1E |
+| Surface / navigation | #1D2421 | #0A0F1E |
+| Raised inspector/dialog | #242B29 | #161B2E |
+| Primary text | #F1F5F3 | #F1F5F9 |
+| Secondary text | #B5C3BC | #94A3B8 |
+| Muted readable label | #99ABA1 | #8B9DC3 |
+| Divider / decorative border | #45534C | #465578 |
+| Primary action / active nav / selected single note | #9EE7BF | #38BDF8 |
+| On primary action | #14251B | #071722 |
+| Normal note / secondary emphasis | #72C7AF | #4ECDC4 |
+| Harmony / multi-selection | #C5CFAB | #A78BFA |
+| Root note | #E5C07B | #34D399 |
+| Warning / playback cursor | #F0B86E | #FB923C |
+| Destructive / error | #F08B88 | #F87171 |
 
-The palette is a deep indigo canvas with distinct accents for selection, harmony, roots, warnings, and errors.
+Studio Muzician may use the existing background stops #0A0A1E → #1A1034 → #16213E → #0F3460, but controls sit on opaque surfaces for legibility. Studio has a flat background. Disabled styling is separate from readable help text. Required text contrast ≥4.5:1, large text ≥3:1, interactive boundary/focus/selection ≥3:1. Decorative dividers need not reach 3:1; they must not be the only control boundary. Measure relevant token pairs in tests.
 
-### Primary
-- **Sky accent** (#38BDF8): selected controls, primary actions, active navigation, and note selection.
-- **Teal accent** (#4ECDC4): scale highlights and secondary musical emphasis.
+Musical states use labels/position/outline as well as color. Preserve piano white/black key identity and guitar strings/fret markers. Roll: normal notes use teal, active-column notes use the primary mint/sky accent, selected notes add a2px outline and multiple selection uses harmony color; active column and moving playhead remain distinct. Do not recolor musical objects with arbitrary rainbow accents.
 
-### Secondary
-- **Violet accent** (#A78BFA): chord highlights.
-- **Purple accent** (#C084FC): supporting emphasis where the existing UI uses it.
-- **Emerald accent** (#34D399): root-note emphasis and positive musical state.
+## Runtime contract
 
-### Neutral
-- **Scaffold night** (#0A0A1E): deepest app canvas, with a blue-violet vertical gradient used on major surfaces.
-- **Panel ink** (#0A0F1E): compact panels and navigation surfaces.
-- **Dialog slate** (#161B2E): raised dialog background.
-- **Primary text** (#F1F5F9): titles and high-priority content.
-- **Secondary text** (#94A3B8): supporting copy and controls.
-- **Muted text** (#8B9DC3): less prominent labels.
-- **Dim text** (#334155): disabled or very low-emphasis content; check contrast before using for essential text.
-- **Orange** (#FB923C) and **red** (#F87171): warning and destructive/error states.
+Use an immutable context-resolved `ThemeExtension` for semantic colors, background stops and dimensions, backed by ThemeData. Keep legacy Muzician constants available for the excluded Song scope during migration. No mutable global theme variables. Painters receive the resolved immutable palette, and `shouldRepaint` includes palette changes. Root theme changes rebuild presentation without re-creating providers or using theme-based keys on workspaces. Flutter routes/sheets must use a scope-aware wrapper: Studio resolves the live app-level inherited theme source above Navigator (also above isolated editor containers), while Song uses a fixed legacy theme. Capture only the host scope kind, never a ThemeData snapshot. Shared modal surfaces resolve colors inside that live wrapper. Open/nested dialogs must update without losing input/scroll state. Song embedded Roll retains legacy layout as well as palette.
 
-### Named Rules
-**The Semantic Accent Rule.** Use accent color to communicate selection, musical role, or action state. Do not make color the only way to distinguish a note or control.
+## Type, space and geometry
 
-## 3. Typography
+Use the existing platform sans family, with weight and tabular figures for numerical readouts; no remote fonts/dependency required. Titles 24–28/700, section titles 18–20/700, body/actions 14–16, labels 12–13. Use tabular figures for BPM, bar/beat and octave. Preserve user text scale; wrap/reflow instead of globally clamping it. Musical canvas labels follow the existing renderer geometry, with readable minimums and a documented accessibility limitation where appropriate.
 
-**Display Font:** Flutter Material default; no custom font family is configured.
-**Body Font:** Flutter Material default.
-**Label/Mono Font:** No separate label or monospace family is configured.
+Spacing scale: 4, 8, 12, 16, 24, 32. Compact outer inset 16; wide 24. Radius: controls 6–8, panels 10, modal 16. Borders 1px; modest shadow only for transient overlays. Interactive controls ≥44×44 logical pixels (48 where practical). Canvas key cells and note handles retain existing instrument geometry and gestures; do not claim all musical hit regions meet 44px. Provide visible selection/edit alternatives and do not shrink them further.
 
-**Character:** Compact and neutral, keeping note names and musical structure readable without a decorative display face. The values below are representative sizes used across screens, not a single enforced text scale.
+## Shared workspace structure
 
-### Hierarchy
-- **Display** (weight 800, 32px): primary screen headings on roomy layouts.
-- **Headline** (weight 700, 20px): compact app-bar titles and secondary headings.
-- **Title** (weight 700, 16–18px): dialogs and section headings.
-- **Body** (regular, 13–14px): supporting descriptions and action content.
-- **Label** (weight 600, 10–12px): navigation, chips, transport readouts, and compact control labels.
+Project context comes first in a quiet 44px row with a plain project-name disclosure, followed by the full title; full workspace title does not compete with the project name and three icons. Long project names can ellipsize with full semantic label/tooltip. Six destinations remain accessible with text and icons; use an adaptive rail only when it improves space, otherwise keep the existing bottom layout with safe-area handling. Do not remove Song.
 
-### Named Rules
-**The Instrument Label Rule.** Keep note labels concise, but preserve readable sizing and text scaling around the instrument canvas.
+At widths under 700 or height under 500, retain a dominant canvas and scrollable contextual inspector; never squeeze every control into a fixed-height column. At width ≥700 and sufficient height, use canvas/content plus a 300–360px inspector where appropriate. Short landscape prioritizes the canvas and scrollable tools. Respect keyboard viewInsets, safe areas and nested scroll constraints.
 
-## 4. Elevation
+Shared controls: project/title header, opaque workspace panel, labelled primary/secondary action, inspector tabs, section heading and theme-aware modal helper. Create only components actually reused. Modal sheets scroll, have a named title and close action, preserve context and can be dismissed without applying unrelated changes. Do not present a decorative handle as a promise of multiple drag detents unless implemented.
 
-Depth currently comes mainly from tonal layering, translucent panel fills, and fine borders. Dialogs use a modest shadow and sit on a distinct slate surface. Reserve stronger elevation for transient overlays and dialogs; do not add blur or shadow to every panel.
+## Fretboard and Piano
 
-### Shadow Vocabulary
-- **Dialog elevation**: theme elevation 16 with a soft black shadow, used for modal dialogs.
-- **Undo toast**: a broad, low-opacity shadow separates the temporary recovery action from the canvas.
+Order: project/title → instrument controls → playable canvas → compact detection/actions → inspector. Default inspector Voicings; tabs Notes / Voicings / Setup. Allow collapse and reopen without clearing selection. Notes contains full detection; Voicings reuses existing pickers; Setup exposes native controls. Scale and library remain explicitly reachable without duplicate state or dead controls.
 
-### Named Rules
-**The Layered Surface Rule.** Use a small surface-color shift and border to establish hierarchy before adding shadow.
+Save idea opens the existing save flow; Add to Writer preserves recognized versus Exact selection and linked-save behavior. Keep explanations for disabled guitar Free handoff. Show tuning/capo as readable controls and preserve capo positioning, one-note-per-string eligibility and scroll guards. Piano preserves actual MIDI keys, black-key overlays, range, octave/inversions and audition. No new global transport for Fretboard/Piano merely because it appeared in the image.
 
-## 5. Components
+## Piano Roll
 
-Components use familiar touch targets and low-contrast containers. Keep control states consistent across Fretboard, Piano, Roll, Song, and Writer.
+Grid remains central, with transport above and a compact tool row. Keep Draw, Select, Split, Paint and Delete accessible; active tool has a visible label. Expose snap and pitch range on mobile; retain Quick, rewind, selection clear/delete, column detection, scale, Save/Load, Import and Hum Recorder. Name recording 'Hum recorder' or explain it visibly. No velocity lane, automation or Add to Writer invented by the mockup.
 
-### Buttons
-- **Interactive controls:** at least 44×44px touch area, including pattern-grid steps; give them concise semantic labels and keyboard activation when available.
-- **Icon buttons:** 44×44px touch area, 22px icon, secondary text color by default, with a tooltip or semantic label.
-- **Dialog actions:** normal actions use secondary text; primary actions use sky; destructive actions use red.
-- **Focus and disabled states:** preserve a visible keyboard-focus indication and sufficient contrast; disabled color must not carry essential information.
-- **Undo and redo:** expose them in each workspace's overflow menu with clear text labels and disabled states. A temporary Writer delete snackbar may offer the same history undo action.
-- **Writer project creation:** expose New project in the main menu on compact and wide layouts; keep session protection in the existing creation flow.
+Inspector: Stack Builder / Selection / Tools. Reuse the builder and detection logic. On wide screens the inspector sits beside the grid; on compact screens it has bounded/scrollable expansion so the grid keeps useful height. Embedded instances respect showScale/showSavePanels/showBackground and inherit host behavior.
 
-### Chips
-- **Status chips:** translucent white fill, fine white border, pill radius, compact single-line label.
-- **Musical state chips:** use sky, teal, violet, emerald, orange, or red according to the state they represent; pair color with a label or shape cue.
+## Writer
 
-### Cards / Containers
-- **Glass panels:** near-transparent white fill, subtle white border, 14px radius, and restrained padding. Use to group related controls, not as a wrapper around every element.
-- **Dialogs:** slate surface, 16px radius, thin border, 16px elevation; keep actions clearly separated from content.
+Header separates project/title, named version action and overflow. Transport retains project key confirmation, tempo/play/metronome; Undo/Redo remain available. Use 'Save version' and 'Writer versions' for named Writer snapshots while retaining Section blocks. State labels distinguish auto-persisted draft from named-version changes.
 
-### Inputs / Fields
-- Follow Material input behavior and labels. Show errors next to the field or action that needs attention and preserve entered work when correcting an error.
-- Confirm replacement of a non-empty Song before opening the bundle picker; explain that a successful import can be undone.
-- Confirm a project's first key, key change, or key removal before updating all instrument views. Cancel retains the confirmed key and selected notes.
+Section: name, bars, repeats and Mixer; Harmony lane source label, four-cell rows with chord/degree/lyrics and Save identity; other lane types retain editors. Expose frequent chord actions contextually while keeping every existing advanced menu action. No Add to Writer inside Writer. Keep exact labels literal and theory absent when unknown.
 
-### Navigation and Instrument Surfaces
-- Keep the current workspace identifiable and the instrument canvas visually dominant.
-- Instrument labels and highlights must remain readable at compact widths and with text scaling enabled.
-- On short screens, let instrument content scroll above the Scale/Chord dock while preserving board size and touch gestures.
-- Apply the global Sharps/Flats preference consistently to musical labels, including canvas notes, detected scales, project keys, and chord tools. Preserve literal user names and slash-chord bass notes. An unsupported chord wheel opens the root/quality picker instead of showing a false missing-key state.
-- Expose essential gestures with visible controls or contextual help.
-- Treat named exact Harmony like other playable Harmony blocks for editing and reuse; omit theory controls when no chord identity exists. Explain the Chord-mode requirement beside an unavailable Fretboard handoff. Hide strum targets already assigned to another lane while retaining the current source.
+Wide layout: avoid a single half-width section with an empty column. Use full-width bounded section content or a real contextual inspector; do not invent an inspector with fake actions. Pattern editor groups steps using the canonical project beat grid (four per quarter beat, two per eighth beat), with 44px steps and wrapping within a labelled beat when needed. Groups never cross a bar boundary; existing timing rules remain authoritative. Guitar Strum source stays explicit, Unassigned remains visible and silent. Audio/melody/drum/lyrics must stay reachable even when not illustrated in the concept.
 
-### Named Rules
-**The Empty-State Hierarchy Rule.** Name the empty state, surface the contextually likely next action, preserve an alternate creation action, and state transfer boundaries in brief copy.
+## Visual fidelity revision — 19 October 2026
 
-## 6. Do's and Don'ts
+The initial implementation passed functional review but did not match the chosen composition. Studio uses rectangular 6–8px controls, mint filled primary actions, outlined secondary actions, and underlined inspector tabs without a redundant INSPECTOR banner. Avoid pill-shaped defaults and oversized empty-state copy. In phone portrait, target 200–230px instrument canvases and a compact horizontal detection/action row so the first native voicing previews appear above navigation. Writer combines section metadata in one row where possible and uses compact chord cells (about 64px populated, 44px empty), exposing more lanes without scrolling. Preserve scaled-text reflow and essential 44px toolbar touch targets. Music cell geometry can adapt to density while maintaining existing hit-testing and scroll guards; provide larger landscape/editor views and native picker alternatives.
 
-### Do
-- Use the semantic accent mapping consistently across features.
-- Group related tools and reveal advanced controls when they become relevant.
-- Keep touch actions close to the musical object they affect.
-- Verify compact and wide layouts, including landscape, when changing a visible screen.
-- Pair color-coded musical states with text, shape, or position cues.
+Compare real populated screenshots with the references before declaring completion; passing layout tests alone does not establish fidelity.
 
-### Don't
-- Add glass blur, glow, gradient text, or shadow as decoration.
-- Use the dark palette by habit on surfaces where a musician needs more contrast or daylight readability; validate the use context.
-- Put every action in an icon-only button without a tooltip or semantic name.
-- Add dense theory controls to the main writing surface when they are not needed for the current decision.
+The final visual pass also uses readable bar/beat ruler labels, a contextual column strip when height allows, and a bounded wide Roll builder. New notes added outside a grid gesture are revealed vertically. Writer Bars/Repeat are outlined disclosures; Mixer has a label on wide layouts. Native evidence and before/after comparison are in `docs/studio-redesign/comparison.html`.
+
+## Verification and preservation
+
+Instrument inspectors size to their active content and align results at the top. The phone workspace or wide inspector rail owns vertical scrolling; embedded Notes must not reserve a fixed-height viewport. Setup uses one horizontal inset and removes additive native-widget spacing and repeated headings. Configuration comes first, with a subdued 44px Clear all selections action last. Verify populated Notes and Setup as well as Voicings; a single default-tab capture is insufficient.
+
+Test 390×844 portrait and 844×390 landscape plus 1024×768 wide where applicable; 320px width and text scale 1.5 for headers/forms. Verify no overflow/unbounded viewport, controls reachable with scroll, theme changes reflected inside open dialogs and painters, settings restored on restart and no changes to notes/history/project when switching. Use screenshots of real populated data to compare hierarchy to Studio. Preserve all existing music/key/Save safeguards. Update feature guides and README after each implemented phase; do not label planned controls as shipped.
