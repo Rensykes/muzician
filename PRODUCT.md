@@ -12,7 +12,7 @@ Independent songwriters and musicians who primarily write on guitar and piano. T
 
 Muzician is a songwriting workspace that connects guitar and piano exploration, music theory, lyrics, arrangement, and demo playback. Success means a musician can move from an initial musical idea to a structured, audible draft and shareable output while staying oriented and keeping their work safe.
 
-This is the initial product context inferred from the existing app and the user's stated focus. Treat it as the working direction for planning and implementation, and revise it when product intent changes.
+The chosen product direction is **Studio** (18 October 2026): a precise, calm songwriting workbench with the musical surface first and contextual tools close to it. This document defines the target and the existing musical contracts; implementation status is tracked in [the Studio ledger](docs/studio-redesign/PROGRESS.md).
 
 Writer Harmony lanes are instrument-bound to Piano or Fretboard. Projects
 created through the usual project flow use the app's configured default,
@@ -83,3 +83,19 @@ Creative, clear, musician-first. Muzician should feel encouraging and musically 
 ## Accessibility & Inclusion
 
 Design for touch-first use on phones and tablets, with readable text, scalable layouts, accessible labels for controls, keyboard support where available, and reduced reliance on color alone. Important actions should have visible affordances and forgiving recovery. Verify compact and wide layouts, including landscape, when changing user-facing screens.
+
+## Studio redesign scope and success
+
+A musician rehearses or writes in a room with moderate or dim light, moving between a physical instrument and a phone/tablet. Studio uses a dark neutral canvas, readable controls and restrained musical accents so the interface supports sustained writing without competing with the music.
+
+The initial redesign covers Fretboard, Piano, Piano Roll, Writer, their shared dialogs/library, application navigation and the necessary Settings surfaces. **Song stays available with its existing layout and palette; redesigning it is a later phase.** Embedded Roll editors must retain their host configuration and capabilities.
+
+The app offers two presentation themes in Settings: **Studio** (default graphite/mint) and **Studio Muzician** (the same layout with Muzician's night/sky/teal/violet palette). The preference is device-local and persisted across launches; it does not belong to a project or named Save. Existing settings without this field select Studio. Switching themes must preserve projects, selections, playback position, edits, history, open panels and scroll state. This is a presentation change, not a project operation.
+
+Fretboard and Piano share a visible project context, full screen title, dominant playable surface, concise selection/detection, Save idea and Add to Writer actions, and an inspector for Notes, Voicings and Setup. Scale and the full library remain discoverable. Instrument-specific controls remain explicit: Free/Chord, tuning and capo for guitar; range, octave and inversions for piano. A closed inspector must not make essential actions unreachable.
+
+Piano Roll retains all five tools, manual gestures, column detection, Stack Builder and Quick, scale, save/import and Hum Recorder. Mobile makes the existing snap/range controls reachable. Record must identify humming-to-notes, not suggest audio track or MIDI recording. Selection of a time column remains distinct from note selection.
+
+Writer makes project/version actions, transport, section structure, Harmony source, chord/text relationship and contextual editing clearer. All lane types and existing safeguards remain available. Rhythmic step editors group subdivisions by beat with usable touch targets. Save idea, reusable Harmony, current auto-persisted draft and named Writer version have distinct labels. The existing music logic and save/link semantics above remain authoritative.
+
+Success means users can identify the current project/workspace, play/select an idea, inspect a voicing, save it or place it in Writer, and edit/play a section without losing context. Verify empty, populated, long-name, exact-Harmony, out-of-key, shared-save and disabled-action states at compact and wide sizes. The selected concept images govern composition, density, control shapes and visual hierarchy. Compare populated runtime screenshots directly against them; implementation must preserve their character while adapting to real device safe areas, text scaling and actual musical content. Do not implement invented controls from them.

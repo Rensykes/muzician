@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 class SongAudioPickerSheet extends ConsumerWidget {
   final String trackId;
@@ -22,10 +22,11 @@ class SongAudioPickerSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final palette = StudioPalette.of(context);
     return Container(
-      decoration: const BoxDecoration(
-        color: MuzicianTheme.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SafeArea(
         top: false,
@@ -37,39 +38,35 @@ class SongAudioPickerSheet extends ConsumerWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
+                color: palette.isStudio
+                    ? palette.textMuted
+                    : Colors.white.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const SizedBox(height: 16),
             if (recordSupported)
               ListTile(
-                leading: const Icon(
-                  Icons.mic,
-                  color: MuzicianTheme.textPrimary,
-                ),
-                title: const Text(
+                leading: Icon(Icons.mic, color: palette.textPrimary),
+                title: Text(
                   'Record audio',
-                  style: TextStyle(color: MuzicianTheme.textPrimary),
+                  style: TextStyle(color: palette.textPrimary),
                 ),
-                subtitle: const Text(
+                subtitle: Text(
                   'Overdub with count-in, preview, and place',
-                  style: TextStyle(color: MuzicianTheme.textSecondary),
+                  style: TextStyle(color: palette.textSecondary),
                 ),
                 onTap: onRecord,
               ),
             ListTile(
-              leading: const Icon(
-                Icons.file_open,
-                color: MuzicianTheme.textPrimary,
-              ),
-              title: const Text(
+              leading: Icon(Icons.file_open, color: palette.textPrimary),
+              title: Text(
                 'Import audio file',
-                style: TextStyle(color: MuzicianTheme.textPrimary),
+                style: TextStyle(color: palette.textPrimary),
               ),
-              subtitle: const Text(
+              subtitle: Text(
                 'WAV, MP3, or M4A',
-                style: TextStyle(color: MuzicianTheme.textSecondary),
+                style: TextStyle(color: palette.textSecondary),
               ),
               onTap: onImport,
             ),

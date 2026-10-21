@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano.dart';
 import '../../schema/rules/piano_rules.dart';
 import '../../store/piano_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 const _rangeOrder = [
   PianoRangeName.key49,
@@ -26,10 +26,10 @@ class PianoRangeSelector extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'RANGE',
           style: TextStyle(
-            color: Color(0xFF94A3B8),
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.8,
@@ -48,6 +48,8 @@ class PianoRangeSelector extends ConsumerWidget {
                 notifier.setRange(range);
               },
               child: Container(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
@@ -55,11 +57,11 @@ class PianoRangeSelector extends ConsumerWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   color: active
-                      ? MuzicianTheme.sky.withValues(alpha: 0.14)
+                      ? StudioPalette.of(context).sky.withValues(alpha: 0.14)
                       : Colors.white.withValues(alpha: 0.04),
                   border: Border.all(
                     color: active
-                        ? MuzicianTheme.sky.withValues(alpha: 0.45)
+                        ? StudioPalette.of(context).sky.withValues(alpha: 0.45)
                         : Colors.white.withValues(alpha: 0.16),
                     width: 0.5,
                   ),
@@ -67,7 +69,9 @@ class PianoRangeSelector extends ConsumerWidget {
                 child: Text(
                   rangeData.displayName,
                   style: TextStyle(
-                    color: active ? MuzicianTheme.sky : const Color(0xFF94A3B8),
+                    color: active
+                        ? StudioPalette.of(context).sky
+                        : StudioPalette.of(context).textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),

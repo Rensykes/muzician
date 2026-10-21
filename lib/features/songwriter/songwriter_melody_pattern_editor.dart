@@ -10,7 +10,7 @@ import '../../models/songwriter.dart';
 import '../../schema/rules/song_pattern_bridge_rules.dart' as bridge;
 import '../../store/piano_roll_store.dart';
 import '../../store/songwriter_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../piano_roll/piano_roll_screen_v2.dart';
 
 /// Identifies the one just-created Writer placement eligible for its initial
@@ -42,9 +42,12 @@ Future<void> showSongwriterMelodyPatternEditor({
 }) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) => _SongwriterMelodyPatternEditor(
-      patternId: patternId,
-      initialPlacement: initialPlacement,
+    builder: StudioRouteTheme.builder(
+      context,
+      (_) => _SongwriterMelodyPatternEditor(
+        patternId: patternId,
+        initialPlacement: initialPlacement,
+      ),
     ),
   ),
 );
@@ -131,9 +134,9 @@ class _SongwriterMelodyPatternEditorState
     _ensureContainer(pattern, project.config);
 
     return Scaffold(
-      backgroundColor: MuzicianTheme.surface,
+      backgroundColor: StudioPalette.of(context).surface,
       appBar: AppBar(
-        backgroundColor: MuzicianTheme.surface,
+        backgroundColor: StudioPalette.of(context).surface,
         title: Text(pattern.name),
         actions: [
           TextButton.icon(
@@ -141,7 +144,9 @@ class _SongwriterMelodyPatternEditorState
             onPressed: () => _save(pattern),
             icon: const Icon(Icons.save_outlined, size: 18),
             label: const Text('Save'),
-            style: TextButton.styleFrom(foregroundColor: MuzicianTheme.sky),
+            style: TextButton.styleFrom(
+              foregroundColor: StudioPalette.of(context).sky,
+            ),
           ),
           const SizedBox(width: 8),
         ],

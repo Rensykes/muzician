@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../theme/studio_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/project_config.dart';
@@ -119,7 +120,7 @@ class UpdateProjectKeyDialog extends StatelessWidget {
     required String? newLabel,
     required int affectedSaves,
   }) async {
-    final result = await showDialog<bool>(
+    final result = await showStudioDialog<bool>(
       context: context,
       builder: (_) => UpdateProjectKeyDialog(
         currentLabel: currentLabel,

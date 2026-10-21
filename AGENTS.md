@@ -22,7 +22,7 @@ These rules are for coding agents working in this repository. Prefer small, veri
 - Define the success check before editing, then run the narrowest command that proves the change works.
 - For changes in `lib/schema/rules/`, `lib/store/`, or `lib/features/save_system/`, add or update mirrored tests under `test/` when practical.
 - Run `dart format <changed paths>`, `flutter analyze`, and the narrowest relevant `flutter test` target before finishing.
-- For visible UI changes, verify layout on at least one compact and one wide viewport or device.
+- For visible UI changes, verify layout on at least one compact and one wide viewport or device. When a visual reference exists, compare populated runtime screenshots against it; passing layout tests alone does not establish visual fidelity.
 
 ### Product and Design Documentation
 - Treat root `PRODUCT.md` and `DESIGN.md` as the working product and visual-system references. Review them before user-facing work and update them when product direction, interaction principles, or visual tokens change.
@@ -40,6 +40,8 @@ Writer block musical content is canonical in Save System entries; Writer keeps p
 Writer native Harmony eligibility uses the saved instrument mode and selection: Fretboard requires valid Chord mode; Free remains an instrument-only idea. Exact Harmony preserves native notes and the user label without inferring chord identity. Each section assigns a Fretboard Harmony source to at most one Guitar Strum lane. Project key is canonical; instrument and Writer key changes require confirmation before updating `ProjectConfig`.
 
 Apply the persistent Sharps/Flats preference at display boundaries only. Keep music callbacks and transfer payloads canonical; preserve literal Save names and exact Harmony labels. Format recognized symbols only after validating root/quality metadata, retaining slash bass and octave information.
+
+Studio UI resolves `StudioPalette.of(context)`; pass immutable palettes into painters and include them in repaint comparisons. Use live Studio route helpers for dialogs and isolated editors, capturing host scope rather than ThemeData. Song and its embedded editors stay explicitly legacy-scoped. Theme switches must retain providers, edits, history, and open-panel state.
 
 ## Build, Test, and Development Commands
 Run `flutter pub get` after dependency changes. Use `flutter run` for the default attached device, or `flutter run -d <device-id>` after checking `flutter devices`. Keep code clean with `dart format lib` and `flutter analyze`. Run `flutter test` for Dart and widget tests once they exist under `test/`. CI currently builds with `flutter build web --release` for Firebase preview/production and `flutter build appbundle --release` for Play Store delivery.

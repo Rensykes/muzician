@@ -2,6 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../theme/studio_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/song_project.dart' show AudioAsset;
@@ -29,14 +30,13 @@ Future<void> showSongwriterAudioPicker(
   required int startBar,
   required int sectionLengthBars,
 }) async {
-  await showModalBottomSheet<void>(
+  await showStudioModalBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheetCtx) => SongAudioPickerSheet(
+    builder: (context) => SongAudioPickerSheet(
       trackId: '',
       startTick: 0,
       onRecord: () async {
-        Navigator.of(sheetCtx).pop();
+        Navigator.of(context).pop();
         final project = ref.read(songwriterProvider);
         final cfg = project.config;
         final measureTicks = cfg.measureTicks;
@@ -81,13 +81,12 @@ Future<void> showSongwriterAudioPicker(
             clips: sectionClips.clips,
           );
         }
-        final asset = await showModalBottomSheet<AudioAsset?>(
+        final asset = await showStudioModalBottomSheet<AudioAsset?>(
           context: context,
           isScrollControlled: true,
-          backgroundColor: Colors.transparent,
           isDismissible: false,
           enableDrag: false,
-          builder: (_) => SongwriterAudioRecorderSheet(
+          builder: (context) => SongwriterAudioRecorderSheet(
             monitorTemplate: template,
             countInBarMs: songwriterAudioTickToMs(measureTicks, cfg),
             countInBeats: cfg.beatsPerBar,
@@ -116,7 +115,7 @@ Future<void> showSongwriterAudioPicker(
         }
       },
       onImport: () async {
-        Navigator.of(sheetCtx).pop();
+        Navigator.of(context).pop();
         final picked = await FilePicker.platform.pickFiles(
           type: FileType.custom,
           allowedExtensions: const ['wav', 'mp3', 'm4a'],

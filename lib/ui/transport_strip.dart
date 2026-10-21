@@ -7,7 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/piano_roll.dart' show TimeSignature;
-import '../theme/muzician_theme.dart';
+import '../theme/studio_theme.dart';
 
 const int kMinBpm = 40;
 const int kMaxBpm = 300;
@@ -79,9 +79,11 @@ class TransportStrip extends StatelessWidget {
       height: 48,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        color: StudioPalette.of(context).glassBg,
+        borderRadius: BorderRadius.circular(
+          StudioPalette.of(context).isStudio ? 6 : 12,
+        ),
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -92,7 +94,11 @@ class TransportStrip extends StatelessWidget {
             _PlayBtn(playing: playing, onTap: onPlayPause),
             _IconBtn(icon: Icons.stop_rounded, onTap: onStop),
             const SizedBox(width: 6),
-            Container(width: 1, height: 20, color: MuzicianTheme.glassBorder),
+            Container(
+              width: 1,
+              height: 20,
+              color: StudioPalette.of(context).glassBorder,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: SingleChildScrollView(
@@ -149,7 +155,11 @@ class _IconBtn extends StatelessWidget {
       child: InkResponse(
         onTap: onTap,
         radius: 24,
-        child: Icon(icon, color: MuzicianTheme.textSecondary, size: 22),
+        child: Icon(
+          icon,
+          color: StudioPalette.of(context).textSecondary,
+          size: 22,
+        ),
       ),
     );
   }
@@ -167,16 +177,25 @@ class _PlayBtn extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 38,
-          height: 38,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: MuzicianTheme.sky,
+          width: StudioPalette.of(context).isStudio ? 44 : 38,
+          height: StudioPalette.of(context).isStudio ? 44 : 38,
+          decoration: BoxDecoration(
+            shape: StudioPalette.of(context).isStudio
+                ? BoxShape.rectangle
+                : BoxShape.circle,
+            borderRadius: StudioPalette.of(context).isStudio
+                ? BorderRadius.circular(6)
+                : null,
+            color: StudioPalette.of(context).isStudio
+                ? Colors.transparent
+                : StudioPalette.of(context).sky,
           ),
           child: Icon(
             playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
             size: 22,
-            color: MuzicianTheme.scaffoldBg,
+            color: StudioPalette.of(context).isStudio
+                ? StudioPalette.of(context).sky
+                : StudioPalette.of(context).onAccent,
           ),
         ),
       ),
@@ -206,8 +225,8 @@ class _Readout extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: MuzicianTheme.textMuted,
+          style: TextStyle(
+            color: StudioPalette.of(context).textMuted,
             fontSize: 9,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.4,
@@ -217,7 +236,7 @@ class _Readout extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            color: MuzicianTheme.textPrimary,
+            color: StudioPalette.of(context).textPrimary,
             fontSize: accent ? 14 : 12,
             fontWeight: accent ? FontWeight.w700 : FontWeight.w600,
             fontFeatures: const [FontFeature.tabularFigures()],
@@ -233,7 +252,12 @@ class _Readout extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTap: onTap,
             onVerticalDragUpdate: onVerticalDragUpdate,
-            child: row,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+              ),
+              child: Center(child: row),
+            ),
           )
         : row;
   }
@@ -326,9 +350,9 @@ class _BpmSheetState extends State<BpmSheet> {
             textAlign: TextAlign.center,
             textInputAction: TextInputAction.done,
             maxLength: 3,
-            cursorColor: MuzicianTheme.sky,
-            style: const TextStyle(
-              color: MuzicianTheme.textPrimary,
+            cursorColor: StudioPalette.of(context).sky,
+            style: TextStyle(
+              color: StudioPalette.of(context).textPrimary,
               fontSize: 36,
               fontWeight: FontWeight.w800,
               fontFeatures: [FontFeature.tabularFigures()],
@@ -349,10 +373,10 @@ class _BpmSheetState extends State<BpmSheet> {
             },
           ),
         ),
-        const Text(
+        Text(
           'BPM',
           style: TextStyle(
-            color: MuzicianTheme.textMuted,
+            color: StudioPalette.of(context).textMuted,
             fontSize: 11,
             fontWeight: FontWeight.w600,
             letterSpacing: 1.0,
@@ -380,10 +404,10 @@ class _BpmSheetState extends State<BpmSheet> {
         const SizedBox(height: 8),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: MuzicianTheme.sky,
-            inactiveTrackColor: MuzicianTheme.glassBorder,
-            thumbColor: MuzicianTheme.sky,
-            overlayColor: MuzicianTheme.sky.withValues(alpha: 0.18),
+            activeTrackColor: StudioPalette.of(context).sky,
+            inactiveTrackColor: StudioPalette.of(context).glassBorder,
+            thumbColor: StudioPalette.of(context).sky,
+            overlayColor: StudioPalette.of(context).sky.withValues(alpha: 0.18),
             trackHeight: 3,
           ),
           child: Slider(
@@ -409,16 +433,16 @@ class _BpmSheetState extends State<BpmSheet> {
             children: [
               Text(
                 '${widget.minBpm}',
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               Text(
                 '${widget.maxBpm}',
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
@@ -444,18 +468,23 @@ class _StepBtn extends StatelessWidget {
         onTap();
       },
       child: Container(
-        constraints: const BoxConstraints(minWidth: 48, minHeight: 36),
+        constraints: BoxConstraints(
+          minWidth: 48,
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 36,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: (StudioPalette.of(context).isStudio
+              ? StudioPalette.of(context).glassBg
+              : Colors.white.withValues(alpha: 0.06)),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
-          style: const TextStyle(
-            color: MuzicianTheme.textPrimary,
+          style: TextStyle(
+            color: StudioPalette.of(context).textPrimary,
             fontSize: 13,
             fontWeight: FontWeight.w700,
             fontFeatures: [FontFeature.tabularFigures()],

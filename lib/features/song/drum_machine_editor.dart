@@ -16,7 +16,7 @@ import '../../store/drum_pattern_playback_store.dart';
 import 'drum_library_sheet.dart';
 import 'drum_loop_save_panel.dart';
 import '../../store/song_project_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../_mockup_shell.dart';
 
@@ -56,6 +56,7 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final patternId = widget.patternId;
     final clipId = widget.clipId;
     final project = ref.watch(songProjectProvider);
@@ -66,7 +67,7 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
     final timeSig = project.config.timeSignature;
 
     return Scaffold(
-      backgroundColor: MuzicianTheme.scaffoldBg,
+      backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
         title: Text(pattern.name),
         actions: [
@@ -77,10 +78,7 @@ class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
                   .makeClipPatternUnique(clipId);
               Navigator.pop(context);
             },
-            child: const Text(
-              'Make unique',
-              style: TextStyle(color: MuzicianTheme.sky),
-            ),
+            child: Text('Make unique', style: TextStyle(color: palette.sky)),
           ),
         ],
       ),
@@ -131,6 +129,7 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
       child: Row(
@@ -138,19 +137,19 @@ class _MetaRow extends StatelessWidget {
           _MetaChip(
             icon: Icons.straighten,
             label: _lengthLabel,
-            color: MuzicianTheme.sky,
+            color: palette.sky,
           ),
           const SizedBox(width: 8),
           _MetaChip(
             icon: Icons.music_note,
             label: '${timeSig.beatsPerMeasure}/${timeSig.beatUnit}',
-            color: MuzicianTheme.teal,
+            color: palette.teal,
           ),
           const Spacer(),
           Text(
             'Used in $usedCount clips',
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
+            style: TextStyle(
+              color: palette.textMuted,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -349,20 +348,23 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
   Future<void> _confirmClearAll() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => MuzicianDialog(
-        title: 'Clear all steps?',
-        content: const Text('This empties every lane on this pattern.'),
-        actions: [
-          MuzicianDialogButton(
-            'Cancel',
-            onPressed: () => Navigator.pop(ctx, false),
-          ),
-          MuzicianDialogButton(
-            'Clear',
-            emphasis: MuzicianDialogEmphasis.destructive,
-            onPressed: () => Navigator.pop(ctx, true),
-          ),
-        ],
+      builder: StudioRouteTheme.builder(
+        context,
+        (ctx) => MuzicianDialog(
+          title: 'Clear all steps?',
+          content: const Text('This empties every lane on this pattern.'),
+          actions: [
+            MuzicianDialogButton(
+              'Cancel',
+              onPressed: () => Navigator.pop(ctx, false),
+            ),
+            MuzicianDialogButton(
+              'Clear',
+              emphasis: MuzicianDialogEmphasis.destructive,
+              onPressed: () => Navigator.pop(ctx, true),
+            ),
+          ],
+        ),
       ),
     );
     if (ok == true) _clearAll();
@@ -370,6 +372,7 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final playback = ref.watch(drumPatternPlaybackProvider);
     final playing = playback.status == DrumPatternPlaybackStatus.playing;
     final timeSig = TimeSignature(
@@ -397,97 +400,115 @@ class _DrumMachineEditorBodyState extends ConsumerState<DrumMachineEditorBody> {
       HapticFeedback.lightImpact();
     }
 
+    final transport = <Widget>[
+      IconButton(
+        tooltip: playing ? 'Stop' : 'Play',
+        icon: Icon(playing ? Icons.stop : Icons.play_arrow),
+        color: palette.orange,
+        onPressed: togglePlayback,
+      ),
+      IconButton(
+        key: const Key('drumClearAllButton'),
+        tooltip: 'Clear all',
+        visualDensity: palette.isStudio
+            ? VisualDensity.standard
+            : VisualDensity.compact,
+        icon: const Icon(Icons.clear_all),
+        color: palette.textMuted,
+        onPressed: _confirmClearAll,
+      ),
+      if (widget.backing != null) ...[
+        const SizedBox(width: 4),
+        FilterChip(
+          key: const Key('backingToggle'),
+          label: const Text('Backing'),
+          selected: _backingOn,
+          showCheckmark: false,
+          onSelected: playing ? null : (v) => setState(() => _backingOn = v),
+          backgroundColor: palette.violet.withValues(alpha: 0.12),
+          selectedColor: palette.violet.withValues(alpha: 0.30),
+          side: BorderSide(color: palette.violet.withValues(alpha: 0.5)),
+          labelStyle: TextStyle(
+            color: palette.textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+      if (!palette.isStudio) const Spacer(),
+      if (widget.enableLibrary) ...[
+        IconButton(
+          key: const Key('drumLibraryButton'),
+          tooltip: 'Drum presets',
+          visualDensity: palette.isStudio
+              ? VisualDensity.standard
+              : VisualDensity.compact,
+          iconSize: 20,
+          color: palette.orange,
+          icon: const Icon(Icons.library_music),
+          onPressed: () =>
+              showDrumLibrarySheet(context: context, onPick: _applyPreset),
+        ),
+        IconButton(
+          key: const Key('drumLoopsButton'),
+          tooltip: 'My loops',
+          visualDensity: palette.isStudio
+              ? VisualDensity.standard
+              : VisualDensity.compact,
+          iconSize: 20,
+          color: palette.orange,
+          icon: const Icon(Icons.bookmarks_outlined),
+          onPressed: () => showDrumLoopLibrarySheet(
+            context: context,
+            currentPattern: _pattern,
+            onApply: _applyLoadedPattern,
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
+      Text(
+        '${widget.tempo} BPM',
+        style: TextStyle(
+          color: palette.textMuted,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ];
+    final grid = _DrumGrid(
+      pattern: _pattern,
+      timeSig: timeSig,
+      playheadTick: playing ? playback.currentTick : null,
+      onToggle: (laneId, tick) {
+        HapticFeedback.lightImpact();
+        _toggle(laneId, tick);
+      },
+      onLaneMenu: _openLaneFill,
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Transport row
         Container(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: playing ? 'Stop' : 'Play',
-                icon: Icon(playing ? Icons.stop : Icons.play_arrow),
-                color: MuzicianTheme.orange,
-                onPressed: togglePlayback,
-              ),
-              IconButton(
-                key: const Key('drumClearAllButton'),
-                tooltip: 'Clear all',
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.clear_all),
-                color: MuzicianTheme.textMuted,
-                onPressed: _confirmClearAll,
-              ),
-              if (widget.backing != null) ...[
-                const SizedBox(width: 4),
-                FilterChip(
-                  key: const Key('backingToggle'),
-                  label: const Text('Backing'),
-                  selected: _backingOn,
-                  showCheckmark: false,
-                  onSelected: playing ? null : (v) => setState(() => _backingOn = v),
-                  backgroundColor: MuzicianTheme.violet.withValues(alpha: 0.12),
-                  selectedColor: MuzicianTheme.violet.withValues(alpha: 0.30),
-                  side: BorderSide(
-                    color: MuzicianTheme.violet.withValues(alpha: 0.5),
-                  ),
-                  labelStyle: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-              const Spacer(),
-              if (widget.enableLibrary) ...[
-                IconButton(
-                  key: const Key('drumLibraryButton'),
-                  tooltip: 'Drum presets',
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 20,
-                  color: MuzicianTheme.orange,
-                  icon: const Icon(Icons.library_music),
-                  onPressed: () =>
-                      showDrumLibrarySheet(context: context, onPick: _applyPreset),
-                ),
-                IconButton(
-                  key: const Key('drumLoopsButton'),
-                  tooltip: 'My loops',
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 20,
-                  color: MuzicianTheme.orange,
-                  icon: const Icon(Icons.bookmarks_outlined),
-                  onPressed: () => showDrumLoopLibrarySheet(
-                    context: context,
-                    currentPattern: _pattern,
-                    onApply: _applyLoadedPattern,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                '${widget.tempo} BPM',
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          child: palette.isStudio
+              ? Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: transport,
+                )
+              : Row(children: transport),
         ),
         Flexible(
-          child: _DrumGrid(
-            pattern: _pattern,
-            timeSig: timeSig,
-            playheadTick: playing ? playback.currentTick : null,
-            onToggle: (laneId, tick) {
-              HapticFeedback.lightImpact();
-              _toggle(laneId, tick);
-            },
-            onLaneMenu: _openLaneFill,
-          ),
+          child: palette.isStudio
+              ? LayoutBuilder(
+                  builder: (context, constraints) =>
+                      constraints.hasBoundedHeight
+                      ? SingleChildScrollView(child: grid)
+                      : grid,
+                )
+              : grid,
         ),
       ],
     );
@@ -539,22 +560,28 @@ class _DrumGridState extends State<_DrumGrid> {
     DrumLaneId.crash: 'Crash',
   };
 
-  static const Map<DrumLaneId, Color> _laneColors = {
-    DrumLaneId.kick: MuzicianTheme.orange,
-    DrumLaneId.snare: MuzicianTheme.sky,
-    DrumLaneId.closedHiHat: MuzicianTheme.teal,
-    DrumLaneId.openHiHat: MuzicianTheme.violet,
-    DrumLaneId.clap: MuzicianTheme.emerald,
-    DrumLaneId.lowTom: MuzicianTheme.purple,
-    DrumLaneId.highTom: MuzicianTheme.red,
-    DrumLaneId.crash: MuzicianTheme.sky,
-  };
-
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
+    final laneColors = {
+      DrumLaneId.kick: palette.orange,
+      DrumLaneId.snare: palette.sky,
+      DrumLaneId.closedHiHat: palette.teal,
+      DrumLaneId.openHiHat: palette.violet,
+      DrumLaneId.clap: palette.emerald,
+      DrumLaneId.lowTom: palette.purple,
+      DrumLaneId.highTom: palette.red,
+      DrumLaneId.crash: palette.sky,
+    };
+    if (palette.isStudio) {
+      for (final lane in DrumLaneId.values) {
+        laneColors[lane] = palette.teal;
+      }
+    }
     final stepCount = widget.pattern.lengthTicks;
     final beatTicks = widget.timeSig.ticksPerBeat;
-    final totalGridWidth = _gridWidth(stepCount, beatTicks);
+    final cellSize = palette.isStudio ? 44.0 : _kCellSize;
+    final totalGridWidth = _gridWidth(stepCount, beatTicks, cellSize);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -563,7 +590,7 @@ class _DrumGridState extends State<_DrumGrid> {
         _LaneLabelsColumn(
           lanes: widget.pattern.lanes,
           labels: _laneLabels,
-          colors: _laneColors,
+          colors: laneColors,
           onLaneMenu: widget.onLaneMenu,
         ),
         // Scrollable grid: beat header + 8 lane rows
@@ -579,7 +606,7 @@ class _DrumGridState extends State<_DrumGrid> {
                   for (final lane in widget.pattern.lanes)
                     _DrumLaneRow(
                       lane: lane,
-                      color: _laneColors[lane.laneId] ?? MuzicianTheme.sky,
+                      color: laneColors[lane.laneId] ?? palette.sky,
                       stepCount: stepCount,
                       beatTicks: beatTicks,
                       onToggle: (tick) => widget.onToggle(lane.laneId, tick),
@@ -593,9 +620,9 @@ class _DrumGridState extends State<_DrumGrid> {
     );
   }
 
-  static double _gridWidth(int stepCount, int beatTicks) {
+  static double _gridWidth(int stepCount, int beatTicks, double cellSize) {
     final beats = (stepCount / beatTicks).ceil();
-    final beatWidth = beatTicks * (_kCellSize + _kCellMargin * 2);
+    final beatWidth = beatTicks * (cellSize + _kCellMargin * 2);
     return beats * beatWidth + (beats - 1) * _kBeatGap + _kCellMargin * 2;
   }
 }
@@ -615,8 +642,9 @@ class _LaneLabelsColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     return Container(
-      width: _kLabelColumnWidth,
+      width: palette.isStudio ? 138 : _kLabelColumnWidth,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.02),
         border: Border(
@@ -630,7 +658,7 @@ class _LaneLabelsColumn extends StatelessWidget {
           for (var i = 0; i < lanes.length; i++)
             _LaneLabel(
               label: labels[lanes[i].laneId] ?? lanes[i].laneId.name,
-              color: colors[lanes[i].laneId] ?? MuzicianTheme.textSecondary,
+              color: colors[lanes[i].laneId] ?? palette.textSecondary,
               activeCount: lanes[i].activeTicks.length,
               isEven: i % 2 == 0,
               menuKey: Key('laneFillMenu_${lanes[i].laneId.name}'),
@@ -661,8 +689,9 @@ class _LaneLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     return Container(
-      height: _kLaneHeight,
+      height: palette.isStudio ? 48 : _kLaneHeight,
       padding: const EdgeInsets.only(left: 10),
       decoration: BoxDecoration(
         color: isEven
@@ -683,8 +712,8 @@ class _LaneLabel extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
+              style: TextStyle(
+                color: palette.textPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -704,11 +733,16 @@ class _LaneLabel extends StatelessWidget {
           IconButton(
             key: menuKey,
             tooltip: 'Fill lane',
-            visualDensity: VisualDensity.compact,
+            visualDensity: palette.isStudio
+                ? VisualDensity.standard
+                : VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            constraints: BoxConstraints(
+              minWidth: palette.isStudio ? 44 : 28,
+              minHeight: palette.isStudio ? 44 : 28,
+            ),
             iconSize: 16,
-            color: MuzicianTheme.textMuted,
+            color: palette.textMuted,
             icon: const Icon(Icons.tune),
             onPressed: onMenu,
           ),
@@ -749,7 +783,9 @@ class _BeatNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = beatTicks * (_kCellSize + _kCellMargin * 2);
+    final palette = StudioPalette.of(context);
+    final width =
+        beatTicks * ((palette.isStudio ? 44 : _kCellSize) + _kCellMargin * 2);
     final isDownbeat = beatIndex == 0;
     return SizedBox(
       width: width,
@@ -757,9 +793,7 @@ class _BeatNumber extends StatelessWidget {
         child: Text(
           '${beatIndex + 1}',
           style: TextStyle(
-            color: isDownbeat
-                ? MuzicianTheme.textPrimary
-                : MuzicianTheme.textMuted,
+            color: isDownbeat ? palette.textPrimary : palette.textMuted,
             fontSize: 11,
             fontWeight: isDownbeat ? FontWeight.w800 : FontWeight.w600,
             letterSpacing: 0.4,
@@ -788,11 +822,12 @@ class _DrumLaneRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final isEven = DrumLaneId.values.indexOf(lane.laneId) % 2 == 0;
     final activeTicks = lane.activeTicks.toSet();
     final beats = (stepCount / beatTicks).ceil();
     return Container(
-      height: _kLaneHeight,
+      height: palette.isStudio ? 48 : _kLaneHeight,
       decoration: BoxDecoration(
         color: isEven
             ? Colors.white.withValues(alpha: 0.025)
@@ -809,13 +844,21 @@ class _DrumLaneRow extends StatelessWidget {
               () {
                 final tick = b * beatTicks + i;
                 if (tick >= stepCount) {
-                  return const SizedBox(width: _kCellSize + _kCellMargin * 2);
+                  return SizedBox(
+                    width:
+                        (palette.isStudio ? 44 : _kCellSize) + _kCellMargin * 2,
+                  );
                 }
-                return _StepCell(
-                  active: activeTicks.contains(tick),
-                  color: color,
-                  isDownbeat: i == 0,
-                  onTap: () => onToggle(tick),
+                return Semantics(
+                  label: '${lane.laneId.name} step ${tick + 1}',
+                  button: true,
+                  toggled: activeTicks.contains(tick),
+                  child: _StepCell(
+                    active: activeTicks.contains(tick),
+                    color: color,
+                    isDownbeat: i == 0,
+                    onTap: () => onToggle(tick),
+                  ),
                 );
               }(),
           ],
@@ -840,18 +883,21 @@ class _StepCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final restingFill = isDownbeat
         ? Colors.white.withValues(alpha: 0.08)
         : Colors.white.withValues(alpha: 0.04);
-    final restingBorder = isDownbeat
+    final restingBorder = palette.isStudio
+        ? palette.textMuted
+        : isDownbeat
         ? Colors.white.withValues(alpha: 0.18)
         : Colors.white.withValues(alpha: 0.08);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: _kCellSize,
-        height: _kCellSize,
+        width: palette.isStudio ? 44 : _kCellSize,
+        height: palette.isStudio ? 44 : _kCellSize,
         margin: const EdgeInsets.all(_kCellMargin),
         decoration: BoxDecoration(
           color: active ? color.withValues(alpha: 0.85) : restingFill,
@@ -860,7 +906,7 @@ class _StepCell extends StatelessWidget {
             color: active ? color : restingBorder,
             width: active ? 1.5 : 1,
           ),
-          boxShadow: active
+          boxShadow: active && !palette.isStudio
               ? [
                   BoxShadow(
                     color: color.withValues(alpha: 0.55),
@@ -916,8 +962,7 @@ class _LaneFillSheetState extends State<_LaneFillSheet> {
       if (beat ~/ 2 >= 1) beat ~/ 2,
       beat,
       beat * 2,
-    }.where((s) => s <= widget.lengthTicks).toList()
-      ..sort();
+    }.where((s) => s <= widget.lengthTicks).toList()..sort();
     return raw;
   }
 
@@ -937,6 +982,7 @@ class _LaneFillSheetState extends State<_LaneFillSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Column(
@@ -953,18 +999,18 @@ class _LaneFillSheetState extends State<_LaneFillSheet> {
                 ActionChip(
                   key: Key('fillEvery_$step'),
                   label: Text(_stepLabel(step)),
-                  backgroundColor: MuzicianTheme.orange.withValues(alpha: 0.18),
+                  backgroundColor: palette.orange.withValues(alpha: 0.18),
                   side: BorderSide(
-                    color: MuzicianTheme.orange.withValues(alpha: 0.5),
+                    color: palette.orange.withValues(alpha: 0.5),
                   ),
-                  labelStyle: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
+                  labelStyle: TextStyle(
+                    color: palette.textPrimary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
-                  onPressed: () =>
-                      _applyAndClose(everyN(widget.lengthTicks, step,
-                          offset: _offset)),
+                  onPressed: () => _applyAndClose(
+                    everyN(widget.lengthTicks, step, offset: _offset),
+                  ),
                 ),
             ],
           ),
@@ -979,7 +1025,10 @@ class _LaneFillSheetState extends State<_LaneFillSheet> {
                 ? () => setState(() => _offset++)
                 : null,
           ),
-          const Divider(height: 28, color: Colors.white24),
+          Divider(
+            height: 28,
+            color: palette.isStudio ? palette.glassBorder : Colors.white24,
+          ),
           const _FillSectionLabel('Euclidean'),
           const SizedBox(height: 8),
           _StepperRow(
@@ -1008,16 +1057,17 @@ class _LaneFillSheetState extends State<_LaneFillSheet> {
             width: double.infinity,
             child: FilledButton(
               key: const Key('fillEuclidApply'),
-              style: FilledButton.styleFrom(
-                backgroundColor: MuzicianTheme.orange,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: palette.orange),
               onPressed: () => _applyAndClose(
                 euclid(widget.lengthTicks, _hits, rotation: _rotation),
               ),
               child: const Text('Apply Euclidean'),
             ),
           ),
-          const Divider(height: 28, color: Colors.white24),
+          Divider(
+            height: 28,
+            color: palette.isStudio ? palette.glassBorder : Colors.white24,
+          ),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
@@ -1038,10 +1088,11 @@ class _FillSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
-        color: MuzicianTheme.textMuted,
+      style: TextStyle(
+        color: palette.textMuted,
         fontSize: 11,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.6,
@@ -1069,13 +1120,14 @@ class _StepperRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     return Row(
       children: [
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              color: MuzicianTheme.textPrimary,
+            style: TextStyle(
+              color: palette.textPrimary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -1085,18 +1137,18 @@ class _StepperRow extends StatelessWidget {
           key: minusKey,
           onPressed: onMinus,
           icon: const Icon(Icons.remove_circle_outline),
-          color: MuzicianTheme.textSecondary,
+          color: palette.textSecondary,
         ),
         SizedBox(
           width: 28,
           child: Text(
             '$value',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: MuzicianTheme.textPrimary,
+            style: TextStyle(
+              color: palette.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              fontFeatures: [FontFeature.tabularFigures()],
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ),
@@ -1104,7 +1156,7 @@ class _StepperRow extends StatelessWidget {
           key: plusKey,
           onPressed: onPlus,
           icon: const Icon(Icons.add_circle_outline),
-          color: MuzicianTheme.textSecondary,
+          color: palette.textSecondary,
         ),
       ],
     );

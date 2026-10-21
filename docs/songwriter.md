@@ -14,6 +14,57 @@ Writer is the first workspace on a new install. After startup it restores the
 last content workspace (Fretboard, Piano, Roll, Song, or Writer); opening
 Settings does not change that preference.
 
+## Studio workspace
+
+Writer follows the persistent **Studio** or **Studio Muzician** appearance in
+Settings. Editable project context and draft status come first. The next row
+pairs the Writer title with **Save version** and labelled Undo, Redo, and
+Writer versions icons. **Save version** saves through the existing named Save
+flow; **Writer versions** opens whole-project versions alongside **Section
+blocks**. **Draft** means the active project session is saved automatically.
+**Draft changed** means it differs from the bound named Writer version; it is
+not a warning that the draft will disappear. The Writer menu retains New
+project, Undo/Redo, version browsing, structure editing, and project renaming.
+
+The transport exposes key, BPM, play/stop, and metronome. It wraps at narrow
+widths and larger text sizes. Its key and BPM values use a single compact line;
+all transport and history controls retain 44-pixel touch targets. The Writer
+menu keeps these commands available as well. Project-key changes still require
+confirmation.
+
+Sections keep their name, bars, repeat count, Mixer icon, and **Section actions**
+menu in a compact row, reflowing when space is limited. **Remove section** lives
+in that menu and remains recoverable with Undo. Harmony lane headers identify
+the source instrument and keep rename, instrument change, duplicate, and delete controls. Four-bar rows show
+chord, degree when known, linked Save name, and the current verse's lyric.
+Filled cells start at 64 pixels and empty add slots at 44; a distinct Save name
+or a lyric adds the space its text needs. Larger text scales grow the cells.
+Exact Harmony labels remain literal and gain no inferred degree. A single
+section uses the available width; multiple sections flow into two columns
+only at widths of at least 1100 logical pixels.
+
+Tapping a block opens its contextual sheet. Common play, chord-change, and
+verse-lyric actions appear first, with every applicable advanced action below:
+voicings/library, replacement, native instrument editing, rename, standalone
+Save, and removal. This reuses the existing editor flows rather than introducing
+a second editor with separate musical state.
+
+Guitar Strum keeps its title and explicitly labelled **Source** selector on one
+row at standard phone sizes, wrapping at larger text sizes. **Unassigned**
+remains visible and silent. Pattern placements use neutral strips with accented
+down/up previews; the pattern name, continuation, shared Save menu, and tap to
+edit remain available. Narrow single-bar placements stack their content to
+keep the controls usable. Its editor follows the canonical project beat grid:
+four 16th steps for a quarter-note beat and two for an eighth-note beat. Beat
+groups keep their bar/beat label and 44×44 step targets; steps can wrap inside their group on
+compact screens. Groups never cross bar boundaries. The sheet scrolls for longer
+patterns and short viewports. Down → up → off behavior is unchanged. Shared
+drum editors also group steps by beat and scroll on short screens.
+
+Writer's chord, library, mixer, audio, drum, strum, structure, and melody editors
+follow live appearance changes. An open melody Piano Roll keeps its isolated
+notes, tool, and snap setting; only **Save** commits its edits to Writer.
+
 ---
 
 ## Data Model (`lib/models/songwriter.dart`)
@@ -311,7 +362,8 @@ versions can be inspected.
 
 ## Undo / Redo
 
-Writer's overflow menu contains **Undo** and **Redo**. Both controls have
+Writer's overflow menu contains **Undo** and **Redo**; Studio also exposes
+labelled history icons beside **Save version** and the version-browser icon. Both controls have
 accessible button labels, can be reached with Tab, and activate with Enter or
 Space. The active project keeps up to 50 prior immutable snapshots in memory,
 including melody and strum
@@ -344,7 +396,7 @@ the symbol/name. Example in C major: a saved F-major voicing shows `IV`.
 
 The Writer save panel has two views:
 
-- **Song versions** save and load a whole `SongwriterProjectSnapshot`. Saving
+- **Writer versions** save and load a whole `SongwriterProjectSnapshot`. Saving
   captures current canonical content for every resolvable block, including
   patterns, clips, and required audio metadata. Loading restores that version's
   recoverable musical content without overwriting shared root saves or changing
@@ -365,10 +417,10 @@ The Writer save panel has two views:
   as a whole-project load.
 
 The panel is scoped to the selected project's folder, keeping both views inside
-the project subtree. If a Song version records different tempo, meter, or key,
+the project subtree. If a Writer version records different tempo, meter, or key,
 Writer summarizes the difference before loading and applies the current
 project config to the active session. The saved version remains unchanged.
-Project config retrofits do not rewrite named Song versions.
+Project config retrofits do not rewrite named Writer versions.
 
 The Writer save sheet keeps its title and tabs fixed while each Save Browser
 scrolls its own contents, so saves remain reachable on short screens.
@@ -426,3 +478,7 @@ project has no Writer section, Writer offers to create its default eight-bar
 section. The blank Writer state also has a visible **Start an 8-bar section**
 action. A separately saved Fretboard/Piano idea can be linked from the project
 root with **Use in Writer**; a fresh instrument selection creates a new save.
+
+Studio section Bars and Repeat controls have outlined borders and disclosure chevrons; both open the existing steppers. Mixer keeps its tooltip on compact screens and shows a label on wide screens.
+
+Studio Harmony cells in a mixed row share the tallest cell’s height so their top and bottom edges align. Entirely empty rows retain compact 44-pixel slots; scaled text, lyrics and Save names can increase row height.

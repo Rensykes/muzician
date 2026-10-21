@@ -107,9 +107,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('barActionEditInstrument')));
       await tester.pumpAndSettle();
-      expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 0);
+      expect(
+        tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+        0,
+      );
 
-      await tester.tap(find.byIcon(Icons.bookmark_border_rounded));
+      await tester.tap(find.byKey(const Key('instrumentLibrary')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('updateLinkedSaveButton')), findsOneWidget);
       await tester.tap(find.text('Other shape'));
@@ -133,13 +136,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('barActionEditInstrument')));
       await tester.pumpAndSettle();
-      expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 0);
+      expect(
+        tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+        0,
+      );
 
       saves.selectProject(otherProjectId);
       await tester.pumpAndSettle();
       saves.selectProject(projectId);
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.bookmark_border_rounded));
+      await tester.tap(find.byKey(const Key('instrumentLibrary')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('updateLinkedSaveButton')), findsNothing);
     },
@@ -217,7 +223,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('barActionEditInstrument')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.bookmark_border_rounded));
+      await tester.tap(find.byKey(const Key('instrumentLibrary')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('updateLinkedSaveButton')), findsOneWidget);
       await tester.tap(find.byIcon(Icons.close_rounded));
@@ -256,7 +262,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('nav_Fretboard')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.bookmark_border_rounded));
+      await tester.tap(find.byKey(const Key('instrumentLibrary')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('updateLinkedSaveButton')), findsNothing);
     },

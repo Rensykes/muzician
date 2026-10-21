@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../store/settings_store.dart';
 import '../../store/piano_store.dart';
 import '../../store/project_config_sync.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
@@ -135,7 +135,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
     final notes = outOfKey
         .map((note) => formatRootChoiceLabel(note, spelling: spelling))
         .join(', ');
-    final result = await showDialog<OutOfKeyResult>(
+    final result = await showStudioDialog<OutOfKeyResult>(
       context: context,
       builder: (ctx) => OutOfKeyDialog(
         title: 'Chord outside the key',
@@ -182,19 +182,60 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
         ? const <DiatonicChord>[]
         : getDiatonicChords(activeKey.root, activeKey.scaleName);
 
+    final studio = StudioPalette.of(context).isStudio;
+    final octaveSelector = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Octave',
+          style: TextStyle(
+            color: StudioPalette.of(context).textSecondary,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(width: 10),
+        _OctaveButton(
+          icon: Icons.remove,
+          enabled: _octaveOffset > _minOctaveOffset,
+          onTap: () => setState(
+            () => _octaveOffset = math.max(_minOctaveOffset, _octaveOffset - 1),
+          ),
+        ),
+        SizedBox(
+          width: 28,
+          child: Text(
+            octaveLabel,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: StudioPalette.of(context).textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        _OctaveButton(
+          icon: Icons.add,
+          enabled: _octaveOffset < _maxOctaveOffset,
+          onTap: () => setState(
+            () => _octaveOffset = math.min(_maxOctaveOffset, _octaveOffset + 1),
+          ),
+        ),
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header with active chord badge
-          ChordPickerHeader(
-            title: 'Chord Voicings',
-            root: _selectedRoot,
-            quality: _selectedQuality,
-          ),
-          const SizedBox(height: 10),
-          if (diatonic.isNotEmpty) ...[
+          if (!studio)
+            ChordPickerHeader(
+              title: 'Chord Voicings',
+              root: _selectedRoot,
+              quality: _selectedQuality,
+            ),
+          if (!studio) const SizedBox(height: 10),
+          if (!studio && diatonic.isNotEmpty) ...[
             DiatonicChordsHeader(
               keyLabel:
                   '${formatRootChoiceLabel(activeKey!.root, spelling: spelling)} ${activeKey.scaleName}',
@@ -204,7 +245,7 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
               chords: diatonic,
               selectedRoot: _selectedRoot,
               selectedQuality: _selectedQuality,
-              accent: MuzicianTheme.violet,
+              accent: StudioPalette.of(context).violet,
               onTap: (root, quality) => setState(() {
                 _selectedRoot = root;
                 _selectedQuality = quality;
@@ -213,86 +254,128 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
             ),
             const SizedBox(height: 10),
           ],
+          if (studio)
+            Row(
+              children: [
+                Expanded(
+                  child: StudioChordSelectors(
+                    root: _selectedRoot,
+                    quality: _selectedQuality,
+                    qualities: _pianoQualities,
+                    onRootChanged: (root) => setState(() {
+                      _selectedRoot = root;
+                      _selectedVoicingIdx = null;
+                    }),
+                    onQualityChanged: (quality) => setState(() {
+                      _selectedQuality = quality;
+                      _selectedVoicingIdx = null;
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 88,
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: StudioPalette.of(context).surface,
+                    border: Border.all(
+                      color: StudioPalette.of(context).glassBorder,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      key: const Key('pianoVoicingOctave'),
+                      value: _octaveOffset,
+                      isExpanded: true,
+                      dropdownColor: StudioPalette.of(context).dialogBg,
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textPrimary,
+                        fontSize: 12,
+                      ),
+                      selectedItemBuilder: (context) => [
+                        for (
+                          var offset = _minOctaveOffset;
+                          offset <= _maxOctaveOffset;
+                          offset++
+                        )
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              MediaQuery.textScalerOf(context).scale(12) > 15
+                                  ? '${4 + offset}'
+                                  : 'Oct ${4 + offset}',
+                              semanticsLabel: 'Voicing octave ${4 + offset}',
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
+                            ),
+                          ),
+                      ],
+                      items: [
+                        for (
+                          var offset = _minOctaveOffset;
+                          offset <= _maxOctaveOffset;
+                          offset++
+                        )
+                          DropdownMenuItem(
+                            value: offset,
+                            child: Text('Octave ${4 + offset}'),
+                          ),
+                      ],
+                      onChanged: (offset) {
+                        if (offset != null) {
+                          setState(() => _octaveOffset = offset);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
           // Root pills
-          RootPillRow(
-            selectedRoot: _selectedRoot,
-            accent: MuzicianTheme.violet,
-            onTap: (root) => setState(() {
-              _selectedRoot = _selectedRoot == root ? null : root;
-              _selectedVoicingIdx = null;
-            }),
-          ),
-          const SizedBox(height: 10),
+          if (!studio)
+            RootPillRow(
+              selectedRoot: _selectedRoot,
+              accent: StudioPalette.of(context).violet,
+              onTap: (root) => setState(() {
+                _selectedRoot = _selectedRoot == root ? null : root;
+                _selectedVoicingIdx = null;
+              }),
+            ),
+          if (!studio) const SizedBox(height: 10),
           // Quality pills
-          QualityPillRow(
-            qualities: _pianoQualities,
-            selectedQuality: _selectedQuality,
-            accent: MuzicianTheme.violet,
-            onTap: (symbol) => setState(() {
-              _selectedQuality = symbol;
-              _selectedVoicingIdx = null;
-            }),
-          ),
-          const SizedBox(height: 10),
-          // Octave selector
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Octave',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-              ),
-              const SizedBox(width: 10),
-              _OctaveButton(
-                icon: Icons.remove,
-                enabled: _octaveOffset > _minOctaveOffset,
-                onTap: () => setState(
-                  () => _octaveOffset = math.max(
-                    _minOctaveOffset,
-                    _octaveOffset - 1,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 28,
-                child: Text(
-                  octaveLabel,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFFE2E8F0),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              _OctaveButton(
-                icon: Icons.add,
-                enabled: _octaveOffset < _maxOctaveOffset,
-                onTap: () => setState(
-                  () => _octaveOffset = math.min(
-                    _maxOctaveOffset,
-                    _octaveOffset + 1,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          if (!studio)
+            QualityPillRow(
+              qualities: _pianoQualities,
+              selectedQuality: _selectedQuality,
+              accent: StudioPalette.of(context).violet,
+              onTap: (symbol) => setState(() {
+                _selectedQuality = symbol;
+                _selectedVoicingIdx = null;
+              }),
+            ),
+          if (!studio) const SizedBox(height: 10),
+          if (!studio) octaveSelector,
           // Voicings
           if (voicings.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                '${voicings.length} voicing${voicings.length != 1 ? 's' : ''} — tap to apply',
-                style: const TextStyle(
-                  color: Color(0xFF334155),
-                  fontSize: 10,
-                  letterSpacing: 0.3,
+            SizedBox(height: studio ? 8 : 6),
+            if (!studio)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${voicings.length} voicing${voicings.length != 1 ? 's' : ''} — tap to apply',
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
+                    fontSize: 10,
+                    letterSpacing: 0.3,
+                  ),
                 ),
               ),
-            ),
             SizedBox(
-              height: 116,
+              height: studio
+                  ? 64 + MediaQuery.textScalerOf(context).scale(36)
+                  : 82 + MediaQuery.textScalerOf(context).scale(36),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: voicings.length,
@@ -338,6 +421,26 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
               ),
             ),
           ],
+          if (studio) ...[
+            if (diatonic.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              DiatonicChordsHeader(
+                keyLabel:
+                    '${formatRootChoiceLabel(activeKey!.root, spelling: spelling)} ${activeKey.scaleName}',
+              ),
+              DiatonicChordsRow(
+                chords: diatonic,
+                selectedRoot: _selectedRoot,
+                selectedQuality: _selectedQuality,
+                accent: StudioPalette.of(context).sky,
+                onTap: (root, quality) => setState(() {
+                  _selectedRoot = root;
+                  _selectedQuality = quality;
+                  _selectedVoicingIdx = null;
+                }),
+              ),
+            ],
+          ],
           const SizedBox(height: 4),
         ],
       ),
@@ -368,8 +471,8 @@ class _OctaveButton extends StatelessWidget {
             }
           : null,
       child: Container(
-        width: 28,
-        height: 28,
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: enabled
@@ -385,7 +488,9 @@ class _OctaveButton extends StatelessWidget {
         child: Icon(
           icon,
           size: 14,
-          color: enabled ? const Color(0xFFE2E8F0) : const Color(0xFF475569),
+          color: enabled
+              ? StudioPalette.of(context).textPrimary
+              : StudioPalette.of(context).textMuted,
         ),
       ),
     );

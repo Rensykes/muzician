@@ -3,7 +3,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../schema/rules/save_system_rules.dart' show isValidSaveName;
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 
 enum HarmonySharedSaveEditChoice { updateAllPlacements, createStandaloneSave }
@@ -12,7 +12,7 @@ Future<HarmonySharedSaveEditChoice?> showHarmonySharedSaveEditChoice(
   BuildContext context, {
   required String saveName,
   required int placementCount,
-}) => showDialog<HarmonySharedSaveEditChoice>(
+}) => showStudioDialog<HarmonySharedSaveEditChoice>(
   context: context,
   builder: (dialogContext) => MuzicianDialog(
     title: 'This chord is used in multiple places',
@@ -48,7 +48,7 @@ Future<HarmonySharedSaveEditChoice?> showHarmonySharedSaveEditChoice(
 Future<String?> showStandaloneHarmonySaveNameDialog(
   BuildContext context, {
   required String initialName,
-}) => showDialog<String>(
+}) => showStudioDialog<String>(
   context: context,
   builder: (_) => _StandaloneHarmonySaveNameDialog(initialName: initialName),
 );
@@ -116,19 +116,21 @@ class _StandaloneHarmonySaveNameDialogState
 Widget harmonyLinkedSaveButton({
   required String saveName,
   required VoidCallback onPressed,
-}) => Padding(
-  padding: const EdgeInsets.symmetric(horizontal: 4),
-  child: Semantics(
-    button: true,
-    label: 'Update linked save $saveName',
-    child: OutlinedButton.icon(
-      key: const Key('updateLinkedSaveButton'),
-      onPressed: onPressed,
-      icon: const Icon(Icons.sync),
-      label: Text('Update linked save · $saveName'),
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(48),
-        foregroundColor: MuzicianTheme.sky,
+}) => Builder(
+  builder: (context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Semantics(
+      button: true,
+      label: 'Update linked save $saveName',
+      child: OutlinedButton.icon(
+        key: const Key('updateLinkedSaveButton'),
+        onPressed: onPressed,
+        icon: const Icon(Icons.sync),
+        label: Text('Update linked save · $saveName'),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          foregroundColor: StudioPalette.of(context).sky,
+        ),
       ),
     ),
   ),

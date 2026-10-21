@@ -15,15 +15,15 @@ abstract final class MuzicianTheme {
 
   // ── Surface / Glass ─────────────────────────────────────────────────────
   static const Color surface = Color(0xFF0A0F1E);
-  static Color glassBg = Colors.white.withValues(alpha: 0.03);
-  static Color glassBorder = Colors.white.withValues(alpha: 0.07);
+  static final Color glassBg = Colors.white.withValues(alpha: 0.03);
+  static final Color glassBorder = Colors.white.withValues(alpha: 0.07);
 
   // ── Dialog ──────────────────────────────────────────────────────────────
   /// Elevated glass surface used by every modal dialog. Sits a step lighter
   /// than [surface] so it reads as floating above the gradient scaffold.
   static const Color dialogBg = Color(0xFF161B2E);
   static const double dialogRadius = 16;
-  static Color dialogBorder = Colors.white.withValues(alpha: 0.08);
+  static final Color dialogBorder = Colors.white.withValues(alpha: 0.08);
 
   // ── Text ────────────────────────────────────────────────────────────────
   static const Color textPrimary = Color(0xFFF1F5F9);

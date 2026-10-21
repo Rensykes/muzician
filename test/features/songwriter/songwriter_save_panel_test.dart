@@ -47,7 +47,7 @@ void main() {
     expect(snap.sections.single.label, 'V');
   });
 
-  testWidgets('song versions and section blocks use separate tabs', (
+  testWidgets('Writer versions and section blocks use separate tabs', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -74,7 +74,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Song versions'), findsOneWidget);
+    expect(find.text('Writer versions'), findsOneWidget);
     expect(find.text('Section blocks'), findsOneWidget);
     expect(find.text('Saved song'), findsOneWidget);
     expect(find.text('Free strum'), findsNothing);

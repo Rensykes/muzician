@@ -16,7 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../_mockup_shell.dart';
 
@@ -45,22 +45,19 @@ void showLaneRenameDialog(
   required SongLane lane,
 }) {
   final controller = TextEditingController(text: lane.label ?? '');
-  showDialog<void>(
+  showStudioDialog<void>(
     context: context,
-    builder: (dialogCtx) => MuzicianDialog(
+    builder: (context) => MuzicianDialog(
       title: 'Lane name',
       content: TextField(
         key: const Key('laneRenameField'),
         controller: controller,
         autofocus: true,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        style: TextStyle(color: StudioPalette.of(context).textPrimary),
         decoration: const InputDecoration(hintText: 'Lead vocal, Guitars…'),
       ),
       actions: [
-        MuzicianDialogButton(
-          'Cancel',
-          onPressed: () => Navigator.pop(dialogCtx),
-        ),
+        MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(context)),
         MuzicianDialogButton(
           'Save',
           emphasis: MuzicianDialogEmphasis.primary,
@@ -72,7 +69,7 @@ void showLaneRenameDialog(
                   laneId: lane.id,
                   label: controller.text,
                 );
-            Navigator.pop(dialogCtx);
+            Navigator.pop(context);
           },
         ),
       ],
@@ -109,11 +106,11 @@ class SongwriterMixerSheet extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (mixLanes.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Text(
                   'No lanes in this section yet.',
-                  style: TextStyle(color: MuzicianTheme.textMuted),
+                  style: TextStyle(color: StudioPalette.of(context).textMuted),
                 ),
               )
             else
@@ -163,8 +160,8 @@ class _MixerStripState extends ConsumerState<_MixerStrip> {
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
       decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        color: StudioPalette.of(context).glassBg,
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -175,7 +172,7 @@ class _MixerStripState extends ConsumerState<_MixerStrip> {
               Icon(
                 _kindIcon(lane.kind),
                 size: 15,
-                color: MuzicianTheme.textSecondary,
+                color: StudioPalette.of(context).textSecondary,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -194,18 +191,18 @@ class _MixerStripState extends ConsumerState<_MixerStrip> {
                         child: Text(
                           lane.label ?? laneKindFallbackLabel(lane.kind),
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MuzicianTheme.textPrimary,
+                          style: TextStyle(
+                            color: StudioPalette.of(context).textPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                       const SizedBox(width: 5),
-                      const Icon(
+                      Icon(
                         Icons.edit_outlined,
                         size: 12,
-                        color: MuzicianTheme.textMuted,
+                        color: StudioPalette.of(context).textMuted,
                       ),
                     ],
                   ),
@@ -219,8 +216,8 @@ class _MixerStripState extends ConsumerState<_MixerStrip> {
                 icon: Icon(
                   lane.muted ? Icons.volume_off : Icons.volume_up,
                   color: lane.muted
-                      ? MuzicianTheme.sky
-                      : MuzicianTheme.textMuted,
+                      ? StudioPalette.of(context).sky
+                      : StudioPalette.of(context).textMuted,
                 ),
                 onPressed: () => notifier.setLaneMuted(
                   sectionId: sectionId,
@@ -292,8 +289,8 @@ class _LabeledSlider extends StatelessWidget {
           width: 30,
           child: Text(
             label,
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -314,8 +311,8 @@ class _LabeledSlider extends StatelessWidget {
           child: Text(
             trailing ?? '',
             textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
               fontSize: 10,
             ),
           ),

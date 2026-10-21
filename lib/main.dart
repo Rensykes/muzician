@@ -26,6 +26,8 @@ import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/project_config_sync.dart';
 import 'store/save_system_store.dart';
+import 'schema/rules/fretboard_rules.dart' show tunings;
+import 'schema/rules/piano_rules.dart' show pianoRanges;
 import 'schema/rules/save_system_rules.dart'
     show getWriterLinksForSave, resolveSaveInProject;
 import 'store/settings_store.dart';
@@ -36,7 +38,8 @@ import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
 import 'store/song_playback_store.dart';
 import 'store/songwriter_audio_sink.dart';
-import 'theme/muzician_theme.dart';
+import 'theme/studio_theme.dart';
+import 'models/app_theme_variant.dart';
 import 'utils/note_player.dart';
 
 void main() {
@@ -68,16 +71,20 @@ void main() {
   );
 }
 
-class MuzicianApp extends StatelessWidget {
+class MuzicianApp extends ConsumerWidget {
   const MuzicianApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Muzician',
-      debugShowCheckedModeBanner: false,
-      theme: MuzicianTheme.dark(),
-      home: const _AppShell(),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final variant = ref.watch(settingsProvider.select((s) => s.themeVariant));
+    return StudioThemeSource(
+      variant: variant,
+      child: MaterialApp(
+        title: 'Muzician',
+        debugShowCheckedModeBanner: false,
+        theme: StudioTheme.data(variant),
+        home: const _AppShell(),
+      ),
     );
   }
 }
@@ -237,11 +244,11 @@ class _AppShellState extends ConsumerState<_AppShell> {
                   onDifferentSaveLoaded: _onInstrumentSaveLoaded,
                 ),
                 const PianoRollScreenV2(),
-                const SongScreen(),
+                const StudioRouteTheme(isStudio: false, child: SongScreen()),
                 SongwriterScreen(
                   onEditInstrumentSave: _openLinkedSaveInInstrument,
                 ),
-                const _SettingsScreen(),
+                const _SettingsScreen(key: ValueKey('settings_screen')),
               ],
             ),
       bottomNavigationBar:
@@ -249,14 +256,16 @@ class _AppShellState extends ConsumerState<_AppShell> {
           ? null
           : Container(
               decoration: BoxDecoration(
-                color: MuzicianTheme.surface.withValues(alpha: 0.96),
+                color: StudioPalette.of(
+                  context,
+                ).surface.withValues(alpha: 0.96),
                 border: const Border(
                   top: BorderSide(color: Color(0x4094A3B8), width: 0.5),
                 ),
               ),
               child: SafeArea(
                 child: SizedBox(
-                  height: 60,
+                  height: 56,
                   child: Row(
                     children: [
                       _NavTab(
@@ -272,25 +281,25 @@ class _AppShellState extends ConsumerState<_AppShell> {
                         onTap: () => _setTab(1),
                       ),
                       _NavTab(
-                        icon: Icons.view_timeline,
+                        icon: Icons.bar_chart_rounded,
                         label: 'Roll',
                         active: _tabIndex == 2,
                         onTap: () => _setTab(2),
                       ),
                       _NavTab(
-                        icon: Icons.queue_music,
+                        icon: Icons.article_outlined,
                         label: 'Song',
                         active: _tabIndex == 3,
                         onTap: () => _setTab(3),
                       ),
                       _NavTab(
-                        icon: Icons.lyrics,
+                        icon: Icons.edit_outlined,
                         label: 'Writer',
                         active: _tabIndex == 4,
                         onTap: () => _setTab(4),
                       ),
                       _NavTab(
-                        icon: Icons.settings,
+                        icon: Icons.settings_outlined,
                         label: 'Settings',
                         active: _tabIndex == 5,
                         onTap: () => _setTab(5),
@@ -308,11 +317,11 @@ class _AppShellState extends ConsumerState<_AppShell> {
     final failure = _startupFailure;
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: MuzicianTheme.gradientColors,
+          colors: StudioPalette.of(context).gradientColors,
         ),
       ),
       child: SafeArea(
@@ -332,7 +341,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
                       message: failure.message,
                       onRetry: _hydrateAndOpen,
                     )
-                  : const Column(
+                  : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         CircularProgressIndicator(),
@@ -340,7 +349,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
                         Text(
                           'Loading your workspaces…',
                           style: TextStyle(
-                            color: MuzicianTheme.textPrimary,
+                            color: StudioPalette.of(context).textPrimary,
                             fontSize: 16,
                           ),
                         ),
@@ -438,13 +447,17 @@ class _StartupFailurePrompt extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
-      const Icon(Icons.storage_rounded, color: MuzicianTheme.orange, size: 42),
+      Icon(
+        Icons.storage_rounded,
+        color: StudioPalette.of(context).orange,
+        size: 42,
+      ),
       const SizedBox(height: 14),
-      const Text(
+      Text(
         'Could not load your workspaces',
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: MuzicianTheme.textPrimary,
+          color: StudioPalette.of(context).textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w700,
         ),
@@ -453,7 +466,7 @@ class _StartupFailurePrompt extends StatelessWidget {
       Text(
         message,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: MuzicianTheme.textSecondary),
+        style: TextStyle(color: StudioPalette.of(context).textSecondary),
       ),
       const SizedBox(height: 20),
       FilledButton.icon(
@@ -480,17 +493,17 @@ class _StartupRecoveryPrompt extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
-      const Icon(
+      Icon(
         Icons.warning_amber_rounded,
-        color: MuzicianTheme.orange,
+        color: StudioPalette.of(context).orange,
         size: 42,
       ),
       const SizedBox(height: 14),
-      const Text(
+      Text(
         'Some saved data could not be read',
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: MuzicianTheme.textPrimary,
+          color: StudioPalette.of(context).textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w700,
         ),
@@ -500,7 +513,7 @@ class _StartupRecoveryPrompt extends StatelessWidget {
         '${payloads.length} saved item${payloads.length == 1 ? '' : 's'} need recovery. '
         'The original data is still intact.',
         textAlign: TextAlign.center,
-        style: const TextStyle(color: MuzicianTheme.textSecondary),
+        style: TextStyle(color: StudioPalette.of(context).textSecondary),
       ),
       const SizedBox(height: 18),
       for (final payload in payloads)
@@ -511,8 +524,8 @@ class _StartupRecoveryPrompt extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
               fontSize: 12,
             ),
           ),
@@ -536,10 +549,13 @@ class _StartupRecoveryPrompt extends StatelessWidget {
         ],
       ),
       const SizedBox(height: 10),
-      const Text(
+      Text(
         'Start fresh first copies the original data to Settings → Data Recovery.',
         textAlign: TextAlign.center,
-        style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+        style: TextStyle(
+          color: StudioPalette.of(context).textMuted,
+          fontSize: 12,
+        ),
       ),
     ],
   );
@@ -573,15 +589,21 @@ class _NavTab extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted,
+              color: active
+                  ? StudioPalette.of(context).sky
+                  : StudioPalette.of(context).textMuted,
             ),
             const SizedBox(height: 2),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted,
+                color: active
+                    ? StudioPalette.of(context).sky
+                    : StudioPalette.of(context).textMuted,
                 fontSize: 11,
-                fontWeight: FontWeight.w600,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ],
@@ -607,11 +629,11 @@ class _GradientScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: MuzicianTheme.gradientColors,
+          colors: StudioPalette.of(context).gradientColors,
           stops: [0, 0.3, 0.7, 1],
         ),
       ),
@@ -631,19 +653,19 @@ class _GradientScaffold extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w800,
-                            color: MuzicianTheme.textPrimary,
+                            color: StudioPalette.of(context).textPrimary,
                             letterSpacing: -0.5,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           subtitle,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: MuzicianTheme.textMuted,
+                            color: StudioPalette.of(context).textMuted,
                             letterSpacing: 1,
                           ),
                         ),
@@ -672,12 +694,12 @@ class _Card extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: StudioPalette.of(context).glassBg,
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.1),
           width: 0.5,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(10),
       ),
       padding: const EdgeInsets.all(12),
       child: child,
@@ -712,39 +734,37 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
     final chordCommitted = ref.watch(fretboardChordCommittedProvider);
     final scaleInfo = _resolveScaleDockState(ref, activeScale);
     final chordOffKey = ref.watch(fretboardBinding.chordOffKey);
+    final tuningLabel = formatTuningName(
+      tunings[state.currentTuning]!,
+      ref.watch(settingsProvider.select((s) => s.noteSpelling)),
+    );
 
     return InstrumentScreen(
       binding: fretboardBinding,
       title: 'Fretboard',
       appBarChipLabel: null,
+      projectContext: const ProjectChip(),
+      voicingsBuilder: (_) => const ChordVoicingPicker(),
+      setupBuilder: (_) =>
+          const _FretSettingsSheetContent(closeAfterClear: false),
+      onSaveRequested: () => showWidgetSheet(
+        context: context,
+        title: 'Idea library',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: FretboardSavePanel(
+            linkedEditSaveId: widget.linkedEditSaveId,
+            onDifferentSaveLoaded: widget.onDifferentSaveLoaded,
+            onHandoffCompleted: widget.onHandoffCompleted,
+          ),
+        ),
+      ),
+      instrumentContext:
+          '$tuningLabel · ${state.capo == 0 ? 'Capo off' : 'Capo ${state.capo}'}',
       appBarActions: [
-        const Padding(padding: EdgeInsets.only(right: 4), child: ProjectChip()),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 0),
-        ),
-        IconBtn(
-          icon: Icons.bookmark_border_rounded,
-          onTap: () => showWidgetSheet(
-            context: context,
-            title: 'Saves',
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: FretboardSavePanel(
-                linkedEditSaveId: widget.linkedEditSaveId,
-                onDifferentSaveLoaded: widget.onDifferentSaveLoaded,
-                onHandoffCompleted: widget.onHandoffCompleted,
-              ),
-            ),
-          ),
-        ),
-        IconBtn(
-          icon: Icons.tune_rounded,
-          onTap: () => showWidgetSheet(
-            context: context,
-            title: 'Settings',
-            child: _FretSettingsSheetContent(),
-          ),
         ),
       ],
       modeSegment: ModeSegment<FretboardInputMode>(
@@ -759,7 +779,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
         padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: GuitarFretboard(
           hideToolbar: true,
-          palette: FretboardPalette.wood,
+          palette: FretboardPalette.graphite,
         ),
       ),
       boardHeight: fretboardBoardHeight,
@@ -795,7 +815,9 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
 // ── Fret Settings Sheet Content ─────────────────────────────────────────────
 
 class _FretSettingsSheetContent extends ConsumerWidget {
-  const _FretSettingsSheetContent();
+  const _FretSettingsSheetContent({this.closeAfterClear = true});
+
+  final bool closeAfterClear;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -805,24 +827,24 @@ class _FretSettingsSheetContent extends ConsumerWidget {
         state.selectedCells.isNotEmpty ||
         state.highlightedNotes.isNotEmpty ||
         state.focusedNotes.isNotEmpty;
+    final studio = StudioPalette.of(context).isStudio;
+    void clearSelections() {
+      HapticFeedback.mediumImpact();
+      notifier.clearSelectedNotes();
+      notifier.setHighlightedNotes([]);
+      ref.read(activeScaleProvider.notifier).state = null;
+      ref.read(activeChordProvider.notifier).state = null;
+      ref.read(fretboardChordCommittedProvider.notifier).state = false;
+      if (closeAfterClear) Navigator.of(context).maybePop();
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (hasFilters) ...[
-            ClearAllButton(
-              onClear: () {
-                HapticFeedback.mediumImpact();
-                notifier.clearSelectedNotes();
-                notifier.setHighlightedNotes([]);
-                ref.read(activeScaleProvider.notifier).state = null;
-                ref.read(activeChordProvider.notifier).state = null;
-                ref.read(fretboardChordCommittedProvider.notifier).state =
-                    false;
-                Navigator.of(context).maybePop();
-              },
-            ),
+          if (hasFilters && !studio) ...[
+            ClearAllButton(onClear: clearSelections),
             const SizedBox(height: 16),
           ],
           const _TuneSectionLabel('View mode'),
@@ -838,12 +860,29 @@ class _FretSettingsSheetContent extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: studio ? 8 : 16),
           const _TuneSectionLabel('Tuning'),
           const TuningSelector(),
-          const SizedBox(height: 16),
-          const _TuneSectionLabel('Capo'),
+          SizedBox(height: studio ? 8 : 16),
+          if (!studio) const _TuneSectionLabel('Capo'),
           const CapoControl(),
+          if (hasFilters && studio) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('instrumentClearAllSelections'),
+                onPressed: clearSelections,
+                style: TextButton.styleFrom(
+                  foregroundColor: StudioPalette.of(context).red,
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+                icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                label: const Text('Clear all selections'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -859,11 +898,16 @@ class _TuneSectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+      padding: EdgeInsets.fromLTRB(
+        4,
+        StudioPalette.of(context).isStudio ? 4 : 8,
+        4,
+        6,
+      ),
       child: Text(
         label.toUpperCase(),
-        style: const TextStyle(
-          color: MuzicianTheme.textMuted,
+        style: TextStyle(
+          color: StudioPalette.of(context).textMuted,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
@@ -903,34 +947,28 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
       binding: pianoBinding,
       title: 'Piano',
       appBarChipLabel: null,
+      projectContext: const ProjectChip(),
+      voicingsBuilder: (_) => const PianoChordPicker(),
+      setupBuilder: (_) =>
+          const _PianoSettingsSheetContent(closeAfterClear: false),
+      onSaveRequested: () => showWidgetSheet(
+        context: context,
+        title: 'Idea library',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: PianoSavePanel(
+            linkedEditSaveId: widget.linkedEditSaveId,
+            onDifferentSaveLoaded: widget.onDifferentSaveLoaded,
+            onHandoffCompleted: widget.onHandoffCompleted,
+          ),
+        ),
+      ),
+      instrumentContext:
+          '${pianoRanges[ref.watch(pianoProvider).currentRange]!.displayName} · Exact MIDI keys',
       appBarActions: [
-        const Padding(padding: EdgeInsets.only(right: 4), child: ProjectChip()),
         IconBtn(
           icon: Icons.help_outline_rounded,
           onTap: () => showAppInfoPanel(context, initialTab: 1),
-        ),
-        IconBtn(
-          icon: Icons.bookmark_border_rounded,
-          onTap: () => showWidgetSheet(
-            context: context,
-            title: 'Saves',
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: PianoSavePanel(
-                linkedEditSaveId: widget.linkedEditSaveId,
-                onDifferentSaveLoaded: widget.onDifferentSaveLoaded,
-                onHandoffCompleted: widget.onHandoffCompleted,
-              ),
-            ),
-          ),
-        ),
-        IconBtn(
-          icon: Icons.tune_rounded,
-          onTap: () => showWidgetSheet(
-            context: context,
-            title: 'Settings',
-            child: _PianoSettingsSheetContent(),
-          ),
         ),
       ],
       board: const GlassFrame(
@@ -970,7 +1008,9 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
 // ── Piano Settings Sheet Content ────────────────────────────────────────────
 
 class _PianoSettingsSheetContent extends ConsumerWidget {
-  const _PianoSettingsSheetContent();
+  const _PianoSettingsSheetContent({this.closeAfterClear = true});
+
+  final bool closeAfterClear;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -980,23 +1020,24 @@ class _PianoSettingsSheetContent extends ConsumerWidget {
         state.selectedKeys.isNotEmpty ||
         state.highlightedNotes.isNotEmpty ||
         state.focusedNotes.isNotEmpty;
+    final studio = StudioPalette.of(context).isStudio;
+    void clearSelections() {
+      HapticFeedback.mediumImpact();
+      notifier.clearSelectedNotes();
+      notifier.setHighlightedNotes([]);
+      ref.read(pianoActiveScaleProvider.notifier).state = null;
+      ref.read(pianoActiveChordProvider.notifier).state = null;
+      ref.read(pianoChordCommittedProvider.notifier).state = false;
+      if (closeAfterClear) Navigator.of(context).maybePop();
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (hasFilters) ...[
-            ClearAllButton(
-              onClear: () {
-                HapticFeedback.mediumImpact();
-                notifier.clearSelectedNotes();
-                notifier.setHighlightedNotes([]);
-                ref.read(pianoActiveScaleProvider.notifier).state = null;
-                ref.read(pianoActiveChordProvider.notifier).state = null;
-                ref.read(pianoChordCommittedProvider.notifier).state = false;
-                Navigator.of(context).maybePop();
-              },
-            ),
+          if (hasFilters && !studio) ...[
+            ClearAllButton(onClear: clearSelections),
             const SizedBox(height: 16),
           ],
           const _TuneSectionLabel('View mode'),
@@ -1012,9 +1053,26 @@ class _PianoSettingsSheetContent extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const _TuneSectionLabel('Range'),
+          SizedBox(height: studio ? 8 : 16),
+          if (!studio) const _TuneSectionLabel('Range'),
           const PianoRangeSelector(),
+          if (hasFilters && studio) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('instrumentClearAllSelections'),
+                onPressed: clearSelections,
+                style: TextButton.styleFrom(
+                  foregroundColor: StudioPalette.of(context).red,
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+                icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                label: const Text('Clear all selections'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1024,7 +1082,7 @@ class _PianoSettingsSheetContent extends ConsumerWidget {
 // ── Settings Screen ─────────────────────────────────────────────────────────
 
 class _SettingsScreen extends ConsumerWidget {
-  const _SettingsScreen();
+  const _SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1035,13 +1093,54 @@ class _SettingsScreen extends ConsumerWidget {
       title: 'Settings',
       subtitle: 'Personalise your experience',
       children: [
+        _Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Appearance',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              for (final variant in AppThemeVariant.values)
+                ListTile(
+                  key: ValueKey('settings_theme_${variant.name}'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    variant == AppThemeVariant.studio
+                        ? 'Studio'
+                        : 'Studio Muzician',
+                  ),
+                  subtitle: Text(
+                    variant == AppThemeVariant.studio
+                        ? 'Graphite surfaces with mint accents'
+                        : 'Night surfaces with sky, teal and violet accents',
+                  ),
+                  trailing: Icon(
+                    settings.themeVariant == variant
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    color: settings.themeVariant == variant
+                        ? StudioPalette.of(context).sky
+                        : StudioPalette.of(context).textMuted,
+                  ),
+                  selected: settings.themeVariant == variant,
+                  onTap: () => notifier.setThemeVariant(variant),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         const DataRecoveryPanel(),
         const SizedBox(height: 12),
         _Card(
           child: SwitchListTile.adaptive(
             key: const ValueKey('settings_note_spelling'),
             contentPadding: EdgeInsets.zero,
-            secondary: const Icon(Icons.music_note, color: MuzicianTheme.sky),
+            secondary: Icon(
+              Icons.music_note,
+              color: StudioPalette.of(context).sky,
+            ),
             title: const Text('Prefer flat note names'),
             subtitle: const Text('Show Eb instead of D# in musical labels.'),
             value: settings.noteSpelling == NoteSpelling.flats,
@@ -1055,16 +1154,22 @@ class _SettingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.queue_music, color: MuzicianTheme.sky, size: 18),
+                  Icon(
+                    Icons.queue_music,
+                    color: StudioPalette.of(context).sky,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
-                  Text(
-                    'Default Harmony instrument for new projects',
-                    style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: Text(
+                      'Default Harmony instrument for new projects',
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -1077,7 +1182,7 @@ class _SettingsScreen extends ConsumerWidget {
                     instrument == HarmonyLaneInstrument.fretboard
                         ? Icons.music_note
                         : Icons.piano,
-                    color: MuzicianTheme.sky,
+                    color: StudioPalette.of(context).sky,
                   ),
                   title: Text(
                     instrument == HarmonyLaneInstrument.fretboard
@@ -1086,15 +1191,21 @@ class _SettingsScreen extends ConsumerWidget {
                   ),
                   trailing:
                       settings.defaultNewProjectHarmonyInstrument == instrument
-                      ? const Icon(Icons.check_circle, color: MuzicianTheme.sky)
+                      ? Icon(
+                          Icons.check_circle,
+                          color: StudioPalette.of(context).sky,
+                        )
                       : const Icon(Icons.circle_outlined),
                   onTap: () => notifier.setDefaultNewProjectHarmonyInstrument(
                     instrument,
                   ),
                 ),
-              const Text(
+              Text(
                 'This choice is copied to new projects. Existing projects keep their current instrument.',
-                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 11),
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -1104,14 +1215,14 @@ class _SettingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Text('🔊', style: TextStyle(fontSize: 18)),
                   SizedBox(width: 8),
                   Text(
                     'Note Preview Volume',
                     style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
+                      color: StudioPalette.of(context).textSecondary,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1121,20 +1232,22 @@ class _SettingsScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.volume_mute,
                     size: 16,
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                   ),
                   Expanded(
                     child: SliderTheme(
                       data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: MuzicianTheme.sky,
-                        inactiveTrackColor: MuzicianTheme.sky.withValues(
-                          alpha: 0.15,
-                        ),
-                        thumbColor: MuzicianTheme.sky,
-                        overlayColor: MuzicianTheme.sky.withValues(alpha: 0.12),
+                        activeTrackColor: StudioPalette.of(context).sky,
+                        inactiveTrackColor: StudioPalette.of(
+                          context,
+                        ).sky.withValues(alpha: 0.15),
+                        thumbColor: StudioPalette.of(context).sky,
+                        overlayColor: StudioPalette.of(
+                          context,
+                        ).sky.withValues(alpha: 0.12),
                         trackHeight: 3,
                         thumbShape: const RoundSliderThumbShape(
                           enabledThumbRadius: 7,
@@ -1149,17 +1262,17 @@ class _SettingsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.volume_up,
                     size: 16,
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                   ),
                 ],
               ),
               Text(
                 '${(settings.noteVolume * 100).round()} %',
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -1171,14 +1284,14 @@ class _SettingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Text('🎵', style: TextStyle(fontSize: 18)),
                   SizedBox(width: 8),
                   Text(
                     'Scale Highlight',
                     style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
+                      color: StudioPalette.of(context).textSecondary,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1198,29 +1311,33 @@ class _SettingsScreen extends ConsumerWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(4),
                         color: settings.suppressOutOfKeyAlert
-                            ? MuzicianTheme.sky.withValues(alpha: 0.2)
-                            : Colors.white.withValues(alpha: 0.04),
+                            ? StudioPalette.of(
+                                context,
+                              ).sky.withValues(alpha: 0.2)
+                            : (StudioPalette.of(context).isStudio
+                                  ? StudioPalette.of(context).glassBg
+                                  : Colors.white.withValues(alpha: 0.04)),
                         border: Border.all(
                           color: settings.suppressOutOfKeyAlert
-                              ? MuzicianTheme.sky
-                              : Colors.white.withValues(alpha: 0.2),
+                              ? StudioPalette.of(context).sky
+                              : StudioPalette.of(context).textMuted,
                           width: 1,
                         ),
                       ),
                       child: settings.suppressOutOfKeyAlert
-                          ? const Icon(
+                          ? Icon(
                               Icons.check,
                               size: 12,
-                              color: MuzicianTheme.sky,
+                              color: StudioPalette.of(context).sky,
                             )
                           : null,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Skip out-of-key warning',
                         style: TextStyle(
-                          color: MuzicianTheme.textSecondary,
+                          color: StudioPalette.of(context).textSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1230,9 +1347,12 @@ class _SettingsScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'When enabled, adding a note outside the highlighted scale clears the highlight silently.',
-                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 11),
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -1241,10 +1361,10 @@ class _SettingsScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             children: [
-              const Text(
+              Text(
                 'Muzician',
                 style: TextStyle(
-                  color: MuzicianTheme.textMuted,
+                  color: StudioPalette.of(context).textMuted,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1253,7 +1373,9 @@ class _SettingsScreen extends ConsumerWidget {
               Text(
                 'Settings are saved automatically',
                 style: TextStyle(
-                  color: MuzicianTheme.textMuted.withValues(alpha: 0.6),
+                  color: StudioPalette.of(
+                    context,
+                  ).textMuted.withValues(alpha: 0.6),
                   fontSize: 11,
                 ),
               ),

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 OverlayEntry? _activeEntry;
 Timer? _activeTimer;
@@ -92,9 +92,9 @@ class _UndoToast extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
         decoration: BoxDecoration(
-          color: MuzicianTheme.surface.withValues(alpha: 0.96),
+          color: StudioPalette.of(context).surface.withValues(alpha: 0.96),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.35),
@@ -108,8 +108,8 @@ class _UndoToast extends StatelessWidget {
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(
-                  color: MuzicianTheme.textPrimary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -118,7 +118,7 @@ class _UndoToast extends StatelessWidget {
             TextButton(
               onPressed: onUndo,
               style: TextButton.styleFrom(
-                foregroundColor: MuzicianTheme.sky,
+                foregroundColor: StudioPalette.of(context).sky,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 minimumSize: const Size(0, 36),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -131,7 +131,7 @@ class _UndoToast extends StatelessWidget {
             IconButton(
               onPressed: onDismiss,
               icon: const Icon(Icons.close_rounded, size: 18),
-              color: MuzicianTheme.textMuted,
+              color: StudioPalette.of(context).textMuted,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               splashRadius: 18,

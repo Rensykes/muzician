@@ -18,7 +18,7 @@ import '../store/piano_store.dart';
 import '../store/project_config_sync.dart';
 import '../store/save_system_store.dart';
 import '../store/settings_store.dart';
-import '../theme/muzician_theme.dart';
+import '../theme/studio_theme.dart';
 import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
 
@@ -196,7 +196,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   }) async {
     var value = suggestions.isNotEmpty ? suggestions.first : '';
     final controller = TextEditingController(text: value);
-    return showDialog<String>(
+    return showStudioDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => MuzicianDialog(
@@ -206,10 +206,10 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (suggestions.isNotEmpty) ...[
-                const Text(
+                Text(
                   'SUGGESTIONS',
                   style: TextStyle(
-                    color: MuzicianTheme.textDim,
+                    color: StudioPalette.of(context).textDim,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.8,
@@ -235,11 +235,17 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
                             color: isSelected
-                                ? MuzicianTheme.teal.withValues(alpha: 0.18)
-                                : Colors.white.withValues(alpha: 0.06),
+                                ? StudioPalette.of(
+                                    context,
+                                  ).teal.withValues(alpha: 0.18)
+                                : (StudioPalette.of(context).isStudio
+                                      ? StudioPalette.of(context).glassBg
+                                      : Colors.white.withValues(alpha: 0.06)),
                             border: Border.all(
                               color: isSelected
-                                  ? MuzicianTheme.teal.withValues(alpha: 0.5)
+                                  ? StudioPalette.of(
+                                      context,
+                                    ).teal.withValues(alpha: 0.5)
                                   : Colors.white.withValues(alpha: 0.12),
                               width: 0.5,
                             ),
@@ -248,8 +254,8 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
                             s,
                             style: TextStyle(
                               color: isSelected
-                                  ? MuzicianTheme.teal
-                                  : const Color(0xFF94A3B8),
+                                  ? StudioPalette.of(context).teal
+                                  : StudioPalette.of(context).textSecondary,
                               fontSize: 12,
                               fontWeight: isSelected
                                   ? FontWeight.w700
@@ -266,17 +272,23 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
               TextField(
                 controller: controller,
                 autofocus: suggestions.isEmpty,
-                style: const TextStyle(color: MuzicianTheme.textPrimary),
+                style: TextStyle(color: StudioPalette.of(context).textPrimary),
                 decoration: InputDecoration(
                   hintText: suggestions.isNotEmpty
                       ? 'Or type a custom name…'
                       : hint,
-                  hintStyle: const TextStyle(color: MuzicianTheme.textMuted),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: MuzicianTheme.textDim),
+                  hintStyle: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
                   ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: MuzicianTheme.sky),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: StudioPalette.of(context).textDim,
+                    ),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: StudioPalette.of(context).sky,
+                    ),
                   ),
                 ),
                 onChanged: (v) => setDialogState(() => value = v),
@@ -304,22 +316,22 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
   }) async {
     var value = initial ?? '';
     final controller = TextEditingController(text: value);
-    return showDialog<String>(
+    return showStudioDialog<String>(
       context: context,
       builder: (ctx) => MuzicianDialog(
         title: title,
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: MuzicianTheme.textPrimary),
+          style: TextStyle(color: StudioPalette.of(context).textPrimary),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: MuzicianTheme.textMuted),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: MuzicianTheme.textDim),
+            hintStyle: TextStyle(color: StudioPalette.of(context).textMuted),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: StudioPalette.of(context).textDim),
             ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: MuzicianTheme.sky),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: StudioPalette.of(context).sky),
             ),
           ),
           onChanged: (v) => value = v,
@@ -337,7 +349,7 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
     );
   }
 
-  Future<bool?> _confirmDialog(String message) => showDialog<bool>(
+  Future<bool?> _confirmDialog(String message) => showStudioDialog<bool>(
     context: context,
     builder: (ctx) => MuzicianDialog(
       content: Text(message),
@@ -1056,10 +1068,10 @@ class _Header extends StatelessWidget {
       spacing: 4,
       runSpacing: 2,
       children: [
-        const Text(
+        Text(
           'SAVES',
           style: TextStyle(
-            color: Color(0xFF94A3B8),
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.2,
@@ -1076,7 +1088,7 @@ class _Header extends StatelessWidget {
               iconSize: 16,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              color: MuzicianTheme.textSecondary,
+              color: StudioPalette.of(context).textSecondary,
               tooltip: gridMode ? 'List view' : 'Grid view',
               onPressed: onToggleGrid,
             ),
@@ -1088,7 +1100,7 @@ class _Header extends StatelessWidget {
             icon: const Icon(Icons.playlist_add, size: 16),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            color: MuzicianTheme.sky,
+            color: StudioPalette.of(context).sky,
             tooltip: 'Use in Writer',
             onPressed: onUseInWriter,
           ),
@@ -1096,20 +1108,22 @@ class _Header extends StatelessWidget {
           _ActionChip(
             key: const Key('saveBrowserSaveHere'),
             label: 'Save here',
-            color: MuzicianTheme.emerald,
+            color: StudioPalette.of(context).emerald,
             onTap: onSaveHere,
           ),
         ],
         _ActionChip(
           key: const Key('saveBrowserNewFolder'),
           label: '+ Folder',
-          color: MuzicianTheme.sky,
+          color: StudioPalette.of(context).sky,
           onTap: canCreateFolder ? onNewFolder : null,
         ),
         _ActionChip(
           key: const Key('saveBrowserEditToggle'),
           label: editMode ? 'Done' : 'Edit',
-          color: editMode ? MuzicianTheme.orange : MuzicianTheme.textSecondary,
+          color: editMode
+              ? StudioPalette.of(context).orange
+              : StudioPalette.of(context).textSecondary,
           onTap: onToggleEdit,
         ),
       ],
@@ -1159,7 +1173,9 @@ class _ActionChip extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  color: onTap == null ? MuzicianTheme.textDim : color,
+                  color: onTap == null
+                      ? StudioPalette.of(context).textDim
+                      : color,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1196,10 +1212,10 @@ class _Breadcrumb extends StatelessWidget {
             children: [
               GestureDetector(
                 onTap: onRoot,
-                child: const Text(
+                child: Text(
                   '⌂',
                   style: TextStyle(
-                    color: MuzicianTheme.sky,
+                    color: StudioPalette.of(context).sky,
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1207,12 +1223,12 @@ class _Breadcrumb extends StatelessWidget {
               ),
               ...breadcrumb.asMap().entries.expand(
                 (e) => [
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(horizontal: 4),
                     child: Text(
                       '›',
                       style: TextStyle(
-                        color: MuzicianTheme.textMuted,
+                        color: StudioPalette.of(context).textMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -1223,8 +1239,8 @@ class _Breadcrumb extends StatelessWidget {
                       e.value.name,
                       style: TextStyle(
                         color: e.key == breadcrumb.length - 1
-                            ? MuzicianTheme.textPrimary
-                            : MuzicianTheme.textSecondary,
+                            ? StudioPalette.of(context).textPrimary
+                            : StudioPalette.of(context).textSecondary,
                         fontSize: 12,
                         fontWeight: e.key == breadcrumb.length - 1
                             ? FontWeight.w600
@@ -1243,17 +1259,19 @@ class _Breadcrumb extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: (StudioPalette.of(context).isStudio
+                  ? StudioPalette.of(context).glassBg
+                  : Colors.white.withValues(alpha: 0.05)),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.1),
                 width: 0.5,
               ),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
+            child: Text(
               '← Back',
               style: TextStyle(
-                color: MuzicianTheme.textSecondary,
+                color: StudioPalette.of(context).textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -1276,8 +1294,8 @@ class _EmptyHint extends StatelessWidget {
     child: Text(
       message,
       textAlign: TextAlign.center,
-      style: const TextStyle(
-        color: MuzicianTheme.textMuted,
+      style: TextStyle(
+        color: StudioPalette.of(context).textMuted,
         fontSize: 12,
         fontStyle: FontStyle.italic,
       ),
@@ -1354,14 +1372,14 @@ class _FolderRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: editMode && !managed
-                      ? MuzicianTheme.orange
-                      : MuzicianTheme.textSecondary,
+                      ? StudioPalette.of(context).orange
+                      : StudioPalette.of(context).textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                   decoration: editMode && !managed
                       ? TextDecoration.underline
                       : null,
-                  decorationColor: MuzicianTheme.orange,
+                  decorationColor: StudioPalette.of(context).orange,
                 ),
               ),
             ),
@@ -1378,13 +1396,16 @@ class _FolderRow extends StatelessWidget {
                 managed ? Icons.lock_outline : Icons.delete_outline,
                 size: 18,
               ),
-              color: MuzicianTheme.red,
-              disabledColor: MuzicianTheme.textDim,
+              color: StudioPalette.of(context).red,
+              disabledColor: StudioPalette.of(context).textDim,
             )
           else
-            const Text(
+            Text(
               '›',
-              style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 16),
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
+                fontSize: 16,
+              ),
             ),
         ],
       ),
@@ -1511,10 +1532,10 @@ class _SaveRowState extends State<_SaveRow>
       : '🎸';
 
   Color get _accentColor => widget.isActiveSession
-      ? MuzicianTheme.emerald
+      ? StudioPalette.of(context).emerald
       : widget.isSelected
-      ? MuzicianTheme.sky
-      : MuzicianTheme.textSecondary;
+      ? StudioPalette.of(context).sky
+      : StudioPalette.of(context).textSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -1526,16 +1547,20 @@ class _SaveRowState extends State<_SaveRow>
           margin: const EdgeInsets.symmetric(vertical: 2),
           decoration: BoxDecoration(
             color: widget.isSelected && !widget.editMode
-                ? MuzicianTheme.sky.withValues(alpha: 0.08 + 0.07 * t)
+                ? StudioPalette.of(
+                    context,
+                  ).sky.withValues(alpha: 0.08 + 0.07 * t)
                 : widget.isActiveSession && !widget.editMode
-                ? MuzicianTheme.emerald.withValues(alpha: 0.08)
+                ? StudioPalette.of(context).emerald.withValues(alpha: 0.08)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8 + 4 * t),
             border: Border.all(
               color: widget.isSelected && !widget.editMode
-                  ? MuzicianTheme.sky.withValues(alpha: 0.25 + 0.25 * t)
+                  ? StudioPalette.of(
+                      context,
+                    ).sky.withValues(alpha: 0.25 + 0.25 * t)
                   : widget.isActiveSession
-                  ? MuzicianTheme.emerald.withValues(alpha: 0.15)
+                  ? StudioPalette.of(context).emerald.withValues(alpha: 0.15)
                   : Colors.transparent,
               width: widget.isSelected && !widget.editMode
                   ? 0.5 + 0.5 * t
@@ -1590,10 +1615,10 @@ class _SaveRowState extends State<_SaveRow>
                       Text(_icon, style: const TextStyle(fontSize: 14)),
                       if (widget.offKey) ...[
                         const SizedBox(width: 4),
-                        const Icon(
+                        Icon(
                           Icons.warning_amber_rounded,
                           size: 14,
-                          color: MuzicianTheme.orange,
+                          color: StudioPalette.of(context).orange,
                         ),
                       ],
                       const SizedBox(width: 8),
@@ -1615,14 +1640,16 @@ class _SaveRowState extends State<_SaveRow>
                                 decoration: widget.editMode && widget.canRename
                                     ? TextDecoration.underline
                                     : null,
-                                decorationColor: MuzicianTheme.orange,
+                                decorationColor: StudioPalette.of(
+                                  context,
+                                ).orange,
                               ),
                             ),
                             if (widget.contextLabel != null)
                               Text(
                                 widget.contextLabel!,
-                                style: const TextStyle(
-                                  color: MuzicianTheme.textMuted,
+                                style: TextStyle(
+                                  color: StudioPalette.of(context).textMuted,
                                   fontSize: 10,
                                 ),
                               ),
@@ -1637,8 +1664,8 @@ class _SaveRowState extends State<_SaveRow>
                                   widget.save.snapshot,
                                   spelling: widget.spelling,
                                 ).text!,
-                                style: const TextStyle(
-                                  color: MuzicianTheme.violet,
+                                style: TextStyle(
+                                  color: StudioPalette.of(context).violet,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1661,8 +1688,8 @@ class _SaveRowState extends State<_SaveRow>
                                       .quality,
                                   spelling: widget.spelling,
                                 ),
-                                style: const TextStyle(
-                                  color: MuzicianTheme.violet,
+                                style: TextStyle(
+                                  color: StudioPalette.of(context).violet,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1677,15 +1704,15 @@ class _SaveRowState extends State<_SaveRow>
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: MuzicianTheme.emerald.withValues(
-                              alpha: 0.15,
-                            ),
+                            color: StudioPalette.of(
+                              context,
+                            ).emerald.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
+                          child: Text(
                             'active',
                             style: TextStyle(
-                              color: MuzicianTheme.emerald,
+                              color: StudioPalette.of(context).emerald,
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
@@ -1693,14 +1720,14 @@ class _SaveRowState extends State<_SaveRow>
                           ),
                         ),
                       if (widget.editMode && !widget.canRename)
-                        const Tooltip(
+                        Tooltip(
                           message: 'Rename this linked save from Writer.',
                           child: Padding(
                             padding: EdgeInsets.all(6),
                             child: Icon(
                               Icons.lock_outline,
                               size: 16,
-                              color: MuzicianTheme.textDim,
+                              color: StudioPalette.of(context).textDim,
                             ),
                           ),
                         ),
@@ -1732,8 +1759,8 @@ class _SaveRowState extends State<_SaveRow>
                                     : Icons.lock_outline,
                                 size: 18,
                               ),
-                              color: MuzicianTheme.red,
-                              disabledColor: MuzicianTheme.textDim,
+                              color: StudioPalette.of(context).red,
+                              disabledColor: StudioPalette.of(context).textDim,
                             ),
                           ),
                         )
@@ -1746,10 +1773,12 @@ class _SaveRowState extends State<_SaveRow>
                                 : Icons.keyboard_arrow_down,
                             size: 16,
                             color: widget.isSelected
-                                ? MuzicianTheme.sky.withValues(
-                                    alpha: 0.8 + 0.2 * t,
-                                  )
-                                : MuzicianTheme.textDim.withValues(alpha: 0.5),
+                                ? StudioPalette.of(
+                                    context,
+                                  ).sky.withValues(alpha: 0.8 + 0.2 * t)
+                                : StudioPalette.of(
+                                    context,
+                                  ).textDim.withValues(alpha: 0.5),
                           ),
                         ),
                     ],
@@ -1819,8 +1848,8 @@ class _UpDownButton extends StatelessWidget {
         constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
         padding: EdgeInsets.zero,
         icon: Icon(icon, size: 14),
-        color: MuzicianTheme.sky,
-        disabledColor: MuzicianTheme.textDim,
+        color: StudioPalette.of(context).sky,
+        disabledColor: StudioPalette.of(context).textDim,
       ),
     ),
   );
@@ -1860,11 +1889,18 @@ class _SaveExpandedDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Divider(color: MuzicianTheme.glassBorder, height: 12, thickness: 0.5),
+          Divider(
+            color: StudioPalette.of(context).glassBorder,
+            height: 12,
+            thickness: 0.5,
+          ),
           if (save.snapshot is SongProjectSnapshot)
-            _buildSongSummary(save.snapshot as SongProjectSnapshot)
+            _buildSongSummary(context, save.snapshot as SongProjectSnapshot)
           else if (save.snapshot is WriterBlockSnapshot)
-            _buildWriterBlockSummary(save.snapshot as WriterBlockSnapshot)
+            _buildWriterBlockSummary(
+              context,
+              save.snapshot as WriterBlockSnapshot,
+            )
           else ...[
             if (save.snapshot.selectedNotes.isNotEmpty) ...[
               SingleChildScrollView(
@@ -1878,17 +1914,21 @@ class _SaveExpandedDetails extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: MuzicianTheme.sky.withValues(alpha: 0.12),
+                        color: StudioPalette.of(
+                          context,
+                        ).sky.withValues(alpha: 0.12),
                         border: Border.all(
-                          color: MuzicianTheme.sky.withValues(alpha: 0.3),
+                          color: StudioPalette.of(
+                            context,
+                          ).sky.withValues(alpha: 0.3),
                           width: 0.5,
                         ),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         formatRootChoiceLabel(note, spelling: spelling),
-                        style: const TextStyle(
-                          color: MuzicianTheme.sky,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).sky,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1904,8 +1944,8 @@ class _SaveExpandedDetails extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
                   'Chord: ${formatRecognizedChordLabel(symbol: save.snapshot.pendingChord!.symbol, rootPc: noteToPC[toSharp(save.snapshot.pendingChord!.root)] ?? -1, quality: save.snapshot.pendingChord!.quality, spelling: spelling)}',
-                  style: const TextStyle(
-                    color: MuzicianTheme.violet,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).violet,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1916,8 +1956,8 @@ class _SaveExpandedDetails extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
                   'Scale: ${formatRootChoiceLabel(save.snapshot.pendingScale!.root, spelling: spelling)} ${save.snapshot.pendingScale!.scaleName}',
-                  style: const TextStyle(
-                    color: MuzicianTheme.emerald,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).emerald,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1939,12 +1979,20 @@ class _SaveExpandedDetails extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
                         color: isActiveSession
-                            ? MuzicianTheme.emerald.withValues(alpha: 0.15)
-                            : MuzicianTheme.sky.withValues(alpha: 0.15),
+                            ? StudioPalette.of(
+                                context,
+                              ).emerald.withValues(alpha: 0.15)
+                            : StudioPalette.of(
+                                context,
+                              ).sky.withValues(alpha: 0.15),
                         border: Border.all(
                           color: isActiveSession
-                              ? MuzicianTheme.emerald.withValues(alpha: 0.4)
-                              : MuzicianTheme.sky.withValues(alpha: 0.4),
+                              ? StudioPalette.of(
+                                  context,
+                                ).emerald.withValues(alpha: 0.4)
+                              : StudioPalette.of(
+                                  context,
+                                ).sky.withValues(alpha: 0.4),
                           width: 0.5,
                         ),
                         borderRadius: BorderRadius.circular(10),
@@ -1954,8 +2002,8 @@ class _SaveExpandedDetails extends StatelessWidget {
                           isActiveSession ? 'Reload' : 'Load',
                           style: TextStyle(
                             color: isActiveSession
-                                ? MuzicianTheme.emerald
-                                : MuzicianTheme.sky,
+                                ? StudioPalette.of(context).emerald
+                                : StudioPalette.of(context).sky,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1987,7 +2035,7 @@ class _SaveExpandedDetails extends StatelessWidget {
     );
   }
 
-  Widget _buildSongSummary(SongProjectSnapshot snap) {
+  Widget _buildSongSummary(BuildContext context, SongProjectSnapshot snap) {
     final trackCount = snap.project.tracks.length;
     final clipCount = snap.project.clips.length;
     final patternCount =
@@ -1996,8 +2044,8 @@ class _SaveExpandedDetails extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 3),
       child: Text(
         '$trackCount tracks · $clipCount clips · $patternCount patterns',
-        style: const TextStyle(
-          color: MuzicianTheme.emerald,
+        style: TextStyle(
+          color: StudioPalette.of(context).emerald,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
@@ -2005,12 +2053,15 @@ class _SaveExpandedDetails extends StatelessWidget {
     );
   }
 
-  Widget _buildWriterBlockSummary(WriterBlockSnapshot snapshot) => Padding(
+  Widget _buildWriterBlockSummary(
+    BuildContext context,
+    WriterBlockSnapshot snapshot,
+  ) => Padding(
     padding: const EdgeInsets.only(bottom: 3),
     child: Text(
       '${snapshot.laneKind.name} block',
-      style: const TextStyle(
-        color: MuzicianTheme.violet,
+      style: TextStyle(
+        color: StudioPalette.of(context).violet,
         fontSize: 11,
         fontWeight: FontWeight.w600,
       ),
@@ -2030,7 +2081,9 @@ class _NavButton extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: (StudioPalette.of(context).isStudio
+            ? StudioPalette.of(context).glassBg
+            : Colors.white.withValues(alpha: 0.05)),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.12),
           width: 0.5,
@@ -2039,8 +2092,8 @@ class _NavButton extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: MuzicianTheme.textSecondary,
+        style: TextStyle(
+          color: StudioPalette.of(context).textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -2106,10 +2159,10 @@ class _SaveCard extends StatelessWidget {
                 Icon(saveInstrumentIcon(instrument), size: 16),
                 const Spacer(),
                 if (offKey)
-                  const Icon(
+                  Icon(
                     Icons.warning_amber_rounded,
                     size: 14,
-                    color: MuzicianTheme.orange,
+                    color: StudioPalette.of(context).orange,
                   ),
               ],
             ),
@@ -2144,7 +2197,7 @@ class _SaveCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontSize: 10,
-                  color: MuzicianTheme.textMuted,
+                  color: StudioPalette.of(context).textMuted,
                 ),
               ),
           ],

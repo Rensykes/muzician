@@ -5,7 +5,7 @@ sidebar notes, detection, scale/root choices, hum previews, and saved-stack
 details. Sharps is the default; Flats displays Eb for D# and Gb for F# without
 changing MIDI notes, octaves, project keys, or custom names.
 
-A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, named stack buttons, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and adaptive landscape/portrait layout.
+A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, Stack Builder and Quick, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and responsive Studio layout with a bounded contextual inspector. Song-hosted note editors retain the legacy layout.
 
 ---
 
@@ -20,11 +20,11 @@ A quantized, timeline-based note editor rendered with `CustomPainter`. Supports 
 ### Selection workflows
 
 - **Select tool (primary)**: Switch to `Select`, then drag a marquee rectangle across the grid. All notes the box touches (partial overlap) are selected. Each new marquee replaces the previous selection.
-- **Double-tap (refinement)**: In any mode, double-tap a note to add or remove it from the current selection.
-- **Tap a note**: solo-select that note (replace current note selection).
-- **Select column (secondary shortcut)**: Use the selection action to select all notes active at `selectedColumnTick` — kept as a quick legacy alternative to the Select tool.
-- **Move a selected group**: drag a selected note body to move all selected notes together.
-- **Resize a selected group**: drag the right edge of a selected note to resize the whole current selection.
+- **Double-tap (refinement)**: In Draw or Select, double-tap a note to add or remove it from the current selection.
+- **Tap a note (Draw)**: solo-select that note (replace current note selection).
+- **Select column (secondary shortcut)**: Use the selection action to select all notes active at `selectedColumnTick` without changing the active tool.
+- **Move a selected group (Draw)**: drag a selected note body to move all selected notes together.
+- **Resize a selected group (Draw)**: drag the right edge of a selected note to resize the whole current selection.
 - **Split a selected group**: in scissors mode, split on a selected note to split the whole current selection at that tick.
 - **Delete selected notes**: use the UI delete-selection action or `Delete` / `Backspace` (desktop/web).
 
@@ -64,11 +64,14 @@ lib/
     piano_roll_grid.dart                  ← main editor canvas (PianoRollGrid)
     piano_roll_screen_v2.dart             ← adaptive layout shell (Roll tab body)
     piano_roll_stack_builder.dart         ← unified Stack Builder (Canonico/Avanzato)
-    piano_roll_scale_picker.dart          ← scale-highlight picker
     piano_roll_save_stack_loader.dart     ← load stacks from saved progressions
     piano_roll_save_panel.dart            ← first-class piano-roll save/load
     piano_roll_detection_panel.dart       ← detect chord/scale at selected column
     piano_roll_hum_recorder.dart          ← mobile-only hum → MIDI
+  features/instrument_shared/
+    shared_scale_picker.dart              ← shared project-aware scale picker
+  theme/
+    studio_theme.dart                     ← inherited palettes and live route scope
 ```
 
 ### Shared Providers
@@ -317,8 +320,9 @@ Onset-sequencer transport that plays notes via the synthesised `NotePlayer` engi
 |---|---|
 | Idle + column selected | Plays from that tick to the end of the timeline. |
 | Idle + no column selected | Plays from tick 0 to the end of the timeline. |
+| Playing playhead | The grid and ruler show the current tick and scroll horizontally to keep it in view. |
 | Playing | `currentTick` advances tick-by-tick at `60000 / tempo / ticksPerQuarter` ms each. |
-| Hum is recording / processing | Playback button is hidden; `message = "Playback unavailable while humming"`. |
+| Hum is requesting permission / recording / processing | Starting playback is blocked; `message = "Playback unavailable while humming"`. |
 | No notes anywhere at/after start + metronome off | `message = "Nothing to play from the selected column"`. |
 | No notes anywhere at/after start + metronome on | Loop runs anyway — metronome alone is valid playback. |
 
@@ -339,7 +343,7 @@ Configurable via the Roll Settings sheet ([Settings](#roll-settings)). When `App
 |---|---|
 | Play / Pause / Stop / Rewind | Loop / cycle markers |
 | Start from selected column | Pause + resume from the same tick |
-| Run to end of timeline | Animated playhead / auto-scroll |
+| Run to end of timeline | Looped playback regions |
 | Tap-to-edit BPM and time signature | Multi-track / velocity editing |
 | Metronome (accent on downbeat) | MIDI export |
 | Onset-only sequencing (duration-accurate note-offs deferred) | Count-in / pre-roll |
@@ -349,7 +353,7 @@ Configurable via the Roll Settings sheet ([Settings](#roll-settings)). When `App
 
 ## Roll Settings
 
-Per-page settings sheet opened via the gear icon in the `CompactAppBar`. Currently exposes a single toggle:
+Per-page settings sheet opened via the gear action in the Piano Roll header. Currently exposes a single toggle:
 
 | Setting | Persistence | Default | Effect |
 |---|---|---|---|
@@ -361,7 +365,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 ## Tool Modes
 
-`PianoRollState.activeTool` drives the grid's tap behaviour. All five modes are reachable from the portrait action-bar tool segment (icon-only segmented control) or directly via `pianoRollProvider.setActiveTool(...)`.
+`PianoRollState.activeTool` drives the grid's tap behaviour. All five modes are reachable from the named Studio tool row (scroll horizontally on compact screens), the Tools inspector, or directly via `pianoRollProvider.setActiveTool(...)`.
 
 | Tool | Icon | Tap on empty cell | Tap on note | Drag |
 |---|---|---|---|---|
@@ -377,7 +381,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 |---|---|
 | Enum | `lib/models/piano_roll.dart` |
 | Tap/drag wiring | `lib/features/piano_roll/piano_roll_grid.dart` (`_DragMode.paintBrush`, `_DragMode.deleteBrush`, `_paintAt`, `_deleteAt`, brushed-cell/id sets) |
-| Tool segmented control (portrait action bar) | `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_ToolModeSegment`, `_ToolSegmentItem`) |
+| Studio tool row / Tools inspector; legacy portrait segment | `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_StudioToolRow`, `_EditPitchControls`, `_ToolModeSegment`) |
 
 ### Continuous-tool guarantees
 
@@ -395,47 +399,66 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 ---
 
-## Layout: Landscape & Portrait
+## Studio layout and utilities
 
-### Landscape (width > 600 px)
+Studio and Studio Muzician share one layout. `PianoRollScreenV2` resolves the
+inherited `StudioPalette`; it never selects appearance from an isolated editor's
+settings container. Theme switching retains notes, time column, tool, selection,
+grid zoom/scroll and the open Stack Builder wizard. All three painters receive the
+immutable palette and repaint when it changes.
 
-- **Grid**: 3× flex on the left — primary editing surface.
-- **Inspector rail**: 1× flex on the right — scrollable utility panel containing:
-  - Stack Builder (unified Canonico/Avanzato chord stack editor)
-  - Selection status
-  - Edit & Pitch controls (tool + snap pills, pitch range ± octave)
-  - Scale picker
-  - Detection panel (when column selected)
-  - Hum Recorder (mobile) / unsupported card (web)
-  - Save / Load panel
-  - Import from Saves
-- **Transport strip**: compact row with BPM, bar/beat readout, time signature, play/stop.
+- **Header:** full Piano Roll title, with project context, help and Roll Settings
+  on a separate row. Long project names retain a full tooltip and semantic label.
+- **Transport:** rewind, play/pause, stop, tempo, bar/beat and time signature.
+  Readouts scroll horizontally when space is tight.
+- **Tools:** named Draw, Select, Split, Paint and Delete actions above the grid.
+  The active tool is highlighted. The Snap readout opens the Tools inspector.
+- **Grid:** the central editing surface, with distinct white/black pitch keys,
+  restrained alternating rows and octave labels on notes when their width
+  permits. On tall tablets the pitch rows start immediately under the ruler,
+  aligned with the keyboard sidebar. It preserves the raw pointer, resize, pinch and synchronized
+  scrolling behavior described below.
+- **Inspector:** underlined Stack Builder / Selection / Tools tabs. At widths
+  of at least 700px it is a 320px side rail. Below 700px it is an inline dock
+  capped at 33% of available height (80–220px), including tabs. The Chord
+  builder presents Root, Quality, Inversion and Duration as four compact menus
+  above a mint Add stack action with the actual note preview. Field choosers
+  have a named title and close action and follow live theme changes. Ordinary phone
+  portrait layouts show the complete builder without scrolling. Custom opens
+  the existing lossless note editor. The body scrolls at short heights or large
+  text sizes, and the inspector can collapse; opening it keeps useful grid space. Short landscape
+  uses the side rail so its contextual controls scroll independently. Below
+  500px height, the title and project remain distinct within a compact row,
+  and utilities follow the tools in the same horizontal strip to preserve grid
+  height beneath app navigation or a keyboard.
+- **Selection:** time-column status, Select column, Clear selection, Delete
+  selection and detection. A ruler column is a time anchor; clearing selected
+  notes keeps that anchor.
+- **Tools inspector:** all five tools, snap choices (1/2/4/8/16/32 ticks) and
+  pitch-range controls. Range shifts by an octave; Clear restores MIDI 48–84.
+  These controls are available on phones as well as tablets.
+- **Utility strip:** Quick, Scale, Hum recorder, Save and Import. Scroll the
+  strip horizontally to reach later actions on compact screens.
 
-### Portrait (width ≤ 600 px)
+Quick copies selected notes to the selected column, or repeats the last added
+stack when there is no note selection. It does nothing until either source is
+available. Hum recorder records humming into notes on supported mobile
+platforms; it does not record an audio track.
 
-The portrait shell is minimal-by-design: the grid is `Expanded` and the chrome below it is **fixed-height**, so opening a panel never resizes the grid. Every utility surface opens as a modal bottom sheet on top of the grid via `showWidgetSheet(...)` rather than as an inline expander.
+Scale, Hum recorder, Save, Import and Settings open named, scrollable sheets.
+These follow the live Studio theme while open, including nested confirmation
+dialogs. Save uses the full-roll Save/Load flow; Import places note stacks from
+Piano or Fretboard Saves. No velocity lane, automation or Writer-transfer action
+is added.
 
-- **`CompactAppBar`**: `× Roll · {chip}`, with a gear icon (`Icons.settings_outlined`) on the right that opens the Roll Settings sheet.
-- **`_TransportStrip`**: transport buttons + BPM / BAR / SIG readouts (see [Playback](#playback)).
-- **Grid**: full-width `PianoRollGrid` inside `Expanded` — never shrinks.
-- **`_PortraitActionBar`** (3 fixed rows under the grid):
-  1. `_SelectionStatus(compact)` (left, ellipsis-safe) + `_ToolModeSegment` (right, fixed 4-icon segmented control).
-  2. `Stack Builder` · `Scale` · `Detect`.
-  3. `Record` · `Save` · `Import`.
+### Legacy Song host
 
-#### Bottom sheets
-
-Each chip opens the corresponding panel as a glass `showWidgetSheet`:
-
-| Chip | Sheet body |
-|---|---|
-| `Stack Builder` | `PianoRollStackBuilder` — unified Canonico/Avanzato chord stack editor |
-| `Scale` | `PianoRollScalePicker` |
-| `Detect` | `PianoRollDetectionPanel` (chip disabled when no column is selected) |
-| `Record` | `PianoRollHumRecorderPanel` |
-| `Save` | `PianoRollSavePanel` |
-| `Import` | `PianoRollSaveStackLoader` |
-| Gear icon | `_SettingsSheet` (see [Roll Settings](#roll-settings)) |
+Song's fullscreen note editor passes through the fixed legacy theme scope.
+Its Roll uses the established 600px landscape threshold: grid plus scrollable
+utility rail when wide, or grid plus the portrait action bar and modal panels
+when compact. The legacy title remains Roll, canvas colors remain fixed, and
+root appearance changes do not redesign it. Capability flags still control
+Scale, Save/Import and outer background independently in every host.
 
 ---
 
@@ -485,7 +508,7 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 | **Add note (snap length)** | `draw` tool: double-tap on empty cell — inserts note at current snap duration |
 | **Solo-select note + audition pitch** | `draw` tool: tap on existing note |
 | **Add/remove note in selection** | `draw` tool: double-tap on existing note |
-| **Select notes at current column** | Selection action: use **Multi-select** in the Selection area (landscape) or the top-left selection icon in the portrait action bar to select all notes active at `selectedColumnTick` |
+| **Select notes at current column** | Selection action: use **Select column** in the Studio Selection inspector (or the legacy selection action) to select all notes active at `selectedColumnTick` |
 | **Move selected group** | `draw` tool: drag body of any selected note (horizontal = beat-snapped tick, vertical = semitone pitch) |
 | **Resize selected group** | `draw` tool: drag the right-edge handle of a selected note (rightmost 16 px, snaps to 1/16th minimum) |
 | **Split selected group** | `scissors` tool: tap a selected note — splits the current selection at the tapped position |
@@ -519,10 +542,10 @@ Tap behaviour depends on the active tool — the table below covers `draw`; see 
 ### `PianoRollStackBuilder`
 Unified chord stack editor replacing the old `Stack Selector` and `Stack Composer` flows. Provides two views on the same final note list:
 
-- **Canonico**: Quick path — pick root, quality (17 types), inversion, and duration. Changes transform the current stack.
-- **Avanzato**: Lossless editor — add, edit, remove, and reorder individual notes; insert by note + octave picker or chord degree shortcut (1–9). Hard cap at 10 notes. Exact duplicates (e.g. `C4` + `C4`) are rejected; octave doublings (e.g. `C3` + `C4`) are allowed.
+- **Chord** in Studio (**Canonico** in legacy): Quick path — pick root, quality, inversion, and duration. Changes transform the current stack.
+- **Custom** in Studio (**Avanzato** in legacy): Lossless editor — add, edit and remove individual notes; insert by note + octave picker or chord degree shortcut (1–9). Hard cap at 10 notes. Exact duplicates (e.g. `C4` + `C4`) are rejected; octave doublings (e.g. `C3` + `C4`) are allowed.
 
-The builder recognises custom voicings (e.g. `G2 C3 E3 G3 C4` displays as "C maj • 2nd inv • Custom voicing"). Unrecognised stacks show "Unrecognized custom stack". Canonical and advanced views remain synchronised — switching tabs never resets the stack. In portrait, tapping **Add Stack** inserts the stack at the current column and dismisses the drawer immediately.
+The builder recognises custom voicings (e.g. `G2 C3 E3 G3 C4` displays as "C maj • 2nd inv • Custom voicing"). Unrecognised stacks show "Unrecognized custom stack". Canonical and advanced views remain synchronised — switching tabs never resets the stack. In Studio, **Add stack** inserts at the current column and keeps the inline inspector open. In the legacy portrait sheet it inserts and dismisses the sheet immediately.
 
 ---
 
@@ -538,8 +561,8 @@ Supports `FretboardSnapshot` (MIDI via tuning + string + fret) and `PianoSnapsho
 
 ---
 
-### `PianoRollScalePicker`
-Scale-highlight picker: choose a root note and scale type (major, minor, pentatonic major/minor, blues, chromatic). Highlights all matching pitch-class rows on the grid in teal. The selection is stored as `highlightedNotes` in `PianoRollState`.
+### `SharedScalePicker` with `pianoRollScaleBinding`
+Shared project-aware scale picker: choose a root note and a scale from the common, mode or extended categories. Highlights all matching pitch-class rows on the grid in teal. The selection is stored as `highlightedNotes` in `PianoRollState`.
 
 When a scale is active:
 - existing out-of-scale notes are checked before applying the scale and can be removed via the confirmation flow
@@ -559,7 +582,7 @@ Displays:
 - **Note chips** — one per active note. Each chip: tap to select, `×` button to delete.
 - **Chords** — detected chord names, matching exact pitch-class set
 - **Scales** — detected scale names, where all selected PCs are subset of scale
-- **Delete Selected Note** — button present when a note is selected
+- **Delete Selected Note** — deletes the current note selection when present
 
 ---
 
@@ -678,8 +701,14 @@ project's tonal centre.
 
 ## Standalone Roll vs. Song Note Editor
 
-The standalone `Roll` tab (`PianoRollScreenV2`) uses `pianoRollProvider` with the default container.
+The standalone `Roll` tab (`PianoRollScreenV2`) uses `pianoRollProvider` with the default container and the selected Studio appearance. Writer's isolated melody editor inherits that Studio appearance while disabling Scale and Save/Import.
 The Song workspace uses an **isolated `ProviderContainer`** seeded from a `NotePattern` when editing note clips.
-Both use `PianoRollGrid` and `PianoRollDetectionPanel`, but the provider scope keeps their states independent.
+Both use `PianoRollGrid` and `PianoRollDetectionPanel`, but the provider scope keeps their states independent. Utility and tempo sheets retain the launching editor container, so their Consumers edit that pattern rather than the standalone Roll.
 Closing the Song note editor writes a converted `NotePattern` back through `applyNotePattern` on the Song store.
-This ensures that editing a Song pattern does not mutate the standalone Roll session.
+This ensures that editing a Song pattern does not mutate the standalone Roll session. Song supplies its fixed legacy palette/layout; an isolated provider container never chooses presentation themes.
+
+### Studio visual refinement (19 October 2026)
+
+Compact portrait keeps the active tool labelled, the other four tools available as labelled-by-tooltip icons, and Snap visible. The utility row uses Quick / Scale / Hum / Save / Import; Hum retains the full Hum recorder tooltip and panel title. Large text and short viewports retain scrolling rather than compressing targets below44px.
+
+The ruler identifies each measure as bar:1 and labels its subsequent beats when zoom permits. Stronger beat lines, mint active-column notes and a2px selected-note outline distinguish musical state. With adequate vertical space, column context and existing selection actions sit under the grid while Stack Builder stays open. Wide canonical builders use a bounded panel; Custom and other inspectors retain their available editing space. Added notes from toolbar/builder operations are revealed vertically when no grid gesture is active; this does not change pitches, timing or the gesture state machine. Song's embedded legacy grid retains its prior presentation.

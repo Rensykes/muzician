@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/save_system.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
-import '../theme/muzician_theme.dart';
+import '../theme/studio_theme.dart';
 import 'core/muzician_dialog.dart';
 import 'save_previews/save_preview_thumbnail.dart';
 
@@ -100,25 +100,22 @@ class _SaveTreeBrowserState extends ConsumerState<SaveTreeBrowser> {
 
   Future<void> _handleNewFolder() async {
     final controller = TextEditingController();
-    final name = await showDialog<String>(
+    final name = await showStudioDialog<String>(
       context: context,
       builder: (ctx) => MuzicianDialog(
         title: 'New folder',
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: MuzicianTheme.textPrimary),
-          decoration: const InputDecoration(
+          style: TextStyle(color: StudioPalette.of(context).textPrimary),
+          decoration: InputDecoration(
             hintText: 'Folder name',
-            hintStyle: TextStyle(color: MuzicianTheme.textMuted),
+            hintStyle: TextStyle(color: StudioPalette.of(context).textMuted),
           ),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
-          MuzicianDialogButton(
-            'Cancel',
-            onPressed: () => Navigator.pop(ctx),
-          ),
+          MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(ctx)),
           MuzicianDialogButton(
             'Create',
             emphasis: MuzicianDialogEmphasis.primary,
@@ -138,25 +135,22 @@ class _SaveTreeBrowserState extends ConsumerState<SaveTreeBrowser> {
     final capture = widget.captureSnapshot;
     if (capture == null || _currentFolderId == null) return;
     final controller = TextEditingController();
-    final name = await showDialog<String>(
+    final name = await showStudioDialog<String>(
       context: context,
       builder: (ctx) => MuzicianDialog(
         title: 'Name your save',
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: MuzicianTheme.textPrimary),
-          decoration: const InputDecoration(
+          style: TextStyle(color: StudioPalette.of(context).textPrimary),
+          decoration: InputDecoration(
             hintText: 'Save name',
-            hintStyle: TextStyle(color: MuzicianTheme.textMuted),
+            hintStyle: TextStyle(color: StudioPalette.of(context).textMuted),
           ),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
-          MuzicianDialogButton(
-            'Cancel',
-            onPressed: () => Navigator.pop(ctx),
-          ),
+          MuzicianDialogButton('Cancel', onPressed: () => Navigator.pop(ctx)),
           MuzicianDialogButton(
             'Save',
             emphasis: MuzicianDialogEmphasis.primary,
@@ -262,10 +256,10 @@ class _HeaderBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 4, 8, 0),
       child: Row(
         children: [
-          const Text(
+          Text(
             'Library',
             style: TextStyle(
-              color: MuzicianTheme.textPrimary,
+              color: StudioPalette.of(context).textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 16,
             ),
@@ -273,27 +267,33 @@ class _HeaderBar extends StatelessWidget {
           const Spacer(),
           TextButton.icon(
             onPressed: onNewFolder,
-            icon: const Icon(
+            icon: Icon(
               Icons.create_new_folder_outlined,
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
               size: 18,
             ),
-            label: const Text(
+            label: Text(
               'Folder',
-              style: TextStyle(color: MuzicianTheme.sky, fontSize: 13),
+              style: TextStyle(
+                color: StudioPalette.of(context).sky,
+                fontSize: 13,
+              ),
             ),
           ),
           if (canSave)
             TextButton.icon(
               onPressed: onSaveHere,
-              icon: const Icon(
+              icon: Icon(
                 Icons.save_outlined,
-                color: MuzicianTheme.emerald,
+                color: StudioPalette.of(context).emerald,
                 size: 18,
               ),
-              label: const Text(
+              label: Text(
                 'Save here',
-                style: TextStyle(color: MuzicianTheme.emerald, fontSize: 13),
+                style: TextStyle(
+                  color: StudioPalette.of(context).emerald,
+                  fontSize: 13,
+                ),
               ),
             ),
         ],
@@ -326,21 +326,21 @@ class _Breadcrumb extends StatelessWidget {
         children: [
           IconButton(
             tooltip: 'Back',
-            icon: const Icon(
+            icon: Icon(
               Icons.arrow_back_ios_new,
-              color: MuzicianTheme.textSecondary,
+              color: StudioPalette.of(context).textSecondary,
               size: 16,
             ),
             onPressed: onBack,
           ),
           InkWell(
             onTap: onRoot,
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Text(
                 'Library',
                 style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -348,10 +348,10 @@ class _Breadcrumb extends StatelessWidget {
             ),
           ),
           for (var i = 0; i < breadcrumb.length; i++) ...[
-            const Icon(
+            Icon(
               Icons.chevron_right,
               size: 14,
-              color: MuzicianTheme.textMuted,
+              color: StudioPalette.of(context).textMuted,
             ),
             InkWell(
               onTap: () => onNavigate(breadcrumb[i].id),
@@ -361,8 +361,8 @@ class _Breadcrumb extends StatelessWidget {
                   breadcrumb[i].name,
                   style: TextStyle(
                     color: i == breadcrumb.length - 1
-                        ? MuzicianTheme.textPrimary
-                        : MuzicianTheme.textSecondary,
+                        ? StudioPalette.of(context).textPrimary
+                        : StudioPalette.of(context).textSecondary,
                     fontSize: 12,
                     fontWeight: i == breadcrumb.length - 1
                         ? FontWeight.w700
@@ -391,7 +391,9 @@ class _FolderRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
-        color: Colors.white.withValues(alpha: 0.03),
+        color: (StudioPalette.of(context).isStudio
+            ? StudioPalette.of(context).glassBg
+            : Colors.white.withValues(alpha: 0.03)),
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -402,26 +404,26 @@ class _FolderRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.folder_outlined,
-                    color: MuzicianTheme.sky,
+                    color: StudioPalette.of(context).sky,
                     size: 22,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       folder.name,
-                      style: const TextStyle(
-                        color: MuzicianTheme.textPrimary,
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.chevron_right,
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                     size: 18,
                   ),
                 ],
@@ -446,7 +448,9 @@ class _SaveRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: (StudioPalette.of(context).isStudio
+            ? StudioPalette.of(context).glassBg
+            : Colors.white.withValues(alpha: 0.04)),
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -465,8 +469,8 @@ class _SaveRow extends StatelessWidget {
                     children: [
                       Text(
                         save.name,
-                        style: const TextStyle(
-                          color: MuzicianTheme.textPrimary,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -475,8 +479,8 @@ class _SaveRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         instrumentLabel,
-                        style: const TextStyle(
-                          color: MuzicianTheme.textMuted,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textMuted,
                           fontSize: 11,
                           letterSpacing: 0.4,
                           fontWeight: FontWeight.w600,
@@ -485,9 +489,9 @@ class _SaveRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.download_outlined,
-                  color: MuzicianTheme.sky,
+                  color: StudioPalette.of(context).sky,
                   size: 20,
                 ),
               ],
@@ -536,7 +540,7 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(
               Icons.folder_open,
-              color: MuzicianTheme.textMuted.withValues(alpha: 0.5),
+              color: StudioPalette.of(context).textMuted.withValues(alpha: 0.5),
               size: 40,
             ),
             const SizedBox(height: 12),
@@ -544,7 +548,9 @@ class _EmptyState extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: MuzicianTheme.textMuted.withValues(alpha: 0.85),
+                color: StudioPalette.of(
+                  context,
+                ).textMuted.withValues(alpha: 0.85),
                 fontSize: 13,
               ),
             ),
