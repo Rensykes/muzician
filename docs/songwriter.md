@@ -7,12 +7,13 @@ and audio. Recoverable block content links to a canonical save in the selected
 project's Save System; placement and lyrics stay with the Writer block. If a
 save and its fallback content are both unavailable, Writer keeps the block
 visible as broken rather than inventing replacement content.
-Use Writer to shape the song's sections, then move to **Song** when you want to
-arrange note, drum, or audio clips on a timeline.
+Use Writer to shape the song's sections. **Song is temporarily unavailable in
+V2**; its saved arrangements and clip-arranger implementation are retained.
 
 Writer is the first workspace on a new install. After startup it restores the
-last content workspace (Fretboard, Piano, Roll, Song, or Writer); opening
-Settings does not change that preference.
+last available content workspace (Fretboard, Piano, Roll, or Writer); a saved
+Song destination falls back to Writer. Opening Settings does not change that
+preference.
 
 ## Studio workspace
 

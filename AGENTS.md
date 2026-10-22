@@ -43,6 +43,15 @@ Apply the persistent Sharps/Flats preference at display boundaries only. Keep mu
 
 Studio UI resolves `StudioPalette.of(context)`; pass immutable palettes into painters and include them in repaint comparisons. Use live Studio route helpers for dialogs and isolated editors, capturing host scope rather than ThemeData. Song and its embedded editors stay explicitly legacy-scoped. Theme switches must retain providers, edits, history, and open-panel state.
 
+Instrument UX V2 keeps Studio Fretboard/Piano canvases visible while bounded
+inspector panels scroll. Keep panels mounted across collapse, tab, theme and
+layout changes. Selection actions have one disclosure outside inspector tabs;
+keep Input/View menus compact with accessible labels and 44px targets.
+Voicings remain horizontal; captured note queries are separate
+from applied selections, including deferred provider notifications. Song is
+temporarily unavailable through normal navigation; preserve its data and legacy
+implementation, and restore saved Song destinations to Writer.
+
 ## Build, Test, and Development Commands
 Run `flutter pub get` after dependency changes. Use `flutter run` for the default attached device, or `flutter run -d <device-id>` after checking `flutter devices`. Keep code clean with `dart format lib` and `flutter analyze`. Run `flutter test` for Dart and widget tests once they exist under `test/`. CI currently builds with `flutter build web --release` for Firebase preview/production and `flutter build appbundle --release` for Play Store delivery.
 

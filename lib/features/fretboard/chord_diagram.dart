@@ -7,8 +7,8 @@ import '../../theme/studio_theme.dart';
 
 const double _svgW = 80;
 const double _svgH = 98;
-const double _ml = 18;
-const double _mr = 6;
+const double _ml = 12;
+const double _mr = 12;
 const double _mt = 22;
 const double _mb = 6;
 const int _strings = 6;
@@ -87,6 +87,10 @@ class _ChordDiagramPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Border insets can make the paint bounds smaller than the nominal card.
+    // Keep the strings centered within those actual bounds as well.
+    canvas.save();
+    canvas.translate((size.width - _svgW) / 2, (size.height - _svgH) / 2);
     final displayBase = voicing.baseFret < 1 ? 1 : voicing.baseFret;
     final isOpen = voicing.baseFret <= 1;
 
@@ -94,12 +98,13 @@ class _ChordDiagramPainter extends CustomPainter {
     if (!isOpen) {
       final tp = TextPainter(
         text: TextSpan(
-          text: '${displayBase}fr',
+          text: '$displayBase',
           style: TextStyle(color: colors.textMuted, fontSize: 8),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(_ml - 4 - tp.width, _wireY(0)));
+      tp.paint(canvas, Offset(_ml - 2 - tp.width, _wireY(0)));
+      tp.dispose();
     }
 
     // Fret wires
@@ -176,6 +181,7 @@ class _ChordDiagramPainter extends CustomPainter {
         canvas.drawCircle(Offset(cx, cy), _fg * 0.32, Paint()..color = fill);
       }
     }
+    canvas.restore();
   }
 
   @override

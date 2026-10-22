@@ -8,54 +8,73 @@ previews use `CustomPainter`. The default range is 61 keys, C2–C7.
 ## Workspace
 
 Project context has its own row above the full Piano title. The **?** action
-opens shared help. Setup in the inspector exposes the current range, and the
-Instrument setup footer action shows its full range label in a tooltip.
+opens shared help. A compact **Exact/Solo** menu above the keyboard explains
+both display modes. Setup contains the current range, and the footer shortcut
+shows its full range label in a tooltip.
 
-Below the keyboard, a compact summary shows the first detected chord or
-**Exact selection**, plus selected MIDI notes with their octaves. **Save
-idea** is outlined and opens the existing save browser/naming flow. The filled
-**Add to Writer** action keeps
-recognized-chord and exact-note handoff, including unrecognized combinations.
-**Library** opens the same browser for loading, renaming and linked-Save
+One compact selection row below the keyboard shows a detected chord
+or selected-note count. **Actions** opens a sheet containing exact MIDI notes,
+**Save idea**, and **Add to Writer**, preserving recognized and exact-note handoff.
+These actions have one consistent home across all inspector tabs and remain
+available when the inspector is collapsed.
+
+**Library** opens the existing save browser for loading, renaming and linked-Save
 updates. **Scale** opens the shared picker, displays the active key and warns
 when a committed chord contains notes outside the project key.
 
-The inline inspector defaults to **Voicings** and can collapse without
-clearing selected MIDI keys or resetting its local picker state. Underlined
-Notes / Voicings / Setup tabs replace a separate inspector heading. Compact
-root/quality selectors share one row with a labelled octave dropdown and lead
-directly to native inversion previews, followed by project-key suggestions.
-Scale, Library and Instrument setup remain available in its compact footer:
+The inline inspector defaults to **Voicings**. Notes / Voicings / Setup tabs
+and the Scale / Library footer remain reachable while its content scrolls.
+Collapsing and reopening preserves the selection and each mounted panel's state.
+Compact portrait keeps the playable surface above a bounded inspector; wide
+and short landscape layouts put the inspector beside the instrument. Scrolling
+the inspector does not scroll the instrument out of view. Very short portrait layouts use a single-row header and tighter inspector margins to retain usable controls at enlarged text sizes.
 
 | Tab | Controls |
 | --- | --- |
-| Notes | Pitch-class focus, inversion-aware chord detection, compatible scales, Clear |
-| Voicings | Project-key diatonic chords, chromatic root/quality, octave selector and root/first/second inversion diagrams |
-| Setup | Exact/Solo view and 49/61/88-key ranges; subdued Clear all selections action below the settings |
+| Notes | Selected pitch classes, chord detection, compatible scales and Clear |
+| Voicings | From notes / By chord search and a horizontal native-diagram carousel |
+| Setup | 49/61/88-key ranges; Clear all selections remains a secondary action |
 
-Selecting a detected chord switches to the one existing inline picker.
-Committed voicings override detection until a manual keyboard edit. Notes
-Clear deselects keys; Setup Clear all also removes local filters and stays in
-the workspace. The octave dropdown has a 48px target. Studio voicing cards
-are 102×100px at
-standard text size, with 6px corners and native 86×44px keyboards. All three
-inversions fit a 390px viewport. Cards grow with text scale and scroll
-horizontally; legacy cards retain their original 142px minimum width.
+### Voicing search
 
-Notes starts directly below its tab and sizes to its results. Compact screens
-use the page's vertical scroll, while wide screens use the bounded inspector
-rail, without a second vertical scroller inside detection. Setup labels the
-native range control once and keeps Clear all selections after the settings
-as a text action with a 44px minimum touch target.
+- **From notes** captures the selected pitch classes. Each candidate contains
+  every captured note, but may add chord tones. C + E can therefore suggest C,
+  Cmaj7, Am and Fmaj7 when realizations fit the instrument. Octave, bass and
+  position are not fixed by this filter. When a scale is active, every candidate
+  chord tone must belong to it. The project key takes precedence over a local
+  scale; without either, the search uses the full chord catalogue. Setting,
+  changing or clearing the scale refreshes results without changing the query
+  or selected notes. A query containing an outside note returns no suggestions.
+- **By chord** chooses a root and quality independently of the captured notes,
+  showing available generated realizations within the current instrument bounds.
+- Compatible chords are interleaved before alternate realizations. Both modes
+  retain their criteria when switching. Manual instrument edits
+  refresh the note query. The refresh action, **Use current notes**, explicitly recaptures the
+  selection after applying a result.
+- Tap a card to apply its native notes. **Applied** identifies that result;
+  applying does not rewrite search criteria, change result order or reset the
+  horizontal carousel. Explicit **By chord** choices retain key-conflict
+  confirmation before applying.
+- Selecting a detected chord opens By chord in the existing inline picker.
+  Empty selection and no-result states explain what to change; the filter is
+  never silently relaxed.
 
-At widths of at least 700px with at least 500px available height, content and
-a 316–360px inspector column sit beside one another with independent scrolling.
-Compact and short windows use a scrolling page. The Studio keyboard canvas is
-226px tall: white keys are 42×190px and black keys 26×118px. Horizontal key
-positions and hit testing remain native; scrolling reveals the remaining range.
-Legacy hosts retain 42×210px white keys and 26×130px black keys. Named controls
-use at least 44px tap regions, while native black-key widths remain smaller.
-Short landscape scrolls the full page rather than further shrinking keys.
+Generation covers all registers in the active keyboard range and ordered
+inversions/open spacings spanning at most 23 semitones. Each result includes all
+chord tones; notes are never dropped at range boundaries. This is a bounded
+catalog of realizations, not every possible doubled-note or reordered voicing.
+The preview expands to three C-aligned octaves when needed to show every note.
+
+Notes Clear deselects notes; Setup Clear all stays in the workspace. Project-key
+changes keep their existing confirmation flow. Root/quality controls adapt to
+the inspector width, and cards continue to scroll horizontally at larger text
+sizes. Scale and Library are outside the scrolling panel content.
+
+The Studio keyboard canvas is 226px tall: white keys are 42×190px and
+black keys 26×118px. Horizontal key positions and hit testing remain native;
+scrolling reveals the remaining range. Legacy hosts retain 42×210px white keys
+and 26×130px black keys. Named controls use at least 44px tap regions, while
+native black-key widths remain smaller.
 
 Studio and Studio Muzician share the layout. The keyboard, diagrams, sheets
 and controls consume the inherited palette. Switching themes retains project,
@@ -111,8 +130,9 @@ change.
   project-key confirmation.
 - `lib/features/piano/piano_keyboard.dart`: widget keyboard, taps, dimming and
   one-shot MIDI scroll.
-- `piano_chord_picker.dart` / `piano_chord_diagram.dart`: octave/inversions and
-  immutable palette-aware miniature painter.
+- `piano_chord_picker.dart` / `piano_chord_diagram.dart`: search/application
+  state and immutable palette-aware miniature painter. Shared voicing rules
+  live in `lib/schema/rules/instrument_voicing_search_rules.dart`.
 - `piano_range_selector.dart` / `piano_save_panel.dart`: range and existing
   Save browser/native linked-Save behavior.
 - `lib/models/piano.dart`, `lib/schema/rules/piano_rules.dart`,

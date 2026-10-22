@@ -11,7 +11,6 @@ import 'features/instrument_shared/shared_scale_picker.dart';
 import 'ui/core/app_info_panel.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
-import 'features/song/song_screen.dart';
 import 'features/songwriter/songwriter_feature.dart';
 import 'features/save_system/data_recovery_panel.dart';
 import 'models/fretboard.dart' show FretboardInputMode, FretboardViewMode;
@@ -244,7 +243,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
                   onDifferentSaveLoaded: _onInstrumentSaveLoaded,
                 ),
                 const PianoRollScreenV2(),
-                const StudioRouteTheme(isStudio: false, child: SongScreen()),
+                const _UnavailableSongWorkspace(),
                 SongwriterScreen(
                   onEditInstrumentSave: _openLinkedSaveInInstrument,
                 ),
@@ -290,7 +289,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
                         icon: Icons.article_outlined,
                         label: 'Song',
                         active: _tabIndex == 3,
-                        onTap: () => _setTab(3),
+                        semanticHint: 'Temporarily unavailable',
                       ),
                       _NavTab(
                         icon: Icons.edit_outlined,
@@ -363,6 +362,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
   }
 
   void _setTab(int index) {
+    if (index == songWorkspaceTabIndex) return;
     if (index != _tabIndex) {
       HapticFeedback.selectionClick();
       setState(() => _tabIndex = index);
@@ -567,50 +567,96 @@ class _NavTab extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool active;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final String? semanticHint;
 
   const _NavTab({
     required this.icon,
     required this.label,
     required this.active,
-    required this.onTap,
+    this.onTap,
+    this.semanticHint,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        key: ValueKey('nav_$label'),
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: active
-                  ? StudioPalette.of(context).sky
-                  : StudioPalette.of(context).textMuted,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: active
-                    ? StudioPalette.of(context).sky
-                    : StudioPalette.of(context).textMuted,
-                fontSize: 11,
-                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+    final palette = StudioPalette.of(context);
+    final tab = Semantics(
+      key: ValueKey('nav_$label'),
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      hint: semanticHint,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (onTap == null)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(icon, size: 24, color: palette.textMuted),
+                    Positioned(
+                      right: -2,
+                      bottom: -1,
+                      child: Icon(
+                        Icons.lock_outline,
+                        size: 12,
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Icon(
+                  icon,
+                  size: 24,
+                  color: active ? palette.sky : palette.textMuted,
+                ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: active ? palette.sky : palette.textMuted,
+                  fontSize: 11,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+    return Expanded(
+      child: semanticHint == null
+          ? tab
+          : Tooltip(
+              message: semanticHint!,
+              excludeFromSemantics: true,
+              child: tab,
+            ),
+    );
   }
+}
+
+class _UnavailableSongWorkspace extends StatelessWidget {
+  const _UnavailableSongWorkspace();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(
+      child: Text(
+        'Temporarily unavailable',
+        style: TextStyle(color: StudioPalette.of(context).textSecondary),
+      ),
+    ),
+  );
 }
 
 // ── Screen Wrappers ─────────────────────────────────────────────────────────
@@ -767,6 +813,38 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
           onTap: () => showAppInfoPanel(context, initialTab: 0),
         ),
       ],
+      studioControls: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Wrap(
+          spacing: 4,
+          children: [
+            InstrumentModeMenu<FretboardInputMode>(
+              key: const Key('instrumentInputMode'),
+              label: 'Input mode',
+              current: state.inputMode,
+              onSelect: notifier.setInputMode,
+              options: const [
+                (FretboardInputMode.free, 'Free', 'Multiple notes per string'),
+                (FretboardInputMode.chord, 'Chord', 'One note per string'),
+              ],
+            ),
+            InstrumentModeMenu<FretboardViewMode>(
+              key: const Key('instrumentViewMode'),
+              label: 'View mode',
+              current: state.viewMode,
+              onSelect: notifier.setViewMode,
+              options: const [
+                (FretboardViewMode.exact, 'Exact', 'Show the full fretboard'),
+                (
+                  FretboardViewMode.exactFocus,
+                  'Solo',
+                  'Focus on selected notes',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
       modeSegment: ModeSegment<FretboardInputMode>(
         current: state.inputMode,
         onSelect: notifier.setInputMode,
@@ -847,20 +925,22 @@ class _FretSettingsSheetContent extends ConsumerWidget {
             ClearAllButton(onClear: clearSelections),
             const SizedBox(height: 16),
           ],
-          const _TuneSectionLabel('View mode'),
-          ModeSegment<FretboardViewMode>(
-            current: state.viewMode,
-            onSelect: notifier.setViewMode,
-            options: const [
-              (FretboardViewMode.exact, Icons.visibility_rounded, 'Exact'),
-              (
-                FretboardViewMode.exactFocus,
-                Icons.center_focus_strong_rounded,
-                'Solo',
-              ),
-            ],
-          ),
-          SizedBox(height: studio ? 8 : 16),
+          if (!studio) ...[
+            const _TuneSectionLabel('View mode'),
+            ModeSegment<FretboardViewMode>(
+              current: state.viewMode,
+              onSelect: notifier.setViewMode,
+              options: const [
+                (FretboardViewMode.exact, Icons.visibility_rounded, 'Exact'),
+                (
+                  FretboardViewMode.exactFocus,
+                  Icons.center_focus_strong_rounded,
+                  'Solo',
+                ),
+              ],
+            ),
+            SizedBox(height: studio ? 8 : 16),
+          ],
           const _TuneSectionLabel('Tuning'),
           const TuningSelector(),
           SizedBox(height: studio ? 8 : 16),
@@ -971,6 +1051,22 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
           onTap: () => showAppInfoPanel(context, initialTab: 1),
         ),
       ],
+      studioControls: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: InstrumentModeMenu<PianoViewMode>(
+            key: const Key('instrumentViewMode'),
+            label: 'View mode',
+            current: ref.watch(pianoProvider).viewMode,
+            onSelect: ref.read(pianoProvider.notifier).setViewMode,
+            options: const [
+              (PianoViewMode.exact, 'Exact', 'Show the full keyboard'),
+              (PianoViewMode.exactFocus, 'Solo', 'Focus on selected notes'),
+            ],
+          ),
+        ),
+      ),
       board: const GlassFrame(
         padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: PianoKeyboard(hideToolbar: true),
@@ -1040,20 +1136,22 @@ class _PianoSettingsSheetContent extends ConsumerWidget {
             ClearAllButton(onClear: clearSelections),
             const SizedBox(height: 16),
           ],
-          const _TuneSectionLabel('View mode'),
-          ModeSegment<PianoViewMode>(
-            current: state.viewMode,
-            onSelect: notifier.setViewMode,
-            options: const [
-              (PianoViewMode.exact, Icons.visibility_rounded, 'Exact'),
-              (
-                PianoViewMode.exactFocus,
-                Icons.center_focus_strong_rounded,
-                'Solo',
-              ),
-            ],
-          ),
-          SizedBox(height: studio ? 8 : 16),
+          if (!studio) ...[
+            const _TuneSectionLabel('View mode'),
+            ModeSegment<PianoViewMode>(
+              current: state.viewMode,
+              onSelect: notifier.setViewMode,
+              options: const [
+                (PianoViewMode.exact, Icons.visibility_rounded, 'Exact'),
+                (
+                  PianoViewMode.exactFocus,
+                  Icons.center_focus_strong_rounded,
+                  'Solo',
+                ),
+              ],
+            ),
+            SizedBox(height: studio ? 8 : 16),
+          ],
           if (!studio) const _TuneSectionLabel('Range'),
           const PianoRangeSelector(),
           if (hasFilters && studio) ...[

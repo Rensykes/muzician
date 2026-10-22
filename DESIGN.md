@@ -10,13 +10,15 @@ status: implemented-refined
 
 Chosen direction: Studio original, 18 October 2026. Implementation and review evidence are in [PROGRESS.md](docs/studio-redesign/PROGRESS.md); the four Studio workspaces and shared theme system are implemented. [PRODUCT.md](PRODUCT.md) governs music and persistence contracts.
 
+Current instrument UX V2 implementation and runtime evidence: [delivery record](docs/instrument-ux-v2/PROGRESS.md).
+
 ## Scene and visual intent
 
 A guitarist or pianist writes during rehearsal in moderate/dim light, holding an instrument and reaching for a phone or tablet. Use a graphite workbench, a large musical surface, restrained emphasis and explicit controls. Avoid a full DAW console, decorative glow, default glass effects, card-within-card layouts and gradients in text. The original Studio triptych and Roll concept are visual references in `docs/design-exploration/2026-10-16/mockups/02-studio.png` and `06-studio-piano-roll.png`. Correct diagrams come from existing renderers, never from image pixels.
 
 ## Themes and semantic roles
 
-Both themes share layout, typography and behavior. Settings → Appearance exposes Studio and Studio Muzician; Studio is default, including old/unknown preference values. No system/light mode in this phase. Song remains legacy-scoped; shared components resolve the nearest inherited palette so a Song dialog is not silently restyled by a global mutable singleton.
+Both themes share layout, typography and behavior. Settings → Appearance exposes Studio and Studio Muzician; Studio is default, including old/unknown preference values. No system/light mode in this phase. Song is temporarily disabled in V2; its retained implementation remains legacy-scoped; shared components resolve the nearest inherited palette so a Song dialog is not silently restyled by a global mutable singleton.
 
 | Role | Studio | Studio Muzician |
 | --- | --- | --- |
@@ -51,17 +53,23 @@ Spacing scale: 4, 8, 12, 16, 24, 32. Compact outer inset 16; wide 24. Radius: co
 
 ## Shared workspace structure
 
-Project context comes first in a quiet 44px row with a plain project-name disclosure, followed by the full title; full workspace title does not compete with the project name and three icons. Long project names can ellipsize with full semantic label/tooltip. Six destinations remain accessible with text and icons; use an adaptive rail only when it improves space, otherwise keep the existing bottom layout with safe-area handling. Do not remove Song.
+Project context comes first in a quiet 44px row with a plain project-name disclosure, followed by the full title; full workspace title does not compete with the project name and three icons. Long project names can ellipsize with full semantic label/tooltip. Keep six labelled navigation destinations, with Song visibly disabled and an accessible “Temporarily unavailable” explanation. Use an adaptive rail only when it improves space, otherwise keep the existing bottom layout with safe-area handling. Preserve Song code and saved data.
 
-At widths under 700 or height under 500, retain a dominant canvas and scrollable contextual inspector; never squeeze every control into a fixed-height column. At width ≥700 and sufficient height, use canvas/content plus a 300–360px inspector where appropriate. Short landscape prioritizes the canvas and scrollable tools. Respect keyboard viewInsets, safe areas and nested scroll constraints.
+For Fretboard/Piano, compact portrait pins the playable canvas above a bounded inspector. Tabs and Scale/Library remain outside the inspector content scroll; each panel keeps its own scroll position. Wide and short landscape use a side inspector, keeping native musical geometry useful. Adapt auxiliary content to available height and scaled text instead of allowing inspector scrolling to displace the instrument. Respect keyboard viewInsets, safe areas and nested scroll constraints. Very short portrait layouts may use the compact single-row header and reduce inspector outer margins while retaining the native canvas and 44px control targets.
 
 Shared controls: project/title header, opaque workspace panel, labelled primary/secondary action, inspector tabs, section heading and theme-aware modal helper. Create only components actually reused. Modal sheets scroll, have a named title and close action, preserve context and can be dismissed without applying unrelated changes. Do not present a decorative handle as a promise of multiple drag detents unless implemented.
 
 ## Fretboard and Piano
 
-Order: project/title → instrument controls → playable canvas → compact detection/actions → inspector. Default inspector Voicings; tabs Notes / Voicings / Setup. Allow collapse and reopen without clearing selection. Notes contains full detection; Voicings reuses existing pickers; Setup exposes native controls. Scale and library remain explicitly reachable without duplicate state or dead controls.
+Order: project/title → compact labeled Input/View menus → playable canvas → single selection disclosure → inspector. Input (Free/Chord) and View (Exact/Solo) use neutral controls with 44px minimum touch targets and explanatory menu choices. Selection opens one live-theme action sheet for exact notes, Save idea and Add to Writer; do not repeat summaries or actions in inspector tabs. The disclosure remains available with the inspector collapsed. Default inspector Voicings; tabs Notes / Voicings / Setup. Allow collapse and reopen without clearing selection or recreating panels. Notes contains full detection; Voicings provides From notes / By chord search with native diagrams in a horizontal carousel; Setup exposes native controls. Distinguish captured search criteria from the applied selection with an Applied label/check. Applying a result must not change criteria, result order or carousel offset. Manual note edits refresh the note query; Use current notes is the explicit refresh action. Root/quality controls must remain readable in a narrow inspector and reflow where needed. Scale and library remain explicitly reachable without duplicate state or dead controls.
 
 Save idea opens the existing save flow; Add to Writer preserves recognized versus Exact selection and linked-save behavior. Keep explanations for disabled guitar Free handoff. Show tuning/capo as readable controls and preserve capo positioning, one-note-per-string eligibility and scroll guards. Piano preserves actual MIDI keys, black-key overlays, range, octave/inversions and audition. No new global transport for Fretboard/Piano merely because it appeared in the image.
+
+Automatic **From notes** suggestions in Fretboard and Piano respect the active
+scale as well as the captured notes. Changing or clearing the scale updates
+results without changing the query or instrument selection. An incompatible
+query shows the existing no-results state; do not silently relax either filter.
+Explicit **By chord** browsing retains its key-conflict confirmation.
 
 ## Piano Roll
 

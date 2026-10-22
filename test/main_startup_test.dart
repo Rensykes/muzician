@@ -1,11 +1,17 @@
 import 'dart:convert';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/features/song/song_screen.dart';
 import 'package:muzician/main.dart';
 import 'package:muzician/models/save_system.dart';
+import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/settings_store.dart';
+import 'package:muzician/store/song_project_store.dart';
+import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,7 +49,8 @@ void main() {
     expect(
       tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
       index,
-      reason: 'The app should restore $workspace on a $viewport view.',
+      reason:
+          'The app should open tab $index for the $workspace preference on a $viewport view.',
     );
   }
 
@@ -90,12 +97,15 @@ void main() {
       ('fretboard', 0),
       ('piano', 1),
       ('roll', 2),
-      ('song', 3),
+      ('song', 4),
       ('writer', 4),
     ]) {
       final useGenerousRollMount = viewport == 'wide' && workspace == 'roll';
       final testViewport = useGenerousRollMount ? 'generous wide' : viewport;
-      testWidgets('startup restores $workspace on $testViewport view', (
+      final restoredWorkspace = workspace == 'song'
+          ? 'Writer for the disabled Song preference'
+          : workspace;
+      testWidgets('startup restores $restoredWorkspace on $testViewport view', (
         tester,
       ) async {
         await expectRestoredWorkspace(
@@ -136,7 +146,7 @@ void main() {
     await _pumpUntil(tester, find.byType(IndexedStack));
     expect(
       tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
-      3,
+      4,
     );
 
     await tester.tap(find.byKey(const ValueKey('nav_Settings')));
@@ -160,9 +170,58 @@ void main() {
     await _pumpUntil(tester, find.byType(IndexedStack));
     expect(
       tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
-      3,
+      4,
     );
   });
+
+  testWidgets(
+    'Song is disabled and tapping it leaves the workspace unchanged',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MuzicianApp(),
+        ),
+      );
+      await _pumpUntil(tester, find.byType(IndexedStack));
+      expect(
+        tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+        4,
+      );
+
+      final saveState = container.read(saveSystemProvider);
+      final writerState = container.read(songwriterProvider);
+      final songState = container.read(songProjectProvider);
+      final settingsState = container.read(settingsProvider);
+      final songTab = find.byKey(const ValueKey('nav_Song'));
+      final semantics = tester.getSemantics(songTab).getSemanticsData();
+      expect(semantics.label, 'Song');
+      expect(semantics.hint, 'Temporarily unavailable');
+      expect(semantics.flagsCollection.isEnabled, Tristate.isFalse);
+      expect(semantics.hasAction(SemanticsAction.tap), isFalse);
+
+      await tester.tap(songTab);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<IndexedStack>(find.byType(IndexedStack).first).index,
+        4,
+      );
+      expect(find.byType(SongScreen), findsNothing);
+      expect(container.read(saveSystemProvider), same(saveState));
+      expect(container.read(songwriterProvider), same(writerState));
+      expect(container.read(songProjectProvider), same(songState));
+      expect(container.read(settingsProvider), same(settingsState));
+    },
+  );
 
   testWidgets('Settings exposes the persistent flat spelling switch', (
     tester,

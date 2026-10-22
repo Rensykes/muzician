@@ -7,7 +7,6 @@ import '../../theme/studio_theme.dart';
 
 const double _kbW = 126;
 const double _kbH = 52;
-const int _whiteKeys = 14; // 2 octaves of C..B
 const _whitePcs = [0, 2, 4, 5, 7, 9, 11];
 // White indices (within an octave) that have a black key to their right.
 const _blackAfter = {0, 1, 3, 4, 5};
@@ -122,7 +121,12 @@ class _PianoChordPainter extends CustomPainter {
     final midiSet = midis.toSet();
     final windowStart = (midis.reduce((a, b) => a < b ? a : b) ~/ 12) * 12;
 
-    final whiteW = size.width / _whiteKeys;
+    // Open spacings can cross a third C-aligned octave. Keep every selected
+    // MIDI note visible instead of clipping the upper part of the voicing.
+    final highest = midis.reduce((a, b) => a > b ? a : b);
+    final octaves = ((highest - windowStart) ~/ 12 + 1).clamp(2, 3);
+    final whiteKeys = octaves * 7;
+    final whiteW = size.width / whiteKeys;
     final blackW = whiteW * 0.62;
     final blackH = size.height * 0.6;
 
@@ -132,7 +136,7 @@ class _PianoChordPainter extends CustomPainter {
       ..color = const Color(0xFF0A0F1E)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
-    for (var i = 0; i < _whiteKeys; i++) {
+    for (var i = 0; i < whiteKeys; i++) {
       final x = i * whiteW;
       final rect = Rect.fromLTWH(x, 0, whiteW - 0.5, size.height);
       canvas.drawRect(rect, whiteFill);
@@ -148,7 +152,7 @@ class _PianoChordPainter extends CustomPainter {
 
     // Black keys (drawn on top)
     final blackFill = Paint()..color = const Color(0xFF0A0F1E);
-    for (var i = 0; i < _whiteKeys - 1; i++) {
+    for (var i = 0; i < whiteKeys - 1; i++) {
       final within = i % 7;
       if (!_blackAfter.contains(within)) continue;
       final x = (i + 1) * whiteW - blackW / 2;
