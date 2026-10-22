@@ -15,6 +15,7 @@ import '../../theme/studio_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
+import '../instrument_shared/instrument_voicing_search.dart';
 import 'chord_diagram.dart';
 
 const _qualities = [
@@ -228,6 +229,9 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
 
   @override
   Widget build(BuildContext context) {
+    if (StudioPalette.of(context).isStudio) {
+      return const InstrumentVoicingSearch(guitar: true);
+    }
     final state = ref.watch(fretboardProvider);
     final spelling = ref.watch(
       settingsProvider.select((settings) => settings.noteSpelling),

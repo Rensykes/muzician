@@ -205,7 +205,8 @@ class _FretboardInfoTab extends StatelessWidget {
               desc:
                   'The inspector keeps note detection under Notes, chord shapes '
                   'under Voicings, and guitar tuning, capo, and display controls '
-                  'under Setup. Switch tabs without losing the current picker state.',
+                  'under Setup. Tools scroll independently while the instrument stays visible; '
+                  'tabs and collapse preserve picker state.',
               color: StudioPalette.of(context).emerald,
             ),
             _Entry(
@@ -308,8 +309,10 @@ class _FretboardInfoTab extends StatelessWidget {
               icon: Icons.library_music_outlined,
               label: 'Voicings',
               desc:
-                  'Choose a root and quality, then tap a chord diagram to apply '
-                  'that voicing to the fretboard.',
+                  'From notes finds shapes containing all selected pitch classes. '
+                  'By chord browses an independent root and quality. Swipe diagrams '
+                  'horizontally and tap to apply without changing the query. '
+                  'Use current notes refreshes the filter; manual edits refresh it automatically.',
               color: StudioPalette.of(context).orange,
             ),
             _Entry(
@@ -360,8 +363,9 @@ class _PianoInfoTab extends StatelessWidget {
               label: 'Notes, Voicings & Setup',
               desc:
                   'The inspector keeps selected-note detection under Notes, '
-                  'chord shapes and octave/inversion choices under Voicings, '
-                  'and keyboard range and display controls under Setup.',
+                  'horizontal voicing search under Voicings, and keyboard range '
+                  'and display controls under Setup. Tools scroll independently '
+                  'while the keyboard stays visible.',
               color: StudioPalette.of(context).emerald,
             ),
             _Entry(
@@ -416,9 +420,10 @@ class _PianoInfoTab extends StatelessWidget {
               icon: Icons.library_music_outlined,
               label: 'Voicings',
               desc:
-                  'Choose a root and quality, then select a voicing diagram to '
-                  'apply exact MIDI keys. Octave and inversion controls help place '
-                  'the shape in the register you want.',
+                  'From notes requires all selected pitch classes. By chord browses '
+                  'a root and quality across available registers and inversions. '
+                  'Swipe horizontally and tap to apply exact MIDI keys without '
+                  'changing the query. Use current notes refreshes it explicitly.',
               color: StudioPalette.of(context).violet,
             ),
             _Entry(
@@ -513,7 +518,8 @@ class _PianoRollInfoTab extends StatelessWidget {
               icon: Icons.compare_arrows_outlined,
               label: 'Song-embedded Roll',
               desc:
-                  'Song keeps its existing Roll layout and host settings. Embedded '
+                  'Song is temporarily unavailable in V2. Its retained Roll layout '
+                  'and host settings stay compatible. Embedded '
                   'editors can hide background, scale, or save/import actions when '
                   'those controls belong to the host workspace.',
               color: StudioPalette.of(context).emerald,

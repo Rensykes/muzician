@@ -155,17 +155,30 @@ void main() {
             find.byType(guitar ? ChordVoicingPicker : PianoChordPicker),
             findsOneWidget,
           );
-          if (size.width >= 700 && size.height >= 500) {
+          if (size.width >= 700 ||
+              (size.width > size.height && size.height < 500)) {
             expect(
-              find.byKey(const Key('studioInstrumentInspectorScroll')),
+              find.byKey(const Key('studioInstrumentContentScroll')),
               findsOneWidget,
+            );
+            expect(
+              find.byKey(const Key('studioInstrumentCompactLayout')),
+              findsNothing,
             );
           } else {
             expect(
-              find.byKey(const Key('studioInstrumentPageScroll')),
+              find.byKey(const Key('studioInstrumentCompactLayout')),
               findsOneWidget,
             );
           }
+          expect(
+            find.byKey(const Key('studioInstrumentPageScroll')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const Key('instrumentInspectorVoicingsScroll')),
+            findsOneWidget,
+          );
           await _tap(tester, const Key('instrumentInspectorSetup'));
           expect(
             find.byType(guitar ? CapoControl : PianoRangeSelector),
@@ -260,39 +273,22 @@ void main() {
             findsOneWidget,
           );
           if (size == const Size(390, 844)) {
+            final canvas = find.byKey(const Key('studioInstrumentCanvas'));
+            final before = tester.getRect(canvas);
             final preview = find
                 .byType(guitar ? ChordDiagram : PianoChordDiagram)
                 .first;
-            expect(
-              tester.getBottomLeft(preview).dy,
-              lessThan(size.height - 44),
-            );
+            await tester.ensureVisible(preview);
+            await tester.pumpAndSettle();
+            expect(tester.getRect(canvas), before);
             expect(find.text('INSPECTOR'), findsNothing);
+            await _tap(tester, const Key('voicingsByChord'));
             expect(find.byType(StudioChordSelectors), findsOneWidget);
-            if (!guitar) {
-              final lastPreview = find.byType(PianoChordDiagram).last;
-              final inspector = find.byKey(const Key('instrumentInspector'));
-              expect(
-                tester.getBottomRight(lastPreview).dx,
-                lessThan(tester.getBottomRight(inspector).dx),
-              );
-              expect(tester.getSize(lastPreview).width, 102);
-              expect(tester.getSize(lastPreview).height, 100);
-            }
           }
           await _tap(tester, const Key('instrumentInspectorNotes'));
+          await tester.ensureVisible(find.text('DETECTION'));
+          await tester.pumpAndSettle();
           expect(find.text('DETECTION'), findsOneWidget);
-          // Notes begins directly under its tab and grows with its contents.
-          // A fixed viewport or centered switcher leaves a large blank area.
-          expect(
-            tester.getTopLeft(find.text('DETECTION')).dy -
-                tester
-                    .getBottomLeft(
-                      find.byKey(const Key('instrumentInspectorNotes')),
-                    )
-                    .dy,
-            inInclusiveRange(12, 32),
-          );
           final detection = find.byType(SharedDetectionPanel);
           expect(
             find.descendant(
@@ -397,6 +393,7 @@ void main() {
         onSave: () => saves++,
         onScale: () => scales++,
       );
+      await _tap(tester, const Key('instrumentSelectionActions'));
       expect(
         find.byKey(const Key('writerHandoffUnavailableReason')),
         findsOneWidget,
@@ -419,6 +416,7 @@ void main() {
           .setInputMode(FretboardInputMode.chord);
       await tester.pumpAndSettle();
       expect(container.read(fretboardProvider).selectedCells, same(cells));
+      await _tap(tester, const Key('instrumentSelectionActions'));
       expect(
         tester
             .widget<FilledButton>(
@@ -434,31 +432,26 @@ void main() {
   );
 
   testWidgets(
-    'compact piano shows all voicings and utility footer above native navigation',
+    'compact piano carousel and utility footer stay reachable above navigation',
     (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container.read(pianoProvider.notifier).loadExactMidis([60, 64, 67]);
-      // 402×874 device minus its native status area and bottom destinations.
       await _pump(tester, container, size: const Size(402, 722), guitar: false);
-      expect(
-        tester.getBottomRight(find.byType(PianoChordDiagram).last).dx,
-        lessThan(386),
-      );
+      final canvas = find.byKey(const Key('studioInstrumentCanvas'));
+      final before = tester.getRect(canvas);
+      await tester.ensureVisible(find.byType(PianoChordDiagram).first);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(canvas), before);
       expect(
         tester.getBottomRight(find.byKey(const Key('instrumentLibrary'))).dy,
         lessThan(722),
       );
-      await _tap(tester, const Key('pianoVoicingOctave'));
-      await tester.tap(find.text('Octave 5').last);
-      await tester.pumpAndSettle();
       expect(
         tester
-            .widget<DropdownButton<int>>(
-              find.byKey(const Key('pianoVoicingOctave')),
-            )
-            .value,
-        1,
+            .widget<ListView>(find.byKey(const Key('voicingCarousel')))
+            .scrollDirection,
+        Axis.horizontal,
       );
       expect(tester.takeException(), isNull);
     },

@@ -1,6 +1,11 @@
 # Song Workspace
 
-The `Song` tab provides a pattern-based clip arranger with note, drum, and audio
+**V2 availability:** Song is temporarily unavailable. Its navigation destination
+is visible but disabled, and normal app navigation does not mount the workspace.
+Saved arrangements, audio references and serialization remain intact. The rest
+of this guide documents the retained implementation for its later return.
+
+The `Song` implementation provides a pattern-based clip arranger with note, drum, and audio
 tracks. It is the timeline workspace; Writer is the section, chord, lyric,
 melody, and groove sketch used to plan a song before arranging its clips.
 

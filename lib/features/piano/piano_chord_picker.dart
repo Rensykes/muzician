@@ -12,6 +12,7 @@ import '../../theme/studio_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
+import '../instrument_shared/instrument_voicing_search.dart';
 import '../instrument_shared/instrument_binding.dart';
 import 'piano_chord_diagram.dart';
 
@@ -150,6 +151,9 @@ class _PianoChordPickerState extends ConsumerState<PianoChordPicker>
 
   @override
   Widget build(BuildContext context) {
+    if (StudioPalette.of(context).isStudio) {
+      return const InstrumentVoicingSearch(guitar: false);
+    }
     final spelling = ref.watch(
       settingsProvider.select((settings) => settings.noteSpelling),
     );

@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/piano/piano_chord_diagram.dart';
@@ -43,6 +44,45 @@ void main() {
 
     await tester.tap(find.text('1 inv'));
     expect(tapped, isTrue);
+  });
+
+  testWidgets('open spacing paints the highest note across a third octave', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        PianoChordDiagram(
+          midis: const [71, 75, 90],
+          rootPc: null,
+          label: 'Open',
+          noteLabels: const ['B', 'D#', 'F#'],
+          isSelected: false,
+          onPress: () {},
+        ),
+      ),
+    );
+    final painter = tester
+        .widget<CustomPaint>(
+          find.descendant(
+            of: find.byType(PianoChordDiagram),
+            matching: find.byType(CustomPaint),
+          ),
+        )
+        .painter!;
+    final recorder = ui.PictureRecorder();
+    painter.paint(Canvas(recorder), const Size(210, 60));
+    final picture = recorder.endRecording();
+    final bytes = await tester.runAsync(() async {
+      final image = await picture.toImage(210, 60);
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
+      return data!;
+    });
+    picture.dispose();
+    // F# in the third C-aligned octave: black key at x=180, y=10.
+    final pixel = (10 * 210 + 180) * 4;
+    expect(bytes!.getUint8(pixel), greaterThan(80));
+    expect(bytes.getUint8(pixel + 2), greaterThan(100));
   });
 
   testWidgets('empty voicing paints without throwing', (tester) async {

@@ -5,9 +5,9 @@ each feature behaves, how to use it, and where it lives in the code. It spans th
 two arrangement surfaces — the **Writer** (lead-sheet style) and the **Song**
 (clip arranger) — plus the bridges between them.
 
-If you just want the short version: *both pages now play the whole song out
-loud, the Song arranger gained a full set of editing tools, and both screens
-work in portrait and landscape.*
+**V2 availability:** Writer remains available. Song and its entry/import actions
+are temporarily unavailable; saved arrangements and the underlying implementation
+are retained. Song-specific instructions below describe that retained behavior.
 
 ---
 
@@ -20,7 +20,8 @@ When Song is empty, a timeline action also offers **Import from Writer** if the
 current Writer content can produce tracks.
 
 A new install opens Writer. On later starts the app restores the last content
-workspace among Fretboard, Piano, Roll, Song, and Writer; visiting Settings
+workspace among Fretboard, Piano, Roll, and Writer (a previously saved Song
+selection falls back to Writer); visiting Settings
 does not replace that choice. If saved workspace data cannot be read, the app
 keeps workspaces closed and offers Retry or Start fresh. Start fresh first
 preserves the original stored strings in **Settings → Data Recovery**, where

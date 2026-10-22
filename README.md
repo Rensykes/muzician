@@ -20,9 +20,9 @@ Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESI
 
 ## Features
 
-The bottom navigation is labeled **Fretboard**, **Piano**, **Roll**, **Song**, **Writer**, and **Settings**. Save System is a shared project feature rather than a bottom-navigation destination.
+The bottom navigation is labeled **Fretboard**, **Piano**, **Roll**, **Song**, **Writer**, and **Settings**. **Song is temporarily unavailable in V2**: its entry stays visible and disabled, while saved arrangements remain intact. Save System is a shared project feature rather than a bottom-navigation destination.
 
-Fretboard and Piano inspectors fit their content: Notes scrolls with the workspace, and Setup groups configuration controls above a secondary Clear all selections action.
+Fretboard and Piano keep the instrument visible while a bounded Notes / Voicings / Setup inspector scrolls independently. Compact Input/View menus replace full-width mode bars. A single selection **Actions** sheet holds note details, Save idea and Add to Writer across all inspector tabs. Voicings use a horizontal carousel with **From notes** suggestions filtered by selected pitch classes and the active scale, when set, plus independent **By chord** browsing. See the [V2 implementation plan](docs/instrument-ux-v2/PLAN.md) and [verification evidence](docs/instrument-ux-v2/PROGRESS.md).
 
 | Feature | Description | Docs |
 |---|---|---|
@@ -30,7 +30,7 @@ Fretboard and Piano inspectors fit their content: Notes scrolls with the workspa
 | **Piano** | Studio piano workspace with a compact Notes / Voicings / Setup inspector, 49 / 61 / 88-key ranges, Scale and Library shortcuts, Save idea, and recognized or exact-note Writer Harmony | [docs/piano.md](docs/piano.md) |
 | **Piano Roll** | Studio timeline editor (navigation label **Roll**) with all five tools, a Stack Builder / Selection / Tools inspector, Quick, snap and range controls, and the mobile **Hum recorder** | [docs/piano_roll.md](docs/piano_roll.md) |
 | **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; contextual Harmony and lane editing, source-bound Guitar Strum, reusable melodies, playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
-| **Song** | Clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Song** | Temporarily disabled in V2; retained clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
 | **Settings** | Device-local Studio / Studio Muzician appearance and persistent Sharps/Flats spelling for musical labels, retaining pitches and custom names | [docs/save_system.md](docs/save_system.md) |
 
@@ -83,7 +83,7 @@ docs/
 
 - **View modes:** Both fretboard and piano support `exact` (note name only) and `exactFocus` (note name with focus highlighting) display modes. See [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
 
-- **Appearance:** Settings → **Appearance** switches between **Studio** (default graphite / mint) and **Studio Muzician** (night / sky / teal / violet). The choice is saved on this device and applies to Fretboard, Piano, Piano Roll, Writer, and shared panels. Song remains on its existing layout and palette in this redesign.
+- **Appearance:** Settings → **Appearance** switches between **Studio** (default graphite / mint) and **Studio Muzician** (night / sky / teal / violet). The choice is saved on this device and applies to Fretboard, Piano, Piano Roll, Writer, and shared panels. Song is temporarily disabled; its retained implementation uses the legacy layout and palette.
 
 
 ## Running the App

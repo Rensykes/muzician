@@ -8,54 +8,75 @@ The default is Standard tuning, 12 frets, capo off and Free input mode.
 ## Workspace
 
 Project context has its own row above the full Fretboard title. The **?** action
-opens shared help. Free/Chord controls and the current tuning/capo readout sit
-above the board; tapping the readout opens **Setup** in the inspector.
+opens shared help. Compact **Free/Chord** and **Exact/Solo**
+menus sit together above the board (in the inspector header in short landscape).
+Each menu explains its choices and retains a minimum 44px touch target. Setup
+contains tuning, capo and fret count; its shortcut exposes tuning/capo in a tooltip.
 
-Below the board, a compact summary shows the first detected chord or **Exact
-selection**, plus the selected MIDI notes with octave labels. **Save idea**
-opens the existing save browser and naming flow as an outlined action. The
-filled **Add to Writer** action keeps the
-recognized-chord versus exact-note choice and explains why Free selections
-cannot enter Writer. **Library** opens the same save browser for loading,
-renaming and linked-Save updates. **Scale** opens the shared scale picker;
-when a key is active its name replaces the Scale label, and an off-key chord adds
-a warning icon.
+One compact selection row below the instrument shows the detected
+chord or selected-note count. **Actions** opens the selection sheet with exact
+MIDI notes, **Save idea**, and **Add to Writer**. The sheet explains why Free or
+invalid shapes cannot enter Writer and preserves recognized versus exact-note
+handoff. Selection actions stay in this single location across Notes, Voicings
+and Setup, including when the inspector is collapsed.
 
-The inline inspector defaults to **Voicings** and can collapse without
-clearing selection or recreating the picker. Underlined Notes / Voicings / Setup
-tabs replace the separate inspector heading. Compact root/quality selectors
-lead directly to native voicing previews; project-key suggestions follow them.
-Scale, Library and Instrument setup remain in a compact footer:
+**Library** opens the existing save browser for loading, renaming and linked-Save
+updates. **Scale** opens the shared scale picker; an active key replaces the
+Scale label, and an off-key chord adds a warning icon.
 
+The inline inspector defaults to **Voicings**. Notes / Voicings / Setup tabs
+and the Scale / Library footer remain reachable while its content scrolls.
+Collapsing and reopening preserves the selection and each mounted panel's state.
+Compact portrait keeps the playable surface above a bounded inspector; wide
+and short landscape layouts put the inspector beside the instrument. Scrolling
+the inspector does not scroll the instrument out of view. Very short portrait layouts use a single-row header and tighter inspector margins to retain usable controls at enlarged text sizes.
 
 | Tab | Controls |
 | --- | --- |
-| Notes | Selected pitch classes (tap to focus), chord detection, compatible scales, Clear |
-| Voicings | Project-key diatonic chords, chromatic root/quality, scrollable native chord diagrams; tap a voicing to apply |
-| Setup | Exact/Solo view, tuning categories/presets, capo stepper and fret choices; subdued Clear all selections action below the settings |
+| Notes | Selected pitch classes, chord detection, compatible scales and Clear |
+| Voicings | From notes / By chord search and a horizontal native-diagram carousel |
+| Setup | Tuning, capo and fret count; Clear all selections remains a secondary action |
 
-Selecting a detected chord switches to the existing inline voicing picker;
-it does not create another picker sheet. A committed voicing remains in
-control until a manual board edit returns it to detection. Setup's Clear all
-stays in the workspace; Notes Clear deselects notes. Project-key changes still
-use their confirmation flow.
+### Voicing search
 
-Notes starts directly below its tab and sizes to its detection results, without
-a reserved blank viewport. The page owns vertical scrolling on compact screens;
-the bounded inspector rail owns it on wide screens. Setup keeps related controls
-close, labels the native capo control once, and places the destructive clear
-action last while preserving its 44px touch target.
+- **From notes** captures the selected pitch classes. Each candidate contains
+  every captured note, but may add chord tones. C + E can therefore suggest C,
+  Cmaj7, Am and Fmaj7 when realizations fit the instrument. Octave, bass and
+  position are not fixed by this filter. When a scale is active, every candidate
+  chord tone must belong to it. The project key takes precedence over a local
+  scale; without either, the search uses the full chord catalogue. Setting,
+  changing or clearing the scale refreshes results without changing the query
+  or selected notes. A query containing an outside note returns no suggestions.
+- **By chord** chooses a root and quality independently of the captured notes,
+  showing available generated realizations within the current instrument bounds.
+- Compatible chords are interleaved so hundreds of shapes for one chord do not
+  hide the other completions. Both modes retain their criteria when switching. Manual instrument edits
+  refresh the note query. The refresh action, **Use current notes**, explicitly recaptures the
+  selection after applying a result.
+- Tap a card to apply its native notes. **Applied** identifies that result;
+  applying does not rewrite search criteria, change result order or reset the
+  horizontal carousel. Explicit **By chord** choices retain key-conflict
+  confirmation before applying.
+- Selecting a detected chord opens By chord in the existing inline picker.
+  Empty selection and no-result states explain what to change; the filter is
+  never silently relaxed.
 
-At widths of at least 700px with at least 500px available height, content and
-a 316–360px inspector column sit beside one another, each scrollable. Compact
-and short windows use a single scrolling page. The Studio canvas is 212px tall,
-with six native 28px string rows, unchanged 66px fret spacing, and 36×28px note
-hit regions. These musical targets remain smaller than named 44px controls;
-voicing diagrams provide an alternative for entering complete chords. The
-renderer keeps its pointer scroll guard and maps compact rows directly to
-notes. Chord mode shows selected/focused positions clearly; Free retains all
-note labels. Legacy/controlled hosts retain their existing geometry. All
-strings and tools remain reachable, including 844×390 landscape.
+Generation uses every supported root/quality. Guitar results cover the configured
+physical fret range, requiring every chord tone within a four-fret hand span
+plus open/capo strings. Muted inner strings are allowed; results are generated
+shapes, not finger-assignment guarantees. There is no arbitrary 24-result cap.
+
+Notes Clear deselects notes; Setup Clear all stays in the workspace. Project-key
+changes keep their existing confirmation flow. Root/quality controls adapt to
+the inspector width, and cards continue to scroll horizontally at larger text
+sizes. Scale and Library are outside the scrolling panel content.
+
+The Studio canvas is 212px tall, with six native 28px string rows,
+unchanged 66px fret spacing, and 36×28px note hit regions. These musical targets
+remain smaller than named 44px controls; voicing diagrams provide an alternative
+for entering complete chords. The renderer keeps its pointer scroll guard,
+physical capo mapping and horizontal scrolling. Legacy/controlled hosts keep
+their existing geometry.
 
 Studio and Studio Muzician share this layout. Sheets, diagrams and the native
 canvas consume the inherited immutable palette and repaint when it changes.
@@ -108,8 +129,9 @@ custom Save names and exact Harmony labels stay literal and unchanged.
   `shared_scale_picker.dart`: binding-driven detection/key controls.
 - `lib/features/fretboard/fretboard.dart`: native board, pointer guard,
   one-shot scroll-to-fret and immutable painter palette.
-- `chord_voicing_picker.dart` / `chord_diagram.dart`: voicing generation,
-  committed/detected sync and native mini-diagrams.
+- `chord_voicing_picker.dart` / `chord_diagram.dart`: search/application state
+  and centered native mini-diagrams with balanced string-grid margins. Shared voicing rules live in
+  `lib/schema/rules/instrument_voicing_search_rules.dart`.
 - `capo_control.dart`, `tuning_selector.dart`, `fretboard_save_panel.dart`:
   instrument settings and Save browser integration.
 - `lib/models/fretboard.dart`, `lib/schema/rules/fretboard_rules.dart`,

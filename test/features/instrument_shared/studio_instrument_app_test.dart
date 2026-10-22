@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/main.dart';
 import 'package:muzician/features/_mockup_shell.dart';
+import 'package:muzician/features/instrument_shared/instrument_screen.dart';
 import 'package:muzician/features/fretboard/capo_control.dart';
 import 'package:muzician/features/piano/piano_range_selector.dart';
 import 'package:muzician/models/fretboard.dart';
@@ -18,6 +19,8 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final guitar in [true, false]) {
     for (final size in [
+      const Size(320, 568),
+      const Size(375, 667),
       const Size(320, 844),
       const Size(390, 844),
       const Size(1024, 768),
@@ -79,15 +82,38 @@ void main() {
             find.text(guitar ? 'CAPO' : 'RANGE'),
             guitar ? findsNothing : findsOneWidget,
           );
-          final mode = find.byType(
-            guitar
-                ? ModeSegment<FretboardViewMode>
-                : ModeSegment<PianoViewMode>,
-          );
+          final mode = find.byKey(const Key('instrumentViewMode'));
           expect(
-            tester.getTopLeft(mode).dy -
-                tester.getBottomLeft(find.text('VIEW MODE')).dy,
-            lessThanOrEqualTo(8),
+            tester.getBottomLeft(mode).dy,
+            lessThanOrEqualTo(
+              tester
+                  .getTopLeft(find.byKey(const Key('studioInstrumentCanvas')))
+                  .dy,
+            ),
+          );
+          expect(find.text('VIEW MODE'), findsNothing);
+          expect(tester.getSize(mode).height, greaterThanOrEqualTo(44));
+          expect(
+            find.byType(
+              guitar
+                  ? InstrumentModeMenu<FretboardViewMode>
+                  : InstrumentModeMenu<PianoViewMode>,
+            ),
+            findsOneWidget,
+          );
+          final selectionBefore = guitar
+              ? container.read(fretboardProvider).selectedNotes
+              : container.read(pianoProvider).selectedNotes;
+          await tester.tap(find.byTooltip('View mode: Exact'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('View mode-Solo')));
+          await tester.pumpAndSettle();
+          expect(find.byTooltip('View mode: Solo'), findsOneWidget);
+          expect(
+            guitar
+                ? container.read(fretboardProvider).selectedNotes
+                : container.read(pianoProvider).selectedNotes,
+            selectionBefore,
           );
           final clearPosition = tester.getTopLeft(clearButton);
           final stateBeforeTheme = guitar
@@ -120,7 +146,9 @@ void main() {
           );
           expect(
             find.descendant(
-              of: find.byType(WorkspaceHeader),
+              of: find.byType(
+                size.height < 600 ? CompactAppBar : WorkspaceHeader,
+              ),
               matching: find.text(guitar ? 'Fretboard' : 'Piano'),
             ),
             findsOneWidget,
@@ -154,12 +182,12 @@ void main() {
     await tester.pumpAndSettle();
     container.read(fretboardProvider.notifier).setTuning(TuningName.ebStandard);
     await tester.pumpAndSettle();
-    expect(find.text('D# Standard · Capo off'), findsOneWidget);
+    expect(find.byTooltip('D# Standard · Capo off'), findsOneWidget);
     await container
         .read(settingsProvider.notifier)
         .setNoteSpelling(NoteSpelling.flats);
     await tester.pumpAndSettle();
-    expect(find.text('Eb Standard · Capo off'), findsOneWidget);
+    expect(find.byTooltip('Eb Standard · Capo off'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

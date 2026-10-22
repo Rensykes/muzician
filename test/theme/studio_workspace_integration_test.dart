@@ -87,13 +87,7 @@ void main() {
                 ? StudioPalette.studio
                 : StudioPalette.studioMuzician,
           );
-          for (final destination in [
-            'Fretboard',
-            'Piano',
-            'Roll',
-            if (scale == 1.0) 'Song', // Legacy page is outside the redesign.
-            'Writer',
-          ]) {
+          for (final destination in ['Fretboard', 'Piano', 'Roll', 'Writer']) {
             await tester.tap(find.byKey(ValueKey('nav_$destination')));
             await tester.pumpAndSettle();
             expect(

@@ -26,6 +26,23 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
+    'Song preferences fall back without changing available workspace mappings',
+    () {
+      expect(contentWorkspaceTabForPreference('song'), 4);
+      expect(contentWorkspacePreferenceForTab(3), isNull);
+      for (final entry in {
+        0: 'fretboard',
+        1: 'piano',
+        2: 'roll',
+        4: 'writer',
+      }.entries) {
+        expect(contentWorkspaceTabForPreference(entry.value), entry.key);
+        expect(contentWorkspacePreferenceForTab(entry.key), entry.value);
+      }
+    },
+  );
+
+  test(
     'startup replays a Writer journal before hydrating workspaces',
     () async {
       const projectId = 'journal-project';
@@ -283,8 +300,11 @@ void main() {
     ]);
     for (var tab = 0; tab < contentWorkspaceNames.length; tab++) {
       final workspace = contentWorkspaceNames[tab];
-      expect(contentWorkspaceTabForPreference(workspace), tab);
-      expect(contentWorkspacePreferenceForTab(tab), workspace);
+      expect(contentWorkspaceTabForPreference(workspace), tab == 3 ? 4 : tab);
+      expect(
+        contentWorkspacePreferenceForTab(tab),
+        tab == 3 ? null : workspace,
+      );
     }
     expect(contentWorkspacePreferenceForTab(5), isNull);
   });
