@@ -313,6 +313,7 @@ Onset-sequencer transport that plays notes via the synthesised `NotePlayer` engi
 | **BPM readout** | Tap opens `_BpmSheet`: numeric `TextField` + ±1/±10 step buttons + slider (40–300). Vertical-drag on the readout still fine-tunes ±1 BPM per 4 px. |
 | **BAR readout** | Live tick → bar/beat display (`1.2.0` style). |
 | **SIG readout** | Tap opens a picker sheet with `2/4`, `3/4`, `4/4`, `5/4`, `6/8`, `7/8`, `12/8` → `setTimeSignature(...)`. |
+| **RANGE readout** | Shows the visible pitch window. Vertical drag shifts by an octave per 24 px, long-press resets to MIDI 48–84, tap opens `−1 octave` / `+1 octave` / `Clear`. |
 
 ### Playback semantics
 
@@ -409,13 +410,16 @@ immutable palette and repaint when it changes.
 
 - **Header:** full Piano Roll title, with project context, help and Roll Settings
   on a separate row. Long project names retain a full tooltip and semantic label.
-- **Transport:** unframed rewind, play/pause, stop, tempo, bar/beat and time
-  signature. Readouts scroll horizontally when space is tight.
+- **Transport:** unframed rewind, play/pause, stop, tempo, bar/beat, time
+  signature and the pitch-range readout. Readouts scroll horizontally when
+  space is tight; the range readout stays pinned at the right.
 - **Tools:** named Draw, Select, Split, Paint and Delete actions above the grid.
-  The active tool is highlighted. Snap, the current pitch-range readout, and
-  `−1 Oct` / `+1 Oct` / `Clear` share the same borderless row; it wraps onto
-  a second line when vertical space allows and scrolls horizontally on short
-  viewports.
+  The active tool is highlighted. Snap shares the same borderless row in a
+  horizontal scroll.
+- **Pitch range:** the unframed transport's `C3–C6` readout is the control.
+  Drag vertically to shift by octaves, long-press to reset to MIDI 48–84, or
+  tap for explicit `−1 octave`, `+1 octave` and `Clear` choices. The readout
+  updates immediately and is available on phones as well as tablets.
 - **Grid:** the central editing surface, with distinct white/black pitch keys,
   restrained alternating rows and octave labels on notes when their width
   permits. On tall tablets the pitch rows start immediately under the ruler,
@@ -437,10 +441,10 @@ immutable palette and repaint when it changes.
 - **Selection:** time-column status, Select column, Clear selection, Delete
   selection and detection. A ruler column is a time anchor; clearing selected
   notes keeps that anchor.
-- **Pitch range:** the readout shows the current window and the octave-shift
-  and Clear actions sit beside it in the tool row. Range shifts by an octave;
-  Clear restores MIDI 48–84. These controls are available on phones as well as
-  tablets and remain outside the inspector.
+- **Pitch range:** the readout shows the current window. Drag it vertically to
+  shift by an octave, long-press to restore MIDI 48–84, or tap for the same
+  actions in a small menu. It remains outside the inspector and updates as the
+  range changes.
 - **Utility strip:** Quick, Scale, Hum recorder, Save and Import. Scroll the
   strip horizontally to reach later actions on compact screens.
 

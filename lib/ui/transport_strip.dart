@@ -57,6 +57,9 @@ class TransportStrip extends StatelessWidget {
   /// metronome chips supplied by the hosting workspace).
   final List<Widget> extras;
 
+  /// A control pinned to the right of the scrollable readouts.
+  final Widget? trailing;
+
   /// Whether to draw the translucent card around the transport. Hosts that
   /// want a bare toolbar (Studio Piano Roll) pass `false`.
   final bool framed;
@@ -74,6 +77,7 @@ class TransportStrip extends StatelessWidget {
     required this.onSigTap,
     this.onBpmDelta,
     this.extras = const [],
+    this.trailing,
     this.framed = true,
   });
 
@@ -108,7 +112,7 @@ class TransportStrip extends StatelessWidget {
               color: StudioPalette.of(context).glassBorder,
             ),
             const SizedBox(width: 10),
-            Expanded(
+            Flexible(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -142,6 +146,12 @@ class TransportStrip extends StatelessWidget {
                 ),
               ),
             ),
+            if (trailing != null) ...[
+              const SizedBox(width: 6),
+              Container(width: 1, height: 20, color: palette.glassBorder),
+              const SizedBox(width: 8),
+              trailing!,
+            ],
             const SizedBox(width: 8),
           ],
         ),
