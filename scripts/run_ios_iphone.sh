@@ -57,6 +57,24 @@ PY
 )"
 echo "Using Xcode at ${DEVELOPER_DIR}"
 
+# Some native-asset build hooks (objective_c) shell out to `xcrun` from Xcode's
+# build phase, where DEVELOPER_DIR may not survive. Put a wrapper early on PATH
+# so those hooks resolve the iOS SDK from the Xcode selected above.
+xcode_tools_dir="${TMPDIR:-/tmp}/muzician-xcode-tools"
+mkdir -p "$xcode_tools_dir"
+cat > "${xcode_tools_dir}/xcrun" <<'WRAPPER'
+#!/bin/sh
+if [ -z "${DEVELOPER_DIR:-}" ]; then
+  for candidate in /Applications/Xcode*.app/Contents/Developer; do
+    [ -d "$candidate" ] && DEVELOPER_DIR="$candidate"
+  done
+  export DEVELOPER_DIR
+fi
+exec /usr/bin/xcrun "$@"
+WRAPPER
+chmod +x "${xcode_tools_dir}/xcrun"
+export PATH="${xcode_tools_dir}:${PATH}"
+
 devices_json="$(flutter devices --machine)"
 selection="$(MUZICIAN_IOS_DEVICE_ID="${MUZICIAN_IOS_DEVICE_ID:-}" python3 -c '
 import json
