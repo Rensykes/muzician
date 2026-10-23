@@ -365,7 +365,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 
 ## Tool Modes
 
-`PianoRollState.activeTool` drives the grid's tap behaviour. All five modes are reachable from the named Studio tool row (scroll horizontally on compact screens), the Tools inspector, or directly via `pianoRollProvider.setActiveTool(...)`.
+`PianoRollState.activeTool` drives the grid's tap behaviour. All five modes are reachable from the named Studio tool row (which wraps on tall screens and scrolls horizontally on short ones), the legacy Edit & Pitch rail, or directly via `pianoRollProvider.setActiveTool(...)`.
 
 | Tool | Icon | Tap on empty cell | Tap on note | Drag |
 |---|---|---|---|---|
@@ -381,7 +381,7 @@ The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_Settin
 |---|---|
 | Enum | `lib/models/piano_roll.dart` |
 | Tap/drag wiring | `lib/features/piano_roll/piano_roll_grid.dart` (`_DragMode.paintBrush`, `_DragMode.deleteBrush`, `_paintAt`, `_deleteAt`, brushed-cell/id sets) |
-| Studio tool row / Tools inspector; legacy portrait segment | `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_StudioToolRow`, `_EditPitchControls`, `_ToolModeSegment`) |
+| Studio tool row; legacy Edit & Pitch rail and portrait segment | `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_StudioToolRow`, `_EditPitchControls`, `_ToolModeSegment`) |
 
 ### Continuous-tool guarantees
 
@@ -409,16 +409,19 @@ immutable palette and repaint when it changes.
 
 - **Header:** full Piano Roll title, with project context, help and Roll Settings
   on a separate row. Long project names retain a full tooltip and semantic label.
-- **Transport:** rewind, play/pause, stop, tempo, bar/beat and time signature.
-  Readouts scroll horizontally when space is tight.
+- **Transport:** unframed rewind, play/pause, stop, tempo, bar/beat and time
+  signature. Readouts scroll horizontally when space is tight.
 - **Tools:** named Draw, Select, Split, Paint and Delete actions above the grid.
-  The active tool is highlighted. The Snap readout opens the Tools inspector.
+  The active tool is highlighted. Snap, the current pitch-range readout, and
+  `−1 Oct` / `+1 Oct` / `Clear` share the same borderless row; it wraps onto
+  a second line when vertical space allows and scrolls horizontally on short
+  viewports.
 - **Grid:** the central editing surface, with distinct white/black pitch keys,
   restrained alternating rows and octave labels on notes when their width
   permits. On tall tablets the pitch rows start immediately under the ruler,
   aligned with the keyboard sidebar. It preserves the raw pointer, resize, pinch and synchronized
   scrolling behavior described below.
-- **Inspector:** underlined Stack Builder / Selection / Tools tabs. At widths
+- **Inspector:** underlined Stack Builder / Selection tabs. At widths
   of at least 700px it is a 320px side rail. Below 700px it is an inline dock
   capped at 33% of available height (80–220px), including tabs. The Chord
   builder presents Root, Quality, Inversion and Duration as four compact menus
@@ -434,9 +437,10 @@ immutable palette and repaint when it changes.
 - **Selection:** time-column status, Select column, Clear selection, Delete
   selection and detection. A ruler column is a time anchor; clearing selected
   notes keeps that anchor.
-- **Tools inspector:** all five tools, snap choices (1/2/4/8/16/32 ticks) and
-  pitch-range controls. Range shifts by an octave; Clear restores MIDI 48–84.
-  These controls are available on phones as well as tablets.
+- **Pitch range:** the readout shows the current window and the octave-shift
+  and Clear actions sit beside it in the tool row. Range shifts by an octave;
+  Clear restores MIDI 48–84. These controls are available on phones as well as
+  tablets and remain outside the inspector.
 - **Utility strip:** Quick, Scale, Hum recorder, Save and Import. Scroll the
   strip horizontally to reach later actions on compact screens.
 

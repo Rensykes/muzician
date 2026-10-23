@@ -57,6 +57,10 @@ class TransportStrip extends StatelessWidget {
   /// metronome chips supplied by the hosting workspace).
   final List<Widget> extras;
 
+  /// Whether to draw the translucent card around the transport. Hosts that
+  /// want a bare toolbar (Studio Piano Roll) pass `false`.
+  final bool framed;
+
   const TransportStrip({
     super.key,
     required this.bpm,
@@ -70,21 +74,25 @@ class TransportStrip extends StatelessWidget {
     required this.onSigTap,
     this.onBpmDelta,
     this.extras = const [],
+    this.framed = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final timeSigLabel = '${timeSig.beatsPerMeasure}/${timeSig.beatUnit}';
     return Container(
       height: 48,
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      decoration: BoxDecoration(
-        color: StudioPalette.of(context).glassBg,
-        borderRadius: BorderRadius.circular(
-          StudioPalette.of(context).isStudio ? 6 : 12,
-        ),
-        border: Border.all(color: StudioPalette.of(context).glassBorder),
-      ),
+      margin: framed
+          ? const EdgeInsets.fromLTRB(12, 4, 12, 4)
+          : EdgeInsets.zero,
+      decoration: framed
+          ? BoxDecoration(
+              color: palette.glassBg,
+              borderRadius: BorderRadius.circular(palette.isStudio ? 6 : 12),
+              border: Border.all(color: palette.glassBorder),
+            )
+          : null,
       child: Material(
         type: MaterialType.transparency,
         child: Row(
