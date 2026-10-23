@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
+import '../../models/guitar_sound.dart' show GuitarTone;
 import '../../models/harmony_lane_instrument.dart';
 import '../../schema/rules/save_system_rules.dart' show resolveSaveInProject;
 import '../../schema/rules/songwriter_library_match_rules.dart';
@@ -967,12 +968,10 @@ class _SectionHeading extends ConsumerWidget {
     final notifier = ref.read(songwriterProvider.notifier);
     final canAddGuitarStrumLane = notifier.canAddGuitarStrumLane(section.id);
     final studio = StudioPalette.of(context).isStudio;
-    final disclosureStyle = OutlinedButton.styleFrom(
+    final disclosureStyle = TextButton.styleFrom(
       minimumSize: const Size(44, 44),
       padding: const EdgeInsets.symmetric(horizontal: 8),
       foregroundColor: StudioPalette.of(context).textSecondary,
-      backgroundColor: StudioPalette.of(context).surface,
-      side: BorderSide(color: StudioPalette.of(context).glassBorder),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
     );
@@ -1012,7 +1011,7 @@ class _SectionHeading extends ConsumerWidget {
             ),
             if (!studio) const SizedBox(width: 8),
             if (studio)
-              OutlinedButton.icon(
+              TextButton.icon(
                 key: Key('barsPill_${section.id}'),
                 style: disclosureStyle,
                 iconAlignment: IconAlignment.end,
@@ -1059,7 +1058,7 @@ class _SectionHeading extends ConsumerWidget {
             // Always-visible repeat control: \u00d7N tiles the section into N verses.
             // Muted at \u00d71 so it stays discoverable; accented once repeated.
             if (studio)
-              OutlinedButton.icon(
+              TextButton.icon(
                 key: Key('repeatPill_${section.id}'),
                 style: disclosureStyle,
                 iconAlignment: IconAlignment.end,
@@ -1472,8 +1471,8 @@ Future<void> showBarActionSheet({
   );
 }
 
-/// Label row above a harmony lane's bar grid, shown only when the section has
-/// more than one harmony lane. Secondary lanes get a delete action.
+/// Source and playback controls above each harmony lane's bar grid.
+/// Secondary lanes also get a delete action.
 class _HarmonyLaneHeader extends ConsumerWidget {
   const _HarmonyLaneHeader({
     required this.section,
@@ -1552,7 +1551,8 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                   ),
                 ),
               ),
-
+              if (instrument == HarmonyLaneInstrument.fretboard)
+                _HarmonyGuitarSound(laneId: lane.id),
               if (lane.id.isNotEmpty &&
                   ref
                       .read(songwriterProvider.notifier)
@@ -1656,6 +1656,57 @@ class _HarmonyLaneHeader extends ConsumerWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HarmonyGuitarSound extends ConsumerWidget {
+  const _HarmonyGuitarSound({required this.laneId});
+  final String laneId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tone = ref.watch(settingsProvider.select((s) => s.guitarTone));
+    final palette = StudioPalette.of(context);
+    final label = tone == GuitarTone.clean ? 'Clean' : 'Distorted';
+    return PopupMenuButton<GuitarTone>(
+      key: Key('harmonyGuitarSound_$laneId'),
+      tooltip: 'Guitar sound, shared with Fretboard and Writer',
+      initialValue: tone,
+      onSelected: (value) =>
+          ref.read(settingsProvider.notifier).setGuitarTone(value),
+      itemBuilder: (_) => [
+        for (final value in GuitarTone.values)
+          CheckedPopupMenuItem(
+            value: value,
+            checked: value == tone,
+            child: Text(value == GuitarTone.clean ? 'Clean' : 'Distorted'),
+          ),
+      ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  'Sound: $label',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: palette.textSecondary, fontSize: 12),
+                ),
+              ),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: palette.textMuted,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

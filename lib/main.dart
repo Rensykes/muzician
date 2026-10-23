@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/_mockup_shell.dart';
 import 'features/fretboard/fretboard_feature.dart';
+import 'features/fretboard/fretboard_audition_controls.dart';
 import 'features/instrument_shared/instrument_screen.dart';
 import 'features/instrument_shared/shared_scale_picker.dart';
 import 'ui/core/app_info_panel.dart';
@@ -807,6 +808,7 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
       ),
       instrumentContext:
           '$tuningLabel · ${state.capo == 0 ? 'Capo off' : 'Capo ${state.capo}'}',
+      auditionControls: const FretboardAuditionControls(),
       appBarActions: [
         IconBtn(
           icon: Icons.help_outline_rounded,
@@ -834,11 +836,11 @@ class _FretboardScreenState extends ConsumerState<_FretboardScreen> {
               current: state.viewMode,
               onSelect: notifier.setViewMode,
               options: const [
-                (FretboardViewMode.exact, 'Exact', 'Show the full fretboard'),
+                (FretboardViewMode.exact, 'Full', 'Show all note labels'),
                 (
                   FretboardViewMode.exactFocus,
                   'Solo',
-                  'Focus on selected notes',
+                  'Show selected note labels only',
                 ),
               ],
             ),
@@ -931,7 +933,7 @@ class _FretSettingsSheetContent extends ConsumerWidget {
               current: state.viewMode,
               onSelect: notifier.setViewMode,
               options: const [
-                (FretboardViewMode.exact, Icons.visibility_rounded, 'Exact'),
+                (FretboardViewMode.exact, Icons.visibility_rounded, 'Full'),
                 (
                   FretboardViewMode.exactFocus,
                   Icons.center_focus_strong_rounded,
@@ -1061,8 +1063,12 @@ class _PianoScreenState extends ConsumerState<_PianoScreen> {
             current: ref.watch(pianoProvider).viewMode,
             onSelect: ref.read(pianoProvider.notifier).setViewMode,
             options: const [
-              (PianoViewMode.exact, 'Exact', 'Show the full keyboard'),
-              (PianoViewMode.exactFocus, 'Solo', 'Focus on selected notes'),
+              (PianoViewMode.exact, 'Full', 'Show all note labels'),
+              (
+                PianoViewMode.exactFocus,
+                'Solo',
+                'Show selected note labels only',
+              ),
             ],
           ),
         ),
@@ -1142,7 +1148,7 @@ class _PianoSettingsSheetContent extends ConsumerWidget {
               current: state.viewMode,
               onSelect: notifier.setViewMode,
               options: const [
-                (PianoViewMode.exact, Icons.visibility_rounded, 'Exact'),
+                (PianoViewMode.exact, Icons.visibility_rounded, 'Full'),
                 (
                   PianoViewMode.exactFocus,
                   Icons.center_focus_strong_rounded,

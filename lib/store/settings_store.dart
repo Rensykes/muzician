@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_theme_variant.dart';
+import '../models/guitar_sound.dart';
 import '../models/harmony_lane_instrument.dart';
 import '../models/save_system.dart';
 import '../schema/rules/mono_pitch_rules.dart';
@@ -44,6 +45,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setNoteVolume(double volume) async {
     state = state.copyWith(noteVolume: volume.clamp(0.0, 1.0));
+    await _persist();
+  }
+
+  Future<void> setGuitarTone(GuitarTone tone) async {
+    state = state.copyWith(guitarTone: tone);
     await _persist();
   }
 

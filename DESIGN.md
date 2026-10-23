@@ -61,9 +61,19 @@ Shared controls: project/title header, opaque workspace panel, labelled primary/
 
 ## Fretboard and Piano
 
-Order: project/title → compact labeled Input/View menus → playable canvas → single selection disclosure → inspector. Input (Free/Chord) and View (Exact/Solo) use neutral controls with 44px minimum touch targets and explanatory menu choices. Selection opens one live-theme action sheet for exact notes, Save idea and Add to Writer; do not repeat summaries or actions in inspector tabs. The disclosure remains available with the inspector collapsed. Default inspector Voicings; tabs Notes / Voicings / Setup. Allow collapse and reopen without clearing selection or recreating panels. Notes contains full detection; Voicings provides From notes / By chord search with native diagrams in a horizontal carousel; Setup exposes native controls. Distinguish captured search criteria from the applied selection with an Applied label/check. Applying a result must not change criteria, result order or carousel offset. Manual note edits refresh the note query; Use current notes is the explicit refresh action. Root/quality controls must remain readable in a narrow inspector and reflow where needed. Scale and library remain explicitly reachable without duplicate state or dead controls.
+Order: project/title → compact labeled Input/View menus → playable canvas → single selection disclosure → inspector. Input (Free/Chord) and View (Full/Solo) use neutral controls with 44px minimum touch targets and explanatory menu choices. Selection opens one live-theme action sheet for exact notes, Save idea and Add to Writer; do not repeat summaries or actions in inspector tabs. The disclosure remains available with the inspector collapsed. Default inspector Voicings; tabs Notes / Voicings / Setup. Allow collapse and reopen without clearing selection or recreating panels. Notes contains full detection; Voicings provides From notes / By chord search with native diagrams in a horizontal carousel; Setup exposes native controls. Distinguish captured search criteria from the applied selection with an Applied label/check. Applying a result must not change criteria, result order or carousel offset. Manual note edits refresh the note query; Use current notes is the explicit refresh action. Root/quality controls must remain readable in a narrow inspector and reflow where needed. Scale and library remain explicitly reachable without duplicate state or dead controls.
+
+Full labels every playable note; Solo labels only exact selected positions,
+independent of Chord/Free. Keep piano keys and guitar strings visible in both
+views. The Fretboard canvas extends through fret 24 with horizontal scrolling.
 
 Save idea opens the existing save flow; Add to Writer preserves recognized versus Exact selection and linked-save behavior. Keep explanations for disabled guitar Free handoff. Show tuning/capo as readable controls and preserve capo positioning, one-note-per-string eligibility and scroll guards. Piano preserves actual MIDI keys, black-key overlays, range, octave/inversions and audition. No new global transport for Fretboard/Piano merely because it appeared in the image.
+
+Fretboard has one compact audition row below its canvas: a Sound menu for Clean
+or Distorted electric guitar and labelled Strum controls for down/up strokes.
+Keep these 44px actions available when the inspector is collapsed. Empty or
+ambiguous selections disable strumming and explain how to select one position
+per string; audition never changes the selection.
 
 Automatic **From notes** suggestions in Fretboard and Piano respect the active
 scale as well as the captured notes. Changing or clearing the scale updates
@@ -81,6 +91,11 @@ Inspector: Stack Builder / Selection / Tools. Reuse the builder and detection lo
 
 Header separates project/title, named version action and overflow. Transport retains project key confirmation, tempo/play/metronome; Undo/Redo remain available. Use 'Save version' and 'Writer versions' for named Writer snapshots while retaining Section blocks. State labels distinguish auto-persisted draft from named-version changes.
 
+Writer uses unframed transport and metadata disclosures, compact section spacing,
+and divider-separated Mixer rows instead of nested bordered cards. Fretboard
+Harmony has an inline Sound disclosure for the shared Clean/Distorted preference.
+Retain visible musical cell boundaries and 44px control targets.
+
 Section: name, bars, repeats and Mixer; Harmony lane source label, four-cell rows with chord/degree/lyrics and Save identity; other lane types retain editors. Expose frequent chord actions contextually while keeping every existing advanced menu action. No Add to Writer inside Writer. Keep exact labels literal and theory absent when unknown.
 
 Wide layout: avoid a single half-width section with an empty column. Use full-width bounded section content or a real contextual inspector; do not invent an inspector with fake actions. Pattern editor groups steps using the canonical project beat grid (four per quarter beat, two per eighth beat), with 44px steps and wrapping within a labelled beat when needed. Groups never cross a bar boundary; existing timing rules remain authoritative. Guitar Strum source stays explicit, Unassigned remains visible and silent. Audio/melody/drum/lyrics must stay reachable even when not illustrated in the concept.
@@ -91,7 +106,7 @@ The initial implementation passed functional review but did not match the chosen
 
 Compare real populated screenshots with the references before declaring completion; passing layout tests alone does not establish fidelity.
 
-The final visual pass also uses readable bar/beat ruler labels, a contextual column strip when height allows, and a bounded wide Roll builder. New notes added outside a grid gesture are revealed vertically. Writer Bars/Repeat are outlined disclosures; Mixer has a label on wide layouts. Native evidence and before/after comparison are in `docs/studio-redesign/comparison.html`.
+The final visual pass also uses readable bar/beat ruler labels, a contextual column strip when height allows, and a bounded wide Roll builder. New notes added outside a grid gesture are revealed vertically. Writer Bars/Repeat are plain disclosures; Mixer has a label on wide layouts. Native evidence and before/after comparison are in `docs/studio-redesign/comparison.html`.
 
 ## Verification and preservation
 

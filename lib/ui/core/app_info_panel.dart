@@ -210,6 +210,17 @@ class _FretboardInfoTab extends StatelessWidget {
               color: StudioPalette.of(context).emerald,
             ),
             _Entry(
+              icon: Icons.music_note_rounded,
+              label: 'Guitar sound & strum',
+              desc:
+                  'Choose Clean or Distorted electric sound below the fretboard. '
+                  'Down/up strum buttons play the selected strings in order. '
+                  'Select one position per string to strum; unselected strings '
+                  'stay silent. Sound is remembered on this device and shared '
+                  'with guitar parts in Writer playback.',
+              color: StudioPalette.of(context).emerald,
+            ),
+            _Entry(
               icon: Icons.bookmarks_outlined,
               label: 'Save idea, Idea library & Add to Writer',
               desc:
@@ -259,26 +270,15 @@ class _FretboardInfoTab extends StatelessWidget {
             ),
             _Entry(
               icon: Icons.grid_on,
-              label: 'All view',
-              desc: 'Shows pitch classes (e.g. C#) across the whole fretboard.',
-              color: StudioPalette.of(context).violet,
-            ),
-            _Entry(
-              icon: Icons.text_fields,
-              label: 'Exact view',
-              desc: 'Shows note names with octave (e.g. C#4).',
-              color: StudioPalette.of(context).violet,
-            ),
-            _Entry(
-              icon: Icons.center_focus_strong_outlined,
-              label: 'Focus view',
-              desc: 'Selected notes are vivid; unselected notes are dimmed.',
+              label: 'Full view',
+              desc: 'Shows all note labels in both Free and Chord input modes.',
               color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.visibility_outlined,
               label: 'Solo view',
-              desc: 'Only selected notes are shown; all others are hidden.',
+              desc:
+                  'Shows only selected note labels; the instrument stays playable.',
               color: StudioPalette.of(context).violet,
             ),
           ],

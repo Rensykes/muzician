@@ -27,7 +27,7 @@ blocks**. **Draft** means the active project session is saved automatically.
 not a warning that the draft will disappear. The Writer menu retains New
 project, Undo/Redo, version browsing, structure editing, and project renaming.
 
-The transport exposes key, BPM, play/stop, and metronome. It wraps at narrow
+The unframed transport exposes key, BPM, play/stop, and metronome. It wraps at narrow
 widths and larger text sizes. Its key and BPM values use a single compact line;
 all transport and history controls retain 44-pixel touch targets. The Writer
 menu keeps these commands available as well. Project-key changes still require
@@ -36,7 +36,11 @@ confirmation.
 Sections keep their name, bars, repeat count, Mixer icon, and **Section actions**
 menu in a compact row, reflowing when space is limited. **Remove section** lives
 in that menu and remains recoverable with Undo. Harmony lane headers identify
-the source instrument and keep rename, instrument change, duplicate, and delete controls. Four-bar rows show
+the source instrument and keep rename, instrument change, duplicate, and delete controls.
+Fretboard Harmony also exposes **Sound: Clean / Distorted**, shared with Fretboard
+audition and all Writer guitar playback on this device. This preference changes
+the timbre without changing saved notes, lane identity, or project history.
+Four-bar rows show
 chord, degree when known, linked Save name, and the current verse's lyric.
 Filled cells start at 64 pixels and empty add slots at 44; a distinct Save name
 or a lyric adds the space its text needs. Larger text scales grow the cells.
@@ -65,6 +69,8 @@ drum editors also group steps by beat and scroll on short screens.
 Writer's chord, library, mixer, audio, drum, strum, structure, and melody editors
 follow live appearance changes. An open melody Piano Roll keeps its isolated
 notes, tool, and snap setting; only **Save** commits its edits to Writer.
+The mixer uses compact lane rows separated by dividers, with volume, pan,
+rename, and mute controls, rather than a bordered card around each lane.
 
 ---
 
@@ -480,6 +486,6 @@ section. The blank Writer state also has a visible **Start an 8-bar section**
 action. A separately saved Fretboard/Piano idea can be linked from the project
 root with **Use in Writer**; a fresh instrument selection creates a new save.
 
-Studio section Bars and Repeat controls have outlined borders and disclosure chevrons; both open the existing steppers. Mixer keeps its tooltip on compact screens and shows a label on wide screens.
+Studio section Bars and Repeat use plain text disclosures with chevrons and 44-pixel targets; both open the existing steppers. Save version is also a text action. Mixer keeps its tooltip on compact screens and shows a label on wide screens. Chord-cell boundaries remain visible because they represent musical placement.
 
 Studio Harmony cells in a mixed row share the tallest cell’s height so their top and bottom edges align. Entirely empty rows retain compact 44-pixel slots; scaled text, lyrics and Save names can increase row height.

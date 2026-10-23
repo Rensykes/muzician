@@ -2,12 +2,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/app_theme_variant.dart';
+import 'package:muzician/models/guitar_sound.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('guitar tone persists independently of the other settings', () async {
+    final first = ProviderContainer();
+    await first.read(settingsProvider.notifier).setNoteVolume(0.4);
+    await first.read(settingsProvider.notifier).setGuitarTone(GuitarTone.distorted);
+    expect(first.read(settingsProvider).guitarTone, GuitarTone.distorted);
+    expect(first.read(settingsProvider).noteVolume, 0.4);
+    first.dispose();
+
+    final restored = ProviderContainer();
+    addTearDown(restored.dispose);
+    await restored.read(settingsProvider.notifier).hydrate();
+    expect(restored.read(settingsProvider).guitarTone, GuitarTone.distorted);
+    expect(restored.read(settingsProvider).noteVolume, 0.4);
+  });
 
   test('setSaveBrowserGrid updates state', () async {
     final container = ProviderContainer();

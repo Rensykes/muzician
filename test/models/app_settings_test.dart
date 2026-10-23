@@ -1,9 +1,36 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/app_theme_variant.dart';
+import 'package:muzician/models/guitar_sound.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/utils/note_utils.dart' show NoteSpelling;
 
 void main() {
+  test('guitar tone defaults to clean and both sounds round-trip', () {
+    expect(const AppSettings().guitarTone, GuitarTone.clean);
+    for (final tone in GuitarTone.values) {
+      final settings = const AppSettings(
+        noteVolume: 0.35,
+      ).copyWith(guitarTone: tone);
+      final restored = AppSettings.fromJson(settings.toJson());
+      expect(restored.guitarTone, tone);
+      expect(restored.noteVolume, 0.35);
+      expect(restored.copyWith(noteVolume: 0.7).guitarTone, tone);
+    }
+  });
+
+  test('old or invalid guitar tone settings retain other preferences', () {
+    for (final raw in [null, 'acoustic', 2]) {
+      final restored = AppSettings.fromJson({
+        'guitarTone': ?raw,
+        'noteVolume': 0.35,
+        'noteSpelling': 'flats',
+      });
+      expect(restored.guitarTone, GuitarTone.clean);
+      expect(restored.noteVolume, 0.35);
+      expect(restored.noteSpelling, NoteSpelling.flats);
+    }
+  });
+
   test('theme variant defaults to Studio and both options round-trip', () {
     expect(const AppSettings().themeVariant, AppThemeVariant.studio);
 

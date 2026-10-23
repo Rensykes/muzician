@@ -7,6 +7,7 @@ import '../schema/rules/piano_roll_rules.dart' as pr_rules;
 import '../utils/note_utils.dart';
 import 'app_theme_variant.dart';
 import 'fretboard.dart';
+import 'guitar_sound.dart';
 import 'harmony_lane_instrument.dart';
 import 'piano.dart';
 import 'project_config.dart';
@@ -902,6 +903,9 @@ class AppSettings {
   // 0.0 (silent) … 1.0 (full volume). Default 0.8.
   final double noteVolume;
 
+  /// Electric guitar sound selected for this device, outside project saves.
+  final GuitarTone guitarTone;
+
   /// Render note-name text inside selected note bubbles / on keyboard rows.
   /// When false the instrument canvases show shapes and colors only — useful
   /// for ear-training and a cleaner visual.
@@ -937,6 +941,7 @@ class AppSettings {
     this.themeVariant = AppThemeVariant.studio,
     this.suppressOutOfKeyAlert = false,
     this.noteVolume = 0.8,
+    this.guitarTone = GuitarTone.clean,
     this.showNoteLabels = true,
     this.humSensitivity = HumSensitivity.balanced,
     this.metronomeEnabled = true,
@@ -953,6 +958,7 @@ class AppSettings {
     AppThemeVariant? themeVariant,
     bool? suppressOutOfKeyAlert,
     double? noteVolume,
+    GuitarTone? guitarTone,
     bool? showNoteLabels,
     HumSensitivity? humSensitivity,
     bool? metronomeEnabled,
@@ -967,6 +973,7 @@ class AppSettings {
     themeVariant: themeVariant ?? this.themeVariant,
     suppressOutOfKeyAlert: suppressOutOfKeyAlert ?? this.suppressOutOfKeyAlert,
     noteVolume: noteVolume ?? this.noteVolume,
+    guitarTone: guitarTone ?? this.guitarTone,
     showNoteLabels: showNoteLabels ?? this.showNoteLabels,
     humSensitivity: humSensitivity ?? this.humSensitivity,
     metronomeEnabled: metronomeEnabled ?? this.metronomeEnabled,
@@ -989,6 +996,7 @@ class AppSettings {
     'themeVariant': themeVariant.name,
     'suppressOutOfKeyAlert': suppressOutOfKeyAlert,
     'noteVolume': noteVolume,
+    'guitarTone': guitarTone.name,
     'showNoteLabels': showNoteLabels,
     'humSensitivity': humSensitivity.name,
     'metronomeEnabled': metronomeEnabled,
@@ -1006,6 +1014,10 @@ class AppSettings {
     themeVariant: _appThemeVariantFromName(json['themeVariant']),
     suppressOutOfKeyAlert: json['suppressOutOfKeyAlert'] as bool? ?? false,
     noteVolume: (json['noteVolume'] as num?)?.toDouble() ?? 0.8,
+    guitarTone: GuitarTone.values.firstWhere(
+      (tone) => tone.name == json['guitarTone'],
+      orElse: () => GuitarTone.clean,
+    ),
     showNoteLabels: json['showNoteLabels'] as bool? ?? true,
     humSensitivity: _humSensitivityFromName(json['humSensitivity'] as String?),
     metronomeEnabled: json['metronomeEnabled'] as bool? ?? true,

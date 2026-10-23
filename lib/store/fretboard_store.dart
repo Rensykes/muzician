@@ -186,7 +186,8 @@ class FretboardNotifier extends Notifier<FretboardState>
   void loadSnapshot(FretboardSnapshot snap) {
     state = FretboardState(
       currentTuning: snap.tuning,
-      numFrets: snap.numFrets,
+      // Older Saves retain their pitches while opening the complete board.
+      numFrets: defaultFretboardFrets,
       capo: snap.capo,
       highlightedNotes: const [],
       selectedNotes: List<String>.from(snap.selectedNotes),

@@ -131,10 +131,12 @@ class SongwriterHeader extends ConsumerWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (onSave != null)
-                      OutlinedButton(
+                      TextButton(
                         key: const Key('writerSaveButton'),
                         onPressed: onSave,
-                        style: OutlinedButton.styleFrom(
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(44, 44),
+                          foregroundColor: palette.textSecondary,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                         ),
                         child: const Text('Save version'),
@@ -312,21 +314,8 @@ class SongwriterHeader extends ConsumerWidget {
         builder: (sheetContext) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: StudioPalette.of(
-                  sheetContext,
-                ).sky.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: StudioPalette.of(
-                    sheetContext,
-                  ).sky.withValues(alpha: 0.2),
-                ),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
                 'Sketch sections with chords and lyrics. Send a Fretboard or Piano selection to place it in a Writer bar.',
                 style: TextStyle(
@@ -512,56 +501,47 @@ class _WriterConfigStrip extends ConsumerWidget {
     );
     if (StudioPalette.of(context).isStudio) {
       final palette = StudioPalette.of(context);
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: palette.surface,
-          border: Border.all(color: palette.glassBorder),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 4,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: _ConfigReadout(
-                  label: 'KEY',
-                  value: keyLabel,
-                  onTap: onKeyTap,
-                ),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 4,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: _ConfigReadout(
+                label: 'KEY',
+                value: keyLabel,
+                onTap: onKeyTap,
               ),
-              _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
-              IconButton(
-                key: const Key('songwriterPlay'),
-                tooltip: playing ? 'Stop Writer' : 'Play Writer',
-                icon: Icon(
-                  playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                ),
-                onPressed: () {
-                  final transport = ref.read(
-                    songwriterPlaybackProvider.notifier,
+            ),
+            _ConfigReadout(label: 'BPM', value: '$tempo', onTap: onTempoTap),
+            IconButton(
+              key: const Key('songwriterPlay'),
+              tooltip: playing ? 'Stop Writer' : 'Play Writer',
+              icon: Icon(
+                playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              ),
+              onPressed: () {
+                final transport = ref.read(songwriterPlaybackProvider.notifier);
+                if (playing) {
+                  transport.stopPlayback();
+                } else {
+                  transport.startPlayback(
+                    startTick: ref.read(songwriterStartTickProvider),
                   );
-                  if (playing) {
-                    transport.stopPlayback();
-                  } else {
-                    transport.startPlayback(
-                      startTick: ref.read(songwriterStartTickProvider),
-                    );
-                  }
-                },
-              ),
-              IconButton(
-                tooltip: metronomeOn ? 'Metronome on' : 'Metronome off',
-                icon: Icon(metronomeOn ? Icons.music_note : Icons.music_off),
-                color: metronomeOn ? palette.sky : palette.textSecondary,
-                onPressed: () => ref
-                    .read(settingsProvider.notifier)
-                    .setMetronomeEnabled(!metronomeOn),
-              ),
-            ],
-          ),
+                }
+              },
+            ),
+            IconButton(
+              tooltip: metronomeOn ? 'Metronome on' : 'Metronome off',
+              icon: Icon(metronomeOn ? Icons.music_note : Icons.music_off),
+              color: metronomeOn ? palette.sky : palette.textSecondary,
+              onPressed: () => ref
+                  .read(settingsProvider.notifier)
+                  .setMetronomeEnabled(!metronomeOn),
+            ),
+          ],
         ),
       );
     }

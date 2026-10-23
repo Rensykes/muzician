@@ -8,7 +8,7 @@ previews use `CustomPainter`. The default range is 61 keys, C2–C7.
 ## Workspace
 
 Project context has its own row above the full Piano title. The **?** action
-opens shared help. A compact **Exact/Solo** menu above the keyboard explains
+opens shared help. A compact **Full/Solo** menu above the keyboard explains
 both display modes. Setup contains the current range, and the footer shortcut
 shows its full range label in a tooltip.
 
@@ -97,8 +97,10 @@ remain above whites for hit testing.
 Selected/focused keys receive the palette accent; ordinary keys keep their
 white/black physical identity. Studio keeps black keys opaque when scale
 highlights or pitch-class focus dim unrelated content, preserving a readable
-physical keyboard. **Solo** hides unrelated keys when a selection exists;
-**Exact** retains the full keyboard. Voicings load exact MIDI keys in the
+physical keyboard. **Full** shows every note label; **Solo** labels only selected
+MIDI keys, even when pitch-class focus is active. With no selection, Solo shows
+no labels. Every physical key remains visible and playable in both views.
+Saved mode identifiers remain compatible with older Saves. Voicings load exact MIDI keys in the
 current range and use the existing one-shot scroll-to-MIDI signal.
 
 ## Project key and spelling

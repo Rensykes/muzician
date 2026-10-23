@@ -1,4 +1,4 @@
-/// NotePlayer – pure-Dart additive-synthesis note preview.
+/// NotePlayer – offline note, plucked-guitar and percussion preview.
 ///
 /// Platform strategy:
 ///   iOS / macOS   → DeviceFileSource (.wav in Documents; AVPlayer needs extension
@@ -15,7 +15,9 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/guitar_sound.dart';
 import '../models/song_project.dart';
+import 'guitar_synth.dart';
 import 'playback_profiling.dart';
 import 'playback_profile_source.dart';
 
@@ -295,12 +297,14 @@ class NotePlayer {
   int _poolIndex = 0;
 
   // Bytes cache — used by BytesSource on all non-iOS platforms.
-  final Map<int, Uint8List> _bytesCache = {};
+  final Map<Object, Uint8List> _bytesCache = {};
 
   // File cache — iOS only; DeviceFileSource requires a named .wav file.
-  final Map<int, String> _fileCache = {};
-  final Map<int, Future<String>> _pending = {};
+  final Map<Object, String> _fileCache = {};
+  final Map<Object, Future<String>> _pending = {};
   String? _tempDir;
+  final Set<String> _guitarStrumCacheKeys = {};
+  static const _maxCachedGuitarStrums = 16;
 
   bool _ready = false;
 
@@ -368,6 +372,52 @@ class NotePlayer {
   /// Plays [midiNote] as a short synthesised tone at [volume] (0.0–1.0),
   /// panned by [pan] (-1.0 left .. 1.0 right).
   void previewNote(int midiNote, {double volume = 0.8, double pan = 0.0}) {
+    _previewNote(midiNote, volume: volume, pan: pan);
+  }
+
+  /// Previews one clean or distorted electric guitar string.
+  void previewGuitarNote(
+    int midiNote, {
+    GuitarTone tone = GuitarTone.clean,
+    double volume = 0.8,
+    double pan = 0.0,
+  }) {
+    final midi = GuitarSynth.safeMidi(midiNote);
+    _previewNote(
+      midi,
+      volume: volume,
+      pan: pan,
+      cacheKey: GuitarSynth.noteCacheKey(midi, tone: tone),
+      render: () => GuitarSynth.renderNote(midi, tone: tone),
+    );
+  }
+
+  /// Plays an entire stroke as one WAV with sample-accurate string onsets.
+  /// The caller supplies physical string order; repeated pitches are retained.
+  void previewGuitarStrum(
+    List<int> midiNotesInStrokeOrder, {
+    GuitarTone tone = GuitarTone.clean,
+    double volume = 0.8,
+    double pan = 0.0,
+  }) {
+    final notes = GuitarSynth.strokeNotes(midiNotesInStrokeOrder);
+    if (notes.isEmpty) return;
+    _previewNote(
+      notes.first,
+      volume: volume,
+      pan: pan,
+      cacheKey: GuitarSynth.strumCacheKey(notes, tone: tone),
+      render: () => GuitarSynth.renderStrum(notes, tone: tone),
+    );
+  }
+
+  void _previewNote(
+    int midiNote, {
+    required double volume,
+    required double pan,
+    Object? cacheKey,
+    Uint8List Function()? render,
+  }) {
     final profileVoice = playbackProfilingEnabled
         ? playbackProfileVoiceContext()
         : null;
@@ -390,7 +440,74 @@ class NotePlayer {
       }
       return;
     }
-    unawaited(_play(midiNote, volume, pan, profileVoice: profileVoice));
+    unawaited(
+      _play(
+        midiNote,
+        volume,
+        pan,
+        profileVoice: profileVoice,
+        cacheKey: cacheKey,
+        render: render,
+      ),
+    );
+  }
+
+  /// A simultaneous chord uses one platform voice instead of racing several
+  /// source bindings. It participates in transport stop/cancellation.
+  void playSequencedChord(
+    List<int> midiNotes, {
+    required Duration duration,
+    double volume = 0.8,
+    double pan = 0.0,
+    GuitarTone? guitarTone,
+  }) {
+    if (!_ready || midiNotes.isEmpty) return;
+    final notes = midiNotes.map(GuitarSynth.safeMidi).toList()..sort();
+    final durationMs = GuitarSynth.durationMilliseconds(duration);
+    final key =
+        'chord_v${GuitarSynth.cacheVersion}_${guitarTone?.name ?? 'piano'}_'
+        '${notes.join('_')}_$durationMs';
+    Uint8List render() {
+      if (guitarTone != null) {
+        return GuitarSynth.renderChord(
+          notes,
+          tone: guitarTone,
+          duration: Duration(milliseconds: durationMs),
+        );
+      }
+      final mixed = Float64List(_sampleRate * durationMs ~/ 1000);
+      final gain = 1 / math.sqrt(notes.length);
+      for (final midi in notes) {
+        final wav = _renderSequencedNote(midi, durationMs);
+        final bytes = ByteData.sublistView(wav);
+        for (var i = 0; i < mixed.length; i++) {
+          mixed[i] += bytes.getInt16(44 + i * 2, Endian.little) * gain;
+        }
+      }
+      final peak = mixed.fold<double>(
+        32767,
+        (peak, value) => math.max(peak, value.abs()),
+      );
+      final samples = Int16List(mixed.length);
+      for (var i = 0; i < samples.length; i++) {
+        samples[i] = (mixed[i] * 32767 / peak).round();
+      }
+      return _encodeWav(samples);
+    }
+
+    unawaited(
+      _playSequencedNote(
+        notes.first,
+        duration: Duration(milliseconds: durationMs),
+        onsetDelay: Duration.zero,
+        volume: volume,
+        pan: pan,
+        generation: _sequencedGeneration,
+        profileVoice: null,
+        cacheKeyOverride: key,
+        renderOverride: render,
+      ),
+    );
   }
 
   /// Starts one duration-aware voice for a sequenced note. Each voice releases
@@ -403,6 +520,7 @@ class NotePlayer {
     Duration onsetDelay = Duration.zero,
     double volume = 0.8,
     double pan = 0.0,
+    GuitarTone? guitarTone,
   }) {
     final profileVoice = playbackProfilingEnabled
         ? playbackProfileVoiceContext(onsetOffsetUs: onsetDelay.inMicroseconds)
@@ -425,13 +543,14 @@ class NotePlayer {
     }
     unawaited(
       _playSequencedNote(
-        midiNote,
+        guitarTone == null ? midiNote : GuitarSynth.safeMidi(midiNote),
         duration: duration,
         onsetDelay: onsetDelay,
         volume: volume,
         pan: pan,
         generation: _sequencedGeneration,
         profileVoice: profileVoice,
+        guitarTone: guitarTone,
       ),
     );
   }
@@ -549,7 +668,11 @@ class NotePlayer {
     double volume,
     double pan, {
     PlaybackProfileVoiceContext? profileVoice,
+    Object? cacheKey,
+    Uint8List Function()? render,
   }) async {
+    cacheKey ??= midi;
+    render ??= () => _renderNote(midi);
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
     if (profileVoice != null) profileVoice.run.playerReusedCount++;
@@ -597,17 +720,20 @@ class NotePlayer {
       final Source source;
       final sourceName = _needsFile ? 'DeviceFileSource' : 'BytesSource';
       final fileWasCached = playbackProfilingEnabled
-          ? _fileCache.containsKey(midi)
+          ? _fileCache.containsKey(cacheKey)
           : false;
       final bytesWereCached = playbackProfilingEnabled
-          ? _bytesCache.containsKey(midi)
+          ? _bytesCache.containsKey(cacheKey)
           : false;
       if (_needsFile) {
-        final path = await _ensureFile(midi, () => _renderNote(midi));
+        final path = await _ensureFile(cacheKey, render);
         source = DeviceFileSource(path);
       } else {
-        final bytes = _bytesCache.putIfAbsent(midi, () => _renderNote(midi));
+        final bytes = _bytesCache.putIfAbsent(cacheKey, render);
         source = BytesSource(bytes);
+      }
+      if (cacheKey is String && cacheKey.startsWith('guitar_strum_')) {
+        _rememberGuitarStrum(cacheKey);
       }
 
       if (playbackProfilingEnabled) {
@@ -722,6 +848,9 @@ class NotePlayer {
     required double pan,
     required int generation,
     required PlaybackProfileVoiceContext? profileVoice,
+    GuitarTone? guitarTone,
+    Object? cacheKeyOverride,
+    Uint8List Function()? renderOverride,
   }) async {
     final noteTrace = playbackProfilingEnabled
         ? PlaybackProfileTask.begin(
@@ -812,7 +941,9 @@ class NotePlayer {
       _activeSequencedVoices[player] = voiceId;
       _pendingSequencedVoices[player] = voiceId;
       if (profileVoice != null) _sequencedProfileVoices[player] = profileVoice;
-      final durationMs = duration.inMilliseconds < 1
+      final durationMs = guitarTone != null
+          ? GuitarSynth.durationMilliseconds(duration)
+          : duration.inMilliseconds < 1
           ? 1
           : duration.inMilliseconds;
       var started = false;
@@ -882,7 +1013,24 @@ class NotePlayer {
           return;
         }
 
-        final cacheKey = 1000000 + midi * 10000000000 + durationMs;
+        final Object cacheKey =
+            cacheKeyOverride ??
+            (guitarTone == null
+                ? 1000000 + midi * 10000000000 + durationMs
+                : GuitarSynth.noteCacheKey(
+                    midi,
+                    tone: guitarTone,
+                    duration: Duration(milliseconds: durationMs),
+                  ));
+        Uint8List render() =>
+            renderOverride?.call() ??
+            (guitarTone == null
+                ? _renderSequencedNote(midi, durationMs)
+                : GuitarSynth.renderNote(
+                    midi,
+                    tone: guitarTone,
+                    duration: Duration(milliseconds: durationMs),
+                  ));
         if (_needsFile) {
           final fileWasCached = playbackProfilingEnabled
               ? _fileCache.containsKey(cacheKey)
@@ -890,10 +1038,7 @@ class NotePlayer {
           final bytesWereCached = playbackProfilingEnabled
               ? _bytesCache.containsKey(cacheKey)
               : false;
-          final path = await _ensureFile(
-            cacheKey,
-            () => _renderSequencedNote(midi, durationMs),
-          );
+          final path = await _ensureFile(cacheKey, render);
           if (generation != _sequencedGeneration ||
               _activeSequencedVoices[player] != voiceId) {
             cancelled = true;
@@ -983,10 +1128,7 @@ class NotePlayer {
           final bytesWereCached = playbackProfilingEnabled
               ? _bytesCache.containsKey(cacheKey)
               : false;
-          final bytes = _bytesCache.putIfAbsent(
-            cacheKey,
-            () => _renderSequencedNote(midi, durationMs),
-          );
+          final bytes = _bytesCache.putIfAbsent(cacheKey, render);
           if (generation != _sequencedGeneration ||
               _activeSequencedVoices[player] != voiceId) {
             cancelled = true;
@@ -1304,7 +1446,33 @@ class NotePlayer {
     }
   }
 
-  Future<String> _ensureFile(int cacheKey, Uint8List Function() render) {
+  void _rememberGuitarStrum(String cacheKey) {
+    _guitarStrumCacheKeys
+      ..remove(cacheKey)
+      ..add(cacheKey);
+    while (_guitarStrumCacheKeys.length > _maxCachedGuitarStrums) {
+      final oldest = _guitarStrumCacheKeys.first;
+      _guitarStrumCacheKeys.remove(oldest);
+      _bytesCache.remove(oldest);
+      final path = _fileCache.remove(oldest);
+      if (path == null) continue;
+      // Let any current preview finish before reclaiming its native WAV.
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 4), () async {
+          if (_fileCache.containsKey(oldest) || _pending.containsKey(oldest)) {
+            return;
+          }
+          try {
+            await ioDeleteIfExists(path);
+          } catch (_) {
+            // Cache cleanup must never interrupt playing an instrument.
+          }
+        }),
+      );
+    }
+  }
+
+  Future<String> _ensureFile(Object cacheKey, Uint8List Function() render) {
     final cachedPath = _fileCache[cacheKey];
     if (cachedPath != null) {
       return Future.value(cachedPath);
@@ -1343,7 +1511,9 @@ class NotePlayer {
     int? renderUs;
     int? byteCount;
     final writeFuture = _pending.putIfAbsent(cacheKey, () async {
-      final name = cacheKey >= 0
+      final name = cacheKey is String
+          ? cacheKey
+          : (cacheKey as int) >= 0
           ? 'note_$cacheKey'
           : cacheKey <= -10
           ? 'drum_${-cacheKey}'
