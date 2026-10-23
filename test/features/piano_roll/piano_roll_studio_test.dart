@@ -140,14 +140,21 @@ void main() {
             greaterThan(120),
           );
           expect(tester.takeException(), isNull);
-          await _tab(tester, 2);
+          expect(
+            find.byKey(const ValueKey('studio-inspector-2')),
+            findsNothing,
+          );
           await tester.ensureVisible(find.text('+1 Oct'));
           await tester.tap(find.text('+1 Oct'));
           await tester.pump();
           expect(container.read(pianoRollProvider).pitchRangeStart, 60);
-          await tester.ensureVisible(find.text('8t'));
-          await tester.tap(find.text('8t'));
-          await tester.pump();
+          await tester.ensureVisible(
+            find.byKey(const ValueKey('studio-roll-snap')),
+          );
+          await tester.tap(find.byKey(const ValueKey('studio-roll-snap')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('8t').last);
+          await tester.pumpAndSettle();
           expect(container.read(pianoRollProvider).snapTicks, 8);
           expect(tester.takeException(), isNull);
           await tester.tap(find.byTooltip('Collapse inspector'));
@@ -426,7 +433,6 @@ void main() {
         tester.getSize(find.byType(PianoRollGrid)).height,
         greaterThan(120),
       );
-      await _tab(tester, 2);
       await tester.ensureVisible(find.text('+1 Oct'));
       await tester.tap(find.text('+1 Oct'));
       await tester.pump();

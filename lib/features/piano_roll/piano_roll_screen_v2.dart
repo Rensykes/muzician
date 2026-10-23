@@ -222,8 +222,12 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
             state.config.timeSignature,
           ),
           timeSig: state.config.timeSignature,
+          framed: false,
         ),
-        _StudioToolRow(trailing: short ? _studioUtilityActions() : const []),
+        _StudioToolRow(
+          allowWrap: constraints.maxHeight >= 800,
+          trailing: short ? _studioUtilityActions() : const [],
+        ),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
@@ -697,11 +701,13 @@ class _TransportStrip extends ConsumerWidget {
   final int bpm;
   final String barBeat;
   final TimeSignature timeSig;
+  final bool framed;
 
   const _TransportStrip({
     required this.bpm,
     required this.barBeat,
     required this.timeSig,
+    this.framed = true,
   });
 
   @override
@@ -778,6 +784,7 @@ class _TransportStrip extends ConsumerWidget {
       bpm: bpm,
       barBeat: barBeat,
       timeSig: timeSig,
+      framed: framed,
       playing: playing,
       onRewind: onRewind,
       onStop: onStop,
@@ -1501,112 +1508,198 @@ const _studioTools = <(PianoRollTool, IconData, String)>[
 ];
 
 class _StudioToolRow extends ConsumerWidget {
-  const _StudioToolRow({this.trailing = const []});
+  const _StudioToolRow({this.trailing = const [], this.allowWrap = false});
   final List<Widget> trailing;
+
+  /// Wraps onto a second line only when the host has vertical room. Short
+  /// viewports keep the original single scrollable row so the grid survives.
+  final bool allowWrap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(pianoRollProvider);
     final p = StudioPalette.of(context);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
+    final rangeLabel =
+        '${formatMidiNoteLabel(state.pitchRangeStart, spelling: spelling)}'
+        '–'
+        '${formatMidiNoteLabel(state.pitchRangeEnd, spelling: spelling)}';
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 700;
-        return SingleChildScrollView(
-          key: const ValueKey('studio-roll-tools'),
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              for (final (tool, icon, label) in _studioTools)
-                SizedBox(
-                  width:
-                      compact &&
-                          MediaQuery.textScalerOf(context).scale(12) <= 13
-                      ? (state.activeTool == tool ? 88 : 44)
-                      : null,
-                  child: _StudioAction(
-                    key: ValueKey('studio-tool-${tool.name}'),
-                    label: label,
-                    icon: icon,
-                    showLabel: !compact || state.activeTool == tool,
-                    compact: compact,
-                    selected: state.activeTool == tool,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      ref.read(pianoRollProvider.notifier).setActiveTool(tool);
-                    },
-                  ),
-                ),
-              const SizedBox(width: 4),
-              SizedBox(
-                width:
-                    compact && MediaQuery.textScalerOf(context).scale(12) <= 13
-                    ? 84
-                    : null,
-                child: TextButton(
-                  key: const ValueKey('studio-roll-snap'),
-                  onPressed: () async {
-                    final snap = await showStudioDialog<int>(
-                      context: context,
-                      builder: (dialogContext) => SimpleDialog(
-                        title: Row(
-                          children: [
-                            const Expanded(child: Text('Snap')),
-                            IconButton(
-                              tooltip: 'Close Snap',
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
+        final children = <Widget>[
+          for (final (tool, icon, label) in _studioTools)
+            SizedBox(
+              width: compact && MediaQuery.textScalerOf(context).scale(12) <= 13
+                  ? (state.activeTool == tool ? 88 : 44)
+                  : null,
+              child: _StudioAction(
+                key: ValueKey('studio-tool-${tool.name}'),
+                label: label,
+                icon: icon,
+                showLabel: !compact || state.activeTool == tool,
+                compact: compact,
+                selected: state.activeTool == tool,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  ref.read(pianoRollProvider.notifier).setActiveTool(tool);
+                },
+              ),
+            ),
+          SizedBox(
+            width: compact && MediaQuery.textScalerOf(context).scale(12) <= 13
+                ? 84
+                : null,
+            child: TextButton(
+              key: const ValueKey('studio-roll-snap'),
+              onPressed: () async {
+                final snap = await showStudioDialog<int>(
+                  context: context,
+                  builder: (dialogContext) => SimpleDialog(
+                    title: Row(
+                      children: [
+                        const Expanded(child: Text('Snap')),
+                        IconButton(
+                          tooltip: 'Close Snap',
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          icon: const Icon(Icons.close_rounded),
                         ),
-                        children: [
-                          for (final ticks in _snapOptions)
-                            SimpleDialogOption(
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(ticks),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 14,
-                              ),
-                              child: Text('${ticks}t'),
-                            ),
-                        ],
-                      ),
-                    );
-                    if (context.mounted && snap != null) {
-                      ref.read(pianoRollProvider.notifier).setSnapTicks(snap);
-                    }
-                  },
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(44, 44),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    foregroundColor: p.textPrimary,
-                    textStyle: const TextStyle(fontSize: 12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                      ],
+                    ),
                     children: [
-                      Flexible(
-                        child: Text(
-                          'Snap ${state.snapTicks}t',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      for (final ticks in _snapOptions)
+                        SimpleDialogOption(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(ticks),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          child: Text('${ticks}t'),
                         ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.expand_more_rounded, size: 16),
                     ],
                   ),
-                ),
+                );
+                if (context.mounted && snap != null) {
+                  ref.read(pianoRollProvider.notifier).setSnapTicks(snap);
+                }
+              },
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 44),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                foregroundColor: p.textPrimary,
+                textStyle: const TextStyle(fontSize: 12),
               ),
-              if (trailing.isNotEmpty) const SizedBox(width: 12),
-              ...trailing,
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Snap ${state.snapTicks}t',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(Icons.expand_more_rounded, size: 16),
+                ],
+              ),
+            ),
           ),
+          Text(
+            rangeLabel,
+            key: const ValueKey('studio-roll-pitch-range'),
+            style: TextStyle(
+              color: p.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          _PitchTextAction(
+            key: const ValueKey('studio-roll-pitch-down'),
+            label: '−1 Oct',
+            tooltip: 'Shift pitch range down one octave',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              ref.read(pianoRollProvider.notifier).shiftPitchRange(-12);
+            },
+          ),
+          _PitchTextAction(
+            key: const ValueKey('studio-roll-pitch-up'),
+            label: '+1 Oct',
+            tooltip: 'Shift pitch range up one octave',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              ref.read(pianoRollProvider.notifier).shiftPitchRange(12);
+            },
+          ),
+          _PitchTextAction(
+            key: const ValueKey('studio-roll-pitch-clear'),
+            label: 'Clear',
+            tooltip: 'Reset pitch range to C3–C6',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              ref.read(pianoRollProvider.notifier).setPitchRange(48, 84);
+            },
+          ),
+          if (trailing.isNotEmpty) const SizedBox(width: 8),
+          ...trailing,
+        ];
+        final row = allowWrap
+            ? Wrap(
+                spacing: 4,
+                runSpacing: 0,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: children,
+              )
+            : Row(spacing: 4, children: children);
+        return Padding(
+          key: const ValueKey('studio-roll-tools'),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: allowWrap
+              ? row
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: row,
+                ),
         );
       },
+    );
+  }
+}
+
+class _PitchTextAction extends StatelessWidget {
+  const _PitchTextAction({
+    super.key,
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final String label;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = StudioPalette.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          minimumSize: const Size(44, 44),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          foregroundColor: p.textSecondary,
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
     );
   }
 }
@@ -1741,7 +1834,6 @@ class _StudioInspector extends ConsumerWidget {
                             for (final (i, label) in [
                               'Stack Builder',
                               'Selection',
-                              'Tools',
                             ].indexed)
                               TextButton(
                                 key: ValueKey('studio-inspector-$i'),
@@ -1800,7 +1892,7 @@ class _StudioInspector extends ConsumerWidget {
                 Divider(height: 1, color: p.glassBorder),
                 Expanded(
                   child: IndexedStack(
-                    index: tab,
+                    index: tab.clamp(0, 1),
                     children: [
                       const PianoRollStackBuilder(),
                       SingleChildScrollView(
@@ -1859,11 +1951,6 @@ class _StudioInspector extends ConsumerWidget {
                             const PianoRollDetectionPanel(),
                           ],
                         ),
-                      ),
-                      SingleChildScrollView(
-                        key: const ValueKey('studio-roll-edit-pitch'),
-                        padding: const EdgeInsets.all(12),
-                        child: _EditPitchControls(state: state),
                       ),
                     ],
                   ),

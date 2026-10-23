@@ -83,9 +83,9 @@ Explicit **By chord** browsing retains its key-conflict confirmation.
 
 ## Piano Roll
 
-Grid remains central, with transport above and a compact tool row. Keep Draw, Select, Split, Paint and Delete accessible; active tool has a visible label. Expose snap and pitch range on mobile; retain Quick, rewind, selection clear/delete, column detection, scale, Save/Load, Import and Hum Recorder. Name recording 'Hum recorder' or explain it visibly. No velocity lane, automation or Add to Writer invented by the mockup.
+Grid remains central, with an unframed transport above and a compact tool row. Keep Draw, Select, Split, Paint and Delete accessible; active tool has a visible label. Expose snap and pitch range in the same borderless tool row on mobile; retain Quick, rewind, selection clear/delete, column detection, scale, Save/Load, Import and Hum Recorder. Name recording 'Hum recorder' or explain it visibly. No velocity lane, automation or Add to Writer invented by the mockup.
 
-Inspector: Stack Builder / Selection / Tools. Reuse the builder and detection logic. On wide screens the inspector sits beside the grid; on compact screens it has bounded/scrollable expansion so the grid keeps useful height. Embedded instances respect showScale/showSavePanels/showBackground and inherit host behavior.
+Inspector: Stack Builder / Selection. Reuse the builder and detection logic. On wide screens the inspector sits beside the grid; on compact screens it has bounded/scrollable expansion so the grid keeps useful height. Embedded instances respect showScale/showSavePanels/showBackground and inherit host behavior.
 
 ## Writer
 
