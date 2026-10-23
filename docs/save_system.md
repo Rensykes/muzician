@@ -381,6 +381,7 @@ Stores app-wide preferences persisted to `SharedPreferences`:
 |---|---|---|
 | `suppressOutOfKeyAlert` | `false` | Suppress the out-of-key confirmation dialog |
 | `noteVolume` | `0.8` | Playback volume (0.0–1.0) |
+| `guitarTone` | `clean` | Device-local Clean or Distorted electric guitar, chosen in Fretboard's Sound menu; shared with Writer guitar playback |
 | `showNoteLabels` | `true` | Render note-name text on instrument canvases |
 | `noteSpelling` | `sharps` | Global musical-label spelling; **Prefer flat note names** selects `flats` |
 | `themeVariant` | `studio` | Device-local **Studio** or **Studio Muzician** appearance preference |

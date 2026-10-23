@@ -141,8 +141,8 @@ void main() {
       container.read(songwriterPlaybackProvider.notifier).stopPlayback();
       expect(
         stopCalls,
-        2,
-      ); // transport start clears old voices; stop releases this run
+        3,
+      ); // start, natural score completion, and explicit stop release voices
     },
   );
 
@@ -316,13 +316,14 @@ void main() {
   test(
     'startPlayback fires chord and drum sinks with lane volume and pan',
     () async {
-      final chordCalls = <(List<int>, double, double)>[];
+      final chordCalls = <(List<int>, double, double, {Duration? duration})>[];
       final drumCalls = <(List<DrumLaneId>, double, double)>[];
 
       final container = ProviderContainer(
         overrides: [
           songwriterNoteSinkProvider.overrideWithValue(
-            (notes, volume, pan) => chordCalls.add((notes, volume, pan)),
+            (notes, volume, pan, {duration}) =>
+                chordCalls.add((notes, volume, pan, duration: duration)),
           ),
           drumPatternPlaybackSinkProvider.overrideWithValue(
             (lanes, volume, pan) async => drumCalls.add((lanes, volume, pan)),
@@ -402,7 +403,7 @@ void main() {
           .startPlayback(tickDurationOverride: Duration.zero);
 
       expect(chordCalls, hasLength(1));
-      final (notes, volume, pan) = chordCalls.single;
+      final (notes, volume, pan, :duration) = chordCalls.single;
       expect(notes, [60, 64, 67]);
       expect(volume, 0.5);
       expect(pan, -1.0);
@@ -419,7 +420,12 @@ void main() {
     final profiledVoices = <PlaybackProfileVoiceContext>[];
     final container = ProviderContainer(
       overrides: [
-        songwriterNoteSinkProvider.overrideWithValue((notes, volume, pan) {
+        songwriterNoteSinkProvider.overrideWithValue((
+          notes,
+          volume,
+          pan, {
+          duration,
+        }) {
           for (final _ in notes) {
             profiledVoices.add(playbackProfileVoiceContext()!);
           }
@@ -668,7 +674,12 @@ void main() {
       late SongwriterPlaybackNotifier transport;
       final container = ProviderContainer(
         overrides: [
-          songwriterNoteSinkProvider.overrideWithValue((notes, volume, pan) {
+          songwriterNoteSinkProvider.overrideWithValue((
+            notes,
+            volume,
+            pan, {
+            duration,
+          }) {
             transport.stopPlayback();
           }),
           songwriterMetronomeSinkProvider.overrideWithValue(

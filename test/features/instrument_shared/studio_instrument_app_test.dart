@@ -104,7 +104,7 @@ void main() {
           final selectionBefore = guitar
               ? container.read(fretboardProvider).selectedNotes
               : container.read(pianoProvider).selectedNotes;
-          await tester.tap(find.byTooltip('View mode: Exact'));
+          await tester.tap(find.byTooltip('View mode: Full'));
           await tester.pumpAndSettle();
           await tester.tap(find.byKey(const ValueKey('View mode-Solo')));
           await tester.pumpAndSettle();

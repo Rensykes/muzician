@@ -40,13 +40,28 @@ final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((
 /// (0.0–1.0 lane gain, applied on top of the sink's own base level) and
 /// [pan]. Mirrors [DrumPatternPlaybackSink]'s shape. Override in tests.
 typedef SongwriterNoteSink =
-    void Function(List<int> midiNotes, double volume, double pan);
+    void Function(List<int> midiNotes, double volume, double pan, {Duration? duration});
 
 final songwriterNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
-  return (midiNotes, volume, pan) {
-    for (final midi in midiNotes) {
-      NotePlayer.instance.previewNote(midi, volume: 0.6 * volume, pan: pan);
-    }
+  return (midiNotes, volume, pan, {duration}) {
+    NotePlayer.instance.playSequencedChord(
+      midiNotes,
+      duration: duration ?? const Duration(milliseconds: 700),
+      volume: 0.6 * volume,
+      pan: pan,
+    );
+  };
+});
+
+final songwriterGuitarNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
+  return (midiNotes, volume, pan, {duration}) {
+    NotePlayer.instance.playSequencedChord(
+      midiNotes,
+      duration: duration ?? const Duration(milliseconds: 700),
+      volume: 0.6 * volume,
+      pan: pan,
+      guitarTone: ref.read(settingsProvider).guitarTone,
+    );
   };
 });
 
@@ -76,6 +91,26 @@ final songwriterSequencedNoteSinkProvider =
           onsetDelay: onsetDelay,
           volume: 0.6 * volume,
           pan: pan,
+        );
+      };
+    });
+
+final songwriterGuitarSequencedNoteSinkProvider =
+    Provider<SongwriterSequencedNoteSink>((ref) {
+      return ({
+        required int midiNote,
+        required Duration duration,
+        required Duration onsetDelay,
+        required double volume,
+        required double pan,
+      }) {
+        NotePlayer.instance.playSequencedNote(
+          midiNote,
+          duration: duration,
+          onsetDelay: onsetDelay,
+          volume: 0.6 * volume,
+          pan: pan,
+          guitarTone: ref.read(settingsProvider).guitarTone,
         );
       };
     });
@@ -124,7 +159,16 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
   int _profileRunId = 0;
 
   @override
-  SongwriterPlaybackState build() => const SongwriterPlaybackState();
+  SongwriterPlaybackState build() {
+    final stopNotes = ref.read(songwriterSequencedNoteStopSinkProvider);
+    final clips = ref.read(songwriterAudioClipSinkProvider);
+    ref.onDispose(() {
+      _version++;
+      stopNotes();
+      unawaited(clips.stopAll());
+    });
+    return const SongwriterPlaybackState();
+  }
 
   Future<void> startPlayback({
     int startTick = 0,
@@ -152,6 +196,10 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       final settings = ref.read(settingsProvider);
       final metronomeSink = ref.read(songwriterMetronomeSinkProvider);
       final noteSink = ref.read(songwriterNoteSinkProvider);
+      final guitarNoteSink = ref.read(songwriterGuitarNoteSinkProvider);
+      final guitarSequencedNoteSink = ref.read(
+        songwriterGuitarSequencedNoteSinkProvider,
+      );
       final sequencedNoteSink = ref.read(songwriterSequencedNoteSinkProvider);
       final sequencedNoteStopSink = ref.read(
         songwriterSequencedNoteStopSinkProvider,
@@ -237,10 +285,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                     0,
                     (count, event) =>
                         count +
-                        event.noteGroups.fold<int>(
-                          0,
-                          (sum, group) => sum + group.midiNotes.length,
-                        ) +
+                        event.noteGroups.length +
                         event.sequencedNoteGroups.fold<int>(
                           0,
                           (sum, group) => sum + group.notes.length,
@@ -260,6 +305,14 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       }
 
       final version = ++_version;
+      // Claim the run before preparation yields so repeated Play cannot create
+      // concurrent transports, and Stop remains available while preparing.
+      state = SongwriterPlaybackState(
+        status: SongwriterPlaybackStatus.playing,
+        currentTick: profileStartTick,
+        totalTicks: endTick,
+        measureTicks: measureTicks,
+      );
 
       final audioSink = ref.read(songwriterAudioClipSinkProvider);
       // Already sorted by startMs by the rule.
@@ -468,10 +521,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                 'dispatch_error_us': eventErrorUs,
                 'dispatch_lateness_us': eventLateUs,
                 'requested_voice_count':
-                    event.noteGroups.fold<int>(
-                      0,
-                      (sum, group) => sum + group.midiNotes.length,
-                    ) +
+                    event.noteGroups.length +
                     event.sequencedNoteGroups.fold<int>(
                       0,
                       (sum, group) => sum + group.notes.length,
@@ -501,20 +551,25 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                   clock: dispatchClock,
                 );
           for (final group in event.noteGroups) {
+            final sink = group.isGuitar ? guitarNoteSink : noteSink;
+            final gate = Duration(microseconds: (tickDuration.inMicroseconds * measureTicks).clamp(1, 700000));
             if (eventProfile == null) {
-              noteSink(group.midiNotes, group.volume, group.pan);
+              sink(group.midiNotes, group.volume, group.pan, duration: gate);
             } else {
               withPlaybackProfileEvent(
                 eventProfile,
-                () => noteSink(group.midiNotes, group.volume, group.pan),
+                () => sink(group.midiNotes, group.volume, group.pan, duration: gate),
               );
             }
           }
           for (final group in event.sequencedNoteGroups) {
+            final sink = group.isGuitar
+                ? guitarSequencedNoteSink
+                : sequencedNoteSink;
             for (final note in group.notes) {
               final onsetOffset = Duration(milliseconds: note.onsetOffsetMs);
               void invokeSink() {
-                sequencedNoteSink(
+                sink(
                   midiNote: note.midiNote,
                   duration: pr_rules.effectiveSequencedNoteDuration(
                     tickDuration,
@@ -551,6 +606,11 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
         );
         return;
       }
+      // The last tick starts a tick-length interval; finish at its end, not
+      // one tick early, and release every generated voice at the score edge.
+      await pacer.awaitBoundary(elapsedTicks);
+      if (_version != version) return;
+      sequencedNoteStopSink();
       for (final p in pendingAudioStops) {
         unawaited(audioSink.stopClip(asset: p.$1));
       }

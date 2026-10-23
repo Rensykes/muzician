@@ -24,7 +24,8 @@ const chromaticFlat = [
   'B',
 ];
 
-const positionMarkerFrets = [3, 5, 7, 9, 12];
+const defaultFretboardFrets = 24;
+const positionMarkerFrets = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
 const doubleMarkerFret = 12;
 
 // ─── Note Helpers ─────────────────────────────────────────────────────────────
@@ -44,6 +45,36 @@ String getNoteWithOctaveAtFret(int openMidi, int fret) {
 
 bool isValidPitchClass(String note) {
   return chromaticNotes.contains(note) || chromaticFlat.contains(note);
+}
+
+/// Selected pitches in physical string order for an audible guitar stroke.
+///
+/// Downstrokes travel from string 6 to string 1, even when fretted pitches cross.
+/// Frets are physical positions, so the capo must not be added a second time.
+/// Unselected strings stay silent; equal pitches on different strings remain.
+/// Returns null when a playable string has more than one selected position.
+List<int>? getFretboardStrumMidiNotes(
+  FretboardState state, {
+  bool upstroke = false,
+}) {
+  final tuning = tunings[state.currentTuning]!;
+  final notesByString = <int, int>{};
+  for (final cell in state.selectedCells) {
+    if (cell.stringIndex < 0 ||
+        cell.stringIndex >= tuning.strings.length ||
+        cell.fret < state.capo ||
+        cell.fret > state.numFrets) {
+      continue;
+    }
+    if (notesByString.containsKey(cell.stringIndex)) return null;
+    notesByString[cell.stringIndex] =
+        tuning.strings[cell.stringIndex].midiNote + cell.fret;
+  }
+  final stringIndices = notesByString.keys.toList()..sort();
+  return [
+    for (final index in upstroke ? stringIndices : stringIndices.reversed)
+      notesByString[index]!,
+  ];
 }
 
 // ─── Tunings ──────────────────────────────────────────────────────────────────
@@ -211,7 +242,7 @@ final tunings = <TuningName, Tuning>{
 
 FretboardState getDefaultFretboardState() => const FretboardState(
   currentTuning: TuningName.standard,
-  numFrets: 12,
+  numFrets: defaultFretboardFrets,
   capo: 0,
   highlightedNotes: [],
   selectedNotes: [],

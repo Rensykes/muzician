@@ -3,15 +3,15 @@
 The Studio Fretboard is a playable six-string workbench for exploring notes,
 loading voicings and saving ideas. It uses the native `GuitarFretboard`
 `CustomPainter`, with native fret geometry and horizontal scrolling.
-The default is Standard tuning, 12 frets, capo off and Free input mode.
+The default is Standard tuning, 24 frets, capo off and Free input mode.
 
 ## Workspace
 
 Project context has its own row above the full Fretboard title. The **?** action
-opens shared help. Compact **Free/Chord** and **Exact/Solo**
+opens shared help. Compact **Free/Chord** and **Full/Solo**
 menus sit together above the board (in the inspector header in short landscape).
 Each menu explains its choices and retains a minimum 44px touch target. Setup
-contains tuning, capo and fret count; its shortcut exposes tuning/capo in a tooltip.
+contains tuning and capo; its shortcut exposes tuning/capo in a tooltip.
 
 One compact selection row below the instrument shows the detected
 chord or selected-note count. **Actions** opens the selection sheet with exact
@@ -35,7 +35,7 @@ the inspector does not scroll the instrument out of view. Very short portrait la
 | --- | --- |
 | Notes | Selected pitch classes, chord detection, compatible scales and Clear |
 | Voicings | From notes / By chord search and a horizontal native-diagram carousel |
-| Setup | Tuning, capo and fret count; Clear all selections remains a secondary action |
+| Setup | Tuning and capo; Clear all selections remains a secondary action |
 
 ### Voicing search
 
@@ -85,13 +85,30 @@ Unthemed legacy hosts retain the previous fixed Scale/Chord dock composition.
 
 ## Playing and settings
 
+- **Sound:** Clean electric is the default; choose Distorted for a driven electric
+  tone. The choice is remembered on this device and also applies to guitar parts
+  in Writer's main transport. Tapping a fret auditions that pitch with the chosen
+  tone and the existing note-volume setting.
+- **Strum:** the down/up controls below the canvas sweep the selected strings in
+  physical order, with staggered attacks. Unselected strings stay silent, equal
+  pitches on different strings remain separate, and tuning/capo are respected.
+  A selection with more than one position on a string must be simplified before
+  strumming. A valid shape can be auditioned in Free or Chord mode, without chord
+  recognition or changing its notes. The controls remain outside the inspector.
 - **Free:** select multiple positions on a string. Ideas remain savable and
   loadable; changing to Chord does not silently remove duplicate positions.
 - **Chord:** tapping a new fret replaces the selected position on that string;
   tapping it again deselects it. Writer requires a nonempty valid shape with
   at most one position per string.
-- **Exact/Solo:** Exact shows the full board; Solo hides unrelated positions
-  when notes are selected while keeping focused pitch classes visible.
+- **Full/Solo:** Full labels every position in both Free and Chord input modes.
+  Solo labels only selected positions; an empty selection shows no note bubbles.
+  Pitch-class focus does not reveal additional labels in Solo. Strings and frets
+  stay visible and playable in both views. Saved mode identifiers remain
+  compatible with older Saves.
+- **Frets:** new boards expose frets 0–24, with position markers through 24 and
+  double markers at 12 and 24. Older Saves open on the complete 24-fret board
+  while retaining their notes, tuning and capo. Stored Saves are not rewritten
+  until explicitly saved again.
 - **Tuning:** presets are grouped as Standard, Metal and Midwest Emo. Tuning
   choices use stored MIDI pitches; display spelling follows Sharps/Flats.
 - **Capo:** Off or physical frets 1–11. The capo scrolls into view and selected

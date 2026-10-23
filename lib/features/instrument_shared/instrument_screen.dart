@@ -53,6 +53,9 @@ class InstrumentScreen extends ConsumerWidget {
   /// Compact Studio controls; legacy screens continue to use [modeSegment].
   final Widget? studioControls;
 
+  /// Optional local audition controls, kept beside the playable canvas.
+  final Widget? auditionControls;
+
   /// The instrument board, pinned to [boardHeight].
   final Widget board;
   final double boardHeight;
@@ -106,6 +109,7 @@ class InstrumentScreen extends ConsumerWidget {
     this.scaleOffKey = false,
     this.modeSegment,
     this.studioControls,
+    this.auditionControls,
   });
 
   @override
@@ -381,11 +385,20 @@ class _StudioInstrumentWorkspaceState
         ...s.appBarActions,
       ],
     );
+    // On compact phones the audition controls sit below the canvas; trimming
+    // the board keeps the inspector's fixed tabs and footer from overflowing.
+    final size = MediaQuery.sizeOf(context);
+    final tightAuditionCanvas =
+        s.auditionControls != null && size.width < 500 && size.height < 600;
     final canvas = KeyedSubtree(
       key: _canvasStateKey,
       child: SizedBox(
         key: const Key('studioInstrumentCanvas'),
-        height: s.modeSegment == null ? 226 : 212,
+        height: tightAuditionCanvas
+            ? 148
+            : s.modeSegment == null
+            ? 226
+            : 212,
         child: s.board,
       ),
     );
@@ -397,7 +410,7 @@ class _StudioInstrumentWorkspaceState
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
-      children: [?controls, canvas, selection],
+      children: [?controls, canvas, ?s.auditionControls, selection],
     );
 
     Widget buildInspector({
@@ -651,7 +664,11 @@ class _StudioInstrumentWorkspaceState
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     mainAxisSize: MainAxisSize.min,
-                                    children: [canvas, selection],
+                                    children: [
+                                      canvas,
+                                      ?s.auditionControls,
+                                      selection,
+                                    ],
                                   )
                                 : content,
                           ),
@@ -673,6 +690,7 @@ class _StudioInstrumentWorkspaceState
                 constraints.maxHeight < 600 ? compactHeader : header,
                 ?controls,
                 canvas,
+                ?s.auditionControls,
                 selection,
                 Expanded(child: inspector),
               ],

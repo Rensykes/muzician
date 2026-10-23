@@ -26,10 +26,10 @@ Fretboard and Piano keep the instrument visible while a bounded Notes / Voicings
 
 | Feature | Description | Docs |
 |---|---|---|
-| **Fretboard** | Studio guitar workspace with a compact Notes / Voicings / Setup inspector, tuning and capo, Scale and Library shortcuts, Save idea, and Chord-only Writer Harmony handoff | [docs/fretboard.md](docs/fretboard.md) |
-| **Piano** | Studio piano workspace with a compact Notes / Voicings / Setup inspector, 49 / 61 / 88-key ranges, Scale and Library shortcuts, Save idea, and recognized or exact-note Writer Harmony | [docs/piano.md](docs/piano.md) |
+| **Fretboard** | Studio 24-fret guitar workspace with Full/Solo note labels, clean/distorted electric sound, down/up strum audition, a compact Notes / Voicings / Setup inspector, tuning and capo, Save idea, and Chord-only Writer Harmony handoff | [docs/fretboard.md](docs/fretboard.md) |
+| **Piano** | Studio piano workspace with Full/Solo note labels, a compact Notes / Voicings / Setup inspector, 49 / 61 / 88-key ranges, Scale and Library shortcuts, Save idea, and recognized or exact-note Writer Harmony | [docs/piano.md](docs/piano.md) |
 | **Piano Roll** | Studio timeline editor (navigation label **Roll**) with all five tools, a Stack Builder / Selection / Tools inspector, Quick, snap and range controls, and the mobile **Hum recorder** | [docs/piano_roll.md](docs/piano_roll.md) |
-| **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; contextual Harmony and lane editing, source-bound Guitar Strum, reusable melodies, playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; compact unframed controls, Harmony guitar tone selection, source-bound Guitar Strum, reusable melodies, instrument-aware guitar playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Song** | Temporarily disabled in V2; retained clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
 | **Settings** | Device-local Studio / Studio Muzician appearance and persistent Sharps/Flats spelling for musical labels, retaining pitches and custom names | [docs/save_system.md](docs/save_system.md) |
@@ -81,7 +81,7 @@ docs/
 
 - **Out-of-key confirmation:** When a scale highlight is active and the user tries to add a note that falls outside the highlighted scale, the app shows an "out-of-key" confirmation dialog (with a "Don't show again" option). See [lib/ui/core/out_of_key_dialog.dart](lib/ui/core/out_of_key_dialog.dart).
 
-- **View modes:** Both fretboard and piano support `exact` (note name only) and `exactFocus` (note name with focus highlighting) display modes. See [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
+- **View modes:** Both fretboard and piano offer **Full** (all note labels) and **Solo** (selected positions only), independently of Chord/Free input. Serialized values remain `exact` / `exactFocus` for compatibility. See [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
 
 - **Appearance:** Settings → **Appearance** switches between **Studio** (default graphite / mint) and **Studio Muzician** (night / sky / teal / violet). The choice is saved on this device and applies to Fretboard, Piano, Piano Roll, Writer, and shared panels. Song is temporarily disabled; its retained implementation uses the legacy layout and palette.
 

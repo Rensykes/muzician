@@ -1,5 +1,5 @@
 /// GuitarFretboard – CustomPainter-driven fretboard rendering all note names
-/// across 6 strings and up to 12 frets. Dimensions calculated mathematically.
+/// across 6 strings and up to 24 frets. Dimensions calculated mathematically.
 library;
 
 import 'dart:math' as math;
@@ -250,7 +250,6 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
                 painter: _FretboardPainter(
                   colors: StudioPalette.of(context),
                   compact: _compact,
-                  chordMode: state.inputMode == FretboardInputMode.chord,
                   tuning: tuning,
                   cells: cells,
                   numFrets: numFrets,
@@ -330,9 +329,11 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
         if (_compact
             ? dx.abs() <= hitRadius && dy.abs() <= 14
             : math.sqrt(dx * dx + dy * dy) <= hitRadius) {
-          NotePlayer.instance.previewNote(
+          final settings = ref.read(settingsProvider);
+          NotePlayer.instance.previewGuitarNote(
             cell.midiNote,
-            volume: ref.read(settingsProvider).noteVolume,
+            tone: settings.guitarTone,
+            volume: settings.noteVolume,
           );
           _guardOutOfKey(
             noteName: cell.noteName,
@@ -501,8 +502,8 @@ class _ViewModeBar extends StatelessWidget {
   const _ViewModeBar({required this.current, required this.onSelect});
 
   static const _modes = [
-    (FretboardViewMode.exact, 'Exact', 'Tapped positions only'),
-    (FretboardViewMode.exactFocus, 'Solo', 'Exact positions only'),
+    (FretboardViewMode.exact, 'Full', 'All note labels'),
+    (FretboardViewMode.exactFocus, 'Solo', 'Selected note labels'),
   ];
 
   @override
@@ -575,7 +576,6 @@ class _ViewModeBar extends StatelessWidget {
 class _FretboardPainter extends CustomPainter {
   final StudioPalette colors;
   final bool compact;
-  final bool chordMode;
   double get stringHeight => compact ? 28 : _stringH;
   double get headerHeight => compact ? 22 : _headerH;
   double _stringY(int index) =>
@@ -599,7 +599,6 @@ class _FretboardPainter extends CustomPainter {
   _FretboardPainter({
     required this.colors,
     this.compact = false,
-    this.chordMode = false,
     required this.tuning,
     required this.cells,
     required this.numFrets,
@@ -761,7 +760,7 @@ class _FretboardPainter extends CustomPainter {
     for (final fret in positionMarkerFrets) {
       if (fret > numFrets) continue;
       final x = _noteX(fret);
-      if (fret == 12) {
+      if (fret % doubleMarkerFret == 0) {
         canvas.drawCircle(Offset(x, midY - stringHeight * 1.5), 5, paint);
         canvas.drawCircle(Offset(x, midY + stringHeight * 1.5), 5, paint);
       } else {
@@ -852,25 +851,15 @@ class _FretboardPainter extends CustomPainter {
         final isSelectablePosition =
             selectableMidiNote == cell.midiNote && !behindCapo;
         final isSelected = isSelectedExact || isPatternPosition;
-        if (compact &&
-            chordMode &&
-            !isSelected &&
-            !focusedNotes.contains(cell.noteName)) {
-          continue;
-        }
 
         // focusedNotes: pitch classes tapped in the detection panel.
         final isFocusedPitchClass = focusedNotes.contains(cell.noteName);
 
-        // In Solo mode, hide notes that are neither selected nor focused.
-        final inExactFocusMode =
-            !controlledMode &&
+        // View alone controls label visibility, independently of input mode
+        // and pitch-class focus. The board itself remains playable in Solo.
+        if (!controlledMode &&
             viewMode == FretboardViewMode.exactFocus &&
-            selectedCells.isNotEmpty;
-        if (inExactFocusMode &&
-            !isSelectedExact &&
-            !isFocusedPitchClass &&
-            !behindCapo) {
+            !isSelectedExact) {
           continue;
         }
 
@@ -968,7 +957,6 @@ class _FretboardPainter extends CustomPainter {
   bool shouldRepaint(covariant _FretboardPainter old) =>
       old.colors != colors ||
       old.compact != compact ||
-      old.chordMode != chordMode ||
       old.numFrets != numFrets ||
       old.capo != capo ||
       old.tuning.name != tuning.name ||

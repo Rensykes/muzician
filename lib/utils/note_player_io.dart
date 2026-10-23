@@ -15,3 +15,8 @@ Future<void> ioWriteIfAbsent(String path, Uint8List bytes) async {
   final file = File(path);
   if (!file.existsSync()) await file.writeAsBytes(bytes);
 }
+
+Future<void> ioDeleteIfExists(String path) async {
+  final file = File(path);
+  if (await file.exists()) await file.delete();
+}

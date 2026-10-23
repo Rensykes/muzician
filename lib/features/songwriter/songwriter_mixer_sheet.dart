@@ -157,12 +157,11 @@ class _MixerStripState extends ConsumerState<_MixerStrip> {
     final volume = _dragVolume ?? lane.volume;
     final pan = _dragPan ?? lane.pan;
     final strip = Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: StudioPalette.of(context).glassBg,
-        border: Border.all(color: StudioPalette.of(context).glassBorder),
-        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          bottom: BorderSide(color: StudioPalette.of(context).glassBorder),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,32 +184,35 @@ class _MixerStripState extends ConsumerState<_MixerStrip> {
                     sectionId: sectionId,
                     lane: lane,
                   ),
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          lane.label ?? laneKindFallbackLabel(lane.kind),
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: StudioPalette.of(context).textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            lane.label ?? laneKindFallbackLabel(lane.kind),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: StudioPalette.of(context).textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 5),
-                      Icon(
-                        Icons.edit_outlined,
-                        size: 12,
-                        color: StudioPalette.of(context).textMuted,
-                      ),
-                    ],
+                        const SizedBox(width: 5),
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 12,
+                          color: StudioPalette.of(context).textMuted,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
               IconButton(
                 key: Key('mixerMute_${lane.id}'),
-                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 iconSize: 18,
                 tooltip: lane.muted ? 'Unmute' : 'Mute',
                 icon: Icon(

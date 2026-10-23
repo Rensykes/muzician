@@ -36,6 +36,12 @@ primary Harmony lane using its project's default; additional Harmony lanes ask
 for their instrument when created. An empty Harmony lane with no anchored
 Save/Voicing lane can change instruments while keeping its lane identity.
 
+Fretboard Harmony headers provide **Sound: Clean / Distorted**. This is the
+same device preference as Fretboard audition and applies to Writer guitar
+playback; changing it leaves the saved chord and its notes intact. Writer uses
+an unframed transport, plain Bars/Repeat disclosures, and compact mixer rows
+separated by dividers while preserving the musical cells and all lane controls.
+
 ### Create a separate project from Writer
 
 Writer's main-menu **New project** creates and selects a new Save System

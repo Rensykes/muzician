@@ -6,6 +6,8 @@ import 'package:muzician/features/songwriter/guitar_strum_pattern_sheet.dart';
 import 'package:muzician/features/songwriter/songwriter_melody_pattern_editor.dart';
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
 import 'package:muzician/models/app_theme_variant.dart';
+import 'package:muzician/models/guitar_sound.dart' show GuitarTone;
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/main.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/project_config.dart';
@@ -43,6 +45,85 @@ class _StudioHost extends ConsumerWidget {
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  for (final (size, scale) in [
+    (const Size(390, 844), 1.0),
+    (const Size(1024, 768), 1.0),
+    (const Size(320, 844), 1.5),
+  ]) {
+    testWidgets(
+      'Fretboard Harmony sound updates shared tone at $size x$scale',
+      (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final saves = container.read(saveSystemProvider.notifier);
+        final projectId = saves.createProject(
+          'Guitar sketch',
+          const ProjectConfig(
+            defaultHarmonyInstrument: HarmonyLaneInstrument.fretboard,
+          ),
+        )!;
+        saves.selectProject(projectId);
+        final writer = container.read(songwriterProvider.notifier);
+        writer.addSection(label: 'Verse', lengthBars: 4);
+        final section = container.read(songwriterProvider).sections.single;
+        final laneId = section.lanes.first.id;
+        writer.addHarmonyChord(
+          sectionId: section.id,
+          laneId: laneId,
+          block: makeHarmonyBlock(
+            startBar: 0,
+            spanBars: 1,
+            chordSymbol: 'C',
+            chordRootPc: 0,
+            chordQuality: '',
+            chordNotes: const ['C', 'E', 'G'],
+          ),
+        );
+        final before = container.read(songwriterProvider);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: _StudioHost(
+              scale: scale,
+              child: const SongwriterScreenSheet(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Populated Writer layout');
+        final sound = find.byKey(Key('harmonyGuitarSound_$laneId'));
+        await tester.ensureVisible(sound);
+        expect(tester.getSize(sound).height, greaterThanOrEqualTo(44));
+        expect(find.text('Sound: Clean'), findsOneWidget);
+        await tester.tap(sound);
+        await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Sound menu layout');
+      await tester.tap(
+        find.widgetWithText(CheckedPopupMenuItem<GuitarTone>, 'Distorted'),
+      );
+      final originalHandler = FlutterError.onError;
+      FlutterError.onError = (details) {
+        debugPrint(details.toString());
+        originalHandler!(details);
+      };
+        await tester.pumpAndSettle();
+      FlutterError.onError = originalHandler;
+        expect(
+          container.read(settingsProvider).guitarTone,
+          GuitarTone.distorted,
+        );
+        expect(find.text('Sound: Distorted'), findsOneWidget);
+        expect(container.read(songwriterProvider), same(before));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 
   testWidgets('Studio mixed Harmony rows align while empty rows stay compact', (
     tester,

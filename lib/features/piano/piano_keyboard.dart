@@ -167,14 +167,9 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     final isFocusedPitchClass =
         !isControlled && state.focusedNotes.contains(key.noteName);
 
-    // In Solo mode, hide keys that are neither selected nor focused.
-    final inExactFocusMode =
-        !isControlled &&
-        state.viewMode == PianoViewMode.exactFocus &&
-        state.selectedKeys.isNotEmpty;
-    if (inExactFocusMode && !selectedExact && !isFocusedPitchClass) {
-      return const SizedBox.shrink();
-    }
+    // Keep every physical key playable; Solo filters labels only.
+    final showLabel =
+        isControlled || state.viewMode == PianoViewMode.exact || isSelected;
 
     final isHighlighted =
         state.highlightedNotes.isNotEmpty &&
@@ -221,19 +216,21 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
       ),
       alignment: Alignment.bottomCenter,
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        note_utils.formatMidiNoteLabel(key.midiNote, spelling: spelling),
-        style: TextStyle(
-          color: (isSelected || isFocusedPitchClass)
-              ? StudioPalette.of(context).onAccent
-              : key.isBlack
-              ? StudioPalette.of(context).textPrimary
-              : const Color(0xFF0F172A),
-          fontSize: key.isBlack ? 9 : 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.2,
-        ),
-      ),
+      child: showLabel
+          ? Text(
+              note_utils.formatMidiNoteLabel(key.midiNote, spelling: spelling),
+              style: TextStyle(
+                color: (isSelected || isFocusedPitchClass)
+                    ? StudioPalette.of(context).onAccent
+                    : key.isBlack
+                    ? StudioPalette.of(context).textPrimary
+                    : const Color(0xFF0F172A),
+                fontSize: key.isBlack ? 9 : 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            )
+          : null,
     );
 
     return Positioned(
@@ -357,8 +354,8 @@ class _ViewModeBar extends StatelessWidget {
   const _ViewModeBar({required this.current, required this.onSelect});
 
   static const _modes = [
-    (PianoViewMode.exact, 'Exact', 'Tapped positions only'),
-    (PianoViewMode.exactFocus, 'Solo', 'Exact positions only'),
+    (PianoViewMode.exact, 'Full', 'All note labels'),
+    (PianoViewMode.exactFocus, 'Solo', 'Selected note labels'),
   ];
 
   @override

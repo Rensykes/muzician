@@ -32,6 +32,17 @@ the project's Harmony Library, and offer Change chord and Replace chord.
 Fretboard Free is for exploration and saved ideas; it cannot enter or play in
 Writer. Converting Free ideas into melody is outside this workflow.
 
+Fretboard opens with 24 frets, including when loading an older shorter Save.
+Full shows every note label in both Chord and Free; Solo labels only selected
+positions. Piano uses the same Full/Solo rule while retaining all physical keys.
+
+Guitar audition uses a plucked electric-guitar voice, with Clean and Distorted
+tones. The tone is a device preference, shared by Fretboard and Writer guitar
+playback, rather than part of a saved chord. Writer exposes the same Sound menu
+on Fretboard Harmony lanes. Fretboard offers explicit down/up
+strums of the selected strings, including unrecognized shapes. A strum requires
+one selected position per string and preserves tuning, capo and doubled pitches.
+
 The project's tonic and scale/mode are shared by Writer and instrument views.
 Fretboard and Piano's automatic **From notes** chord suggestions must keep every
 chord tone within the active scale, using the project key when configured or
@@ -98,7 +109,7 @@ The initial redesign covers Fretboard, Piano, Piano Roll, Writer, their shared d
 
 The app offers two presentation themes in Settings: **Studio** (default graphite/mint) and **Studio Muzician** (the same layout with Muzician's night/sky/teal/violet palette). The preference is device-local and persisted across launches; it does not belong to a project or named Save. Existing settings without this field select Studio. Switching themes must preserve projects, selections, playback position, edits, history, open panels and scroll state. This is a presentation change, not a project operation.
 
-Fretboard and Piano share a visible project context, full screen title, dominant playable surface, one compact selection disclosure opening note details, Save idea and Add to Writer, and an inspector for Notes, Voicings and Setup. Scale and the full library remain discoverable. Instrument-specific controls remain explicit: compact Free/Chord and Exact/Solo menus, tuning and capo for guitar; compact Exact/Solo menu, range, octave and inversions for piano. Selection actions have a single home outside the inspector tabs. A closed inspector must not make essential actions unreachable. In V2, scrolling or expanding inspector tools must keep the playable instrument visible. Compact portrait uses a bounded lower inspector; wide and short landscape use a side inspector. Voicings stay in a horizontal carousel. **From notes** requires every captured pitch class and keeps added chord tones within the active scale, when set; **By chord** independently selects root/quality and shows available generated realizations within instrument bounds. Applying a result preserves the query and carousel position. Manual edits refresh the note query; an explicit Use current notes action also refreshes it.
+Fretboard and Piano share a visible project context, full screen title, dominant playable surface, one compact selection disclosure opening note details, Save idea and Add to Writer, and an inspector for Notes, Voicings and Setup. Scale and the full library remain discoverable. Instrument-specific controls remain explicit: compact Free/Chord and Full/Solo menus, tuning and capo for guitar; compact Full/Solo menu, range, octave and inversions for piano. Selection actions have a single home outside the inspector tabs. A closed inspector must not make essential actions unreachable. In V2, scrolling or expanding inspector tools must keep the playable instrument visible. Compact portrait uses a bounded lower inspector; wide and short landscape use a side inspector. Voicings stay in a horizontal carousel. **From notes** requires every captured pitch class and keeps added chord tones within the active scale, when set; **By chord** independently selects root/quality and shows available generated realizations within instrument bounds. Applying a result preserves the query and carousel position. Manual edits refresh the note query; an explicit Use current notes action also refreshes it.
 
 Piano Roll retains all five tools, manual gestures, column detection, Stack Builder and Quick, scale, save/import and Hum Recorder. Mobile makes the existing snap/range controls reachable. Record must identify humming-to-notes, not suggest audio track or MIDI recording. Selection of a time column remains distinct from note selection.
 
