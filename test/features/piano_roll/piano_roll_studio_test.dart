@@ -144,10 +144,6 @@ void main() {
             find.byKey(const ValueKey('studio-inspector-2')),
             findsNothing,
           );
-          await tester.ensureVisible(find.text('+1 Oct'));
-          await tester.tap(find.text('+1 Oct'));
-          await tester.pump();
-          expect(container.read(pianoRollProvider).pitchRangeStart, 60);
           await tester.ensureVisible(
             find.byKey(const ValueKey('studio-roll-snap')),
           );
@@ -156,6 +152,24 @@ void main() {
           await tester.tap(find.text('8t').last);
           await tester.pumpAndSettle();
           expect(container.read(pianoRollProvider).snapTicks, 8);
+          final rangeControl = find.byKey(
+            const ValueKey('studio-roll-pitch-range'),
+          );
+          expect(rangeControl.hitTestable(), findsOneWidget);
+          await tester.drag(rangeControl, const Offset(0, -60));
+          await tester.pump();
+          expect(container.read(pianoRollProvider).pitchRangeStart, 60);
+          expect(find.text('C4–C7'), findsOneWidget);
+          await tester.longPress(rangeControl);
+          await tester.pump();
+          expect(container.read(pianoRollProvider).pitchRangeStart, 48);
+          await tester.tap(rangeControl);
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(const ValueKey('studio-roll-pitch-menu-up')),
+          );
+          await tester.pumpAndSettle();
+          expect(container.read(pianoRollProvider).pitchRangeStart, 60);
           expect(tester.takeException(), isNull);
           await tester.tap(find.byTooltip('Collapse inspector'));
           await tester.pump();
@@ -433,8 +447,11 @@ void main() {
         tester.getSize(find.byType(PianoRollGrid)).height,
         greaterThan(120),
       );
-      await tester.ensureVisible(find.text('+1 Oct'));
-      await tester.tap(find.text('+1 Oct'));
+      final rangeControl = find.byKey(
+        const ValueKey('studio-roll-pitch-range'),
+      );
+      expect(rangeControl.hitTestable(), findsOneWidget);
+      await tester.drag(rangeControl, const Offset(0, -60));
       await tester.pump();
       expect(container.read(pianoRollProvider).pitchRangeStart, 60);
       expect(tester.takeException(), isNull);

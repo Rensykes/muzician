@@ -224,10 +224,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           timeSig: state.config.timeSignature,
           framed: false,
         ),
-        _StudioToolRow(
-          allowWrap: constraints.maxHeight >= 800,
-          trailing: short ? _studioUtilityActions() : const [],
-        ),
+        _StudioToolRow(trailing: short ? _studioUtilityActions() : const []),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
@@ -785,6 +782,7 @@ class _TransportStrip extends ConsumerWidget {
       barBeat: barBeat,
       timeSig: timeSig,
       framed: framed,
+      trailing: framed ? null : const _PitchRangeControl(),
       playing: playing,
       onRewind: onRewind,
       onStop: onStop,
@@ -1508,24 +1506,13 @@ const _studioTools = <(PianoRollTool, IconData, String)>[
 ];
 
 class _StudioToolRow extends ConsumerWidget {
-  const _StudioToolRow({this.trailing = const [], this.allowWrap = false});
+  const _StudioToolRow({this.trailing = const []});
   final List<Widget> trailing;
-
-  /// Wraps onto a second line only when the host has vertical room. Short
-  /// viewports keep the original single scrollable row so the grid survives.
-  final bool allowWrap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(pianoRollProvider);
     final p = StudioPalette.of(context);
-    final spelling = ref.watch(
-      settingsProvider.select((settings) => settings.noteSpelling),
-    );
-    final rangeLabel =
-        '${formatMidiNoteLabel(state.pitchRangeStart, spelling: spelling)}'
-        '–'
-        '${formatMidiNoteLabel(state.pitchRangeEnd, spelling: spelling)}';
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 700;
@@ -1609,96 +1596,146 @@ class _StudioToolRow extends ConsumerWidget {
               ),
             ),
           ),
-          Text(
-            rangeLabel,
-            key: const ValueKey('studio-roll-pitch-range'),
-            style: TextStyle(
-              color: p.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          _PitchTextAction(
-            key: const ValueKey('studio-roll-pitch-down'),
-            label: '−1 Oct',
-            tooltip: 'Shift pitch range down one octave',
-            onTap: () {
-              HapticFeedback.selectionClick();
-              ref.read(pianoRollProvider.notifier).shiftPitchRange(-12);
-            },
-          ),
-          _PitchTextAction(
-            key: const ValueKey('studio-roll-pitch-up'),
-            label: '+1 Oct',
-            tooltip: 'Shift pitch range up one octave',
-            onTap: () {
-              HapticFeedback.selectionClick();
-              ref.read(pianoRollProvider.notifier).shiftPitchRange(12);
-            },
-          ),
-          _PitchTextAction(
-            key: const ValueKey('studio-roll-pitch-clear'),
-            label: 'Clear',
-            tooltip: 'Reset pitch range to C3–C6',
-            onTap: () {
-              HapticFeedback.selectionClick();
-              ref.read(pianoRollProvider.notifier).setPitchRange(48, 84);
-            },
-          ),
           if (trailing.isNotEmpty) const SizedBox(width: 8),
           ...trailing,
         ];
-        final row = allowWrap
-            ? Wrap(
-                spacing: 4,
-                runSpacing: 0,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: children,
-              )
-            : Row(spacing: 4, children: children);
         return Padding(
           key: const ValueKey('studio-roll-tools'),
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: allowWrap
-              ? row
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: row,
-                ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(spacing: 4, children: children),
+          ),
         );
       },
     );
   }
 }
 
-class _PitchTextAction extends StatelessWidget {
-  const _PitchTextAction({
-    super.key,
-    required this.label,
-    required this.tooltip,
-    required this.onTap,
-  });
+/// One compact pitch-range readout: drag vertically for octaves, long-press
+/// to clear, or tap for the explicit menu.
+class _PitchRangeControl extends ConsumerStatefulWidget {
+  const _PitchRangeControl();
 
-  final String label;
-  final String tooltip;
-  final VoidCallback onTap;
+  @override
+  ConsumerState<_PitchRangeControl> createState() => _PitchRangeControlState();
+}
+
+class _PitchRangeControlState extends ConsumerState<_PitchRangeControl> {
+  static const double _dragStep = 24;
+  double _drag = 0;
+
+  void _shift(int semitones) {
+    HapticFeedback.selectionClick();
+    ref.read(pianoRollProvider.notifier).shiftPitchRange(semitones);
+  }
+
+  void _reset() {
+    HapticFeedback.mediumImpact();
+    ref.read(pianoRollProvider.notifier).setPitchRange(48, 84);
+  }
+
+  Future<void> _openMenu() async {
+    final choice = await showStudioDialog<int>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Row(
+          children: [
+            const Expanded(child: Text('Pitch range')),
+            IconButton(
+              tooltip: 'Close pitch range',
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        children: [
+          SimpleDialogOption(
+            key: const ValueKey('studio-roll-pitch-menu-down'),
+            onPressed: () => Navigator.of(dialogContext).pop(-12),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: const Text('−1 octave'),
+          ),
+          SimpleDialogOption(
+            key: const ValueKey('studio-roll-pitch-menu-up'),
+            onPressed: () => Navigator.of(dialogContext).pop(12),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: const Text('+1 octave'),
+          ),
+          SimpleDialogOption(
+            key: const ValueKey('studio-roll-pitch-menu-clear'),
+            onPressed: () => Navigator.of(dialogContext).pop(0),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: const Text('Clear (C3–C6)'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 0) {
+      _reset();
+    } else {
+      _shift(choice);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(pianoRollProvider);
+    final spelling = ref.watch(
+      settingsProvider.select((settings) => settings.noteSpelling),
+    );
+    final label =
+        '${formatMidiNoteLabel(state.pitchRangeStart, spelling: spelling)}'
+        '–'
+        '${formatMidiNoteLabel(state.pitchRangeEnd, spelling: spelling)}';
     final p = StudioPalette.of(context);
     return Tooltip(
-      message: tooltip,
-      child: TextButton(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          minimumSize: const Size(44, 44),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          foregroundColor: p.textSecondary,
-          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      message: 'Pitch range · swipe to shift, long-press to clear',
+      child: Semantics(
+        button: true,
+        label: 'Pitch range $label',
+        hint:
+            'Swipe up or down to shift one octave. Long-press to clear. '
+            'Tap for options.',
+        child: GestureDetector(
+          key: const ValueKey('studio-roll-pitch-range'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _openMenu,
+          onLongPress: _reset,
+          onVerticalDragStart: (_) => _drag = 0,
+          onVerticalDragUpdate: (details) {
+            _drag -= details.delta.dy;
+            while (_drag >= _dragStep) {
+              _drag -= _dragStep;
+              _shift(12);
+            }
+            while (_drag <= -_dragStep) {
+              _drag += _dragStep;
+              _shift(-12);
+            }
+          },
+          onVerticalDragEnd: (_) => _drag = 0,
+          onVerticalDragCancel: () => _drag = 0,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Center(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: p.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
-        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
     );
   }
