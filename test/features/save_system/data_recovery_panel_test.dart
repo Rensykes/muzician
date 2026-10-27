@@ -20,6 +20,40 @@ String _recoveryKey(String sourceKey, int index) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('empty Data Recovery is an unframed settings section', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await container.read(dataRecoveryProvider.notifier).hydrate();
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: StudioTheme.data(AppThemeVariant.studio),
+          home: const Scaffold(
+            body: SingleChildScrollView(child: DataRecoveryPanel()),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Data Recovery'), findsOneWidget);
+    expect(find.text('No preserved data.'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<Container>(find.byType(Container))
+          .where(
+            (container) =>
+                container.decoration is BoxDecoration &&
+                (container.decoration! as BoxDecoration).borderRadius != null,
+          ),
+      isEmpty,
+    );
+  });
+
   testWidgets(
     'Settings recovery theme switch retains expanded original data and live delete dialog',
     (tester) async {

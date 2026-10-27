@@ -13,7 +13,9 @@ void main() {
   test('guitar tone persists independently of the other settings', () async {
     final first = ProviderContainer();
     await first.read(settingsProvider.notifier).setNoteVolume(0.4);
-    await first.read(settingsProvider.notifier).setGuitarTone(GuitarTone.distorted);
+    await first
+        .read(settingsProvider.notifier)
+        .setGuitarTone(GuitarTone.distorted);
     expect(first.read(settingsProvider).guitarTone, GuitarTone.distorted);
     expect(first.read(settingsProvider).noteVolume, 0.4);
     first.dispose();

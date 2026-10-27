@@ -14,55 +14,66 @@ class DataRecoveryPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = StudioPalette.of(context);
     final backups = ref.watch(dataRecoveryProvider);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: palette.glassBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.glassBorder, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.restore_page_outlined, color: palette.sky),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Data Recovery',
-                  style: TextStyle(
-                    color: palette.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+              Row(
+                children: [
+                  Icon(
+                    Icons.restore_page_outlined,
+                    color: palette.sky,
+                    size: 18,
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Data Recovery',
+                      style: TextStyle(
+                        color: palette.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Preserved original data stays here until you delete that backup.',
+                style: TextStyle(
+                  color: palette.textSecondary,
+                  fontSize: 12,
+                  height: 1.4,
                 ),
               ),
+              const SizedBox(height: 8),
+              if (backups.isEmpty)
+                Text(
+                  'No preserved data.',
+                  style: TextStyle(color: palette.textMuted, fontSize: 12),
+                )
+              else
+                for (final backup in backups)
+                  _RecoveryBackupEntry(
+                    key: ValueKey(backup.storageKey),
+                    backup: backup,
+                  ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Preserved original data stays here until you delete that backup.',
-            style: TextStyle(
-              color: palette.textSecondary,
-              fontSize: 12,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (backups.isEmpty)
-            Text(
-              'No preserved data.',
-              style: TextStyle(color: palette.textMuted, fontSize: 12),
-            )
-          else
-            for (final backup in backups)
-              _RecoveryBackupEntry(
-                key: ValueKey(backup.storageKey),
-                backup: backup,
-              ),
-        ],
-      ),
+        ),
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: palette.glassBorder.withValues(alpha: 0.55),
+          indent: 24,
+          endIndent: 24,
+        ),
+      ],
     );
   }
 }

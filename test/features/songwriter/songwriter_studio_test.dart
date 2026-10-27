@@ -95,24 +95,22 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: 'Populated Writer layout');
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'Populated Writer layout',
+        );
         final sound = find.byKey(Key('harmonyGuitarSound_$laneId'));
         await tester.ensureVisible(sound);
         expect(tester.getSize(sound).height, greaterThanOrEqualTo(44));
         expect(find.text('Sound: Clean'), findsOneWidget);
         await tester.tap(sound);
         await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: 'Sound menu layout');
-      await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<GuitarTone>, 'Distorted'),
-      );
-      final originalHandler = FlutterError.onError;
-      FlutterError.onError = (details) {
-        debugPrint(details.toString());
-        originalHandler!(details);
-      };
+        expect(tester.takeException(), isNull, reason: 'Sound menu layout');
+        await tester.tap(
+          find.widgetWithText(CheckedPopupMenuItem<GuitarTone>, 'Distorted'),
+        );
         await tester.pumpAndSettle();
-      FlutterError.onError = originalHandler;
         expect(
           container.read(settingsProvider).guitarTone,
           GuitarTone.distorted,

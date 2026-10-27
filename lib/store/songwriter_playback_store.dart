@@ -40,7 +40,12 @@ final songwriterMetronomeSinkProvider = Provider<SongwriterMetronomeSink>((
 /// (0.0–1.0 lane gain, applied on top of the sink's own base level) and
 /// [pan]. Mirrors [DrumPatternPlaybackSink]'s shape. Override in tests.
 typedef SongwriterNoteSink =
-    void Function(List<int> midiNotes, double volume, double pan, {Duration? duration});
+    void Function(
+      List<int> midiNotes,
+      double volume,
+      double pan, {
+      Duration? duration,
+    });
 
 final songwriterNoteSinkProvider = Provider<SongwriterNoteSink>((ref) {
   return (midiNotes, volume, pan, {duration}) {
@@ -189,6 +194,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
             },
           )
         : null;
+    int? ownedVersion;
     try {
       ref.read(songwriterAudioAuditionProvider.notifier).stop();
 
@@ -305,6 +311,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       }
 
       final version = ++_version;
+      ownedVersion = version;
       // Claim the run before preparation yields so repeated Play cannot create
       // concurrent transports, and Stop remains available while preparing.
       state = SongwriterPlaybackState(
@@ -552,13 +559,23 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                 );
           for (final group in event.noteGroups) {
             final sink = group.isGuitar ? guitarNoteSink : noteSink;
-            final gate = Duration(microseconds: (tickDuration.inMicroseconds * measureTicks).clamp(1, 700000));
+            final gate = Duration(
+              microseconds: (tickDuration.inMicroseconds * measureTicks).clamp(
+                1,
+                700000,
+              ),
+            );
             if (eventProfile == null) {
               sink(group.midiNotes, group.volume, group.pan, duration: gate);
             } else {
               withPlaybackProfileEvent(
                 eventProfile,
-                () => sink(group.midiNotes, group.volume, group.pan, duration: gate),
+                () => sink(
+                  group.midiNotes,
+                  group.volume,
+                  group.pan,
+                  duration: gate,
+                ),
               );
             }
           }
@@ -686,6 +703,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
         runTrace?.finish(arguments: {'result': 'completed'});
       }
     } catch (error, stackTrace) {
+      if (ownedVersion != null && ownedVersion == _version) stopPlayback();
       runTrace?.finishError(error, stage: 'transport');
       Error.throwWithStackTrace(error, stackTrace);
     }

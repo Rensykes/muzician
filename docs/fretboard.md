@@ -29,7 +29,10 @@ and the Scale / Library footer remain reachable while its content scrolls.
 Collapsing and reopening preserves the selection and each mounted panel's state.
 Compact portrait keeps the playable surface above a bounded inspector; wide
 and short landscape layouts put the inspector beside the instrument. Scrolling
-the inspector does not scroll the instrument out of view. Very short portrait layouts use a single-row header and tighter inspector margins to retain usable controls at enlarged text sizes.
+the inspector does not scroll the instrument out of view. Very short portrait
+layouts use a single-row header and keep the complete 212px canvas pinned. Audition controls, the selection row and a bounded
+inspector scroll together below it, preserving all six strings and usable
+controls at enlarged text sizes.
 
 | Tab | Controls |
 | --- | --- |

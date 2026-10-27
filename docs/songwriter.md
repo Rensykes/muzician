@@ -489,3 +489,26 @@ root with **Use in Writer**; a fresh instrument selection creates a new save.
 Studio section Bars and Repeat use plain text disclosures with chevrons and 44-pixel targets; both open the existing steppers. Save version is also a text action. Mixer keeps its tooltip on compact screens and shows a label on wide screens. Chord-cell boundaries remain visible because they represent musical placement.
 
 Studio Harmony cells in a mixed row share the tallest cell’s height so their top and bottom edges align. Entirely empty rows retain compact 44-pixel slots; scaled text, lyrics and Save names can increase row height.
+
+### Playback correctness and voice lifetime
+
+Harmony plays the saved native Piano register/inversion and Fretboard positions.
+Clean/Distorted is the shared device preference exposed on Fretboard Harmony.
+Simultaneous Harmony notes share one PCM source, reducing six-note chord source
+bindings from six to one. The Distorted amplifier uses bass filtering, two
+saturation stages and cabinet filtering with oversampling.
+
+Generated notes release against their requested onset and duration, including
+preparation time. Stop cancels pending starts; old voice cleanup cannot release
+a new run's voice. Rapid strums end by the next stroke, short bars bound Harmony
+stabs, and the transport completes after the final tick interval. These are
+verified with deterministic platform and transport tests; physical iPhone
+listening and latency measurements remain separate validation.
+
+The October 2026 simulator check used populated, isolated fixtures with the
+production instrument and Writer widgets on iPhone 18 Pro and iPad Pro 11-inch
+(M5), running iOS/iPadOS 27. It exercised Full/Solo, Chord/Free, the shared
+Clean/Distorted selector, note audition, and Writer Play/Stop. Compact and wide
+layouts were inspected at runtime; the 320-pixel layout and enlarged text also
+have widget regression coverage. This check does not measure physical-device
+audio latency or establish a subjective listening assessment of the guitar tone.
