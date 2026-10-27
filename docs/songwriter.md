@@ -238,10 +238,12 @@ pattern** to start one in Piano Roll; reuse preserves the shared pattern and its
 performance mapping, including A–B–A–B arrangements. Pattern duration is its
 actual `lengthTicks`, shown as bars plus any remaining beats and ticks. The
 block's `spanBars` is shown separately against the section's total bars. A new
-block defaults to the pattern's full duration when following bars are free;
-placement can be shortened or extended without crossing the section boundary
-or a neighboring block. Patterns repeat from the block's left edge when the
-placement is longer, and notes clip at the block edge when it is shorter. A
+block uses the pattern's full duration in bars when that placement is valid;
+it may be shortened to fit or rejected if no valid placement is available, even
+when bars appear free, because existing automatic repeat origins must be
+preserved. Placement can be shortened or extended subject to the same rules.
+Patterns repeat from the block's left edge when the placement is longer, and
+notes clip at the block edge when it is shorter. A
 later duration edit to a reused pattern does not resize its existing blocks.
 
 The Melody timeline wraps every four bars with numbered rows and continuation
@@ -255,7 +257,8 @@ cannot shift or remove existing automatic repeat origins by changing the lane's
 natural period; the placement dialog explains repeat conflicts. Adjust the lane
 repeat first if needed. **Repeat / reuse** selects an
 available starting bar in the same lane and creates a linked placement, shortened
-to fit before the next occupied bar or section end. Missing patterns and missing
+as needed to satisfy placement rules; a free start can still be rejected if no
+span preserves existing repeats. Missing patterns and missing
 or unresolved canonical Saves cannot be repeated. Reuse shares the pattern and
 canonical Save, so shared edits affect both placements; **Make Unique** detaches
 only the selected placement. Resizing does not alter the shared pattern. A
@@ -281,10 +284,11 @@ current Piano range or Fretboard's playable positions; Piano Roll remains
 available to correct notes. These Writer-only mappings are kept beside the
 shared `NotePattern`, not added to the Song pattern schema.
 
-Guitar-strum blocks use the same placement rules and open a 16th-note grid with
-down, up, and off steps. Each tile previews the pattern's ordered down/up
-events. A strum lane uses its explicitly selected Fretboard Harmony source; an
-unassigned or invalid source stays silent until repaired, including when the
+Guitar-strum placements must stay within the section and not overlap authored
+blocks in their lane; Melody's repeat-aware restrictions do not apply. Strum
+blocks open a 16th-note grid with down, up, and off steps. Each tile previews
+the pattern's ordered down/up events. A strum lane uses its explicitly selected
+Fretboard Harmony source; an unassigned or invalid source stays silent until repaired, including when the
 primary Harmony lane changes. If the selected source has no chord at a step,
 the strum is silent. Chord tones start 12 ms apart and each voice is gated for
 half a beat. When a melody or strum voice reaches a pattern, block, or section

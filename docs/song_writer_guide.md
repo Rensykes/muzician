@@ -144,9 +144,11 @@ keep the current section in view. Press play/stop from the Writer header.
 At an empty bar, choose **Use existing pattern** to place another block linked
 to that pattern, or **Create new pattern** to start one in Piano Roll. Reuse
 keeps the same notes and Piano/Fretboard mapping, so arrangements such as
-A–B–A–B can share pattern A. A new block defaults to the pattern's full duration
-when the following bars are free; its placement can be shortened or extended
-within the section and around neighboring blocks. The pattern duration comes
+A–B–A–B can share pattern A. A new block uses the pattern's full duration in
+bars when that placement is valid. It may instead be shortened or rejected if
+no valid placement is available, even when bars appear free, because existing
+automatic repeat origins must be preserved. Subsequent moves and resizing use
+the same placement rules. The pattern duration comes
 from its actual note-pattern length, shown in bars plus any remaining beats and
 ticks; the block placement is shown separately in bars against the section's
 total length. A longer placement repeats the pattern; a shorter placement
@@ -162,9 +164,10 @@ the section edge. Changes that overlap them or shift their existing origins by
 changing the lane's natural period are rejected; adjust the lane repeat first
 when necessary. **Repeat / reuse** picks a free start in the same lane and makes
 a new placement sharing the pattern and canonical Save, shortened as needed to
-fit. Missing or unresolved content cannot be repeated. Shared edits affect all
-linked placements; **Make Unique** detaches only the selected placement, and
-resizing never changes the shared pattern.
+meet placement rules; a free start can still be rejected if no span preserves
+existing repeats. Missing or unresolved content cannot be repeated. Shared edits
+affect all linked placements; **Make Unique** detaches only the selected
+placement, and resizing never changes the shared pattern.
 
 Each pattern has one Piano or Fretboard performance target. Piano uses each
 note's MIDI key; Fretboard stores a playable string and physical fret for each note and
