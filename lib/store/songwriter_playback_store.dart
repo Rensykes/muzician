@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/guitar_sound.dart';
 import '../models/song_project.dart' show AudioAsset;
 import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../schema/rules/songwriter_audio_rules.dart';
@@ -81,6 +82,16 @@ typedef SongwriterSequencedNoteSink =
 
 typedef SongwriterSequencedNoteStopSink = void Function();
 
+typedef SongwriterGuitarSequencedNoteSink =
+    void Function({
+      required int midiNote,
+      required Duration duration,
+      required Duration onsetDelay,
+      required double volume,
+      required double pan,
+      GuitarTone? guitarTone,
+    });
+
 final songwriterSequencedNoteSinkProvider =
     Provider<SongwriterSequencedNoteSink>((ref) {
       return ({
@@ -101,13 +112,14 @@ final songwriterSequencedNoteSinkProvider =
     });
 
 final songwriterGuitarSequencedNoteSinkProvider =
-    Provider<SongwriterSequencedNoteSink>((ref) {
+    Provider<SongwriterGuitarSequencedNoteSink>((ref) {
       return ({
         required int midiNote,
         required Duration duration,
         required Duration onsetDelay,
         required double volume,
         required double pan,
+        GuitarTone? guitarTone,
       }) {
         NotePlayer.instance.playSequencedNote(
           midiNote,
@@ -115,7 +127,7 @@ final songwriterGuitarSequencedNoteSinkProvider =
           onsetDelay: onsetDelay,
           volume: 0.6 * volume,
           pan: pan,
-          guitarTone: ref.read(settingsProvider).guitarTone,
+          guitarTone: guitarTone ?? ref.read(settingsProvider).guitarTone,
         );
       };
     });
@@ -580,22 +592,31 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
             }
           }
           for (final group in event.sequencedNoteGroups) {
-            final sink = group.isGuitar
-                ? guitarSequencedNoteSink
-                : sequencedNoteSink;
             for (final note in group.notes) {
               final onsetOffset = Duration(milliseconds: note.onsetOffsetMs);
               void invokeSink() {
-                sink(
-                  midiNote: note.midiNote,
-                  duration: pr_rules.effectiveSequencedNoteDuration(
-                    tickDuration,
-                    note,
-                  ),
-                  onsetDelay: onsetOffset,
-                  volume: group.volume,
-                  pan: group.pan,
+                final duration = pr_rules.effectiveSequencedNoteDuration(
+                  tickDuration,
+                  note,
                 );
+                if (group.isGuitar) {
+                  guitarSequencedNoteSink(
+                    midiNote: note.midiNote,
+                    duration: duration,
+                    onsetDelay: onsetOffset,
+                    volume: group.volume,
+                    pan: group.pan,
+                    guitarTone: group.guitarTone,
+                  );
+                } else {
+                  sequencedNoteSink(
+                    midiNote: note.midiNote,
+                    duration: duration,
+                    onsetDelay: onsetOffset,
+                    volume: group.volume,
+                    pan: group.pan,
+                  );
+                }
               }
 
               if (eventProfile == null) {
