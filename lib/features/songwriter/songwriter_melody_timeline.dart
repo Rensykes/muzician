@@ -33,7 +33,7 @@ class SongwriterMelodyTimeline extends ConsumerStatefulWidget {
 }
 
 class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   final _rowKeys = <int, GlobalKey>{};
   SongBlock? _dragBlock;
   int? _dragPointer;
@@ -43,6 +43,11 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
   ScrollableState? _scrollable;
   Offset? _pointerPosition;
   Duration? _lastScrollTick;
+  final _dragRowRects = <int, Rect>{};
+  double _dragScrollOrigin = 0;
+
+  @override
+  bool get wantKeepAlive => _dragPointer != null;
 
   @override
   void initState() {
@@ -53,7 +58,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
   int _barsInRow(int start) => (widget.section.lengthBars - start).clamp(1, 4);
 
   void _start(SongBlock block, PointerDownEvent event, int rowStart) {
-    if (_dragPointer != null) return;
+    if (!mounted || _dragPointer != null) return;
     final box =
         _rowKeys[rowStart]!.currentContext!.findRenderObject()! as RenderBox;
     final local = box.globalToLocal(event.position);
@@ -61,15 +66,25 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
         (block.endBar - rowStart) * box.size.width / _barsInRow(rowStart);
     _edgeOffset = edge - local.dx;
     _scrollable = Scrollable.maybeOf(context);
+    _dragScrollOrigin = _scrollable?.position.pixels ?? 0;
+    // Rows have fixed geometry during a drag. Capture it while the section is
+    // laid out; kept-alive sliver children may no longer have a paint transform.
+    _dragRowRects.clear();
+    for (final entry in _rowKeys.entries) {
+      final row = entry.value.currentContext?.findRenderObject() as RenderBox?;
+      if (row == null || !row.attached || !row.hasSize) continue;
+      _dragRowRects[entry.key] = row.localToGlobal(Offset.zero) & row.size;
+    }
     setState(() {
       _dragPointer = event.pointer;
       _dragBlock = block;
       _previewSpan = block.spanBars;
     });
+    updateKeepAlive();
   }
 
   void _move(PointerMoveEvent event) {
-    if (event.pointer != _dragPointer) return;
+    if (!mounted || event.pointer != _dragPointer) return;
     _pointerPosition = event.position;
     _updatePreview(event.position);
     if (_scrollSpeed(event.position) != 0) {
@@ -136,25 +151,24 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
     if (block == null) return;
     int? nearestRow;
     double distance = double.infinity;
-    for (final entry in _rowKeys.entries) {
-      final box = entry.value.currentContext?.findRenderObject() as RenderBox?;
-      if (box == null || !box.attached) continue;
-      final p = box.globalToLocal(pointer);
-      final d = p.dy < 0
-          ? -p.dy
-          : (p.dy > box.size.height ? p.dy - box.size.height : 0.0);
+    final scrollDelta =
+        (_scrollable?.position.pixels ?? _dragScrollOrigin) - _dragScrollOrigin;
+    for (final entry in _dragRowRects.entries) {
+      final rect = entry.value.shift(Offset(0, -scrollDelta));
+      final d = pointer.dy < rect.top
+          ? rect.top - pointer.dy
+          : (pointer.dy > rect.bottom ? pointer.dy - rect.bottom : 0.0);
       if (d < distance) {
         distance = d;
         nearestRow = entry.key;
       }
     }
     if (nearestRow == null) return;
-    final box =
-        _rowKeys[nearestRow]!.currentContext!.findRenderObject()! as RenderBox;
-    final x = box.globalToLocal(pointer).dx + _edgeOffset;
+    final rect = _dragRowRects[nearestRow]!;
+    final x = pointer.dx - rect.left + _edgeOffset;
     final desired =
         (nearestRow +
-                (x / (box.size.width / _barsInRow(nearestRow))).round() -
+                (x / (rect.width / _barsInRow(nearestRow))).round() -
                 block.startBar)
             .clamp(1, widget.section.lengthBars - block.startBar);
     // Walk from the original extent toward the pointer: do not jump over an
@@ -176,10 +190,11 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
   }
 
   void _end(PointerUpEvent event) {
-    if (event.pointer != _dragPointer) return;
+    if (!mounted || event.pointer != _dragPointer) return;
     _stopScrolling();
     _pointerPosition = null;
     _scrollable = null;
+    _dragRowRects.clear();
     final block = _dragBlock;
     final span = _previewSpan;
     setState(() {
@@ -187,17 +202,19 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
       _dragPointer = null;
       _previewSpan = null;
     });
-    if (block == null || span == null || span == block.spanBars) return;
-    // The store revalidates against the current project at commit time.
-    ref
-        .read(songwriterProvider.notifier)
-        .setBlockPlacement(
-          sectionId: widget.section.id,
-          laneId: widget.lane.id,
-          blockId: block.id,
-          startBar: block.startBar,
-          spanBars: span,
-        );
+    if (block != null && span != null && span != block.spanBars) {
+      // The store revalidates against the current project at commit time.
+      ref
+          .read(songwriterProvider.notifier)
+          .setBlockPlacement(
+            sectionId: widget.section.id,
+            laneId: widget.lane.id,
+            blockId: block.id,
+            startBar: block.startBar,
+            spanBars: span,
+          );
+    }
+    if (mounted) updateKeepAlive();
   }
 
   @override
@@ -208,6 +225,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final palette = StudioPalette.of(context);
     final lane = _dragBlock == null
         ? widget.lane
@@ -343,15 +361,17 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                         onPointerMove: _move,
                         onPointerUp: _end,
                         onPointerCancel: (event) {
-                          if (event.pointer != _dragPointer) return;
+                          if (!mounted || event.pointer != _dragPointer) return;
                           _stopScrolling();
                           _pointerPosition = null;
                           _scrollable = null;
+                          _dragRowRects.clear();
                           setState(() {
                             _dragPointer = null;
                             _dragBlock = null;
                             _previewSpan = null;
                           });
+                          updateKeepAlive();
                         },
                         child: Semantics(
                           label:

@@ -79,6 +79,209 @@ _timelineFixture(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets(
+    'autoscroll preserves a drag beyond the originating section cache',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 8,
+        size: const Size(390, 650),
+      );
+      final writer = f.container.read(songwriterProvider.notifier);
+      for (var i = 0; i < 10; i++) {
+        writer.addSection(label: 'Later $i', lengthBars: 8);
+      }
+      await tester.pump();
+      final sectionId = f.container.read(songwriterProvider).sections.first.id;
+      SongBlock block() => f.container
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == sectionId)
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single;
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final initial = scrollable.position.pixels;
+      final before = writer.undoCount;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 250; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial + 1500));
+      await gesture.up();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(block().spanBars, 8);
+      expect(writer.undoCount, before + 1);
+      expect(writer.undo(), isTrue);
+      expect(block().spanBars, 1);
+    },
+  );
+
+  testWidgets('release uses final autoscroll layout for snapped extent', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 24,
+      size: const Size(390, 650),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final scrollable = Scrollable.of(tester.element(handle));
+    final viewport = tester.getRect(find.byWidget(scrollable.widget));
+    final row0 = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_0')),
+    );
+    final row1 = tester.getRect(
+      find.byKey(Key('emptyMelodyBar_${f.laneId}_0_4')),
+    );
+    final pointer = Offset(viewport.right - 12, viewport.bottom - 4);
+    final boundary = (row0.bottom + row1.top) / 2;
+    scrollable.position.jumpTo(
+      scrollable.position.pixels + boundary - pointer.dy - 5,
+    );
+    await tester.pump();
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveTo(pointer);
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump(const Duration(milliseconds: 30));
+    await gesture.up();
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      8,
+    );
+  });
+
+  testWidgets('release at the bottom scroll bound commits the final row', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 24,
+      size: const Size(390, 650),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final scrollable = Scrollable.of(tester.element(handle));
+    final viewport = tester.getRect(find.byWidget(scrollable.widget));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+    for (var i = 0; i < 300; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(scrollable.position.pixels, scrollable.position.maxScrollExtent);
+    await tester.pump(const Duration(milliseconds: 30));
+    await gesture.up();
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      24,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'unmounting a timeline during drag makes later pointer release safe',
+    (tester) async {
+      final f = await _timelineFixture(tester, bars: 8);
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(90, 0));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox());
+      await gesture.moveBy(const Offset(30, 0));
+      await gesture.up();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+    },
+  );
+
+  testWidgets(
+    'cancelling a drag beyond the section cache preserves placement',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 8,
+        size: const Size(390, 650),
+      );
+      final writer = f.container.read(songwriterProvider.notifier);
+      for (var i = 0; i < 10; i++) {
+        writer.addSection(label: 'Later $i', lengthBars: 8);
+      }
+      await tester.pump();
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final initial = scrollable.position.pixels;
+      final before = writer.undoCount;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 250; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial + 1500));
+      await gesture.cancel();
+      await tester.pump();
+      final stopped = scrollable.position.pixels;
+      await tester.pump(const Duration(seconds: 1));
+      expect(scrollable.position.pixels, stopped);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .first
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+      expect(writer.undoCount, before);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('partial melody row aligns with Harmony cells', (tester) async {
     final f = await _timelineFixture(tester, bars: 6);
     for (final bar in [4, 5]) {
