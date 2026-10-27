@@ -83,6 +83,77 @@ _timelineFixture(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets('melody lane exposes repeat control and placement deletion', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8);
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = writer.state.sections.single.id;
+    final repeat = find.byKey(Key('melodyLaneRepeat_${f.laneId}_0'));
+    await tester.ensureVisible(repeat);
+    await tester.tap(repeat);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 repeats').last);
+    await tester.pumpAndSettle();
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == f.laneId)
+          .repeat,
+      2,
+    );
+    final menu = find.byKey(Key('melodyBlockActions_${f.blockId}_0'));
+    await tester.ensureVisible(menu);
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete placement'));
+    await tester.pumpAndSettle();
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == f.laneId)
+          .blocks,
+      isEmpty,
+    );
+    expect(writer.undo(), isTrue);
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == f.laneId)
+          .blocks,
+      hasLength(1),
+    );
+    expect(writer.state.sections.single.id, sectionId);
+  });
+
+  testWidgets('resize repairs a block clipped by a shorter section', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8, span: 7);
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = writer.state.sections.single.id;
+    writer.setSectionLength(sectionId, 4);
+    await tester.pumpAndSettle();
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final before = writer.undoCount;
+    await tester.drag(handle, const Offset(-100, 0));
+    await tester.pumpAndSettle();
+    final block = writer.state.sections.single.lanes
+        .singleWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, lessThanOrEqualTo(4));
+    expect(writer.undoCount, before + 1);
+    expect(writer.undo(), isTrue);
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      7,
+    );
+  });
+
   testWidgets(
     'repeat is disabled when a resolved Save has no compatible melody',
     (tester) async {
@@ -151,6 +222,30 @@ void main() {
             .enabled,
         isFalse,
       );
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Make Unique'),
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Rename'),
+            )
+            .enabled,
+        isFalse,
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      final tile = find.byKey(Key('sheetMelodyTile_${patternId}_0_0'));
+      await tester.ensureVisible(tile);
+      expect(tester.widget<InkWell>(tile).onTap, isNull);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('saveWriterMelodyPattern')), findsNothing);
     },
   );
 

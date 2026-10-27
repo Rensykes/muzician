@@ -19,6 +19,7 @@ class SongwriterMelodyTimeline extends ConsumerStatefulWidget {
     required this.patternNames,
     required this.onEdit,
     required this.onCreate,
+    required this.canEdit,
   });
 
   final SongSection section;
@@ -27,6 +28,7 @@ class SongwriterMelodyTimeline extends ConsumerStatefulWidget {
   final Map<String, String> patternNames;
   final ValueChanged<SongBlock> onEdit;
   final ValueChanged<int> onCreate;
+  final bool Function(SongBlock) canEdit;
 
   @override
   ConsumerState<SongwriterMelodyTimeline> createState() => _TimelineState();
@@ -63,7 +65,9 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
         _rowKeys[rowStart]!.currentContext!.findRenderObject()! as RenderBox;
     final local = box.globalToLocal(event.position);
     final edge =
-        (block.endBar - rowStart) * box.size.width / _barsInRow(rowStart);
+        (block.endBar.clamp(0, widget.section.lengthBars) - rowStart) *
+        box.size.width /
+        _barsInRow(rowStart);
     _edgeOffset = edge - local.dx;
     _scrollable = Scrollable.maybeOf(context);
     _dragScrollOrigin = _scrollable?.position.pixels ?? 0;
@@ -174,6 +178,16 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
     // Walk from the original extent toward the pointer: do not jump over an
     // invalid extent or a repeat conflict to reach a later valid one.
     var span = block.spanBars;
+    if (block.endBar > widget.section.lengthBars) {
+      if (isValidMelodyPlacement(
+        section: widget.section,
+        lane: widget.lane,
+        candidate: block.copyWith(spanBars: desired),
+      )) {
+        setState(() => _previewSpan = desired);
+      }
+      return;
+    }
     final step = desired >= span ? 1 : -1;
     while (span != desired) {
       final next = span + step;
@@ -321,7 +335,9 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                         key: Key(
                           'sheetMelodyTile_${block.patternId ?? block.id}_${widget.instanceIndex}_$segmentStart',
                         ),
-                        onTap: () => widget.onEdit(block),
+                        onTap: widget.canEdit(block)
+                            ? () => widget.onEdit(block)
+                            : null,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: Text(

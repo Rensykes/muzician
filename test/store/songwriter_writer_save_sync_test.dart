@@ -146,6 +146,95 @@ void main() {
   }
 
   test(
+    'incompatible canonical melody survives content edits and unique',
+    () async {
+      final (container, projectId, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final saves = container.read(saveSystemProvider.notifier);
+      const incompatible = WriterBlockSnapshot(laneKind: SongLaneKind.drum);
+      final saveId = saves.saveSnapshot('Other', projectId, incompatible)!;
+      final section = writer.state.sections.single;
+      final lane = section.lanes.singleWhere((l) => l.id == laneId);
+      final block = lane.blocks.single.copyWith(saveId: saveId);
+      writer.state = writer.state.copyWith(
+        sections: [
+          section.copyWith(
+            lanes: [
+              for (final l in section.lanes)
+                if (l.id == laneId) lane.copyWith(blocks: [block]) else l,
+            ],
+          ),
+        ],
+      );
+      expect(
+        writer.makeBlockUnique(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: block.id,
+        ),
+        isFalse,
+      );
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns.single.copyWith(name: 'Changed'),
+      );
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((s) => s.id == saveId)
+            .snapshot
+            .toJson(),
+        incompatible.toJson(),
+      );
+      final retained = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks
+          .single;
+      expect(retained.saveId, saveId);
+      expect(retained.patternId, patternId);
+      final fallback = retained.embedded?.toJson();
+      await writer.reconcileCurrentProject();
+      final recovered = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks
+          .single;
+      expect(recovered.saveId, saveId);
+      expect(recovered.embedded?.toJson(), fallback);
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((s) => s.id == saveId)
+            .snapshot
+            .toJson(),
+        incompatible.toJson(),
+      );
+      expect(
+        container
+            .read(saveSystemProvider)
+            .writerLinks
+            .singleWhere((link) => link.blockId == block.id)
+            .saveId,
+        saveId,
+      );
+    },
+  );
+
+  test(
     'repeat rejects resolved saves without compatible canonical melody content',
     () async {
       final (container, projectId, writer) = await makeProject();

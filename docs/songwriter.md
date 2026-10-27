@@ -255,7 +255,7 @@ Automatic lane repeats are marked as repeats and reserve their occupied bars;
 their visible occupancy is clipped at the section edge. Placement changes also
 cannot shift or remove existing automatic repeat origins by changing the lane's
 natural period; the placement dialog explains repeat conflicts. Adjust the lane
-repeat first if needed. **Repeat / reuse** selects an
+repeat first with the Melody lane's **Repeat** control if needed. **Repeat / reuse** selects an
 available starting bar in the same lane and creates a linked placement, shortened
 as needed to satisfy placement rules; a free start can still be rejected if no
 span preserves existing repeats. Missing patterns and missing
@@ -263,7 +263,11 @@ or unresolved canonical Saves cannot be repeated. Reuse shares the pattern and
 canonical Save, so shared edits affect both placements; **Make Unique** detaches
 only the selected placement. Resizing does not alter the shared pattern. A
 separate edit button and block actions remain available on narrow screens.
-Missing references stay visible with a recovery action.
+Missing references stay visible with a recovery action. **Delete placement**
+removes an authored placement and its own automatic repeats, but refuses to move
+another block's repeat origins. A clipped block can be dragged back inside a
+shortened section. Incompatible canonical Saves remain unchanged and cannot be
+edited or made unique through the incompatible placement.
 
 Each melody pattern has one Piano or Fretboard performance target. Piano
 positions use the note's MIDI key. Fretboard positions store a playable string

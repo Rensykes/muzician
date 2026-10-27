@@ -3468,6 +3468,16 @@ class _PatternLaneRow extends ConsumerWidget {
       final patternId = block.patternId;
       if (patternId == null || !patternNames.containsKey(patternId)) return;
       if (isMelody) {
+        if (block.saveId != null &&
+            !isCanonicalMelodyForBlock(
+              writerSaveEntryForBlock(
+                ref.read(saveSystemProvider),
+                block,
+              )?.snapshot,
+              block,
+            )) {
+          return;
+        }
         showSongwriterMelodyPatternEditor(
           context: context,
           patternId: patternId,
@@ -3810,6 +3820,36 @@ class _PatternLaneRow extends ConsumerWidget {
                 ),
               ),
               if (isMelody)
+                PopupMenuButton<int>(
+                  key: Key('melodyLaneRepeat_${lane.id}_$instanceIndex'),
+                  tooltip: 'Melody lane repeats',
+                  onSelected: (repeat) => notifier.setLaneRepeat(
+                    sectionId: section.id,
+                    laneId: lane.id,
+                    repeat: repeat,
+                  ),
+                  itemBuilder: (_) => [
+                    for (
+                      var count = 1;
+                      count <= section.lengthBars.clamp(1, 64);
+                      count++
+                    )
+                      PopupMenuItem(
+                        value: count,
+                        child: Text('$count repeats'),
+                      ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Repeat: ${lane.repeat}',
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              if (isMelody)
                 SizedBox(
                   width: 180,
                   child: Semantics(
@@ -3966,6 +4006,13 @@ class _PatternLaneRow extends ConsumerWidget {
             patternNames: patternNames,
             onEdit: openPattern,
             onCreate: createPatternAt,
+            canEdit: (block) =>
+                patternNames.containsKey(block.patternId) &&
+                (block.saveId == null ||
+                    isCanonicalMelodyForBlock(
+                      writerSaveEntryForBlock(saveState, block)?.snapshot,
+                      block,
+                    )),
           ),
           for (final block in lane.blocks)
             Builder(
@@ -3974,6 +4021,9 @@ class _PatternLaneRow extends ConsumerWidget {
                     .where((p) => p.id == block.patternId)
                     .firstOrNull;
                 final entry = writerSaveEntryForBlock(saveState, block);
+                final safeContent =
+                    block.saveId == null ||
+                    isCanonicalMelodyForBlock(entry?.snapshot, block);
                 final name = pattern?.name ?? 'Missing pattern';
                 final duration = pattern == null
                     ? null
@@ -4030,7 +4080,9 @@ class _PatternLaneRow extends ConsumerWidget {
                             'editMelodyBlock_${block.id}_$instanceIndex',
                           ),
                           tooltip: 'Edit melody $name',
-                          onPressed: () => openPattern(block),
+                          onPressed: safeContent
+                              ? () => openPattern(block)
+                              : null,
                           icon: const Icon(Icons.edit_note),
                         ),
                       Semantics(
@@ -4059,14 +4111,48 @@ class _PatternLaneRow extends ConsumerWidget {
                               );
                             }
                             if (action == 'repeat') repeatPattern(block);
+                            if (action == 'delete') {
+                              notifier.removeBlock(
+                                sectionId: section.id,
+                                laneId: lane.id,
+                                blockId: block.id,
+                              );
+                              final current = ref
+                                  .read(songwriterProvider)
+                                  .sections
+                                  .where((s) => s.id == section.id)
+                                  .firstOrNull
+                                  ?.lanes
+                                  .where((l) => l.id == lane.id)
+                                  .firstOrNull;
+                              if (current?.blocks.any(
+                                    (b) => b.id == block.id,
+                                  ) ??
+                                  false) {
+                                ScaffoldMessenger.maybeOf(
+                                  context,
+                                )?.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'This deletion conflicts with automatic repeats. Adjust the lane repeat first.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
                             if (action == 'performance' &&
+                                safeContent &&
                                 block.patternId != null) {
                               onEditMelodyPerformance?.call(block.patternId!);
                             }
-                            if (action == 'rename' && entry != null) {
+                            if (action == 'rename' &&
+                                entry != null &&
+                                safeContent) {
                               renameWriterBlockSave(context, ref, entry);
                             }
-                            if (action == 'unique' && entry != null) {
+                            if (action == 'unique' &&
+                                entry != null &&
+                                safeContent) {
                               makeWriterBlockUnique(
                                 context,
                                 ref,
@@ -4082,6 +4168,10 @@ class _PatternLaneRow extends ConsumerWidget {
                               value: 'placement',
                               child: Text('Adjust placement'),
                             ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete placement'),
+                            ),
                             PopupMenuItem(
                               value: 'repeat',
                               enabled:
@@ -4094,19 +4184,22 @@ class _PatternLaneRow extends ConsumerWidget {
                             ),
                             if (onEditMelodyPerformance != null &&
                                 pattern != null)
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'performance',
-                                child: Text('Edit performance'),
+                                enabled: safeContent,
+                                child: const Text('Edit performance'),
                               ),
                             if (entry != null) ...[
                               PopupMenuItem(
                                 key: Key('writerRename_${block.id}'),
                                 value: 'rename',
+                                enabled: safeContent,
                                 child: const Text('Rename'),
                               ),
                               PopupMenuItem(
                                 key: Key('writerMakeUnique_${block.id}'),
                                 value: 'unique',
+                                enabled: safeContent,
                                 child: const Text('Make Unique'),
                               ),
                             ],

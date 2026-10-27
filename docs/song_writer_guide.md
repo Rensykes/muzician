@@ -161,13 +161,17 @@ or use **Adjust placement** to move or resize without dragging. A completed drag
 is one undo step; cancelling leaves the placement unchanged. Automatic lane
 repeats are marked and reserve their visible bars, including repeats clipped at
 the section edge. Changes that overlap them or shift their existing origins by
-changing the lane's natural period are rejected; adjust the lane repeat first
+changing the lane's natural period are rejected; use the Melody lane's **Repeat** control first
 when necessary. **Repeat / reuse** picks a free start in the same lane and makes
 a new placement sharing the pattern and canonical Save, shortened as needed to
 meet placement rules; a free start can still be rejected if no span preserves
 existing repeats. Missing or unresolved content cannot be repeated. Shared edits
 affect all linked placements; **Make Unique** detaches only the selected
-placement, and resizing never changes the shared pattern.
+placement, and resizing never changes the shared pattern. **Delete placement** removes
+one authored placement and its automatic repetitions without deleting its Save;
+if that would move another block's repeats, reduce the lane repeat first. A
+clipped placement can be resized back inside a shortened section. Incompatible
+canonical Saves remain intact and content editing is disabled until resolved.
 
 Each pattern has one Piano or Fretboard performance target. Piano uses each
 note's MIDI key; Fretboard stores a playable string and physical fret for each note and
