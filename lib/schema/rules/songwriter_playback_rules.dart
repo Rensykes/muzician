@@ -9,6 +9,7 @@ library;
 import 'dart:math' as math;
 
 import '../../models/save_system.dart';
+import '../../models/guitar_sound.dart' show GuitarTone;
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
@@ -43,10 +44,12 @@ typedef SongwriterDrumGroup = ({
 });
 
 /// Sequenced notes that need a duration-aware voice instead of a one-shot stab.
+/// A guitar group with no explicit tone follows the shared guitar preference.
 typedef SongwriterSequencedNoteGroup = ({
   double volume,
   double pan,
   bool isGuitar,
+  GuitarTone? guitarTone,
   List<NotePatternNote> notes,
 });
 
@@ -360,7 +363,10 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   final sequencedAt =
       <
         int,
-        Map<(double, double, int, int, int, bool), List<NotePatternNote>>
+        Map<
+          (double, double, int, int, int, bool, GuitarTone?),
+          List<NotePatternNote>
+        >
       >{};
 
   void addSequencedNote({
@@ -372,6 +378,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
     required double volume,
     required double pan,
     required bool isGuitar,
+    GuitarTone? guitarTone,
     required String id,
   }) {
     if (durationTicks <= 0) return;
@@ -382,6 +389,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
       onsetOffsetMs,
       durationOffsetMs,
       isGuitar,
+      guitarTone,
     );
     ((sequencedAt[tick] ??= {})[key] ??= []).add(
       NotePatternNote(
@@ -496,11 +504,21 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                   ),
                   volume: mix.volume,
                   pan: mix.pan,
-                  isGuitar:
+                  isGuitar: switch (lane.melodySound) {
+                    MelodyLaneSound.piano => false,
+                    MelodyLaneSound.cleanGuitar ||
+                    MelodyLaneSound.distortedGuitar => true,
+                    null =>
                       project
-                          .melodyPerformancesByPatternId[pattern.id]
-                          ?.instrument ==
-                      HarmonyLaneInstrument.fretboard,
+                              .melodyPerformancesByPatternId[pattern.id]
+                              ?.instrument ==
+                          HarmonyLaneInstrument.fretboard,
+                  },
+                  guitarTone: switch (lane.melodySound) {
+                    MelodyLaneSound.cleanGuitar => GuitarTone.clean,
+                    MelodyLaneSound.distortedGuitar => GuitarTone.distorted,
+                    _ => null,
+                  },
                   id: note.id,
                 );
               }
@@ -626,6 +644,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
               volume: e.key.$1,
               pan: e.key.$2,
               isGuitar: e.key.$6,
+              guitarTone: e.key.$7,
               notes: e.value,
             ),
         ],

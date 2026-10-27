@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muzician/models/guitar_sound.dart' show GuitarTone;
+import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
@@ -7,10 +9,180 @@ import 'package:muzician/schema/rules/songwriter_playback_rules.dart';
 import 'package:muzician/store/drum_pattern_playback_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
+import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/utils/playback_profiling.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test(
+    'transport routes explicit lane tones and leaves legacy guitar tone unset',
+    () async {
+      final calls = <(GuitarTone?, int, Duration, Duration, double, double)>[];
+      final piano = <(int, Duration, Duration, double, double)>[];
+      final container = ProviderContainer(
+        overrides: [
+          songwriterSequencedNoteSinkProvider.overrideWithValue(
+            ({
+              required midiNote,
+              required duration,
+              required onsetDelay,
+              required volume,
+              required pan,
+            }) => piano.add((midiNote, duration, onsetDelay, volume, pan)),
+          ),
+          songwriterGuitarSequencedNoteSinkProvider.overrideWithValue(
+            ({
+              required midiNote,
+              required duration,
+              required onsetDelay,
+              required volume,
+              required pan,
+              guitarTone,
+            }) => calls.add((
+              guitarTone,
+              midiNote,
+              duration,
+              onsetDelay,
+              volume,
+              pan,
+            )),
+          ),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      const block = SongBlock(
+        id: 'b',
+        startBar: 0,
+        spanBars: 1,
+        patternId: 'p',
+      );
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(
+            const SongwriterProjectSnapshot(
+              config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+              sections: [
+                SongSection(
+                  id: 's',
+                  lengthBars: 1,
+                  order: 0,
+                  lanes: [
+                    SongLane(
+                      id: 'piano',
+                      kind: SongLaneKind.melody,
+                      order: 0,
+                      melodySound: MelodyLaneSound.piano,
+                      volume: 0.6,
+                      pan: -0.25,
+                      blocks: [block],
+                    ),
+                    SongLane(
+                      id: 'clean',
+                      kind: SongLaneKind.melody,
+                      order: 1,
+                      melodySound: MelodyLaneSound.cleanGuitar,
+                      volume: 0.6,
+                      pan: -0.25,
+                      blocks: [block],
+                    ),
+                    SongLane(
+                      id: 'distorted',
+                      kind: SongLaneKind.melody,
+                      order: 2,
+                      melodySound: MelodyLaneSound.distortedGuitar,
+                      volume: 0.6,
+                      pan: -0.25,
+                      blocks: [block],
+                    ),
+                    SongLane(
+                      id: 'legacy',
+                      kind: SongLaneKind.melody,
+                      order: 3,
+                      volume: 0.6,
+                      pan: -0.25,
+                      blocks: [block],
+                    ),
+                  ],
+                ),
+              ],
+              melodyPatterns: [
+                NotePattern(
+                  id: 'p',
+                  name: 'Lead',
+                  lengthTicks: 16,
+                  notes: [
+                    NotePatternNote(
+                      id: 'n',
+                      midiNote: 67,
+                      startTick: 0,
+                      durationTicks: 3,
+                      onsetOffsetMs: 12,
+                    ),
+                  ],
+                  pitchRangeStart: 48,
+                  pitchRangeEnd: 84,
+                  snapTicks: 1,
+                  highlightedNotes: [],
+                ),
+              ],
+              melodyPerformancesByPatternId: {
+                'p': WriterMelodyPerformance(
+                  instrument: HarmonyLaneInstrument.fretboard,
+                ),
+              },
+            ),
+          );
+
+      for (final tone in GuitarTone.values) {
+        await container.read(settingsProvider.notifier).setGuitarTone(tone);
+        calls.clear();
+        piano.clear();
+        await container
+            .read(songwriterPlaybackProvider.notifier)
+            .startPlayback(
+              tickDurationOverride: const Duration(milliseconds: 1),
+            );
+        expect(piano, [
+          (
+            67,
+            const Duration(milliseconds: 3),
+            const Duration(milliseconds: 12),
+            0.6,
+            -0.25,
+          ),
+        ]);
+        expect(calls.map((call) => call.$1), [
+          GuitarTone.clean,
+          GuitarTone.distorted,
+          null,
+        ]);
+        for (final call in calls) {
+          expect(
+            (call.$2, call.$3, call.$4, call.$5, call.$6),
+            (
+              67,
+              const Duration(milliseconds: 3),
+              const Duration(milliseconds: 12),
+              0.6,
+              -0.25,
+            ),
+          );
+        }
+        expect(container.read(settingsProvider).guitarTone, tone);
+        expect(
+          container
+              .read(songwriterProvider)
+              .melodyPerformancesByPatternId['p']!
+              .instrument,
+          HarmonyLaneInstrument.fretboard,
+        );
+      }
+    },
+  );
 
   test('playback fires a metronome accent on each bar downbeat', () async {
     final accents = <bool>[];
