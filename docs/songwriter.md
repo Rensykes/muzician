@@ -196,8 +196,8 @@ lyrics into the new placement once; later lyric edits remain local.
 `WriterBlockSnapshot.defaultLyrics` stores that initial seed, so edits to one
 placement do not change what another new placement receives.
 Linked Melody and Guitar Strum tiles expose **Rename** and **Make Unique**
-alongside their block actions. Melody retains **Adjust placement** and
-**Edit performance** in the same menu.
+alongside their block actions. Melody also offers **Adjust placement**,
+**Repeat / reuse**, and **Edit performance** in the same menu.
 
 ## Rules (`lib/schema/rules/songwriter_rules.dart`)
 
@@ -249,7 +249,10 @@ undo step, while cancelling leaves the placement unchanged. Hold the drag near
 the top or bottom of the Writer sheet to scroll to additional rows. The block's action
 menu also offers **Adjust placement** to move or resize without a gesture.
 Automatic lane repeats are marked as repeats and reserve their occupied bars;
-the placement dialog explains repeat conflicts. A separate edit button and
+the placement dialog explains repeat conflicts. **Repeat / reuse** selects an
+available starting bar in the same lane and creates a linked placement, shortened
+to fit before the next occupied bar or section end. Missing patterns and missing
+or unresolved canonical Saves cannot be repeated. A separate edit button and
 block actions remain available on narrow screens. Missing references stay visible
 with a recovery action.
 
@@ -258,8 +261,11 @@ positions use the note's MIDI key. Fretboard positions store a playable string
 and physical fret per note and must match the note's pitch under the current
 tuning, capo, and fret count. The target and positions persist with the Writer
 session and in canonical Writer block saves, so reopen and reuse preserve them.
-The target chooses the physical view and mapping; Writer playback keeps its
-existing synthesized sound. Positions follow a note through Piano Roll edits by note ID and MIDI pitch; a
+The target chooses the physical view and mapping independently of the Melody
+lane's **Sound**: Piano, Clean guitar, or Distorted guitar. Older lanes without
+an explicit sound display **Pattern sounds** and retain their legacy playback
+behavior until a sound is chosen. This choice affects only that lane, not the
+global guitar tone or performance mapping. Positions follow a note through Piano Roll edits by note ID and MIDI pitch; a
 removed or pitch-changed note must be mapped again. The selected instrument
 performance view and position editing are blocked if any note is outside the
 current Piano range or Fretboard's playable positions; Piano Roll remains

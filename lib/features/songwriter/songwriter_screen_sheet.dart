@@ -3681,6 +3681,100 @@ class _PatternLaneRow extends ConsumerWidget {
       });
     }
 
+    Future<void> repeatPattern(SongBlock block) async {
+      final start = await showStudioDialog<int>(
+        context: context,
+        builder: (dialogContext) => Consumer(
+          builder: (context, ref, _) {
+            final currentProject = ref.watch(songwriterProvider);
+            final currentSection = currentProject.sections
+                .where((s) => s.id == section.id)
+                .firstOrNull;
+            final currentLane = currentSection?.lanes
+                .where((l) => l.id == lane.id)
+                .firstOrNull;
+            final source = currentLane?.blocks
+                .where((b) => b.id == block.id)
+                .firstOrNull;
+            final canRepeat =
+                source != null &&
+                currentProject.melodyPatterns.any(
+                  (p) => p.id == source.patternId,
+                ) &&
+                writerSaveEntryForBlock(
+                      ref.watch(saveSystemProvider),
+                      source,
+                    ) !=
+                    null;
+            return MuzicianDialog(
+              title: 'Repeat / reuse',
+              content: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (
+                      var bar = 0;
+                      bar < (currentSection?.lengthBars ?? 0);
+                      bar++
+                    )
+                      Builder(
+                        builder: (context) {
+                          final occupied =
+                              currentLane != null &&
+                              melodyOccurrences(
+                                lane: currentLane,
+                                sectionLengthBars: currentSection!.lengthBars,
+                              ).any((o) => o.startBar <= bar && o.endBar > bar);
+                          final valid =
+                              canRepeat &&
+                              isValidMelodyPlacement(
+                                section: currentSection!,
+                                lane: currentLane!,
+                                candidate: SongBlock(
+                                  id: '__repeat_melody__',
+                                  startBar: bar,
+                                  spanBars: 1,
+                                ),
+                              );
+                          return OutlinedButton(
+                            key: Key('repeatMelodyBar_$bar'),
+                            onPressed: valid
+                                ? () => Navigator.of(dialogContext).pop(bar)
+                                : null,
+                            child: Text(
+                              'Bar ${bar + 1}\n${valid
+                                  ? 'Free'
+                                  : occupied
+                                  ? 'Occupied'
+                                  : 'Unavailable'}',
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                MuzicianDialogButton(
+                  'Cancel',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (start == null || !context.mounted) return;
+      notifier.repeatMelodyBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        blockId: block.id,
+        startBar: start,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -3713,6 +3807,63 @@ class _PatternLaneRow extends ConsumerWidget {
                   ),
                 ),
               ),
+              if (isMelody)
+                SizedBox(
+                  width: 180,
+                  child: Semantics(
+                    label: 'Sound for ${lane.label ?? 'Melody'}',
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<MelodyLaneSound>(
+                        key: Key('melodySound_${lane.id}_$instanceIndex'),
+                        value: lane.melodySound,
+                        hint: const Text('Sound: Pattern sounds'),
+                        isExpanded: true,
+                        dropdownColor: StudioPalette.of(context).surface,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textSecondary,
+                          fontSize: 12,
+                        ),
+                        selectedItemBuilder: (_) => [
+                          for (final label in [
+                            'Piano',
+                            'Clean guitar',
+                            'Distorted guitar',
+                          ])
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Sound: $label',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        items: const [
+                          DropdownMenuItem(
+                            value: MelodyLaneSound.piano,
+                            child: Text('Piano'),
+                          ),
+                          DropdownMenuItem(
+                            value: MelodyLaneSound.cleanGuitar,
+                            child: Text('Clean guitar'),
+                          ),
+                          DropdownMenuItem(
+                            value: MelodyLaneSound.distortedGuitar,
+                            child: Text('Distorted guitar'),
+                          ),
+                        ],
+                        onChanged: (sound) {
+                          if (sound != null) {
+                            notifier.setMelodyLaneSound(
+                              sectionId: section.id,
+                              laneId: lane.id,
+                              sound: sound,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
               if (!isMelody && !StudioPalette.of(context).isStudio)
                 Text(
                   'Source',
@@ -3905,6 +4056,7 @@ class _PatternLaneRow extends ConsumerWidget {
                                 block,
                               );
                             }
+                            if (action == 'repeat') repeatPattern(block);
                             if (action == 'performance' &&
                                 block.patternId != null) {
                               onEditMelodyPerformance?.call(block.patternId!);
@@ -3927,6 +4079,11 @@ class _PatternLaneRow extends ConsumerWidget {
                             const PopupMenuItem(
                               value: 'placement',
                               child: Text('Adjust placement'),
+                            ),
+                            PopupMenuItem(
+                              value: 'repeat',
+                              enabled: pattern != null && entry != null,
+                              child: const Text('Repeat / reuse'),
                             ),
                             if (onEditMelodyPerformance != null &&
                                 pattern != null)

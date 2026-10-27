@@ -10,6 +10,10 @@ import 'package:muzician/features/songwriter/guitar_strum_pattern_sheet.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/app_theme_variant.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/song_project.dart';
+import 'package:muzician/store/save_system_store.dart';
+import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/theme/studio_theme.dart';
@@ -78,6 +82,293 @@ _timelineFixture(
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets(
+    'repeat picker creates a shortened linked and independently unique occurrence',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final saves = container.read(saveSystemProvider.notifier);
+      final projectId = saves.createProject('Project', const ProjectConfig())!;
+      saves.selectProject(projectId);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(lengthBars: 8);
+      final sectionId = container.read(songwriterProvider).sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final saveId = saves.saveSnapshot(
+        'Lead',
+        projectId,
+        const WriterBlockSnapshot(
+          laneKind: SongLaneKind.melody,
+          melodyPattern: NotePattern(
+            id: 'lead',
+            name: 'Lead',
+            lengthTicks: 16,
+            notes: [],
+            pitchRangeStart: 48,
+            pitchRangeEnd: 84,
+            snapTicks: 1,
+            highlightedNotes: [],
+          ),
+        ),
+      )!;
+      expect(
+        writer.insertWriterBlockFromSave(
+          saveId: saveId,
+          sectionId: sectionId,
+          laneKind: SongLaneKind.melody,
+          laneId: laneId,
+          startBar: 0,
+        ),
+        isTrue,
+      );
+      SongLane currentLane() => container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == laneId);
+      final source = currentLane().blocks.single;
+      writer.setBlockPlacement(
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: source.id,
+        startBar: 0,
+        spanBars: 3,
+      );
+      final other = writer.addMelodyPattern(name: 'Other');
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: other,
+        startBar: 5,
+        spanBars: 1,
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      Future<void> openPicker() async {
+        final menu = find.byKey(Key('melodyBlockActions_${source.id}_0'));
+        await tester.ensureVisible(menu);
+        await tester.tap(menu);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Repeat / reuse'));
+        await tester.pumpAndSettle();
+      }
+
+      final before = writer.undoCount;
+      await openPicker();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(writer.undoCount, before);
+      expect(currentLane().blocks, hasLength(2));
+      writer.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 2);
+      await tester.pump();
+      await openPicker();
+      expect(
+        tester
+            .widget<OutlinedButton>(find.byKey(const Key('repeatMelodyBar_6')))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      writer.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 1);
+      await tester.pump();
+      await openPicker();
+      await tester.tap(find.byKey(const Key('repeatMelodyBar_3')));
+      await tester.pumpAndSettle();
+      final copy = currentLane().blocks.singleWhere(
+        (b) => b.id != source.id && b.startBar == 3,
+      );
+      expect(
+        (copy.startBar, copy.spanBars, copy.patternId, copy.saveId),
+        (3, 2, source.patternId, saveId),
+      );
+      final tile = find.byKey(Key('sheetMelodyTile_${copy.patternId}_0_3'));
+      await tester.ensureVisible(tile);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      final editor = tester
+          .widgetList<UncontrolledProviderScope>(
+            find.byType(UncontrolledProviderScope),
+          )
+          .last
+          .container;
+      editor.read(pianoRollProvider.notifier).addNote(72, 0, 4);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+      await tester.pumpAndSettle();
+      expect(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((p) => p.id == source.patternId)
+            .notes,
+        hasLength(1),
+      );
+      final copyMenu = find.byKey(Key('melodyBlockActions_${copy.id}_0'));
+      await tester.ensureVisible(copyMenu);
+      await tester.tap(copyMenu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Make Unique'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('writerBlockNameSave')));
+      await tester.pumpAndSettle();
+      final unique = currentLane().blocks.singleWhere((b) => b.id == copy.id);
+      expect(unique.patternId, isNot(source.patternId));
+      expect(unique.saveId, isNot(saveId));
+      expect(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((p) => p.id == unique.patternId)
+            .notes,
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets('repeat is disabled for missing and unresolved canonical saves', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 4);
+    Future<void> expectDisabled() async {
+      final menu = find.byKey(Key('melodyBlockActions_${f.blockId}_0'));
+      await tester.ensureVisible(menu);
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Repeat / reuse'),
+            )
+            .enabled,
+        isFalse,
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+    }
+
+    await expectDisabled();
+    final writer = f.container.read(songwriterProvider.notifier);
+    final project = f.container.read(songwriterProvider);
+    final section = project.sections.single;
+    final lanes = [
+      for (final lane in section.lanes)
+        if (lane.id == f.laneId)
+          lane.copyWith(
+            blocks: [lane.blocks.single.copyWith(saveId: 'missing-save')],
+          )
+        else
+          lane,
+    ];
+    await writer.loadProject(
+      project.copyWith(sections: [section.copyWith(lanes: lanes)]),
+    );
+    await tester.pumpAndSettle();
+    await expectDisabled();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks,
+      hasLength(1),
+    );
+  });
+
+  testWidgets('melody sound is lane local and legacy sound is displayed', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 4,
+      size: const Size(1024, 1200),
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = f.container.read(songwriterProvider).sections.single.id;
+    final secondId = writer.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.melody,
+    );
+    final project = f.container.read(songwriterProvider);
+    final section = project.sections.single;
+    final lanes = [
+      for (final lane in section.lanes)
+        if (lane.id == f.laneId)
+          SongLane(
+            id: lane.id,
+            kind: lane.kind,
+            order: lane.order,
+            blocks: lane.blocks,
+          )
+        else
+          lane,
+    ];
+    await writer.loadProject(
+      project.copyWith(sections: [section.copyWith(lanes: lanes)]),
+    );
+    await tester.pumpAndSettle();
+    final performance = f.container
+        .read(songwriterProvider)
+        .melodyPerformancesByPatternId;
+    final tone = f.container.read(settingsProvider).guitarTone;
+    expect(find.textContaining('Pattern sounds'), findsOneWidget);
+    for (final choice in [
+      (MelodyLaneSound.cleanGuitar, 'Clean guitar'),
+      (MelodyLaneSound.distortedGuitar, 'Distorted guitar'),
+      (MelodyLaneSound.piano, 'Piano'),
+    ]) {
+      final selector = find.byKey(Key('melodySound_${f.laneId}_0'));
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(choice.$2).last);
+      await tester.pumpAndSettle();
+      final updated = f.container.read(songwriterProvider);
+      expect(
+        updated.sections.single.lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .melodySound,
+        choice.$1,
+      );
+      expect(
+        updated.sections.single.lanes
+            .firstWhere((l) => l.id == secondId)
+            .melodySound,
+        MelodyLaneSound.piano,
+      );
+      expect(updated.melodyPerformancesByPatternId, performance);
+      expect(f.container.read(settingsProvider).guitarTone, tone);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: f.container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining(choice.$2), findsWidgets);
+    }
+  });
 
   testWidgets(
     'autoscroll preserves a drag beyond the originating section cache',
