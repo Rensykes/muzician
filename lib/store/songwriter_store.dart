@@ -3541,10 +3541,23 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String laneId,
     required SongBlock block,
   }) {
+    final section = state.sections
+        .where((item) => item.id == sectionId)
+        .firstOrNull;
+    if (section == null) return;
     _replaceLane(
       sectionId,
       laneId,
-      (l) => l.copyWith(blocks: [...l.blocks, block]),
+      (l) =>
+          l.kind == SongLaneKind.melody &&
+              (l.blocks.any((existing) => existing.id == block.id) ||
+                  !isValidMelodyPlacement(
+                    section: section,
+                    lane: l,
+                    candidate: block,
+                  ))
+          ? l
+          : l.copyWith(blocks: [...l.blocks, block]),
     );
   }
 
@@ -3855,6 +3868,81 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     startBar: startBar,
     spanBars: spanBars,
   );
+
+  /// Creates a linked placement, shortening it to the largest valid span.
+  bool repeatMelodyBlock({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+    required int startBar,
+  }) {
+    final section = state.sections
+        .where((item) => item.id == sectionId)
+        .firstOrNull;
+    final lane = section?.lanes
+        .where((item) => item.id == laneId && item.kind == SongLaneKind.melody)
+        .firstOrNull;
+    final source = lane?.blocks.where((item) => item.id == blockId).firstOrNull;
+    if (section == null ||
+        lane == null ||
+        source == null ||
+        source.spanBars <= 0 ||
+        source.patternId == null ||
+        !state.melodyPatterns.any(
+          (pattern) => pattern.id == source.patternId,
+        )) {
+      return false;
+    }
+    final id = generateId();
+    for (var span = source.spanBars; span > 0; span--) {
+      final candidate = SongBlock(
+        id: id,
+        startBar: startBar,
+        spanBars: span,
+        saveId: source.saveId,
+        embedded: source.embedded,
+        chordSymbol: source.chordSymbol,
+        chordQuality: source.chordQuality,
+        chordRootPc: source.chordRootPc,
+        chordNotes: source.chordNotes,
+        romanNumeral: source.romanNumeral,
+        patternId: source.patternId,
+        audioClipId: source.audioClipId,
+        lyrics: source.lyrics,
+        isSilent: source.isSilent,
+      );
+      if (!isValidMelodyPlacement(
+        section: section,
+        lane: lane,
+        candidate: candidate,
+      )) {
+        continue;
+      }
+      var inserted = false;
+      _replaceLane(sectionId, laneId, (currentLane) {
+        final currentSection = state.sections
+            .where((item) => item.id == sectionId)
+            .firstOrNull;
+        if (currentSection == null ||
+            currentLane.kind != SongLaneKind.melody ||
+            !currentLane.blocks.any((item) => identical(item, source)) ||
+            !state.melodyPatterns.any(
+              (pattern) => pattern.id == source.patternId,
+            ) ||
+            !isValidMelodyPlacement(
+              section: currentSection,
+              lane: currentLane,
+              candidate: candidate,
+            )) {
+          return currentLane;
+        }
+        inserted = true;
+        return currentLane.copyWith(blocks: [...currentLane.blocks, candidate]);
+      });
+      return inserted;
+    }
+    return false;
+  }
 
   String addGuitarStrumPattern({String name = 'Strum', int? lengthTicks}) {
     final pattern = makeGuitarStrumPattern(
@@ -4856,7 +4944,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     final retainedBlocks = targetLane.blocks
         .where((currentBlock) => currentBlock.id != source?.id)
         .toList();
-    if (blocksOverlap(retainedBlocks, block)) return false;
+    if (laneKind == SongLaneKind.melody
+        ? !isValidMelodyPlacement(
+            section: section,
+            lane: targetLane,
+            candidate: block,
+          )
+        : blocksOverlap(retainedBlocks, block)) {
+      return false;
+    }
     final laneWithBlock = targetLane.copyWith(
       blocks: source == null
           ? [...targetLane.blocks, block]

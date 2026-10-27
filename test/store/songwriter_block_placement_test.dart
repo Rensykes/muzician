@@ -10,6 +10,78 @@ import 'package:muzician/store/songwriter_store.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test('melody edits cannot occupy or shift existing lane repeats', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(lengthBars: 6);
+    final sectionId = c.read(songwriterProvider).sections.single.id;
+    final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+    final patternId = n.addMelodyPattern();
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 2,
+    );
+    n.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 3);
+    final before = c.read(songwriterProvider);
+    final blockId = before.sections.single.lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single
+        .id;
+    n.setBlockPlacement(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: blockId,
+      startBar: 0,
+      spanBars: 3,
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 4,
+      spanBars: 1,
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.insertBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: const SongBlock(id: 'inserted', startBar: 2, spanBars: 1),
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.insertBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: before.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single,
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.saveMelodyPattern(
+      before.melodyPatterns.single.copyWith(lengthTicks: 48),
+      initialPlacement: (
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: blockId,
+      ),
+    );
+    final afterSave = c.read(songwriterProvider);
+    expect(
+      afterSave.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single
+          .spanBars,
+      2,
+    );
+  });
+
   test('setBlockPlacement moves/resizes; overlap is rejected', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);
