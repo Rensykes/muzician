@@ -71,14 +71,25 @@ class FretboardAuditionControls extends ConsumerWidget {
                   const SizedBox(width: 4),
                   for (final upstroke in [false, true])
                     IconButton(
-                      key: Key(upstroke ? 'fretboardStrumUp' : 'fretboardStrumDown'),
+                      key: Key(
+                        upstroke ? 'fretboardStrumUp' : 'fretboardStrumDown',
+                      ),
                       tooltip: canStrum
-                          ? upstroke ? 'Strum up' : 'Strum down'
+                          ? upstroke
+                                ? 'Strum up'
+                                : 'Strum down'
                           : unavailableHint,
-                      constraints: const BoxConstraints.tightFor(width: 44, height: 44),
-                      onPressed: canStrum ? () => strum(upstroke: upstroke) : null,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 44,
+                        height: 44,
+                      ),
+                      onPressed: canStrum
+                          ? () => strum(upstroke: upstroke)
+                          : null,
                       icon: Icon(
-                        upstroke ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                        upstroke
+                            ? Icons.arrow_upward_rounded
+                            : Icons.arrow_downward_rounded,
                         semanticLabel: upstroke ? 'Strum up' : 'Strum down',
                         size: 20,
                       ),

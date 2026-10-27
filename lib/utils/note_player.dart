@@ -274,6 +274,9 @@ Uint8List _renderCrash(int sampleRate) {
 
 class NotePlayer {
   NotePlayer._();
+
+  @visibleForTesting
+  NotePlayer.forTesting();
   static final NotePlayer instance = NotePlayer._();
 
   final List<AudioPlayer> _pool = [];
@@ -495,6 +498,10 @@ class NotePlayer {
       return _encodeWav(samples);
     }
 
+    final profileVoice = playbackProfilingEnabled
+        ? playbackProfileVoiceContext()
+        : null;
+    if (profileVoice != null) profileVoice.run.request(profileVoice);
     unawaited(
       _playSequencedNote(
         notes.first,
@@ -503,7 +510,7 @@ class NotePlayer {
         volume: volume,
         pan: pan,
         generation: _sequencedGeneration,
-        profileVoice: null,
+        profileVoice: profileVoice,
         cacheKeyOverride: key,
         renderOverride: render,
       ),
@@ -852,6 +859,8 @@ class NotePlayer {
     Object? cacheKeyOverride,
     Uint8List Function()? renderOverride,
   }) async {
+    final voiceClock = Stopwatch()..start();
+    final releaseDeadline = onsetDelay + duration;
     final noteTrace = playbackProfilingEnabled
         ? PlaybackProfileTask.begin(
             'note_player.sequenced_voice',
@@ -946,6 +955,20 @@ class NotePlayer {
           : duration.inMilliseconds < 1
           ? 1
           : duration.inMilliseconds;
+      var expired = false;
+      bool pastRelease() => expired || voiceClock.elapsed >= releaseDeadline;
+      // Release against the requested score time, including source preparation.
+      // A delayed platform prepare must never add its latency to note duration.
+      final remaining = releaseDeadline - voiceClock.elapsed;
+      final releaseTimer = Timer(
+        remaining > Duration.zero ? remaining : Duration.zero,
+        () {
+          expired = true;
+          unawaited(
+            _stopSequencedVoice(player, voiceId, reason: 'natural_completion'),
+          );
+        },
+      );
       var started = false;
       var cancelled = false;
       Object? operationError;
@@ -994,7 +1017,8 @@ class NotePlayer {
           );
           rethrow;
         }
-        if (generation != _sequencedGeneration ||
+        if (pastRelease() ||
+            generation != _sequencedGeneration ||
             _activeSequencedVoices[player] != voiceId) {
           cancelled = true;
           if (profileVoice != null) {
@@ -1039,7 +1063,8 @@ class NotePlayer {
               ? _bytesCache.containsKey(cacheKey)
               : false;
           final path = await _ensureFile(cacheKey, render);
-          if (generation != _sequencedGeneration ||
+          if (pastRelease() ||
+              generation != _sequencedGeneration ||
               _activeSequencedVoices[player] != voiceId) {
             cancelled = true;
             if (profileVoice != null) {
@@ -1129,7 +1154,8 @@ class NotePlayer {
               ? _bytesCache.containsKey(cacheKey)
               : false;
           final bytes = _bytesCache.putIfAbsent(cacheKey, render);
-          if (generation != _sequencedGeneration ||
+          if (pastRelease() ||
+              generation != _sequencedGeneration ||
               _activeSequencedVoices[player] != voiceId) {
             cancelled = true;
             if (profileVoice != null) {
@@ -1243,12 +1269,16 @@ class NotePlayer {
           _pendingSequencedVoices.remove(player);
         }
         if (!started ||
+            pastRelease() ||
             generation != _sequencedGeneration ||
             _activeSequencedVoices[player] != voiceId) {
+          releaseTimer.cancel();
           await _stopSequencedVoice(
             player,
             voiceId,
-            reason: started
+            reason: pastRelease()
+                ? 'natural_completion'
+                : started
                 ? 'cancelled'
                 : cancelled
                 ? 'cancelled'
@@ -1273,6 +1303,7 @@ class NotePlayer {
       }
 
       if (!started ||
+          pastRelease() ||
           generation != _sequencedGeneration ||
           _activeSequencedVoices[player] != voiceId) {
         if (profileVoice != null &&
@@ -1310,15 +1341,6 @@ class NotePlayer {
           },
         ),
       );
-      unawaited(
-        Future<void>.delayed(Duration(milliseconds: durationMs), () async {
-          await _stopSequencedVoice(
-            player,
-            voiceId,
-            reason: 'natural_completion',
-          );
-        }),
-      );
     } catch (error, stackTrace) {
       if (profileVoice != null) profileVoice.run.outcome(profileVoice, 'error');
       noteTrace?.finish(
@@ -1345,7 +1367,13 @@ class NotePlayer {
     final existingStop = _sequencedStops[player];
     if (existingStop != null) {
       await existingStop;
-      return;
+      // A pending play can finish while stop is waiting inside the platform.
+      // Retry for the same still-owned voice after that operation settles;
+      // otherwise its late resume can outlive the transport's Stop.
+      if (identical(_sequencedStops[player], existingStop)) {
+        _sequencedStops.remove(player);
+      }
+      if (_activeSequencedVoices[player] != voiceId) return;
     }
     final stopping = _stopSequencedVoiceInternal(
       player,
@@ -1364,6 +1392,7 @@ class NotePlayer {
     int voiceId, {
     required String reason,
   }) async {
+    final wasPending = _pendingSequencedVoices[player] == voiceId;
     final profileVoice = _sequencedProfileVoices[player];
     final stopTrace = playbackProfilingEnabled
         ? PlaybackProfileTask.begin(
@@ -1383,6 +1412,7 @@ class NotePlayer {
     try {
       await player.stop();
       if (_activeSequencedVoices[player] == voiceId &&
+          !wasPending &&
           _pendingSequencedVoices[player] != voiceId) {
         _activeSequencedVoices.remove(player);
       }

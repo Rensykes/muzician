@@ -233,6 +233,27 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('nav_Settings')));
     await tester.pumpAndSettle();
 
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Data Recovery'), findsOneWidget);
+    expect(
+      find.text('Default Harmony instrument for new projects'),
+      findsOneWidget,
+    );
+    final settingsList = find
+        .ancestor(of: find.text('Appearance'), matching: find.byType(ListView))
+        .first;
+    expect(
+      find.descendant(
+        of: settingsList,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Container &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration! as BoxDecoration).borderRadius != null,
+        ),
+      ),
+      findsNothing,
+    );
     final switchFinder = find.byKey(const ValueKey('settings_note_spelling'));
     await tester.ensureVisible(switchFinder);
     expect(tester.widget<SwitchListTile>(switchFinder).value, isFalse);

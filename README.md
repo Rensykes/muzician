@@ -32,7 +32,7 @@ Fretboard and Piano keep the instrument visible while a bounded Notes / Voicings
 | **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; compact unframed controls, Harmony guitar tone selection, source-bound Guitar Strum, reusable melodies, instrument-aware guitar playback, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Song** | Temporarily disabled in V2; retained clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
-| **Settings** | Device-local Studio / Studio Muzician appearance and persistent Sharps/Flats spelling for musical labels, retaining pitches and custom names | [docs/save_system.md](docs/save_system.md) |
+| **Settings** | Compact, divider-grouped device preferences for Studio / Studio Muzician appearance, Sharps/Flats spelling, project Harmony defaults, preview volume and scale warnings; preserved recovery backups remain available here | [docs/save_system.md](docs/save_system.md) |
 
 ## Project Structure
 

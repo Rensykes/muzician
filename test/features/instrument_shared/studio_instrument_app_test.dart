@@ -58,6 +58,24 @@ void main() {
             container.read(pianoProvider.notifier).loadExactMidis([60, 64, 67]);
           }
           await tester.pumpAndSettle();
+          if (guitar) {
+            final board = find.byWidgetPredicate(
+              (widget) =>
+                  widget is CustomPaint &&
+                  widget.painter.runtimeType.toString() == '_FretboardPainter',
+            );
+            final paintedBounds = tester.getRect(board);
+            final viewportBounds = tester.getRect(
+              find.byKey(const Key('studioInstrumentCanvas')),
+            );
+            // Compact row 6 ends at y=190. The painter and its host must
+            // contain it, rather than silencing overflow by cropping strings.
+            expect(paintedBounds.height, greaterThanOrEqualTo(190));
+            expect(
+              paintedBounds.bottom,
+              lessThanOrEqualTo(viewportBounds.bottom),
+            );
+          }
           final setup = find.byKey(const Key('instrumentInspectorSetup'));
           await tester.ensureVisible(setup);
           await tester.pumpAndSettle();

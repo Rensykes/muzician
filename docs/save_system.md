@@ -120,6 +120,8 @@ the source key. Settings then exposes preserved entries under **Data Recovery**
 as read-only raw text. Each entry offers **Copy**, **Export**, and confirmed
 **Delete backup**; deletion removes only that entry. Recovery backups remain
 until explicitly deleted.
+The Settings screen presents these controls, including recovery, in compact
+divider-separated groups rather than separate cards.
 
 Export preserves the stored string's UTF-8 bytes without decoding or
 re-encoding JSON. Filenames include a sanitized source key and a unique backup

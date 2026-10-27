@@ -91,6 +91,57 @@ void main() {
   });
 
   group('Harmony playback resolution', () {
+    test('recognized Piano Harmony follows saved register and inversion', () {
+      const content = WriterBlockSnapshot(
+        laneKind: SongLaneKind.harmony,
+        chordSymbol: 'C',
+        chordRootPc: 0,
+        chordQuality: '',
+        chordNotes: ['C', 'E', 'G'],
+      );
+      for (final pitches in [
+        [48, 52, 55],
+        [64, 67, 72],
+      ]) {
+        final snapshot = HarmonyChordSnapshot(
+          harmonyInstrument: HarmonyLaneInstrument.piano,
+          writerBlock: content,
+          instrumentState: PianoSnapshot(
+            currentRange: PianoRangeName.key88,
+            selectedKeys: [
+              for (final midi in pitches)
+                PianoCoordinate(
+                  keyIndex: midi - 21,
+                  midiNote: midi,
+                  noteName: const {0: 'C', 4: 'E', 7: 'G'}[midi % 12]!,
+                ),
+            ],
+            selectedNotes: const ['C', 'E', 'G'],
+            viewMode: PianoViewMode.exact,
+          ),
+        );
+        final block = SongBlock(
+          id: 'native',
+          startBar: 0,
+          spanBars: 1,
+          chordSymbol: 'C',
+          chordRootPc: 0,
+          chordQuality: '',
+          chordNotes: const ['C', 'E', 'G'],
+          embedded: snapshot,
+        );
+        expect(
+          harmonyBlockMidiNotes(
+            block,
+            const [],
+            projectId: null,
+            folders: const [],
+          ),
+          pitches,
+        );
+      }
+    });
+
     test('exact Harmony plays the captured native MIDI pitches', () {
       final snapshot = HarmonyChordSnapshot(
         harmonyInstrument: HarmonyLaneInstrument.piano,

@@ -149,7 +149,14 @@ class _AppShellState extends ConsumerState<_AppShell> {
     }
 
     // Audio preview is optional and can take longer than workspace hydration.
-    unawaited(NotePlayer.instance.init().catchError((_) {}));
+    unawaited(
+      NotePlayer.instance.init().catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) {
+        debugPrint('NotePlayer initialization failed: $error\n$stackTrace');
+      }),
+    );
     try {
       // Mount the project config syncer after all persisted stores are ready.
       ref.read(projectConfigSyncProvider);
@@ -731,25 +738,29 @@ class _GradientScaffold extends StatelessWidget {
   }
 }
 
-class _Card extends StatelessWidget {
+class _SettingsGroup extends StatelessWidget {
   final Widget child;
 
-  const _Card({required this.child});
+  const _SettingsGroup({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: StudioPalette.of(context).glassBg,
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-          width: 0.5,
+    final palette = StudioPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: child,
         ),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: child,
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: palette.glassBorder.withValues(alpha: 0.55),
+          indent: 24,
+          endIndent: 24,
+        ),
+      ],
     );
   }
 }
@@ -1197,7 +1208,7 @@ class _SettingsScreen extends ConsumerWidget {
       title: 'Settings',
       subtitle: 'Personalise your experience',
       children: [
-        _Card(
+        _SettingsGroup(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1234,10 +1245,8 @@ class _SettingsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
         const DataRecoveryPanel(),
-        const SizedBox(height: 12),
-        _Card(
+        _SettingsGroup(
           child: SwitchListTile.adaptive(
             key: const ValueKey('settings_note_spelling'),
             contentPadding: EdgeInsets.zero,
@@ -1253,8 +1262,7 @@ class _SettingsScreen extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        _Card(
+        _SettingsGroup(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1314,15 +1322,18 @@ class _SettingsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        _Card(
+        _SettingsGroup(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Text('🔊', style: TextStyle(fontSize: 18)),
-                  SizedBox(width: 8),
+                  Icon(
+                    Icons.volume_up_outlined,
+                    color: StudioPalette.of(context).sky,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     'Note Preview Volume',
                     style: TextStyle(
@@ -1383,15 +1394,18 @@ class _SettingsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        _Card(
+        _SettingsGroup(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Text('🎵', style: TextStyle(fontSize: 18)),
-                  SizedBox(width: 8),
+                  Icon(
+                    Icons.music_note,
+                    color: StudioPalette.of(context).sky,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     'Scale Highlight',
                     style: TextStyle(

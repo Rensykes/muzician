@@ -18,7 +18,7 @@ abstract final class GuitarSynth {
   static const maxStrings = 12;
 
   // Bump when synthesis changes: native WAVs can survive application launches.
-  static const cacheVersion = 2;
+  static const cacheVersion = 3;
 
   static int safeMidi(int midi) => midi.clamp(0, 127);
 
@@ -86,7 +86,11 @@ abstract final class GuitarSynth {
     required Duration duration,
     required Duration spacing,
   }) {
-    final notes = strokeNotes(midiNotes);
+    // A Writer mix bucket may contain several guitar lanes. Only physical
+    // strum audition has a string-count limit; keep every simultaneous voice.
+    final notes = spacing == Duration.zero
+        ? midiNotes.map(safeMidi).toList(growable: false)
+        : strokeNotes(midiNotes);
     if (notes.isEmpty) return _wav(Float64List(0));
     final durationMs = durationMilliseconds(duration);
     final length = sampleRate * durationMs ~/ 1000;

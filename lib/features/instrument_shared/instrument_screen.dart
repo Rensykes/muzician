@@ -385,20 +385,11 @@ class _StudioInstrumentWorkspaceState
         ...s.appBarActions,
       ],
     );
-    // On compact phones the audition controls sit below the canvas; trimming
-    // the board keeps the inspector's fixed tabs and footer from overflowing.
-    final size = MediaQuery.sizeOf(context);
-    final tightAuditionCanvas =
-        s.auditionControls != null && size.width < 500 && size.height < 600;
     final canvas = KeyedSubtree(
       key: _canvasStateKey,
       child: SizedBox(
         key: const Key('studioInstrumentCanvas'),
-        height: tightAuditionCanvas
-            ? 148
-            : s.modeSegment == null
-            ? 226
-            : 212,
+        height: s.modeSegment == null ? 226 : 212,
         child: s.board,
       ),
     );
@@ -683,6 +674,8 @@ class _StudioInstrumentWorkspaceState
                 ],
               );
             }
+            final shortAuditionLayout =
+                s.auditionControls != null && constraints.maxHeight < 600;
             return Column(
               key: const Key('studioInstrumentCompactLayout'),
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -690,9 +683,27 @@ class _StudioInstrumentWorkspaceState
                 constraints.maxHeight < 600 ? compactHeader : header,
                 ?controls,
                 canvas,
-                ?s.auditionControls,
-                selection,
-                Expanded(child: inspector),
+                if (shortAuditionLayout)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      key: const Key('studioInstrumentLowerScroll'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ?s.auditionControls,
+                          selection,
+                          // Preserve a useful bounded inspector below the
+                          // pinned instrument, even with large system text.
+                          SizedBox(height: 280, child: inspector),
+                        ],
+                      ),
+                    ),
+                  )
+                else ...[
+                  ?s.auditionControls,
+                  selection,
+                  Expanded(child: inspector),
+                ],
               ],
             );
           },
