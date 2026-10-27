@@ -15,6 +15,7 @@ import 'songwriter_block_preview.dart';
 import 'songwriter_audio_actions.dart';
 import 'songwriter_audio_clip_sheet.dart';
 import 'songwriter_playhead.dart';
+import 'songwriter_lane_delete_control.dart';
 
 IconData fitGlyph(AudioFitMode m) => switch (m) {
   AudioFitMode.loop => Icons.repeat,
@@ -264,13 +265,25 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 4),
-          child: Text(
-            lane.label ?? laneKindFallbackLabel(lane.kind),
-            style: TextStyle(
-              color: StudioPalette.of(context).textMuted,
-              fontSize: 11,
-              letterSpacing: 1.2,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  lane.label ?? laneKindFallbackLabel(lane.kind),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
+                    fontSize: 11,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              SongwriterLaneDeleteControl(
+                section: section,
+                lane: lane,
+                instanceIndex: instanceIndex,
+              ),
+            ],
           ),
         ),
         Stack(

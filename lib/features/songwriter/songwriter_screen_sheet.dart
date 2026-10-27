@@ -44,6 +44,7 @@ import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
 import 'songwriter_audio_lane_row.dart';
+import 'songwriter_lane_delete_control.dart';
 import 'songwriter_section_ruler.dart';
 import 'songwriter_melody_pattern_editor.dart';
 
@@ -3340,13 +3341,25 @@ class _DrumLaneRow extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 4),
-              child: Text(
-                lane.label ?? laneKindFallbackLabel(lane.kind),
-                style: TextStyle(
-                  color: StudioPalette.of(context).textMuted,
-                  fontSize: 11,
-                  letterSpacing: 1.2,
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      lane.label ?? laneKindFallbackLabel(lane.kind),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textMuted,
+                        fontSize: 11,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  SongwriterLaneDeleteControl(
+                    section: section,
+                    lane: lane,
+                    instanceIndex: instanceIndex,
+                  ),
+                ],
               ),
             ),
             for (var r = 0; r < rows.length; r++)
@@ -3654,7 +3667,7 @@ class _PatternLaneRow extends ConsumerWidget {
                 ),
               if (!isMelody)
                 SizedBox(
-                  width: StudioPalette.of(context).isStudio ? 176 : 220,
+                  width: StudioPalette.of(context).isStudio ? 132 : 220,
                   child: Semantics(
                     label:
                         'Select Fretboard Harmony source for ${lane.label ?? 'Guitar Strum'}',
@@ -3728,6 +3741,11 @@ class _PatternLaneRow extends ConsumerWidget {
                     ),
                   ),
                 ),
+              SongwriterLaneDeleteControl(
+                section: section,
+                lane: lane,
+                instanceIndex: instanceIndex,
+              ),
             ],
           ),
         ),

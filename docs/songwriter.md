@@ -40,6 +40,10 @@ the source instrument and keep rename, instrument change, duplicate, and delete 
 Fretboard Harmony also exposes **Sound: Clean / Distorted**, shared with Fretboard
 audition and all Writer guitar playback on this device. This preference changes
 the timbre without changing saved notes, lane identity, or project history.
+Drums, Sample, Guitar Strum, and Melody headers each have a delete control.
+Confirming removes that lane and its placements from every repeat of the
+section; saved ideas remain available, and Undo restores the lane. Section
+lyrics are unchanged.
 Four-bar rows show
 chord, degree when known, linked Save name, and the current verse's lyric.
 Filled cells start at 64 pixels and empty add slots at 44; a distinct Save name
@@ -54,8 +58,8 @@ voicings/library, replacement, native instrument editing, rename, standalone
 Save, and removal. This reuses the existing editor flows rather than introducing
 a second editor with separate musical state.
 
-Guitar Strum keeps its title and explicitly labelled **Source** selector on one
-row at standard phone sizes, wrapping at larger text sizes. **Unassigned**
+Guitar Strum keeps its title, explicitly labelled **Source** selector, and delete
+control together, wrapping when space is limited. **Unassigned**
 remains visible and silent. Pattern placements use neutral strips with accented
 down/up previews; the pattern name, continuation, shared Save menu, and tap to
 edit remain available. Narrow single-bar placements stack their content to
