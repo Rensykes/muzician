@@ -84,6 +84,143 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets(
+    'repeat is disabled when a resolved Save has no compatible melody',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final saves = container.read(saveSystemProvider.notifier);
+      final projectId = saves.createProject('Project', const ProjectConfig())!;
+      saves.selectProject(projectId);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final project = container.read(songwriterProvider);
+      final section = project.sections.single;
+      final lane = section.lanes.singleWhere((l) => l.id == laneId);
+      final blockId = lane.blocks.single.id;
+      final saveId = saves.saveSnapshot(
+        'Empty melody',
+        projectId,
+        const WriterBlockSnapshot(laneKind: SongLaneKind.melody),
+      )!;
+      writer.state = project.copyWith(
+        sections: [
+          section.copyWith(
+            lanes: [
+              for (final item in section.lanes)
+                if (item.id == lane.id)
+                  lane.copyWith(
+                    blocks: [lane.blocks.single.copyWith(saveId: saveId)],
+                  )
+                else
+                  item,
+            ],
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final menu = find.byKey(Key('melodyBlockActions_${blockId}_0'));
+      await tester.ensureVisible(menu);
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Repeat / reuse'),
+            )
+            .enabled,
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets('repeat picker scrolls to a later bar at 320 by 480', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final saves = container.read(saveSystemProvider.notifier);
+    final projectId = saves.createProject('Project', const ProjectConfig())!;
+    saves.selectProject(projectId);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 24);
+    final sectionId = writer.state.sections.single.id;
+    final laneId = writer.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern();
+    writer.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    final source = writer.state.sections.single.lanes
+        .singleWhere((l) => l.id == laneId)
+        .blocks
+        .single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final menu = find.byKey(Key('melodyBlockActions_${source.id}_0'));
+    await tester.ensureVisible(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Repeat / reuse'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final target = find.byKey(const Key('repeatMelodyBar_23'));
+    final scroll = find
+        .ancestor(of: target, matching: find.byType(Scrollable))
+        .first;
+    expect(tester.state<ScrollableState>(scroll).position.pixels, 0);
+    await tester.dragUntilVisible(target, scroll, const Offset(0, -200));
+    expect(
+      tester.state<ScrollableState>(scroll).position.pixels,
+      greaterThan(0),
+    );
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    final blocks = writer.state.sections.single.lanes
+        .singleWhere((l) => l.id == laneId)
+        .blocks;
+    expect(blocks, hasLength(2));
+    expect(blocks.last.startBar, 23);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
     'repeat picker creates a shortened linked and independently unique occurrence',
     (tester) async {
       tester.view.physicalSize = const Size(390, 1200);

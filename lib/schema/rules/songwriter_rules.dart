@@ -14,6 +14,13 @@ import 'save_system_rules.dart' show generateId, getProjectIdForFolder;
 
 const _romanByDegree = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
+/// A linked placement must refer to the melody contained in its canonical Save.
+bool isCanonicalMelodyForBlock(InstrumentSnapshot? snapshot, SongBlock block) =>
+    snapshot is WriterBlockSnapshot &&
+    snapshot.laneKind == SongLaneKind.melody &&
+    block.patternId != null &&
+    snapshot.melodyPattern?.id == block.patternId;
+
 /// Classifies a chord quality string into how its Roman numeral is cased.
 String _caseNumeral(String degreeUpper, String quality) {
   final q = quality.toLowerCase();

@@ -146,6 +146,76 @@ void main() {
   }
 
   test(
+    'repeat rejects resolved saves without compatible canonical melody content',
+    () async {
+      final (container, projectId, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final saves = container.read(saveSystemProvider.notifier);
+      final pattern = writer.state.melodyPatterns.single;
+      for (final snapshot in [
+        const WriterBlockSnapshot(laneKind: SongLaneKind.melody),
+        WriterBlockSnapshot(
+          laneKind: SongLaneKind.drum,
+          melodyPattern: pattern,
+        ),
+        WriterBlockSnapshot(
+          laneKind: SongLaneKind.melody,
+          melodyPattern: pattern.copyWith(id: 'different-pattern'),
+        ),
+        chord('C', 0),
+      ]) {
+        final saveId = saves.saveSnapshot('Incompatible', projectId, snapshot)!;
+        final section = writer.state.sections.single;
+        final lane = section.lanes.singleWhere((l) => l.id == laneId);
+        final block = lane.blocks.single.copyWith(saveId: saveId);
+        writer.state = writer.state.copyWith(
+          sections: [
+            section.copyWith(
+              lanes: [
+                for (final item in section.lanes)
+                  if (item.id == laneId)
+                    lane.copyWith(blocks: [block])
+                  else
+                    item,
+              ],
+            ),
+          ],
+        );
+        final before = writer.state;
+        final savesBefore = container.read(saveSystemProvider);
+        final revision = writer.historyRevision;
+        expect(
+          writer.repeatMelodyBlock(
+            sectionId: sectionId,
+            laneId: laneId,
+            blockId: block.id,
+            startBar: 1,
+          ),
+          isFalse,
+          reason: snapshot.toJson().toString(),
+        );
+        expect(writer.state, same(before));
+        expect(container.read(saveSystemProvider), same(savesBefore));
+        expect(writer.historyRevision, revision);
+      }
+    },
+  );
+
+  test(
     'repeat reports failure when the project write fence blocks the commit',
     () async {
       final (container, _, writer) = await makeProject();

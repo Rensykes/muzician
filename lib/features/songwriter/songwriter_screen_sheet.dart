@@ -3701,11 +3701,13 @@ class _PatternLaneRow extends ConsumerWidget {
                 currentProject.melodyPatterns.any(
                   (p) => p.id == source.patternId,
                 ) &&
-                writerSaveEntryForBlock(
-                      ref.watch(saveSystemProvider),
-                      source,
-                    ) !=
-                    null;
+                isCanonicalMelodyForBlock(
+                  writerSaveEntryForBlock(
+                    ref.watch(saveSystemProvider),
+                    source,
+                  )?.snapshot,
+                  source,
+                );
             return MuzicianDialog(
               title: 'Repeat / reuse',
               content: SingleChildScrollView(
@@ -4082,7 +4084,12 @@ class _PatternLaneRow extends ConsumerWidget {
                             ),
                             PopupMenuItem(
                               value: 'repeat',
-                              enabled: pattern != null && entry != null,
+                              enabled:
+                                  pattern != null &&
+                                  isCanonicalMelodyForBlock(
+                                    entry?.snapshot,
+                                    block,
+                                  ),
                               child: const Text('Repeat / reuse'),
                             ),
                             if (onEditMelodyPerformance != null &&
