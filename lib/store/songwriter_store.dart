@@ -3887,9 +3887,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       final saveState = ref.read(saveSystemProvider);
       final projectId = saveState.selectedProjectId;
       final saveId = source?.saveId;
-      return projectId != null &&
-          saveId != null &&
-          resolveSaveInProject(saveState, projectId, saveId) != null;
+      if (projectId == null || saveId == null || source == null) return false;
+      final entry = resolveSaveInProject(saveState, projectId, saveId);
+      return isCanonicalMelodyForBlock(entry?.snapshot, source);
     }
 
     if (section == null ||
