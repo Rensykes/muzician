@@ -37,9 +37,10 @@ Full shows every note label in both Chord and Free; Solo labels only selected
 positions. Piano uses the same Full/Solo rule while retaining all physical keys.
 
 Guitar audition uses a plucked electric-guitar voice, with Clean and Distorted
-tones. The tone is a device preference, shared by Fretboard and Writer guitar
-playback, rather than part of a saved chord. Writer exposes the same Sound menu
-on Fretboard Harmony lanes. Fretboard offers explicit down/up
+tones. The tone is a device preference, shared by Fretboard, Writer Harmony and
+Guitar Strum, and legacy Melody guitar playback, rather than part of a saved
+chord. Explicit Melody lane sounds are independent. Writer exposes the same
+Sound menu on Fretboard Harmony lanes. Fretboard offers explicit down/up
 strums of the selected strings, including unrecognized shapes. A strum requires
 one selected position per string and preserves tuning, capo and doubled pitches.
 
@@ -66,6 +67,13 @@ Strum lane; occupied targets are hidden from other strum selectors.
 Unassigned lanes reserve no target.
 Melody patterns can target Piano or Fretboard, with saved note positions and a
 performance view gated when the current instrument cannot play every note.
+Melody placements wrap across numbered bar rows and resize by whole bars, with
+an accessible placement alternative. Automatic repeats reserve their visible
+bars and cannot be silently displaced by a changed repeat period. Repeat / reuse
+creates a linked placement; Make Unique detaches just the selected placement.
+Each new Melody lane defaults to Piano and can instead select Clean or Distorted
+guitar independently of its pattern's performance target. Unset legacy lanes
+retain per-pattern sound and the shared guitar tone until explicitly changed.
 Writer's main menu can create a separate Save System project; Keep, Discard,
 and Cancel protect the current Writer session. Discard restores its bound
 named Save or clears the session and binding while retaining named Saves.

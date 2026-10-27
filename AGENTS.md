@@ -37,6 +37,8 @@ Writer and Song histories are in-memory and project-scoped, capped at 50 prior s
 
 Writer block musical content is canonical in Save System entries; Writer keeps placement and local lyrics, with fallback content for recovery. Persist compound Writer, Save System, and named-save binding changes through the shared journal queue.
 
+Melody placement validation must account for expanded lane repeats and preserve their existing origins. Linked reuse retains the canonical Save and pattern; Make Unique detaches one placement. New Melody lanes default to Piano; a legacy unset sound follows each pattern's target and shared guitar tone, while explicit lane sounds are independent.
+
 Writer native Harmony eligibility uses the saved instrument mode and selection: Fretboard requires valid Chord mode; Free remains an instrument-only idea. Exact Harmony preserves native notes and the user label without inferring chord identity. Each section assigns a Fretboard Harmony source to at most one Guitar Strum lane. Project key is canonical; instrument and Writer key changes require confirmation before updating `ProjectConfig`.
 
 Apply the persistent Sharps/Flats preference at display boundaries only. Keep music callbacks and transfer payloads canonical; preserve literal Save names and exact Harmony labels. Format recognized symbols only after validating root/quality metadata, retaining slash bass and octave information.

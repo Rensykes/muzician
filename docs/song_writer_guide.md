@@ -37,8 +37,9 @@ for their instrument when created. An empty Harmony lane with no anchored
 Save/Voicing lane can change instruments while keeping its lane identity.
 
 Fretboard Harmony headers provide **Sound: Clean / Distorted**. This is the
-same device preference as Fretboard audition and applies to Writer guitar
-playback; changing it leaves the saved chord and its notes intact. Writer uses
+same device preference as Fretboard audition and applies to Harmony, Guitar
+Strum, and legacy Melody guitar playback; explicit Melody lane sounds override
+it. Changing it leaves the saved chord and its notes intact. Writer uses
 an unframed transport, plain Bars/Repeat disclosures, and compact mixer rows
 separated by dividers while preserving the musical cells and all lane controls.
 
@@ -152,6 +153,19 @@ total length. A longer placement repeats the pattern; a shorter placement
 clips notes at the block edge. Editing a reused pattern's duration does not
 resize existing blocks, so their repeat or clip behavior remains visible.
 
+The Melody timeline wraps in numbered four-bar rows. A block crossing rows has
+continuation segments and one final-edge handle; drag to resize in whole bars,
+or use **Adjust placement** to move or resize without dragging. A completed drag
+is one undo step; cancelling leaves the placement unchanged. Automatic lane
+repeats are marked and reserve their visible bars, including repeats clipped at
+the section edge. Changes that overlap them or shift their existing origins by
+changing the lane's natural period are rejected; adjust the lane repeat first
+when necessary. **Repeat / reuse** picks a free start in the same lane and makes
+a new placement sharing the pattern and canonical Save, shortened as needed to
+fit. Missing or unresolved content cannot be repeated. Shared edits affect all
+linked placements; **Make Unique** detaches only the selected placement, and
+resizing never changes the shared pattern.
+
 Each pattern has one Piano or Fretboard performance target. Piano uses each
 note's MIDI key; Fretboard stores a playable string and physical fret for each note and
 preserves those positions when the Writer session is reopened or the pattern is
@@ -160,7 +174,13 @@ under the current tuning, capo, and fret count. The selected
 instrument performance view and its position editing are unavailable while
 any note is outside that instrument's current playable range; the Piano Roll
 remains available for correcting the notes. The target controls the physical
-view and mapping; Writer keeps its existing synthesized playback sound.
+view and mapping, independently of the Melody lane's **Sound**. New Melody lanes
+default to Piano; choose Piano, Clean guitar, or Distorted guitar per lane. An
+older unset lane displays **Pattern sounds** and retains its per-pattern
+Piano/Fretboard sound, using the shared device guitar tone for Fretboard, until
+an explicit sound is chosen. The choice does not change the performance mapping,
+other lanes, or global guitar preference; it takes effect at the next transport
+start.
 
 ---
 
