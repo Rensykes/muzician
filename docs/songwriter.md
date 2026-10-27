@@ -245,7 +245,8 @@ later duration edit to a reused pattern does not resize its existing blocks.
 
 The Melody timeline wraps every four bars with numbered rows and continuation
 segments. Drag the final edge in whole bars to resize; releasing creates one
-undo step, while cancelling leaves the placement unchanged. The block's action
+undo step, while cancelling leaves the placement unchanged. Hold the drag near
+the top or bottom of the Writer sheet to scroll to additional rows. The block's action
 menu also offers **Adjust placement** to move or resize without a gesture.
 Automatic lane repeats are marked as repeats and reserve their occupied bars;
 the placement dialog explains repeat conflicts. A separate edit button and

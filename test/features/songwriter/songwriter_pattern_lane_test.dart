@@ -14,8 +14,311 @@ import 'package:muzician/store/piano_roll_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/theme/studio_theme.dart';
 
+Future<
+  ({
+    ProviderContainer container,
+    String laneId,
+    String blockId,
+    String patternId,
+    String harmonyId,
+  })
+>
+_timelineFixture(
+  WidgetTester tester, {
+  required int bars,
+  int span = 1,
+  Size size = const Size(390, 1000),
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  final container = ProviderContainer();
+  addTearDown(container.dispose);
+  final writer = container.read(songwriterProvider.notifier);
+  writer.addSection(lengthBars: bars);
+  final section = container.read(songwriterProvider).sections.single;
+  final harmonyId = section.lanes.single.id;
+  final laneId = writer.addLane(
+    sectionId: section.id,
+    kind: SongLaneKind.melody,
+  );
+  final patternId = writer.addMelodyPattern(name: 'Lead');
+  writer.addMelodyBlock(
+    sectionId: section.id,
+    laneId: laneId,
+    patternId: patternId,
+    startBar: 0,
+    spanBars: span,
+  );
+  final blockId = container
+      .read(songwriterProvider)
+      .sections
+      .single
+      .lanes
+      .firstWhere((l) => l.id == laneId)
+      .blocks
+      .single
+      .id;
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+    ),
+  );
+  await tester.pump(const Duration(milliseconds: 600));
+  return (
+    container: container,
+    laneId: laneId,
+    blockId: blockId,
+    patternId: patternId,
+    harmonyId: harmonyId,
+  );
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets('partial melody row aligns with Harmony cells', (tester) async {
+    final f = await _timelineFixture(tester, bars: 6);
+    for (final bar in [4, 5]) {
+      final harmony = tester.getRect(
+        find.byKey(Key('writerHarmonyCell_${f.harmonyId}_0_$bar')),
+      );
+      final melody = tester.getRect(
+        find.byKey(Key('emptyMelodyBar_${f.laneId}_0_$bar')),
+      );
+      expect(melody.left, closeTo(harmony.left, 1));
+      expect(melody.right, closeTo(harmony.right, 1));
+    }
+  });
+
+  testWidgets('tapping the segment background opens its melody editor', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8, span: 3);
+    final segment = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_0')),
+    );
+    await tester.tapAt(Offset(segment.left + 12, segment.top + 3));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('saveWriterMelodyPattern')), findsOneWidget);
+  });
+
+  testWidgets('secondary pointer cannot replace or finish a resize', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8, span: 2);
+    SongBlock current() => f.container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == f.laneId)
+        .blocks
+        .single;
+    final writer = f.container.read(songwriterProvider.notifier);
+    final before = writer.undoCount;
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    final point = tester.getCenter(handle);
+    final first = await tester.startGesture(point, pointer: 11);
+    final second = await tester.startGesture(point, pointer: 12);
+    await second.moveBy(const Offset(140, 0));
+    await second.up();
+    await tester.pump();
+    expect(current().spanBars, 2);
+    expect(writer.undoCount, before);
+    await first.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    expect(current().spanBars, 3);
+    expect(writer.undoCount, before + 1);
+  });
+
+  testWidgets(
+    'edge autoscroll reaches offscreen rows during a continuous drag',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 24,
+        size: const Size(390, 650),
+      );
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final initial = scrollable.position.pixels;
+      final writer = f.container.read(songwriterProvider.notifier);
+      final undoCount = writer.undoCount;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 100; i++) {
+        await gesture.moveTo(
+          Offset(viewport.right - 12 - (i % 2) * 4, viewport.bottom - 4),
+        );
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial + 100));
+      await gesture.up();
+      await tester.pump();
+      final block = f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single;
+      expect(block.spanBars, greaterThan(8));
+      expect(writer.undoCount, undoCount + 1);
+      expect(writer.undo(), isTrue);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+    },
+  );
+
+  testWidgets('secondary cancellation does not cancel the initiating resize', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8, span: 2);
+    final writer = f.container.read(songwriterProvider.notifier);
+    final before = writer.undoCount;
+    final point = tester.getCenter(
+      find.byKey(Key('melodyResize_${f.blockId}_0')),
+    );
+    final first = await tester.startGesture(point, pointer: 21);
+    final second = await tester.startGesture(point, pointer: 22);
+    await second.cancel();
+    await first.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      3,
+    );
+    expect(writer.undoCount, before + 1);
+  });
+
+  testWidgets(
+    'cancelling an edge-scrolling resize stops scrolling without an edit',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 24,
+        size: const Size(390, 650),
+      );
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final writer = f.container.read(songwriterProvider.notifier);
+      final before = writer.undoCount;
+      final initial = scrollable.position.pixels;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial));
+      await gesture.cancel();
+      await tester.pump();
+      final stopped = scrollable.position.pixels;
+      await tester.pump(const Duration(seconds: 1));
+      expect(scrollable.position.pixels, stopped);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+      expect(writer.undoCount, before);
+    },
+  );
+
+  testWidgets('top edge scrolls backwards and stops when pointer leaves it', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 24,
+      span: 16,
+      size: const Size(390, 650),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final scrollable = Scrollable.of(tester.element(handle));
+    final viewport = tester.getRect(find.byWidget(scrollable.widget));
+    final initial = scrollable.position.pixels;
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveTo(Offset(viewport.left + 20, viewport.top + 4));
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(scrollable.position.pixels, lessThan(initial));
+    expect(
+      scrollable.position.pixels,
+      greaterThanOrEqualTo(scrollable.position.minScrollExtent),
+    );
+    await gesture.moveTo(viewport.center);
+    await tester.pump();
+    final stopped = scrollable.position.pixels;
+    await tester.pump(const Duration(seconds: 1));
+    expect(scrollable.position.pixels, stopped);
+    await gesture.cancel();
+  });
+
+  testWidgets('partial-row handle snaps using expanded bar widths', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 6, span: 6);
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    final row = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_4')),
+    );
+    await tester.drag(handle, Offset(-row.width / 2, 0));
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      5,
+    );
+  });
 
   testWidgets('placement dialog moves and resizes a melody', (tester) async {
     tester.view.physicalSize = const Size(390, 1000);

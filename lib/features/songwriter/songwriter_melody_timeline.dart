@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
@@ -31,25 +32,106 @@ class SongwriterMelodyTimeline extends ConsumerStatefulWidget {
   ConsumerState<SongwriterMelodyTimeline> createState() => _TimelineState();
 }
 
-class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
+class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
+    with SingleTickerProviderStateMixin {
   final _rowKeys = <int, GlobalKey>{};
   SongBlock? _dragBlock;
+  int? _dragPointer;
   int? _previewSpan;
   double _edgeOffset = 0;
+  late final Ticker _scrollTicker;
+  ScrollableState? _scrollable;
+  Offset? _pointerPosition;
+  Duration? _lastScrollTick;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollTicker = createTicker(_autoScroll);
+  }
+
+  int _barsInRow(int start) => (widget.section.lengthBars - start).clamp(1, 4);
 
   void _start(SongBlock block, PointerDownEvent event, int rowStart) {
+    if (_dragPointer != null) return;
     final box =
         _rowKeys[rowStart]!.currentContext!.findRenderObject()! as RenderBox;
     final local = box.globalToLocal(event.position);
-    final edge = (block.endBar - rowStart) * box.size.width / 4;
+    final edge =
+        (block.endBar - rowStart) * box.size.width / _barsInRow(rowStart);
     _edgeOffset = edge - local.dx;
+    _scrollable = Scrollable.maybeOf(context);
     setState(() {
+      _dragPointer = event.pointer;
       _dragBlock = block;
       _previewSpan = block.spanBars;
     });
   }
 
   void _move(PointerMoveEvent event) {
+    if (event.pointer != _dragPointer) return;
+    _pointerPosition = event.position;
+    _updatePreview(event.position);
+    if (_scrollSpeed(event.position) != 0) {
+      if (!_scrollTicker.isActive) {
+        _lastScrollTick = null;
+        _scrollTicker.start();
+      }
+    } else {
+      _stopScrolling();
+    }
+  }
+
+  double _scrollSpeed(Offset pointer) {
+    final scrollable = _scrollable;
+    final box = scrollable?.context.findRenderObject() as RenderBox?;
+    if (scrollable == null || box == null || !box.attached) return 0;
+    final local = box.globalToLocal(pointer);
+    const edge = 48.0;
+    if (local.dy < edge &&
+        scrollable.position.pixels > scrollable.position.minScrollExtent) {
+      return -480 * ((edge - local.dy) / edge).clamp(0.0, 1.0);
+    }
+    if (local.dy > box.size.height - edge &&
+        scrollable.position.pixels < scrollable.position.maxScrollExtent) {
+      return 480 * ((local.dy - box.size.height + edge) / edge).clamp(0.0, 1.0);
+    }
+    return 0;
+  }
+
+  void _autoScroll(Duration elapsed) {
+    final pointer = _pointerPosition;
+    final scrollable = _scrollable;
+    if (pointer == null || scrollable == null || _dragPointer == null) {
+      _stopScrolling();
+      return;
+    }
+    final speed = _scrollSpeed(pointer);
+    if (speed == 0) {
+      _stopScrolling();
+      return;
+    }
+    final last = _lastScrollTick;
+    _lastScrollTick = elapsed;
+    if (last == null) return;
+    final seconds =
+        (elapsed - last).inMicroseconds / Duration.microsecondsPerSecond;
+    final position = scrollable.position;
+    position.jumpTo(
+      (position.pixels + speed * seconds.clamp(0.0, 0.05)).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+    );
+    _updatePreview(pointer);
+  }
+
+  void _stopScrolling() {
+    if (_scrollTicker.isActive) _scrollTicker.stop();
+    _lastScrollTick = null;
+  }
+
+  void _updatePreview(Offset pointer) {
     final block = _dragBlock;
     if (block == null) return;
     int? nearestRow;
@@ -57,7 +139,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
     for (final entry in _rowKeys.entries) {
       final box = entry.value.currentContext?.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) continue;
-      final p = box.globalToLocal(event.position);
+      final p = box.globalToLocal(pointer);
       final d = p.dy < 0
           ? -p.dy
           : (p.dy > box.size.height ? p.dy - box.size.height : 0.0);
@@ -69,9 +151,11 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
     if (nearestRow == null) return;
     final box =
         _rowKeys[nearestRow]!.currentContext!.findRenderObject()! as RenderBox;
-    final x = box.globalToLocal(event.position).dx + _edgeOffset;
+    final x = box.globalToLocal(pointer).dx + _edgeOffset;
     final desired =
-        (nearestRow + (x / (box.size.width / 4)).round() - block.startBar)
+        (nearestRow +
+                (x / (box.size.width / _barsInRow(nearestRow))).round() -
+                block.startBar)
             .clamp(1, widget.section.lengthBars - block.startBar);
     // Walk from the original extent toward the pointer: do not jump over an
     // invalid extent or a repeat conflict to reach a later valid one.
@@ -91,11 +175,16 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
     setState(() => _previewSpan = span);
   }
 
-  void _end() {
+  void _end(PointerUpEvent event) {
+    if (event.pointer != _dragPointer) return;
+    _stopScrolling();
+    _pointerPosition = null;
+    _scrollable = null;
     final block = _dragBlock;
     final span = _previewSpan;
     setState(() {
       _dragBlock = null;
+      _dragPointer = null;
       _previewSpan = null;
     });
     if (block == null || span == null || span == block.spanBars) return;
@@ -109,6 +198,12 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
           startBar: block.startBar,
           spanBars: span,
         );
+  }
+
+  @override
+  void dispose() {
+    _scrollTicker.dispose();
+    super.dispose();
   }
 
   @override
@@ -134,12 +229,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
     List<Widget> cellsForRow(int start) {
       final cells = <Widget>[];
       var bar = start;
-      while (bar < start + 4) {
-        if (bar >= bars) {
-          cells.add(const Expanded(child: SizedBox()));
-          bar++;
-          continue;
-        }
+      while (bar < (start + 4).clamp(0, bars)) {
         final occurrence = occurrences
             .where((o) => o.startBar <= bar && o.endBar > bar)
             .firstOrNull;
@@ -202,6 +292,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
                     child: Semantics(
@@ -250,11 +341,18 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
                         behavior: HitTestBehavior.opaque,
                         onPointerDown: (event) => _start(block, event, start),
                         onPointerMove: _move,
-                        onPointerUp: (_) => _end(),
-                        onPointerCancel: (_) => setState(() {
-                          _dragBlock = null;
-                          _previewSpan = null;
-                        }),
+                        onPointerUp: _end,
+                        onPointerCancel: (event) {
+                          if (event.pointer != _dragPointer) return;
+                          _stopScrolling();
+                          _pointerPosition = null;
+                          _scrollable = null;
+                          setState(() {
+                            _dragPointer = null;
+                            _dragBlock = null;
+                            _previewSpan = null;
+                          });
+                        },
                         child: Semantics(
                           label:
                               'Resize melody, ${block.spanBars} bars. Use Adjust placement for precise changes.',
@@ -288,10 +386,10 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline> {
               children: [
                 Row(
                   children: [
-                    for (var col = 0; col < 4; col++)
+                    for (var col = 0; col < _barsInRow(start); col++)
                       Expanded(
                         child: Text(
-                          start + col < bars ? 'Bar ${start + col + 1}' : '',
+                          'Bar ${start + col + 1}',
                           style: TextStyle(
                             color: palette.textMuted,
                             fontSize: 10,
