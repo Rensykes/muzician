@@ -201,6 +201,7 @@ bool isValidMelodyPlacement({
       existing.spanBars == candidate.spanBars) {
     return true;
   }
+  if (blocksOverlap(lane.blocks, candidate)) return false;
   final original = melodyOccurrences(
     lane: lane,
     sectionLengthBars: section.lengthBars,
