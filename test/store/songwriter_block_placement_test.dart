@@ -10,6 +10,44 @@ import 'package:muzician/store/songwriter_store.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test('deleting a melody cannot move another block automatic repeats', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(lengthBars: 12);
+    final s = n.state.sections.single.id;
+    final l = n.addLane(sectionId: s, kind: SongLaneKind.melody);
+    final p = n.addMelodyPattern();
+    n.addMelodyBlock(
+      sectionId: s,
+      laneId: l,
+      patternId: p,
+      startBar: 0,
+      spanBars: 1,
+    );
+    n.addMelodyBlock(
+      sectionId: s,
+      laneId: l,
+      patternId: p,
+      startBar: 2,
+      spanBars: 1,
+    );
+    n.setLaneRepeat(sectionId: s, laneId: l, repeat: 2);
+    final before = n.state;
+    final last = before.sections.single.lanes
+        .singleWhere((x) => x.id == l)
+        .blocks
+        .last;
+    n.removeBlock(sectionId: s, laneId: l, blockId: last.id);
+    expect(n.state, same(before));
+    n.setLaneRepeat(sectionId: s, laneId: l, repeat: 1);
+    n.removeBlock(sectionId: s, laneId: l, blockId: last.id);
+    expect(
+      n.state.sections.single.lanes.singleWhere((x) => x.id == l).blocks,
+      hasLength(1),
+    );
+  });
+
   test('melody edits cannot occupy or shift existing lane repeats', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);

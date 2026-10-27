@@ -1070,6 +1070,26 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           var existing = originalSave == null
               ? adoptSaves[linkedSaveId]
               : (nextSaves[originalSave.id] ?? originalSave);
+          if (lane.kind == SongLaneKind.melody &&
+              existing != null &&
+              !isCanonicalMelodyForBlock(existing.snapshot, block) &&
+              !(block.patternId == null &&
+                  oldBlock != null &&
+                  oldBlock.saveId == block.saveId &&
+                  isCanonicalMelodyForBlock(existing.snapshot, oldBlock))) {
+            // Keep the original link and fallback intact for recovery. Never
+            // replace an unrelated canonical Save with this placement's data.
+            links.add(
+              WriterSaveLink(
+                blockId: blockId,
+                sectionId: section.id,
+                folderId: categoryFolder.id,
+                saveId: existing.id,
+                laneKind: lane.kind,
+              ),
+            );
+            continue;
+          }
           final isSaveRebind =
               oldBlock != null && oldBlock.saveId != block.saveId;
           if (lane.kind == SongLaneKind.harmony &&
@@ -3482,6 +3502,36 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String laneId,
     required String blockId,
   }) {
+    final section = state.sections.where((s) => s.id == sectionId).firstOrNull;
+    final lane = section?.lanes.where((l) => l.id == laneId).firstOrNull;
+    if (section == null ||
+        lane == null ||
+        !lane.blocks.any((b) => b.id == blockId)) {
+      return;
+    }
+    if (lane.kind == SongLaneKind.melody) {
+      final remaining = lane.copyWith(
+        blocks: lane.blocks.where((b) => b.id != blockId).toList(),
+      );
+      final after = {
+        for (final occurrence in melodyOccurrences(
+          lane: remaining,
+          sectionLengthBars: section.lengthBars,
+        ))
+          (occurrence.source.id, occurrence.repeatIndex): occurrence.startBar,
+      };
+      for (final occurrence in melodyOccurrences(
+        lane: lane,
+        sectionLengthBars: section.lengthBars,
+      )) {
+        if (occurrence.source.id != blockId &&
+            occurrence.repeatIndex > 0 &&
+            after[(occurrence.source.id, occurrence.repeatIndex)] !=
+                occurrence.startBar) {
+          return;
+        }
+      }
+    }
     _replaceLane(
       sectionId,
       laneId,
@@ -4500,6 +4550,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .where((candidate) => candidate.id == blockId)
         .firstOrNull;
     if (section == null || lane == null || block == null) return false;
+
+    if (lane.kind == SongLaneKind.melody &&
+        block.saveId != null &&
+        !isCanonicalMelodyForBlock(
+          canonicalSaveForBlock(blockId)?.snapshot,
+          block,
+        )) {
+      return false;
+    }
 
     snapshot ??= canonicalSaveForBlock(blockId)?.snapshot;
     snapshot ??= _contentSnapshot(state, lane, block) ?? block.embedded;
