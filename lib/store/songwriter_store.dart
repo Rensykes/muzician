@@ -2328,7 +2328,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           : null,
     );
     _replaceSection(sectionId, (s) {
-      final positioned = lane.copyWith(order: s.lanes.length);
+      final positioned = lane.copyWith(
+        order: s.lanes.length,
+        melodySound: kind == SongLaneKind.melody ? MelodyLaneSound.piano : null,
+      );
       return s.copyWith(lanes: [...s.lanes, positioned]);
     });
     return lane.id;
@@ -2483,6 +2486,18 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String laneId,
     required bool muted,
   }) => _replaceLane(sectionId, laneId, (l) => l.copyWith(muted: muted));
+
+  void setMelodyLaneSound({
+    required String sectionId,
+    required String laneId,
+    required MelodyLaneSound sound,
+  }) => _replaceLane(
+    sectionId,
+    laneId,
+    (lane) => lane.kind != SongLaneKind.melody || lane.melodySound == sound
+        ? lane
+        : lane.copyWith(melodySound: sound),
+  );
 
   /// Selects the Harmony lane used by Save voicings or Guitar Strum.
   /// A null Save anchor follows the primary Harmony lane; a null Strum anchor

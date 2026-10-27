@@ -11,6 +11,83 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test(
+    'new Melody lanes default to piano while legacy snapshots stay unset',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = n.state.sections.single.id;
+      final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+      expect(
+        n.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .melodySound,
+        MelodyLaneSound.piano,
+      );
+
+      final json = n.state.toJson();
+      final section = (json['sections'] as List).single as Map<String, dynamic>;
+      final lane = (section['lanes'] as List).last as Map<String, dynamic>;
+      lane.remove('melodySound');
+      final legacy = SongwriterProjectSnapshot.fromJson(json);
+      expect(legacy.sections.single.lanes.last.melodySound, isNull);
+    },
+  );
+
+  test(
+    'Melody sound edits target only the chosen lane and support history',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = n.state.sections.single.id;
+      final harmonyId = n.state.sections.single.lanes.single.id;
+      final firstId = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final secondId = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      SongLane lane(String id) => n.state.sections.single.lanes.singleWhere(
+        (candidate) => candidate.id == id,
+      );
+
+      final revision = n.historyRevision;
+      n.setMelodyLaneSound(
+        sectionId: sectionId,
+        laneId: harmonyId,
+        sound: MelodyLaneSound.cleanGuitar,
+      );
+      expect(lane(harmonyId).melodySound, isNull);
+      expect(n.historyRevision, revision);
+
+      n.setMelodyLaneSound(
+        sectionId: sectionId,
+        laneId: firstId,
+        sound: MelodyLaneSound.distortedGuitar,
+      );
+      expect(lane(firstId).melodySound, MelodyLaneSound.distortedGuitar);
+      expect(lane(secondId).melodySound, MelodyLaneSound.piano);
+      expect(lane(harmonyId).melodySound, isNull);
+      final snapshot = SongwriterProjectSnapshot.fromJson(n.state.toJson());
+      expect(
+        snapshot.sections.single.lanes
+            .singleWhere((lane) => lane.id == firstId)
+            .melodySound,
+        MelodyLaneSound.distortedGuitar,
+      );
+      expect(n.undo(), isTrue);
+      expect(lane(firstId).melodySound, MelodyLaneSound.piano);
+      expect(n.redo(), isTrue);
+      expect(lane(firstId).melodySound, MelodyLaneSound.distortedGuitar);
+    },
+  );
+
+  test(
     'removing an audio lane retains shared clips and undo restores placements',
     () {
       final c = ProviderContainer();
