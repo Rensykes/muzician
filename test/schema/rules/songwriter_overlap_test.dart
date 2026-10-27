@@ -3,6 +3,62 @@ import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 
 void main() {
+  test('loaded nonpositive repeats still protect authored melody blocks', () {
+    for (final repeat in [0, -2]) {
+      final lane = SongLane.fromJson({
+        'id': 'lane',
+        'kind': 'melody',
+        'order': 0,
+        'repeat': repeat,
+        'blocks': [
+          const SongBlock(id: 'a', startBar: 0, spanBars: 2).toJson(),
+          const SongBlock(id: 'b', startBar: 3, spanBars: 1).toJson(),
+        ],
+      });
+      final section = SongSection(
+        id: 'section',
+        lengthBars: 6,
+        order: 0,
+        lanes: [lane],
+      );
+      expect(
+        isValidMelodyPlacement(
+          section: section,
+          lane: lane,
+          candidate: const SongBlock(id: 'new', startBar: 1, spanBars: 1),
+        ),
+        isFalse,
+        reason: 'repeat $repeat',
+      );
+      expect(
+        isValidMelodyPlacement(
+          section: section,
+          lane: lane,
+          candidate: lane.blocks.last.copyWith(startBar: 1),
+        ),
+        isFalse,
+        reason: 'repeat $repeat',
+      );
+      expect(
+        isValidMelodyPlacement(
+          section: section,
+          lane: lane,
+          candidate: const SongBlock(id: 'new', startBar: 2, spanBars: 1),
+        ),
+        isTrue,
+        reason: 'repeat $repeat',
+      );
+      expect(
+        isValidMelodyPlacement(
+          section: section,
+          lane: lane,
+          candidate: lane.blocks.first,
+        ),
+        isTrue,
+        reason: 'repeat $repeat',
+      );
+    }
+  });
   test('melody occurrences clip repeats and protect their origins', () {
     const source = SongBlock(id: 'source', startBar: 0, spanBars: 2);
     const lane = SongLane(

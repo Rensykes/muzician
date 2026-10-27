@@ -3883,11 +3883,21 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .where((item) => item.id == laneId && item.kind == SongLaneKind.melody)
         .firstOrNull;
     final source = lane?.blocks.where((item) => item.id == blockId).firstOrNull;
+    bool hasCanonicalSave() {
+      final saveState = ref.read(saveSystemProvider);
+      final projectId = saveState.selectedProjectId;
+      final saveId = source?.saveId;
+      return projectId != null &&
+          saveId != null &&
+          resolveSaveInProject(saveState, projectId, saveId) != null;
+    }
+
     if (section == null ||
         lane == null ||
         source == null ||
         source.spanBars <= 0 ||
         source.patternId == null ||
+        !hasCanonicalSave() ||
         !state.melodyPatterns.any(
           (pattern) => pattern.id == source.patternId,
         )) {
@@ -3918,7 +3928,6 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       )) {
         continue;
       }
-      var inserted = false;
       _replaceLane(sectionId, laneId, (currentLane) {
         final currentSection = state.sections
             .where((item) => item.id == sectionId)
@@ -3926,6 +3935,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         if (currentSection == null ||
             currentLane.kind != SongLaneKind.melody ||
             !currentLane.blocks.any((item) => identical(item, source)) ||
+            !hasCanonicalSave() ||
             !state.melodyPatterns.any(
               (pattern) => pattern.id == source.patternId,
             ) ||
@@ -3936,10 +3946,21 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
             )) {
           return currentLane;
         }
-        inserted = true;
         return currentLane.copyWith(blocks: [...currentLane.blocks, candidate]);
       });
-      return inserted;
+      final committedSection = state.sections
+          .where((item) => item.id == sectionId)
+          .firstOrNull;
+      final committedLane = committedSection?.lanes
+          .where((item) => item.id == laneId)
+          .firstOrNull;
+      return committedLane?.blocks.any(
+            (item) =>
+                item.id == candidate.id &&
+                item.saveId == candidate.saveId &&
+                item.patternId == candidate.patternId,
+          ) ??
+          false;
     }
     return false;
   }
