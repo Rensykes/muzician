@@ -4808,6 +4808,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           harmonyInstrument: laneKind == SongLaneKind.harmony
               ? targetHarmonyInstrument ?? defaultInstrument
               : null,
+          melodySound: laneKind == SongLaneKind.melody
+              ? MelodyLaneSound.piano
+              : null,
         );
     final source = replaceBlockId == null
         ? null

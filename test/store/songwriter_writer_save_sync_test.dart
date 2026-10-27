@@ -774,6 +774,67 @@ void main() {
     }
   });
 
+  test('Use in Writer defaults a newly created Melody lane to piano', () async {
+    final (container, projectId, writer) = await makeProject();
+    addTearDown(container.dispose);
+    final saveId = container
+        .read(saveSystemProvider.notifier)
+        .saveSnapshot(
+          'Melody',
+          projectId,
+          const WriterBlockSnapshot(
+            laneKind: SongLaneKind.melody,
+            melodyPattern: NotePattern(
+              id: 'saved-melody',
+              name: 'Melody',
+              lengthTicks: 16,
+              notes: [],
+              pitchRangeStart: 48,
+              pitchRangeEnd: 84,
+              snapTicks: 1,
+              highlightedNotes: [],
+            ),
+          ),
+        )!;
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = writer.state.sections.single.id;
+
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        startBar: 0,
+      ),
+      isTrue,
+    );
+    final lane = writer.state.sections.single.lanes.singleWhere(
+      (lane) => lane.kind == SongLaneKind.melody,
+    );
+    expect(lane.blocks.single.saveId, saveId);
+    expect(lane.melodySound, MelodyLaneSound.piano);
+
+    writer.setMelodyLaneSound(
+      sectionId: sectionId,
+      laneId: lane.id,
+      sound: MelodyLaneSound.cleanGuitar,
+    );
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        startBar: 1,
+      ),
+      isTrue,
+    );
+    final reused = writer.state.sections.single.lanes.singleWhere(
+      (candidate) => candidate.id == lane.id,
+    );
+    expect(reused.blocks, hasLength(2));
+    expect(reused.melodySound, MelodyLaneSound.cleanGuitar);
+  });
+
   test('explicit Use in Writer reuses a root manual Writer save ID', () async {
     final (container, projectId, writer) = await makeProject();
     addTearDown(container.dispose);
