@@ -145,6 +145,165 @@ void main() {
   }
 
   test(
+    'repeat melody links one shortened placement and Make Unique detaches it',
+    () async {
+      final (container, _, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 7);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern(lengthTicks: 16);
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns.single.copyWith(
+          notes: const [
+            NotePatternNote(
+              id: 'note',
+              midiNote: 67,
+              startTick: 0,
+              durationTicks: 2,
+            ),
+          ],
+        ),
+      );
+      expect(
+        writer.setMelodyPerformanceInstrument(
+          patternId: patternId,
+          instrument: HarmonyLaneInstrument.fretboard,
+        ),
+        isTrue,
+      );
+      const position = FretboardNotePosition(stringIndex: 0, fret: 3);
+      expect(
+        writer.setMelodyNoteFretboardPosition(
+          patternId: patternId,
+          noteId: 'note',
+          position: position,
+        ),
+        isTrue,
+      );
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 3,
+      );
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 5,
+        spanBars: 1,
+      );
+      final source = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks
+          .first;
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 3,
+        ),
+        isTrue,
+      );
+      var blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      final repeated = blocks.last;
+      expect(repeated.id, isNot(source.id));
+      expect((repeated.startBar, repeated.spanBars), (3, 2));
+      expect(repeated.patternId, source.patternId);
+      expect(repeated.saveId, source.saveId);
+      expect(repeated.embedded?.toJson(), source.embedded?.toJson());
+      expect(
+        container
+            .read(saveSystemProvider)
+            .writerLinks
+            .singleWhere((link) => link.blockId == repeated.id)
+            .saveId,
+        source.saveId,
+      );
+      expect(writer.undo(), isTrue);
+      blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      expect(blocks.map((b) => b.id), isNot(contains(repeated.id)));
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 3,
+        ),
+        isTrue,
+      );
+      blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      final copy = blocks.last;
+      expect(
+        writer.makeBlockUnique(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: copy.id,
+        ),
+        isTrue,
+      );
+      blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      final unique = blocks.last;
+      expect(blocks.first.patternId, patternId);
+      expect(blocks.first.saveId, source.saveId);
+      expect(unique.patternId, isNot(patternId));
+      expect(unique.saveId, isNot(source.saveId));
+      expect(
+        writer
+            .state
+            .melodyPerformancesByPatternId[unique.patternId]!
+            .fretboardPositionsByNoteId['note'],
+        position,
+      );
+      final before = writer.state;
+      for (final (s, l, b, bar) in [
+        (sectionId, laneId, source.id, 0),
+        (sectionId, laneId, source.id, -1),
+        (sectionId, laneId, 'missing', 6),
+        ('missing', laneId, source.id, 6),
+        (sectionId, 'missing', source.id, 6),
+      ]) {
+        expect(
+          writer.repeatMelodyBlock(
+            sectionId: s,
+            laneId: l,
+            blockId: b,
+            startBar: bar,
+          ),
+          isFalse,
+        );
+        expect(writer.state, same(before));
+      }
+      writer.removeMelodyPattern(patternId);
+      final missingContent = writer.state;
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 6,
+        ),
+        isFalse,
+      );
+      expect(writer.state, same(missingContent));
+    },
+  );
+
+  test(
     'deleting a populated lane preserves its reusable save and undo',
     () async {
       final (container, _, writer) = await makeProject();
@@ -833,6 +992,58 @@ void main() {
     );
     expect(reused.blocks, hasLength(2));
     expect(reused.melodySound, MelodyLaneSound.cleanGuitar);
+  });
+
+  test('Use in Writer cannot insert over an automatic melody repeat', () async {
+    final (container, projectId, writer) = await makeProject();
+    addTearDown(container.dispose);
+    final saveId = container
+        .read(saveSystemProvider.notifier)
+        .saveSnapshot(
+          'Melody',
+          projectId,
+          const WriterBlockSnapshot(
+            laneKind: SongLaneKind.melody,
+            melodyPattern: NotePattern(
+              id: 'saved',
+              name: 'Melody',
+              lengthTicks: 16,
+              notes: [],
+              pitchRangeStart: 48,
+              pitchRangeEnd: 84,
+              snapTicks: 1,
+              highlightedNotes: [],
+            ),
+          ),
+        )!;
+    writer.addSection(lengthBars: 6);
+    final sectionId = writer.state.sections.single.id;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        startBar: 0,
+        spanBars: 2,
+      ),
+      isTrue,
+    );
+    final laneId = writer.state.sections.single.lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.melody)
+        .id;
+    writer.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 3);
+    final before = writer.state;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        laneId: laneId,
+        startBar: 2,
+      ),
+      isFalse,
+    );
+    expect(writer.state, same(before));
   });
 
   test('explicit Use in Writer reuses a root manual Writer save ID', () async {
