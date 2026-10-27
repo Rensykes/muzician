@@ -1334,12 +1334,14 @@ class _SettingsScreen extends ConsumerWidget {
                     size: 18,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Note Preview Volume',
-                    style: TextStyle(
-                      color: StudioPalette.of(context).textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: Text(
+                      'Note Preview Volume',
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],

@@ -3,11 +3,65 @@ import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test(
+    'removing an audio lane retains shared clips and undo restores placements',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = n.state.sections.single.id;
+      final removed = n.addLane(sectionId: sectionId, kind: SongLaneKind.audio);
+      final retained = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.audio,
+      );
+      n.addAudioAsset(
+        const AudioAsset(
+          id: 'asset',
+          durationMs: 1000,
+          sampleRate: 44100,
+          channels: 1,
+          format: 'wav',
+          peaks: [],
+          sourceLabel: 'sample.wav',
+        ),
+      );
+      final clipId = n.addAudioClip(assetId: 'asset', durationMs: 1000);
+      for (final laneId in [removed, retained]) {
+        n.addAudioBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          audioClipId: clipId,
+          startBar: 0,
+          spanBars: 1,
+        );
+      }
+      n.removeLane(sectionId: sectionId, laneId: removed);
+      expect(n.state.audioAssets.any((asset) => asset.id == 'asset'), isTrue);
+      expect(n.state.audioClips.any((clip) => clip.id == clipId), isTrue);
+      expect(
+        n.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == retained)
+            .blocks,
+        hasLength(1),
+      );
+      expect(n.undo(), isTrue);
+      expect(
+        n.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == removed)
+            .blocks,
+        hasLength(1),
+      );
+    },
+  );
 
   test('set lane repeat and remove lane', () {
     final c = ProviderContainer();

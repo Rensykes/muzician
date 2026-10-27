@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,7 @@ import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/app_bootstrap.dart' show hydrateStores;
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
+import 'package:muzician/store/song_audio_repository.dart';
 import 'package:muzician/store/writer_save_binding_store.dart';
 import 'package:muzician/store/writer_save_sync_store.dart'
     show
@@ -141,6 +143,135 @@ void main() {
     await writer.reconcileCurrentProject();
     return (container, projectId, writer);
   }
+
+  test(
+    'deleting a populated lane preserves its reusable save and undo',
+    () async {
+      final (container, _, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.drum,
+      );
+      final patternId = writer.addDrumPattern(name: 'Beat');
+      writer.addDrumBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      await writer.reconcileCurrentProject();
+      final saveId = writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single
+          .saveId;
+      expect(saveId, isNotNull);
+      writer.removeLane(sectionId: sectionId, laneId: laneId);
+      await writer.reconcileCurrentProject();
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .any((save) => save.id == saveId),
+        isTrue,
+      );
+      expect(
+        writer.state.drumPatterns.any((pattern) => pattern.id == patternId),
+        isTrue,
+      );
+      expect(writer.undo(), isTrue);
+      expect(
+        writer.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .blocks
+            .single
+            .saveId,
+        saveId,
+      );
+    },
+  );
+
+  test(
+    'deleting an audio lane retains the reusable audio save and file',
+    () async {
+      final root = await Directory.systemTemp.createTemp('writer-lane-audio-');
+      addTearDown(() => root.delete(recursive: true));
+      final repository = SongAudioRepository.testWith(rootDirectory: root);
+      final file = await repository.resolvePath('source-audio', 'wav');
+      await file.writeAsBytes([1, 2, 3]);
+      final container = ProviderContainer(
+        overrides: [
+          songwriterAudioRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      final saves = container.read(saveSystemProvider.notifier);
+      final projectId = saves.createProject('Audio', const ProjectConfig())!;
+      saves.selectProject(projectId);
+      const asset = AudioAsset(
+        id: 'source-audio',
+        durationMs: 1000,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [],
+        sourceLabel: 'Take',
+      );
+      final saveId = saves.saveSnapshot(
+        'Take',
+        projectId,
+        const WriterBlockSnapshot(
+          laneKind: SongLaneKind.audio,
+          audioClip: AudioClip(
+            id: 'clip',
+            assetId: 'source-audio',
+            trimEndMs: 1000,
+          ),
+          audioAsset: asset,
+        ),
+      )!;
+      final writer = container.read(songwriterProvider.notifier);
+      await writer.reconcileCurrentProject();
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      expect(
+        writer.insertWriterBlockFromSave(
+          saveId: saveId,
+          sectionId: sectionId,
+          laneKind: SongLaneKind.audio,
+          startBar: 0,
+        ),
+        isTrue,
+      );
+      final laneId = writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.audio)
+          .id;
+      writer.removeLane(sectionId: sectionId, laneId: laneId);
+      await writer.reconcileCurrentProject();
+      expect(await file.exists(), isTrue);
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .any((save) => save.id == saveId),
+        isTrue,
+      );
+      expect(writer.undo(), isTrue);
+      expect(
+        writer.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .blocks
+            .single
+            .saveId,
+        saveId,
+      );
+      expect(await file.exists(), isTrue);
+    },
+  );
 
   test(
     'startup preserves only genuine canonical and fallback conflicts',
