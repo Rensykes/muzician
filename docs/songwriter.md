@@ -38,7 +38,8 @@ menu in a compact row, reflowing when space is limited. **Remove section** lives
 in that menu and remains recoverable with Undo. Harmony lane headers identify
 the source instrument and keep rename, instrument change, duplicate, and delete controls.
 Fretboard Harmony also exposes **Sound: Clean / Distorted**, shared with Fretboard
-audition and all Writer guitar playback on this device. This preference changes
+audition, Writer Harmony and Guitar Strum, and legacy Melody guitar playback on
+this device. Explicit Melody lane sounds are independent. This preference changes
 the timbre without changing saved notes, lane identity, or project history.
 Drums, Sample, Guitar Strum, and Melody headers each have a delete control.
 Confirming removes that lane and its placements from every repeat of the
@@ -85,7 +86,7 @@ rename, and mute controls, rather than a bordered card around each lane.
 | `SongwriterProjectSnapshot` | `InstrumentSnapshot` subtype (`type: 'songwriter'`) — `config`, ordered `sections`, Writer-specific per-pattern performance state, and the strum-anchor migration marker. |
 | `SongwriterConfig` | `tempo`, `beatsPerBar`, `beatUnit`, optional `keyRoot` (pitch class) + `keyScaleName`. |
 | `SongSection` | `id`, optional `label`, `lengthBars`, `order`, `repeat`, `lanes`. |
-| `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; Harmony lanes carry a fixed Piano or Fretboard identity, and a strum lane stores the ID of its selected Fretboard Harmony source. |
+| `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; Harmony lanes carry a fixed Piano or Fretboard identity, a strum lane stores its selected Fretboard Harmony source, and a Melody lane may carry an explicit `melodySound`. |
 | `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter), canonical `saveId`, and local lyrics/placement; pattern lanes reference their pattern id; legacy content fields and `embedded` snapshot are fallback data. Harmony extras include `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, and `romanNumeral`. |
 | `NotePattern` / `GuitarStrumPattern` | Melody pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. Writer melody performance state is stored alongside the pattern. |
 | `WriterMelodyPerformance` | Per-pattern Piano or Fretboard target; Piano uses each note's MIDI key, while Fretboard positions map note IDs to playable strings and physical frets. |
@@ -249,12 +250,17 @@ undo step, while cancelling leaves the placement unchanged. Hold the drag near
 the top or bottom of the Writer sheet to scroll to additional rows. The block's action
 menu also offers **Adjust placement** to move or resize without a gesture.
 Automatic lane repeats are marked as repeats and reserve their occupied bars;
-the placement dialog explains repeat conflicts. **Repeat / reuse** selects an
+their visible occupancy is clipped at the section edge. Placement changes also
+cannot shift or remove existing automatic repeat origins by changing the lane's
+natural period; the placement dialog explains repeat conflicts. Adjust the lane
+repeat first if needed. **Repeat / reuse** selects an
 available starting bar in the same lane and creates a linked placement, shortened
 to fit before the next occupied bar or section end. Missing patterns and missing
-or unresolved canonical Saves cannot be repeated. A separate edit button and
-block actions remain available on narrow screens. Missing references stay visible
-with a recovery action.
+or unresolved canonical Saves cannot be repeated. Reuse shares the pattern and
+canonical Save, so shared edits affect both placements; **Make Unique** detaches
+only the selected placement. Resizing does not alter the shared pattern. A
+separate edit button and block actions remain available on narrow screens.
+Missing references stay visible with a recovery action.
 
 Each melody pattern has one Piano or Fretboard performance target. Piano
 positions use the note's MIDI key. Fretboard positions store a playable string
@@ -262,11 +268,14 @@ and physical fret per note and must match the note's pitch under the current
 tuning, capo, and fret count. The target and positions persist with the Writer
 session and in canonical Writer block saves, so reopen and reuse preserve them.
 The target chooses the physical view and mapping independently of the Melody
-lane's **Sound**: Piano, Clean guitar, or Distorted guitar. Older lanes without
-an explicit sound display **Pattern sounds** and retain their legacy playback
-behavior until a sound is chosen. This choice affects only that lane, not the
-global guitar tone or performance mapping. Positions follow a note through Piano Roll edits by note ID and MIDI pitch; a
-removed or pitch-changed note must be mapped again. The selected instrument
+lane's **Sound**: Piano, Clean guitar, or Distorted guitar. Newly created Melody
+lanes default to Piano. Older lanes without an explicit sound display **Pattern
+sounds**: each pattern's performance target chooses piano or guitar, and guitar
+uses the shared device tone until a sound is chosen. An explicit choice affects
+only that lane, not the global guitar tone or performance mapping, and takes
+effect on the next transport start. Positions follow a note through Piano Roll
+edits by note ID and MIDI pitch; a removed or pitch-changed note must be mapped
+again. The selected instrument
 performance view and position editing are blocked if any note is outside the
 current Piano range or Fretboard's playable positions; Piano Roll remains
 available to correct notes. These Writer-only mappings are kept beside the
@@ -352,7 +361,8 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `setKey(root, scaleName)` / `setTempo(tempo)` | Config edits; `setKey` recomputes harmony-lane Roman numerals. |
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
 | `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit looped note and strum patterns. |
-| `setBlockPlacement(...)` | Move or resize a block while preserving its pattern link and data; rejects section-boundary violations and same-lane overlaps. |
+| `setBlockPlacement(...)` | Move or resize while preserving pattern content; Melody validation also protects expanded repeat occupancy and existing repeat origins. |
+| `repeatMelodyBlock(...)` / `setMelodyLaneSound(...)` | Create a linked placement at a valid start / set an explicit sound for one Melody lane. |
 | `insertInstrumentSelectionAtBar(...)` | Adds a named, saved chord or exact Fretboard/Piano snapshot to a Writer lane after section/bar selection and a name prompt. |
 | `makeBlockUnique(...)` | Copy the canonical save and detach the selected placement; one Writer history step. |
 | `loadProject(project)` | Replace the active Writer session from a named Song version, materializing its retained block content when shared saves have since changed. |
@@ -513,7 +523,8 @@ Studio Harmony cells in a mixed row share the tallest cell’s height so their t
 ### Playback correctness and voice lifetime
 
 Harmony plays the saved native Piano register/inversion and Fretboard positions.
-Clean/Distorted is the shared device preference exposed on Fretboard Harmony.
+Clean/Distorted is the shared device preference exposed on Fretboard Harmony;
+explicit Melody lane guitar sounds override it for that lane.
 Simultaneous Harmony notes share one PCM source, reducing six-note chord source
 bindings from six to one. The Distorted amplifier uses bass filtering, two
 saturation stages and cabinet filtering with oversampling.
