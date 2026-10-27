@@ -47,6 +47,7 @@ import 'songwriter_audio_lane_row.dart';
 import 'songwriter_lane_delete_control.dart';
 import 'songwriter_section_ruler.dart';
 import 'songwriter_melody_pattern_editor.dart';
+import 'songwriter_melody_timeline.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({
@@ -3452,6 +3453,16 @@ class _PatternLaneRow extends ConsumerWidget {
         ownerByBar[bar] = block;
       }
     }
+    if (isMelody) {
+      for (final occurrence in melodyOccurrences(
+        lane: lane,
+        sectionLengthBars: section.lengthBars,
+      )) {
+        for (var bar = occurrence.startBar; bar < occurrence.endBar; bar++) {
+          ownerByBar[bar] = occurrence.source;
+        }
+      }
+    }
 
     void openPattern(SongBlock block) {
       final patternId = block.patternId;
@@ -3478,10 +3489,55 @@ class _PatternLaneRow extends ConsumerWidget {
     int spanForPatternAt(int lengthTicks, int bar) {
       final measureTicks = project.config.measureTicks;
       final requiredBars = (lengthTicks + measureTicks - 1) ~/ measureTicks;
-      return requiredBars.clamp(1, availableBarsAt(bar));
+      final maximum = requiredBars.clamp(1, availableBarsAt(bar));
+      if (!isMelody) return maximum;
+      for (var span = maximum; span >= 1; span--) {
+        if (isValidMelodyPlacement(
+          section: section,
+          lane: lane,
+          candidate: SongBlock(
+            id: '__new_melody__',
+            startBar: bar,
+            spanBars: span,
+          ),
+        )) {
+          return span;
+        }
+      }
+      return 1;
     }
 
     Future<void> createPatternAt(int bar) async {
+      if (isMelody) {
+        final currentSection = ref
+            .read(songwriterProvider)
+            .sections
+            .where((s) => s.id == section.id)
+            .firstOrNull;
+        final currentLane = currentSection?.lanes
+            .where((l) => l.id == lane.id)
+            .firstOrNull;
+        if (currentSection == null ||
+            currentLane == null ||
+            !isValidMelodyPlacement(
+              section: currentSection,
+              lane: currentLane,
+              candidate: SongBlock(
+                id: '__new_melody__',
+                startBar: bar,
+                spanBars: 1,
+              ),
+            )) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'This placement conflicts with automatic repeats. Adjust the lane repeat first.',
+              ),
+            ),
+          );
+          return;
+        }
+      }
       final patternId = await showStudioModalBottomSheet<String>(
         context: context,
         builder: (context) => SafeArea(
@@ -3749,413 +3805,608 @@ class _PatternLaneRow extends ConsumerWidget {
             ],
           ),
         ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final perRow = StudioPalette.of(context).isStudio
-                ? 4
-                : (constraints.maxWidth < 360 ? 2 : 4);
-            final narrowCells = constraints.maxWidth / perRow < 90;
-            final rows = <List<Widget>>[];
-            final bars = section.lengthBars.clamp(1, 64);
-            for (var start = 0; start < bars; start += perRow) {
-              final end = (start + perRow).clamp(0, bars);
-              final cells = <Widget>[];
-              var bar = start;
-              while (bar < end) {
-                final owner = ownerByBar[bar];
-                if (owner != null) {
-                  final span = (owner.endBar.clamp(bar + 1, end)) - bar;
-                  final isContinuation = owner.startBar < bar;
-                  final patternName = owner.patternId == null
-                      ? null
-                      : patternNames[owner.patternId];
-                  final displayName = patternName ?? 'pattern?';
-                  final melodyPattern = isMelody
-                      ? project.melodyPatterns
-                            .where((pattern) => pattern.id == owner.patternId)
-                            .firstOrNull
-                      : null;
-                  final strumPattern = isMelody
-                      ? null
-                      : project.guitarStrumPatterns
-                            .where((pattern) => pattern.id == owner.patternId)
-                            .firstOrNull;
-                  final saveEntry = writerSaveEntryForBlock(saveState, owner);
-                  final hasBrokenReference =
-                      owner.saveId != null && saveEntry == null;
-                  final patternDuration = melodyPattern == null
-                      ? null
-                      : _formatMusicDuration(
-                          melodyPattern.lengthTicks,
-                          project.config,
-                        );
-                  final playbackSummary = melodyPattern == null
-                      ? null
-                      : _melodyPlacementPlaybackSummary(
-                          melodyPattern.lengthTicks,
-                          owner.spanBars,
-                          project.config,
-                        );
-                  final tileLabel = isContinuation
-                      ? 'Continue ${isMelody ? 'melody' : 'guitar strum'} pattern $displayName, bars ${owner.startBar + 1} through ${owner.endBar}'
-                      : isMelody
-                      ? 'Edit melody pattern $displayName. Pattern duration $patternDuration. Placed bars ${owner.startBar + 1} through ${owner.endBar}. $playbackSummary.'
-                      : 'Edit guitar strum pattern $displayName';
-                  Widget? melodyActions;
-                  if (isMelody && !isContinuation) {
-                    final menu = PopupMenuButton<String>(
-                      key: Key('melodyBlockActions_${owner.id}_$instanceIndex'),
-                      tooltip: saveEntry == null
-                          ? 'Melody block actions'
-                          : 'Actions for ${saveEntry.name}',
-                      padding: EdgeInsets.zero,
-                      child: SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: Icon(
-                          Icons.more_vert,
-                          size: 18,
-                          color: StudioPalette.of(context).textSecondary,
+        if (isMelody) ...[
+          SongwriterMelodyTimeline(
+            section: section,
+            lane: lane,
+            instanceIndex: instanceIndex,
+            patternNames: patternNames,
+            onEdit: openPattern,
+            onCreate: createPatternAt,
+          ),
+          for (final block in lane.blocks)
+            Builder(
+              builder: (context) {
+                final pattern = project.melodyPatterns
+                    .where((p) => p.id == block.patternId)
+                    .firstOrNull;
+                final entry = writerSaveEntryForBlock(saveState, block);
+                final name = pattern?.name ?? 'Missing pattern';
+                final duration = pattern == null
+                    ? null
+                    : _formatMusicDuration(pattern.lengthTicks, project.config);
+                final summary = pattern == null
+                    ? null
+                    : _melodyPlacementPlaybackSummary(
+                        pattern.lengthTicks,
+                        block.spanBars,
+                        project.config,
+                      );
+                return Semantics(
+                  label:
+                      'Edit melody pattern $name. Pattern duration $duration. Placed bars ${block.startBar + 1} through ${block.endBar}. $summary.',
+                  explicitChildNodes: true,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: TextStyle(
+                                color: StudioPalette.of(context).textPrimary,
+                              ),
+                            ),
+                            if (duration != null)
+                              Text(
+                                'Duration: $duration',
+                                style: TextStyle(
+                                  color: StudioPalette.of(
+                                    context,
+                                  ).textSecondary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            if (summary != null)
+                              Text(
+                                'Placement: bars ${block.startBar + 1}–${block.endBar} · $summary',
+                                style: TextStyle(
+                                  color: StudioPalette.of(
+                                    context,
+                                  ).textSecondary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      onSelected: (action) {
-                        if (action == 'placement') {
-                          _showPatternPlacementDialog(
-                            context,
-                            ref,
-                            section,
-                            lane,
-                            owner,
-                          );
-                        } else if (action == 'performance' &&
-                            owner.patternId != null) {
-                          onEditMelodyPerformance?.call(owner.patternId!);
-                        } else if (action == 'rename' && saveEntry != null) {
-                          renameWriterBlockSave(context, ref, saveEntry);
-                        } else if (action == 'unique' && saveEntry != null) {
-                          makeWriterBlockUnique(
-                            context,
-                            ref,
-                            section: section,
-                            lane: lane,
-                            block: owner,
-                            entry: saveEntry,
-                          );
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'placement',
-                          child: ListTile(
-                            leading: Icon(Icons.open_with),
-                            title: Text('Adjust placement'),
-                            dense: true,
+                      if (pattern != null)
+                        IconButton(
+                          key: Key(
+                            'editMelodyBlock_${block.id}_$instanceIndex',
+                          ),
+                          tooltip: 'Edit melody $name',
+                          onPressed: () => openPattern(block),
+                          icon: const Icon(Icons.edit_note),
+                        ),
+                      Semantics(
+                        key: entry == null
+                            ? null
+                            : Key('writerBlockActions_${block.id}'),
+                        label: entry == null
+                            ? 'Melody block actions'
+                            : 'Actions for ${entry.name}',
+                        explicitChildNodes: true,
+                        child: PopupMenuButton<String>(
+                          key: Key(
+                            'melodyBlockActions_${block.id}_$instanceIndex',
+                          ),
+                          tooltip: entry == null
+                              ? 'Melody block actions'
+                              : 'Actions for ${entry.name}',
+                          onSelected: (action) {
+                            if (action == 'placement') {
+                              _showPatternPlacementDialog(
+                                context,
+                                ref,
+                                section,
+                                lane,
+                                block,
+                              );
+                            }
+                            if (action == 'performance' &&
+                                block.patternId != null) {
+                              onEditMelodyPerformance?.call(block.patternId!);
+                            }
+                            if (action == 'rename' && entry != null) {
+                              renameWriterBlockSave(context, ref, entry);
+                            }
+                            if (action == 'unique' && entry != null) {
+                              makeWriterBlockUnique(
+                                context,
+                                ref,
+                                section: section,
+                                lane: lane,
+                                block: block,
+                                entry: entry,
+                              );
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'placement',
+                              child: Text('Adjust placement'),
+                            ),
+                            if (onEditMelodyPerformance != null &&
+                                pattern != null)
+                              const PopupMenuItem(
+                                value: 'performance',
+                                child: Text('Edit performance'),
+                              ),
+                            if (entry != null) ...[
+                              PopupMenuItem(
+                                key: Key('writerRename_${block.id}'),
+                                value: 'rename',
+                                child: const Text('Rename'),
+                              ),
+                              PopupMenuItem(
+                                key: Key('writerMakeUnique_${block.id}'),
+                                value: 'unique',
+                                child: const Text('Make Unique'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (pattern == null)
+                        IconButton(
+                          key: Key('writerBrokenReference_${block.id}'),
+                          tooltip: 'Missing melody pattern',
+                          icon: const Icon(Icons.link_off),
+                          onPressed: () => showBarActionSheet(
+                            context: context,
+                            title: 'Missing melody pattern',
+                            actions: [
+                              BarAction(
+                                label: 'Delete block',
+                                icon: Icons.delete_outline,
+                                destructive: true,
+                                onTap: () => notifier.removeBlock(
+                                  sectionId: section.id,
+                                  laneId: lane.id,
+                                  blockId: block.id,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (block.saveId != null && entry == null)
+                        writerBrokenReferenceAction(
+                          context,
+                          block: block,
+                          onDelete: () => notifier.removeBlock(
+                            sectionId: section.id,
+                            laneId: lane.id,
+                            blockId: block.id,
                           ),
                         ),
-                        if (onEditMelodyPerformance != null)
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
+        if (!isMelody)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final perRow = StudioPalette.of(context).isStudio
+                  ? 4
+                  : (constraints.maxWidth < 360 ? 2 : 4);
+              final narrowCells = constraints.maxWidth / perRow < 90;
+              final rows = <List<Widget>>[];
+              final bars = section.lengthBars.clamp(1, 64);
+              for (var start = 0; start < bars; start += perRow) {
+                final end = (start + perRow).clamp(0, bars);
+                final cells = <Widget>[];
+                var bar = start;
+                while (bar < end) {
+                  final owner = ownerByBar[bar];
+                  if (owner != null) {
+                    final span = (owner.endBar.clamp(bar + 1, end)) - bar;
+                    final isContinuation = owner.startBar < bar;
+                    final patternName = owner.patternId == null
+                        ? null
+                        : patternNames[owner.patternId];
+                    final displayName = patternName ?? 'pattern?';
+                    final melodyPattern = isMelody
+                        ? project.melodyPatterns
+                              .where((pattern) => pattern.id == owner.patternId)
+                              .firstOrNull
+                        : null;
+                    final strumPattern = isMelody
+                        ? null
+                        : project.guitarStrumPatterns
+                              .where((pattern) => pattern.id == owner.patternId)
+                              .firstOrNull;
+                    final saveEntry = writerSaveEntryForBlock(saveState, owner);
+                    final hasBrokenReference =
+                        owner.saveId != null && saveEntry == null;
+                    final patternDuration = melodyPattern == null
+                        ? null
+                        : _formatMusicDuration(
+                            melodyPattern.lengthTicks,
+                            project.config,
+                          );
+                    final playbackSummary = melodyPattern == null
+                        ? null
+                        : _melodyPlacementPlaybackSummary(
+                            melodyPattern.lengthTicks,
+                            owner.spanBars,
+                            project.config,
+                          );
+                    final tileLabel = isContinuation
+                        ? 'Continue ${isMelody ? 'melody' : 'guitar strum'} pattern $displayName, bars ${owner.startBar + 1} through ${owner.endBar}'
+                        : isMelody
+                        ? 'Edit melody pattern $displayName. Pattern duration $patternDuration. Placed bars ${owner.startBar + 1} through ${owner.endBar}. $playbackSummary.'
+                        : 'Edit guitar strum pattern $displayName';
+                    Widget? melodyActions;
+                    if (isMelody && !isContinuation) {
+                      final menu = PopupMenuButton<String>(
+                        key: Key(
+                          'melodyBlockActions_${owner.id}_$instanceIndex',
+                        ),
+                        tooltip: saveEntry == null
+                            ? 'Melody block actions'
+                            : 'Actions for ${saveEntry.name}',
+                        padding: EdgeInsets.zero,
+                        child: SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Icon(
+                            Icons.more_vert,
+                            size: 18,
+                            color: StudioPalette.of(context).textSecondary,
+                          ),
+                        ),
+                        onSelected: (action) {
+                          if (action == 'placement') {
+                            _showPatternPlacementDialog(
+                              context,
+                              ref,
+                              section,
+                              lane,
+                              owner,
+                            );
+                          } else if (action == 'performance' &&
+                              owner.patternId != null) {
+                            onEditMelodyPerformance?.call(owner.patternId!);
+                          } else if (action == 'rename' && saveEntry != null) {
+                            renameWriterBlockSave(context, ref, saveEntry);
+                          } else if (action == 'unique' && saveEntry != null) {
+                            makeWriterBlockUnique(
+                              context,
+                              ref,
+                              section: section,
+                              lane: lane,
+                              block: owner,
+                              entry: saveEntry,
+                            );
+                          }
+                        },
+                        itemBuilder: (_) => [
                           const PopupMenuItem(
-                            value: 'performance',
+                            value: 'placement',
                             child: ListTile(
-                              leading: Icon(Icons.piano),
-                              title: Text('Edit performance'),
+                              leading: Icon(Icons.open_with),
+                              title: Text('Adjust placement'),
                               dense: true,
                             ),
                           ),
-                        if (saveEntry != null) ...[
-                          const PopupMenuDivider(height: 8),
-                          PopupMenuItem(
-                            key: Key('writerRename_${owner.id}'),
-                            value: 'rename',
-                            child: const Text('Rename'),
-                          ),
-                          PopupMenuItem(
-                            key: Key('writerMakeUnique_${owner.id}'),
-                            value: 'unique',
-                            child: const Text('Make Unique'),
-                          ),
-                        ],
-                      ],
-                    );
-                    melodyActions = saveEntry == null
-                        ? menu
-                        : Semantics(
-                            key: Key('writerBlockActions_${owner.id}'),
-                            label: 'Actions for ${saveEntry.name}',
-                            explicitChildNodes: true,
-                            child: menu,
-                          );
-                  }
-                  final inlineStrum =
-                      StudioPalette.of(context).isStudio &&
-                      !isMelody &&
-                      constraints.maxWidth * span / perRow >= 180;
-                  cells.add(
-                    Expanded(
-                      flex: span,
-                      child: Semantics(
-                        button: true,
-                        explicitChildNodes: true,
-                        label: tileLabel,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            key: Key(
-                              '${isMelody ? 'sheetMelodyTile' : 'sheetGuitarStrumTile'}_${owner.patternId ?? owner.id}_${instanceIndex}_$bar',
+                          if (onEditMelodyPerformance != null)
+                            const PopupMenuItem(
+                              value: 'performance',
+                              child: ListTile(
+                                leading: Icon(Icons.piano),
+                                title: Text('Edit performance'),
+                                dense: true,
+                              ),
                             ),
-                            borderRadius: BorderRadius.circular(6),
-                            onTap: () => openPattern(owner),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              constraints: BoxConstraints(
-                                minHeight: inlineStrum ? 44 : 48,
+                          if (saveEntry != null) ...[
+                            const PopupMenuDivider(height: 8),
+                            PopupMenuItem(
+                              key: Key('writerRename_${owner.id}'),
+                              value: 'rename',
+                              child: const Text('Rename'),
+                            ),
+                            PopupMenuItem(
+                              key: Key('writerMakeUnique_${owner.id}'),
+                              value: 'unique',
+                              child: const Text('Make Unique'),
+                            ),
+                          ],
+                        ],
+                      );
+                      melodyActions = saveEntry == null
+                          ? menu
+                          : Semantics(
+                              key: Key('writerBlockActions_${owner.id}'),
+                              label: 'Actions for ${saveEntry.name}',
+                              explicitChildNodes: true,
+                              child: menu,
+                            );
+                    }
+                    final inlineStrum =
+                        StudioPalette.of(context).isStudio &&
+                        !isMelody &&
+                        constraints.maxWidth * span / perRow >= 180;
+                    cells.add(
+                      Expanded(
+                        flex: span,
+                        child: Semantics(
+                          button: true,
+                          explicitChildNodes: true,
+                          label: tileLabel,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              key: Key(
+                                '${isMelody ? 'sheetMelodyTile' : 'sheetGuitarStrumTile'}_${owner.patternId ?? owner.id}_${instanceIndex}_$bar',
                               ),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: inlineStrum ? 0 : 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    StudioPalette.of(context).isStudio &&
-                                        !isMelody
-                                    ? StudioPalette.of(context).surface
-                                    : (isMelody
-                                              ? StudioPalette.of(context).sky
-                                              : StudioPalette.of(
-                                                  context,
-                                                ).emerald)
-                                          .withValues(alpha: .14),
-                                border: Border.all(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => openPattern(owner),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
+                                constraints: BoxConstraints(
+                                  minHeight: inlineStrum ? 44 : 48,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: inlineStrum ? 0 : 5,
+                                ),
+                                decoration: BoxDecoration(
                                   color:
                                       StudioPalette.of(context).isStudio &&
                                           !isMelody
-                                      ? StudioPalette.of(context).glassBorder
+                                      ? StudioPalette.of(context).surface
                                       : (isMelody
                                                 ? StudioPalette.of(context).sky
                                                 : StudioPalette.of(
                                                     context,
                                                   ).emerald)
-                                            .withValues(alpha: .45),
+                                            .withValues(alpha: .14),
+                                  border: Border.all(
+                                    color:
+                                        StudioPalette.of(context).isStudio &&
+                                            !isMelody
+                                        ? StudioPalette.of(context).glassBorder
+                                        : (isMelody
+                                                  ? StudioPalette.of(
+                                                      context,
+                                                    ).sky
+                                                  : StudioPalette.of(
+                                                      context,
+                                                    ).emerald)
+                                              .withValues(alpha: .45),
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: inlineStrum
-                                  ? Row(
-                                      children: [
-                                        ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 104,
-                                          ),
-                                          child: Text(
-                                            isContinuation
-                                                ? '$displayName · continued'
-                                                : displayName,
-                                            key: Key(
-                                              'writerBlockName_${owner.id}_${instanceIndex}_$bar',
+                                child: inlineStrum
+                                    ? Row(
+                                        children: [
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 104,
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: StudioPalette.of(
-                                                context,
-                                              ).textSecondary,
-                                            ),
-                                          ),
-                                        ),
-                                        if (strumPattern != null)
-                                          Expanded(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                  ),
-                                              child:
-                                                  _StrumPatternTimelinePreview(
-                                                    pattern: strumPattern,
-                                                    beatTicks: project
-                                                        .config
-                                                        .ticksPerBeat,
-                                                  ),
-                                            ),
-                                          ),
-                                        if (!isContinuation &&
-                                            saveEntry != null)
-                                          writerLinkedBlockActionsMenu(
-                                            context,
-                                            ref,
-                                            section: section,
-                                            lane: lane,
-                                            block: owner,
-                                            entry: saveEntry,
-                                          ),
-                                        if (!isContinuation &&
-                                            hasBrokenReference)
-                                          writerBrokenReferenceAction(
-                                            context,
-                                            block: owner,
-                                            onDelete: () =>
-                                                notifier.removeBlock(
-                                                  sectionId: section.id,
-                                                  laneId: lane.id,
-                                                  blockId: owner.id,
-                                                ),
-                                          ),
-                                      ],
-                                    )
-                                  : Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            if (!narrowCells) ...[
-                                              Icon(
-                                                isMelody
-                                                    ? Icons.edit_note
-                                                    : Icons.music_note_outlined,
-                                                size: 14,
+                                            child: Text(
+                                              isContinuation
+                                                  ? '$displayName · continued'
+                                                  : displayName,
+                                              key: Key(
+                                                'writerBlockName_${owner.id}_${instanceIndex}_$bar',
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
                                                 color: StudioPalette.of(
                                                   context,
-                                                ).textPrimary,
+                                                ).textSecondary,
                                               ),
-                                              const SizedBox(width: 6),
-                                            ],
+                                            ),
+                                          ),
+                                          if (strumPattern != null)
                                             Expanded(
-                                              child: Text(
-                                                isContinuation
-                                                    ? '$displayName · continued'
-                                                    : displayName,
-                                                key: Key(
-                                                  'writerBlockName_${owner.id}_${instanceIndex}_$bar',
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  fontSize: 12,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                    ),
+                                                child:
+                                                    _StrumPatternTimelinePreview(
+                                                      pattern: strumPattern,
+                                                      beatTicks: project
+                                                          .config
+                                                          .ticksPerBeat,
+                                                    ),
+                                              ),
+                                            ),
+                                          if (!isContinuation &&
+                                              saveEntry != null)
+                                            writerLinkedBlockActionsMenu(
+                                              context,
+                                              ref,
+                                              section: section,
+                                              lane: lane,
+                                              block: owner,
+                                              entry: saveEntry,
+                                            ),
+                                          if (!isContinuation &&
+                                              hasBrokenReference)
+                                            writerBrokenReferenceAction(
+                                              context,
+                                              block: owner,
+                                              onDelete: () =>
+                                                  notifier.removeBlock(
+                                                    sectionId: section.id,
+                                                    laneId: lane.id,
+                                                    blockId: owner.id,
+                                                  ),
+                                            ),
+                                        ],
+                                      )
+                                    : Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              if (!narrowCells) ...[
+                                                Icon(
+                                                  isMelody
+                                                      ? Icons.edit_note
+                                                      : Icons
+                                                            .music_note_outlined,
+                                                  size: 14,
                                                   color: StudioPalette.of(
                                                     context,
                                                   ).textPrimary,
                                                 ),
+                                                const SizedBox(width: 6),
+                                              ],
+                                              Expanded(
+                                                child: Text(
+                                                  isContinuation
+                                                      ? '$displayName · continued'
+                                                      : displayName,
+                                                  key: Key(
+                                                    'writerBlockName_${owner.id}_${instanceIndex}_$bar',
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: StudioPalette.of(
+                                                      context,
+                                                    ).textPrimary,
+                                                  ),
+                                                ),
+                                              ),
+                                              ?melodyActions,
+                                              if (!isMelody &&
+                                                  !isContinuation &&
+                                                  saveEntry != null)
+                                                writerLinkedBlockActionsMenu(
+                                                  context,
+                                                  ref,
+                                                  section: section,
+                                                  lane: lane,
+                                                  block: owner,
+                                                  entry: saveEntry,
+                                                ),
+                                              if (!isContinuation &&
+                                                  hasBrokenReference)
+                                                writerBrokenReferenceAction(
+                                                  context,
+                                                  block: owner,
+                                                  onDelete: () =>
+                                                      notifier.removeBlock(
+                                                        sectionId: section.id,
+                                                        laneId: lane.id,
+                                                        blockId: owner.id,
+                                                      ),
+                                                ),
+                                            ],
+                                          ),
+                                          if (isMelody &&
+                                              !isContinuation &&
+                                              melodyPattern != null) ...[
+                                            Text(
+                                              'Duration: $patternDuration',
+                                              style: TextStyle(
+                                                color: StudioPalette.of(
+                                                  context,
+                                                ).textSecondary,
+                                                fontSize: 10,
                                               ),
                                             ),
-                                            ?melodyActions,
-                                            if (!isMelody &&
-                                                !isContinuation &&
-                                                saveEntry != null)
-                                              writerLinkedBlockActionsMenu(
-                                                context,
-                                                ref,
-                                                section: section,
-                                                lane: lane,
-                                                block: owner,
-                                                entry: saveEntry,
+                                            Text(
+                                              'Placement: bars ${owner.startBar + 1}–${owner.endBar} · $playbackSummary',
+                                              style: TextStyle(
+                                                color: StudioPalette.of(
+                                                  context,
+                                                ).textSecondary,
+                                                fontSize: 10,
                                               ),
-                                            if (!isContinuation &&
-                                                hasBrokenReference)
-                                              writerBrokenReferenceAction(
-                                                context,
-                                                block: owner,
-                                                onDelete: () =>
-                                                    notifier.removeBlock(
-                                                      sectionId: section.id,
-                                                      laneId: lane.id,
-                                                      blockId: owner.id,
-                                                    ),
-                                              ),
+                                            ),
                                           ],
-                                        ),
-                                        if (isMelody &&
-                                            !isContinuation &&
-                                            melodyPattern != null) ...[
-                                          Text(
-                                            'Duration: $patternDuration',
-                                            style: TextStyle(
-                                              color: StudioPalette.of(
-                                                context,
-                                              ).textSecondary,
-                                              fontSize: 10,
+                                          if (!isMelody && strumPattern != null)
+                                            _StrumPatternTimelinePreview(
+                                              pattern: strumPattern,
+                                              beatTicks:
+                                                  project.config.ticksPerBeat,
                                             ),
-                                          ),
-                                          Text(
-                                            'Placement: bars ${owner.startBar + 1}–${owner.endBar} · $playbackSummary',
-                                            style: TextStyle(
-                                              color: StudioPalette.of(
-                                                context,
-                                              ).textSecondary,
-                                              fontSize: 10,
-                                            ),
-                                          ),
                                         ],
-                                        if (!isMelody && strumPattern != null)
-                                          _StrumPatternTimelinePreview(
-                                            pattern: strumPattern,
-                                            beatTicks:
-                                                project.config.ticksPerBeat,
-                                          ),
-                                      ],
-                                    ),
+                                      ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                  bar += span;
-                } else {
-                  final emptyBar = bar++;
-                  cells.add(
-                    Expanded(
-                      child: Semantics(
-                        button: true,
-                        label:
-                            'Create ${isMelody ? 'melody' : 'guitar strum'} pattern at bar ${emptyBar + 1}',
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            key: Key(
-                              'empty${isMelody ? 'Melody' : 'GuitarStrum'}Bar_${lane.id}_${instanceIndex}_$emptyBar',
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                            onTap: () => createPatternAt(emptyBar),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              height: 44,
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: StudioPalette.of(context).glassBorder,
-                                ),
-                                borderRadius: BorderRadius.circular(6),
+                    );
+                    bar += span;
+                  } else {
+                    final emptyBar = bar++;
+                    cells.add(
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          label:
+                              'Create ${isMelody ? 'melody' : 'guitar strum'} pattern at bar ${emptyBar + 1}',
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              key: Key(
+                                'empty${isMelody ? 'Melody' : 'GuitarStrum'}Bar_${lane.id}_${instanceIndex}_$emptyBar',
                               ),
-                              child: Center(
-                                child: Icon(
-                                  Icons.add_rounded,
-                                  size: 18,
-                                  color: StudioPalette.of(context).textMuted,
-                                  semanticLabel: 'Add pattern',
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => createPatternAt(emptyBar),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: StudioPalette.of(
+                                      context,
+                                    ).glassBorder,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.add_rounded,
+                                    size: 18,
+                                    color: StudioPalette.of(context).textMuted,
+                                    semanticLabel: 'Add pattern',
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 }
+                rows.add(cells);
               }
-              rows.add(cells);
-            }
-            return Column(
-              children: [
-                for (var row = 0; row < rows.length; row++)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      bottom: row == rows.length - 1 ? 0 : 6,
+              return Column(
+                children: [
+                  for (var row = 0; row < rows.length; row++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: row == rows.length - 1 ? 0 : 6,
+                      ),
+                      child: Row(children: rows[row]),
                     ),
-                    child: Row(children: rows[row]),
-                  ),
-              ],
-            );
-          },
-        ),
+                ],
+              );
+            },
+          ),
       ],
     );
   }
@@ -4286,6 +4537,9 @@ class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
     }
     if (blocksOverlap(widget.lane.blocks, candidate)) {
       return 'This placement overlaps another block in the lane.';
+    }
+    if (!_isValid) {
+      return 'This placement conflicts with automatic repeats. Adjust the lane repeat first.';
     }
     return '';
   }

@@ -15,6 +15,63 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  testWidgets('melody continuation highlights only the active row', (
+    tester,
+  ) async {
+    String? sectionId;
+    final container = ProviderContainer(
+      overrides: [
+        songwriterActivePositionProvider.overrideWith(
+          (ref) => SongwriterActivePosition(
+            sectionId: sectionId!,
+            instanceIndex: 0,
+            localBar: 5,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    sectionId = section.id;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern();
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 6,
+    );
+    final block = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == laneId)
+        .blocks
+        .single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    final first = tester.widget<Container>(
+      find.byKey(Key('melodySegment_${block.id}_0_0_0')),
+    );
+    final second = tester.widget<Container>(
+      find.byKey(Key('melodySegment_${block.id}_0_0_4')),
+    );
+    expect((first.decoration! as BoxDecoration).border!.top.width, 1);
+    expect((second.decoration! as BoxDecoration).border!.top.width, 2);
+  });
+
   testWidgets('active bar cell shows the playhead highlight key', (
     tester,
   ) async {
