@@ -514,6 +514,33 @@ NotePattern makeMelodyPattern({
   highlightedNotes: const [],
 );
 
+/// Largest bar count the Writer melody editor exposes.
+const int melodyMaxBars = 32;
+
+/// Whole bars needed to contain [pattern]'s last note, from 1 to 32.
+///
+/// Empty melodies occupy one bar. A note ending exactly on a barline keeps that
+/// bar; one ending past it extends the melody to the next whole bar.
+int melodyBarCount(NotePattern pattern, int measureTicks) {
+  if (measureTicks <= 0) return 1;
+  var furthestEndTick = 0;
+  for (final note in pattern.notes) {
+    final endTick = note.startTick + note.durationTicks;
+    if (endTick > furthestEndTick) furthestEndTick = endTick;
+  }
+  if (furthestEndTick <= 0) return 1;
+  final bars = (furthestEndTick + measureTicks - 1) ~/ measureTicks;
+  return bars.clamp(1, melodyMaxBars);
+}
+
+/// Returns [pattern] with its length set to whole bars containing the last note.
+NotePattern quantizeMelodyPatternLength(NotePattern pattern, int measureTicks) {
+  final safeMeasureTicks = measureTicks < 1 ? 1 : measureTicks;
+  return pattern.copyWith(
+    lengthTicks: melodyBarCount(pattern, safeMeasureTicks) * safeMeasureTicks,
+  );
+}
+
 GuitarStrumPattern makeGuitarStrumPattern({
   String name = 'Strum',
   required int lengthTicks,
