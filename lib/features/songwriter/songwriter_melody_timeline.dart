@@ -346,7 +346,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
         final finalEdge = !automatic && end == occurrence.endBar;
         final melodyBars = pattern == null
             ? null
-            : melodyPlacementBarLimit(pattern, widget.measureTicks);
+            : melodyBarCount(pattern, widget.measureTicks);
         final silentTailStart = melodyBars == null
             ? null
             : occurrence.startBar + melodyBars;
