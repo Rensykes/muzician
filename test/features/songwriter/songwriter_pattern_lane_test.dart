@@ -11,6 +11,7 @@ import 'package:muzician/features/songwriter/songwriter_melody_timeline.dart';
 import 'package:muzician/features/songwriter/guitar_strum_pattern_sheet.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/app_theme_variant.dart';
+import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/song_project.dart';
@@ -34,6 +35,8 @@ _timelineFixture(
   required int bars,
   int span = 1,
   Size size = const Size(390, 1000),
+  int? patternLengthTicks,
+  List<NotePatternNote> notes = const [],
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -49,7 +52,17 @@ _timelineFixture(
     sectionId: section.id,
     kind: SongLaneKind.melody,
   );
-  final patternId = writer.addMelodyPattern(name: 'Lead');
+  final patternId = writer.addMelodyPattern(
+    name: 'Lead',
+    lengthTicks: patternLengthTicks,
+  );
+  if (notes.isNotEmpty) {
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(notes: notes),
+    );
+  }
   writer.addMelodyBlock(
     sectionId: section.id,
     laneId: laneId,
@@ -2667,6 +2680,96 @@ void main() {
       expect(size.width, greaterThanOrEqualTo(44));
       expect(size.height, greaterThanOrEqualTo(44));
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('editor time signature changes cannot let Bars delete notes', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 4,
+      patternLengthTicks: 64,
+      notes: const [
+        NotePatternNote(
+          id: 'late',
+          midiNote: 72,
+          startTick: 16,
+          durationTicks: 16,
+        ),
+      ],
+    );
+    final editor = await _openMelodyEditor(tester, f.patternId);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+      '4',
+    );
+
+    editor
+        .read(pianoRollProvider.notifier)
+        .setTimeSignature(const TimeSignature(beatsPerMeasure: 2, beatUnit: 4));
+    await tester.pump();
+    final roll = editor.read(pianoRollProvider);
+    expect(roll.config.timeSignature.beatsPerMeasure, 2);
+    expect(roll.config.totalMeasures, 4);
+    expect(roll.notes, hasLength(1));
+    expect(roll.notes.single.startTick, 16);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+      '4',
+    );
+    final decrease = find.byKey(const Key('melodyBarsDecrease'));
+
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await tester.tap(decrease);
+      await tester.pump();
+    }
+    final after = editor.read(pianoRollProvider);
+    expect(after.config.totalMeasures, 4);
+    expect(after.notes, hasLength(1));
+    expect(after.notes.single.startTick, 16);
+    expect(after.notes.single.durationTicks, 16);
+    expect(tester.widget<IconButton>(decrease).onPressed, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleting the last notes shortens the melody on save', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 2,
+      patternLengthTicks: 32,
+      notes: const [
+        NotePatternNote(
+          id: 'tail',
+          midiNote: 67,
+          startTick: 20,
+          durationTicks: 4,
+        ),
+      ],
+    );
+    final editor = await _openMelodyEditor(tester, f.patternId);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+      '2',
+    );
+
+    editor
+        .read(pianoRollProvider.notifier)
+        .removeNote(editor.read(pianoRollProvider).notes.single.id);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    final project = f.container.read(songwriterProvider);
+    final pattern = project.melodyPatterns.singleWhere(
+      (candidate) => candidate.id == f.patternId,
+    );
+    expect(pattern.notes, isEmpty);
+    expect(pattern.lengthTicks, project.config.measureTicks);
     expect(tester.takeException(), isNull);
   });
 }

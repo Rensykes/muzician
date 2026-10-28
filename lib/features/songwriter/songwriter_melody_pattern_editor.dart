@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
+import '../../schema/rules/piano_roll_rules.dart' as piano_roll_rules;
 import '../../schema/rules/song_pattern_bridge_rules.dart' as bridge;
 import '../../schema/rules/songwriter_rules.dart'
     show melodyMaxBars, quantizeMelodyPatternLength;
@@ -74,7 +75,7 @@ class _SongwriterMelodyPatternEditorState
   ProviderContainer? _isolatedContainer;
   ProviderSubscription<PianoRollState>? _barSubscription;
   int? _barCount;
-  int? _measureTicks;
+  int? _projectMeasureTicks;
   String? _draftName;
 
   @override
@@ -95,7 +96,7 @@ class _SongwriterMelodyPatternEditorState
       ),
     );
     _barCount = seedState.config.totalMeasures;
-    _measureTicks = config.measureTicks;
+    _projectMeasureTicks = config.measureTicks;
     _draftName = pattern.name;
     final container = ProviderContainer(
       overrides: [
@@ -119,7 +120,11 @@ class _SongwriterMelodyPatternEditorState
   }
 
   int _lastNoteBar(PianoRollState state) {
-    final measureTicks = _measureTicks ?? 1;
+    // The embedded roll can change its own time signature, so the guard must
+    // follow the roll's live bar size rather than the host project's.
+    final measureTicks = piano_roll_rules.ticksPerMeasure(
+      state.config.timeSignature,
+    );
     if (measureTicks <= 0) return 1;
     var furthestEndTick = 0;
     for (final note in state.notes) {
@@ -152,7 +157,8 @@ class _SongwriterMelodyPatternEditorState
   void _save(NotePattern pattern) {
     final state = _isolatedContainer!.read(pianoRollProvider);
     final measureTicks =
-        _measureTicks ?? ref.read(songwriterProvider).config.measureTicks;
+        _projectMeasureTicks ??
+        ref.read(songwriterProvider).config.measureTicks;
     final draftedName = (_draftName ?? pattern.name).trim();
     final updated = quantizeMelodyPatternLength(
       bridge.notePatternFromPianoRollState(
@@ -179,8 +185,7 @@ class _SongwriterMelodyPatternEditorState
     Navigator.pop(context);
   }
 
-  Widget _barsHeader(StudioPalette palette, PianoRollState state, int bars) {
-    final minimumBars = _lastNoteBar(state);
+  Widget _barsHeader(StudioPalette palette, int bars, int minimumBars) {
     final valueStyle = TextStyle(
       color: palette.textPrimary,
       fontSize: 15,
@@ -243,7 +248,9 @@ class _SongwriterMelodyPatternEditorState
     _ensureContainer(pattern, project.config);
     final palette = StudioPalette.of(context);
     final rollState = _isolatedContainer!.read(pianoRollProvider);
-    final bars = _barCount ?? rollState.config.totalMeasures;
+    final minimumBars = _lastNoteBar(rollState);
+    final storedBars = _barCount ?? rollState.config.totalMeasures;
+    final bars = storedBars < minimumBars ? minimumBars : storedBars;
 
     return Scaffold(
       backgroundColor: palette.surface,
@@ -277,7 +284,7 @@ class _SongwriterMelodyPatternEditorState
         container: _isolatedContainer!,
         child: Column(
           children: [
-            _barsHeader(palette, rollState, bars),
+            _barsHeader(palette, bars, minimumBars),
             const Expanded(
               child: PianoRollScreenV2(
                 showScale: false,
