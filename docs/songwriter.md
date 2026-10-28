@@ -89,7 +89,7 @@ rename, and mute controls, rather than a bordered card around each lane.
 | `SongSection` | `id`, optional `label`, `lengthBars`, `order`, `repeat`, `lanes`. |
 | `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; Harmony lanes carry a fixed Piano or Fretboard identity, a strum lane stores its selected Fretboard Harmony source, and a Melody lane may carry an explicit `melodySound`. |
 | `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter), canonical `saveId`, and local lyrics/placement; pattern lanes reference their pattern id; legacy content fields and `embedded` snapshot are fallback data. Harmony extras include `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, and `romanNumeral`. |
-| `NotePattern` / `GuitarStrumPattern` | Melody name, bar-quantized `lengthTicks`, pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. Writer melody performance state is stored alongside the pattern. |
+| `NotePattern` / `GuitarStrumPattern` | Melody name and `lengthTicks` (normalized to whole bars on a melody save; legacy stored lengths may stay non-bar-aligned until then), pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. Writer melody performance state is stored alongside the pattern. |
 | `WriterMelodyPerformance` | Per-pattern Piano or Fretboard target; Piano uses each note's MIDI key, while Fretboard positions map note IDs to playable strings and physical frets. |
 
 All types are immutable (`copyWith` / `toJson` / `fromJson`). A block resolves to
@@ -249,16 +249,20 @@ The block's `spanBars` is shown separately against the section's total bars. A
 placement is a bar-aligned window over the melody: a new block uses the
 melody's full bar count when that placement is valid, and may be shortened to
 fit or rejected if no valid placement is available, even when bars appear
-free, because existing automatic repeat origins must be preserved. A placement
-may shrink to any whole bar but cannot extend beyond the melody's last-note
-bar. Shortening clips playback at the placement edge while every note remains
+free, because existing automatic repeat origins must be preserved. A
+bar-aligned melody limits placements to its last-note bar. An older
+non-bar-aligned stored length may use its rounded-up bar count for placement
+validation and creation until the next melody save normalizes it. A placement
+may shrink to any whole bar but cannot extend beyond that placement limit.
+Shortening clips playback at the placement edge while every note remains
 stored. Adding a Melody lane creates a one-bar pattern and a one-bar placement;
-on the first save of that empty pattern, the placement expands to the melody's
-full bar count when the whole span fits the section and lane. Later saves never
-resize placements. A placement longer than the melody (typically retained from
-an older project) keeps its occupied bars, plays the melody once, and then
-shows a silent tail instead of looping. A later length edit to a reused pattern
-does not resize its existing blocks.
+on the first save after notes are added to that empty pattern, the placement
+expands to the melody's full bar count when the whole span fits the section and
+lane. Later saves never resize placements. A placement longer than the melody
+(typically retained from an older project) keeps its occupied bars, plays the
+melody once, and then shows a silent tail instead of looping. It may move only
+with its unchanged span; any resize must end within the placement limit. A
+later length edit to a reused pattern does not resize its existing blocks.
 
 The Melody timeline wraps every four bars with numbered rows and continuation
 segments. Blocks show a non-interactive miniature piano roll: horizontal notes
@@ -269,9 +273,12 @@ previews refresh together; missing patterns and missing or incompatible
 canonical Saves show a warning, not cached notes. The detail row identifies
 unresolved melody content separately from an empty pattern. Edit notes in Piano
 Roll, not in the preview. Drag the final edge in whole bars to resize;
-resizing stops at the melody's last-note bar, an over-long legacy placement can
-shrink directly to a valid span, and releasing creates one undo step while
-cancelling leaves the placement unchanged. Hold the drag near the top or
+resizing stops at the placement limit: the last-note bar for normalized
+melodies, or the rounded-up stored length for legacy non-bar-aligned patterns
+until their next save. An over-long legacy placement can shrink directly to a
+valid span, and moving it without changing its span keeps the occupied bars.
+Releasing creates one undo step while cancelling leaves the placement
+unchanged. Hold the drag near the top or
 bottom of the Writer sheet to scroll to additional rows. The block's action
 menu also offers **Adjust placement** to move or resize without a gesture; it
 explains the melody limit when the requested length exceeds it. Placement
@@ -395,7 +402,7 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `newProject()` | Reset the active project's Writer session. Writer's **New project** action creates a separate Save System project and uses the protected project-switch flow described above. |
 | `setKey(root, scaleName)` / `setTempo(tempo)` | Config edits; `setKey` recomputes harmony-lane Roman numerals. |
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
-| `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit named, bar-quantized melody patterns and strum patterns; melody placement validation applies the last-note bar limit. |
+| `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit named melody patterns and strum patterns. Melody `lengthTicks` is normalized to whole bars on save; placement validation uses the last-note bar for normalized melodies and the rounded-up stored length for legacy non-bar-aligned patterns until their next save. |
 | `setBlockPlacement(...)` | Move or resize while preserving pattern content; Melody validation also protects expanded repeat occupancy and existing repeat origins. |
 | `repeatMelodyBlock(...)` / `setMelodyLaneSound(...)` | Create a linked placement at a valid start / set an explicit sound for one Melody lane. |
 | `insertInstrumentSelectionAtBar(...)` | Adds a named, saved chord or exact Fretboard/Piano snapshot to a Writer lane after section/bar selection and a name prompt. |
