@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
+import 'package:muzician/features/songwriter/songwriter_melody_preview.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_playback_rules.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
@@ -40,6 +42,20 @@ void main() {
       kind: SongLaneKind.melody,
     );
     final patternId = writer.addMelodyPattern();
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((p) => p.id == patternId)
+          .copyWith(
+            notes: [
+              const NotePatternNote(
+                id: 'note',
+                midiNote: 72,
+                startTick: 0,
+                durationTicks: 4,
+              ),
+            ],
+          ),
+    );
     writer.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -69,7 +85,24 @@ void main() {
       find.byKey(Key('melodySegment_${block.id}_0_0_4')),
     );
     expect((first.decoration! as BoxDecoration).border!.top.width, 1);
-    expect((second.decoration! as BoxDecoration).border!.top.width, 2);
+    expect(first.foregroundDecoration, isNull);
+    expect(
+      (second.foregroundDecoration! as BoxDecoration).border!.top.width,
+      2,
+    );
+    Rect previewInSegment(int start) {
+      final segment = find.byKey(Key('melodySegment_${block.id}_0_0_$start'));
+      final preview = find.descendant(
+        of: segment,
+        matching: find.byType(SongwriterMelodyPreview),
+      );
+      return tester.getRect(preview).shift(-tester.getTopLeft(segment));
+    }
+
+    final firstRect = previewInSegment(0);
+    final secondRect = previewInSegment(4);
+    expect(secondRect.top, firstRect.top);
+    expect(secondRect.height, firstRect.height);
   });
 
   testWidgets('active bar cell shows the playhead highlight key', (

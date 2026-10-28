@@ -4029,10 +4029,10 @@ class _PatternLaneRow extends ConsumerWidget {
                     block.saveId == null ||
                     isCanonicalMelodyForBlock(entry?.snapshot, block);
                 final name = pattern?.name ?? 'Missing pattern';
-                final duration = pattern == null
+                final duration = pattern == null || !safeContent
                     ? null
                     : _formatMusicDuration(pattern.lengthTicks, project.config);
-                final summary = pattern == null
+                final summary = pattern == null || !safeContent
                     ? null
                     : _melodyPlacementPlaybackSummary(
                         pattern.lengthTicks,
@@ -4040,8 +4040,9 @@ class _PatternLaneRow extends ConsumerWidget {
                         project.config,
                       );
                 return Semantics(
-                  label:
-                      'Edit melody pattern $name. Pattern duration $duration. Placed bars ${block.startBar + 1} through ${block.endBar}. $summary.',
+                  label: pattern != null && !safeContent
+                      ? 'Unresolved melody content for $name. Placed bars ${block.startBar + 1} through ${block.endBar}.'
+                      : 'Edit melody pattern $name. Pattern duration $duration. Placed bars ${block.startBar + 1} through ${block.endBar}. $summary.',
                   explicitChildNodes: true,
                   child: Row(
                     children: [
@@ -4055,6 +4056,14 @@ class _PatternLaneRow extends ConsumerWidget {
                                 color: StudioPalette.of(context).textPrimary,
                               ),
                             ),
+                            if (pattern != null && !safeContent)
+                              Text(
+                                'Unresolved melody content',
+                                style: TextStyle(
+                                  color: StudioPalette.of(context).orange,
+                                  fontSize: 10,
+                                ),
+                              ),
                             if (duration != null)
                               Text(
                                 'Duration: $duration',

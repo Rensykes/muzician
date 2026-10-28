@@ -264,6 +264,9 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
     );
     final active = ref.watch(songwriterActivePositionProvider);
     final bars = widget.section.lengthBars.clamp(1, 64);
+    final labelHeight = MediaQuery.textScalerOf(
+      context,
+    ).scale(13).clamp(16.0, 23.0);
     List<Widget> cellsForRow(int start) {
       final cells = <Widget>[];
       var bar = start;
@@ -305,9 +308,14 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
         );
         bar = end;
         final block = occurrence.source;
-        final pattern = widget.canEdit(block)
-            ? widget.patterns[block.patternId]
-            : null;
+        final editable = widget.canEdit(block);
+        final pattern = editable ? widget.patterns[block.patternId] : null;
+        final name = widget.patternNames[block.patternId];
+        final displayName = name == null
+            ? 'Missing pattern'
+            : editable
+            ? name
+            : 'Unresolved melody';
         final automatic = occurrence.repeatIndex > 0;
         final finalEdge = !automatic && end == occurrence.endBar;
         final highlighted =
@@ -326,26 +334,50 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
               margin: const EdgeInsets.symmetric(horizontal: 1),
               decoration: BoxDecoration(
                 color: palette.sky.withValues(alpha: automatic ? .07 : .18),
-                border: Border.all(
-                  color: highlighted ? palette.orange : palette.sky,
-                  width: highlighted ? 2 : 1,
-                ),
+                border: Border.all(color: palette.sky),
                 borderRadius: BorderRadius.circular(6),
               ),
+              foregroundDecoration: highlighted
+                  ? BoxDecoration(
+                      border: Border.all(color: palette.orange, width: 2),
+                      borderRadius: BorderRadius.circular(6),
+                    )
+                  : null,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   if (pattern != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(5),
+                    Positioned(
+                      top: labelHeight,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: IgnorePointer(
+                          child: SongwriterMelodyPreview(
+                            pattern: pattern,
+                            segmentStartTick:
+                                (segmentStart - occurrence.startBar) *
+                                widget.measureTicks,
+                            segmentEndTick:
+                                (end - occurrence.startBar) *
+                                widget.measureTicks,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (!editable)
+                    Positioned(
+                      left: 2,
+                      top: 1,
                       child: IgnorePointer(
-                        child: SongwriterMelodyPreview(
-                          pattern: pattern,
-                          segmentStartTick:
-                              (segmentStart - occurrence.startBar) *
-                              widget.measureTicks,
-                          segmentEndTick:
-                              (end - occurrence.startBar) * widget.measureTicks,
+                        child: ExcludeSemantics(
+                          child: Icon(
+                            Icons.warning_amber_rounded,
+                            size: 14,
+                            color: palette.orange,
+                          ),
                         ),
                       ),
                     ),
@@ -354,36 +386,37 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                     children: [
                       Expanded(
                         child: Semantics(
-                          label: automatic
-                              ? 'Automatic repeat of ${widget.patternNames[block.patternId] ?? 'Missing pattern'}, bars ${occurrence.startBar + 1} through ${occurrence.endBar}'
-                              : null,
+                          label:
+                              '${automatic ? 'Automatic repeat of ' : ''}$displayName${name != null && !editable ? ' content' : ''}, bars ${occurrence.startBar + 1} through ${occurrence.endBar}',
                           child: InkWell(
                             key: Key(
                               'sheetMelodyTile_${block.patternId ?? block.id}_${widget.instanceIndex}_$segmentStart',
                             ),
-                            onTap: widget.canEdit(block)
-                                ? () => widget.onEdit(block)
-                                : null,
+                            onTap: editable ? () => widget.onEdit(block) : null,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
+                              padding: EdgeInsets.only(
+                                left: editable ? 4 : 18,
+                                right: 4,
                               ),
-                              child: Text(
-                                key: Key(
-                                  'writerBlockName_${block.id}_${widget.instanceIndex}_$segmentStart',
-                                ),
-                                '${widget.patternNames[block.patternId] ?? 'Missing pattern'}${automatic
-                                    ? ' · repeat'
-                                    : segmentStart > occurrence.startBar
-                                    ? ' · continued'
-                                    : ''}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: palette.textPrimary,
-                                  fontSize: 11,
-                                  backgroundColor: palette.surface.withValues(
-                                    alpha: .9,
+                              child: Align(
+                                alignment: Alignment.topLeft,
+                                child: SizedBox(
+                                  height: labelHeight,
+                                  child: Text(
+                                    key: Key(
+                                      'writerBlockName_${block.id}_${widget.instanceIndex}_$segmentStart',
+                                    ),
+                                    '$displayName${automatic
+                                        ? ' · repeat'
+                                        : segmentStart > occurrence.startBar
+                                        ? ' · continued'
+                                        : ''}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: palette.textPrimary,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ),
                               ),
