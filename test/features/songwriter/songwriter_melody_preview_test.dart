@@ -20,6 +20,80 @@ const pattern = NotePattern(
 );
 
 void main() {
+  testWidgets('wide pitch ranges keep visible note thickness across segments', (
+    tester,
+  ) async {
+    final widePattern = pattern.copyWith(
+      notes: [
+        const NotePatternNote(
+          id: 'high',
+          midiNote: 108,
+          startTick: 0,
+          durationTicks: 20,
+        ),
+        const NotePatternNote(
+          id: 'adjacent',
+          midiNote: 22,
+          startTick: 0,
+          durationTicks: 20,
+        ),
+        const NotePatternNote(
+          id: 'low',
+          midiNote: 21,
+          startTick: 0,
+          durationTicks: 20,
+        ),
+      ],
+    );
+    Future<void> show(int start, int end) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox(
+              width: 240,
+              height: 48,
+              child: SongwriterMelodyPreview(
+                pattern: widePattern,
+                segmentStartTick: start,
+                segmentEndTick: end,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // In 42px of available height, 88 semitones are 42/88px apart. The
+    // adjacent notes intentionally overlap, but their centers remain distinct.
+    final highTop = 3 + .5 * (42 / 88) - 1;
+    final adjacentTop = 3 + 86.5 * (42 / 88) - 1;
+    final lowTop = 3 + 87.5 * (42 / 88) - 1;
+    RRect rect(double right, double top) => RRect.fromRectAndRadius(
+      Rect.fromLTRB(0, top, right, top + 2),
+      const Radius.circular(1),
+    );
+    await show(0, 16);
+    final canvas = find.descendant(
+      of: find.byType(SongwriterMelodyPreview),
+      matching: find.byType(CustomPaint),
+    );
+    expect(
+      canvas,
+      paints
+        ..rrect(rrect: rect(240, highTop))
+        ..rrect(rrect: rect(240, adjacentTop))
+        ..rrect(rrect: rect(240, lowTop)),
+    );
+    await show(16, 24);
+    expect(
+      canvas,
+      paints
+        ..rrect(rrect: rect(120, highTop))
+        ..rrect(rrect: rect(120, adjacentTop))
+        ..rrect(rrect: rect(120, lowTop)),
+    );
+  });
+
   testWidgets('theme and note changes repaint the existing preview', (
     tester,
   ) async {

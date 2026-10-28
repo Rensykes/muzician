@@ -58,7 +58,12 @@ class _MelodyPreviewPainter extends CustomPainter {
     final high = pitches.reduce(math.max);
     final range = high - low + 1;
     final rowHeight = (size.height - 6).clamp(0.0, double.infinity) / range;
-    final height = math.min(5.0, rowHeight * .75);
+    // Wide ranges cannot fit a distinct 2px row per semitone; preserve pitch
+    // centers and allow adjacent bars to overlap rather than becoming invisible.
+    final height = math.min(
+      size.height,
+      math.max(2.0, math.min(5.0, rowHeight * .75)),
+    );
     final paint = Paint()..color = palette.teal.withValues(alpha: .8);
     for (final note in notes) {
       final x =
