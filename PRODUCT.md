@@ -67,14 +67,17 @@ Strum lane; occupied targets are hidden from other strum selectors.
 Unassigned lanes reserve no target.
 Melody patterns can target Piano or Fretboard, with saved note positions and a
 performance view gated when the current instrument cannot play every note.
-Melodies are named and their length is derived from the last note in whole
-bars, edited with a Bars control in Piano Roll. Melody placements wrap across
-numbered bar rows and resize by whole bars within the melody's last-note bar,
-with an accessible placement alternative. A placement shorter than its melody
-clips; a longer legacy placement keeps its occupied bars and shows a silent
-tail without looping. Automatic repeats reserve their visible
-bars and cannot be silently displaced by a changed repeat period. Repeat / reuse
-creates a linked placement; Make Unique detaches just the selected placement.
+Melodies are named and their length is normalized to whole bars from the last
+note on save, edited with a Bars control in Piano Roll. Melody placements wrap
+across numbered bar rows and resize by whole bars within the placement limit:
+the last-note bar for normalized melodies, or the rounded-up stored length for
+legacy non-bar-aligned patterns until their next save. An accessible **Adjust
+placement** dialog offers the same edits without dragging. A shorter placement
+clips notes at its edge. An over-long retained placement may move unchanged but
+any resize must fit the limit; it keeps its occupied bars and shows a silent
+tail without looping. Automatic repeats reserve their visible bars and cannot
+be silently displaced by a changed repeat period. Repeat / reuse creates a
+linked placement; Make Unique detaches just the selected placement.
 Each new Melody lane defaults to Piano and can instead select Clean or Distorted
 guitar independently of its pattern's performance target. Unset legacy lanes
 retain per-pattern sound and the shared guitar tone until explicitly changed.

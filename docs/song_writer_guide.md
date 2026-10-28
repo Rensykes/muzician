@@ -160,17 +160,22 @@ the previous name and content.
 A new block uses the melody's full bar count when that placement is valid. It
 may instead be shortened or rejected if no valid placement is available, even
 when bars appear free, because existing automatic repeat origins must be
-preserved. Subsequent moves and resizing use the same rules. A placement may
-shrink to any whole bar but cannot extend beyond the melody's last-note bar.
+preserved. Subsequent moves and resizing use the same rules, with one
+compatibility exception: a retained over-long placement may move without
+changing its span, but any resize must end within the placement limit. A
+bar-aligned melody limits placements to its last-note bar. An older
+non-bar-aligned stored length may use its rounded-up bar count for placement
+validation and creation until the next melody save normalizes it. A placement
+may shrink to any whole bar but cannot extend beyond that placement limit.
 The block placement is shown separately in bars against the section's total
 length. A shorter placement clips notes at the placement edge. A placement
 longer than its melody, typically retained from an older project, keeps its
 occupied bars, plays the melody once, and shows a silent tail; it never loops
 the melody. Adding a Melody lane creates a one-bar pattern and a one-bar
-placement. On the first save of that empty pattern, the placement expands to
-the melody's full bar count when the whole span fits the section and lane.
-Later saves never resize placements, so editing a reused pattern's length does
-not change existing blocks.
+placement. On the first save after notes are added to that empty pattern, the
+placement expands to the melody's full bar count when the whole span fits the
+section and lane. Later saves never resize placements, so editing a reused
+pattern's length does not change existing blocks.
 
 The Melody timeline wraps in numbered four-bar rows. Each block's miniature,
 non-interactive piano roll shows its notes across the single-pass window and
@@ -183,9 +188,12 @@ pattern. Use Piano Roll to edit notes.
 A block crossing rows has continuation segments and one final-edge handle;
 drag to resize in whole bars,
 or use **Adjust placement** to move or resize without dragging. Resizing stops
-at the melody's last-note bar; an over-long legacy placement can shrink
-directly to a valid span, and **Adjust placement** explains the melody limit
-when the requested length exceeds it. A completed drag is one undo step;
+at the placement limit: the last-note bar for normalized melodies, or the
+rounded-up stored length for legacy non-bar-aligned patterns until their next
+save. An over-long legacy placement can shrink directly to a valid span, while
+a move that keeps its span leaves the silent tail in place, and **Adjust
+placement** explains the melody limit when the requested length exceeds it. A
+completed drag is one undo step;
 cancelling leaves the placement unchanged. Automatic lane
 repeats are marked and reserve their visible bars, including repeats clipped at
 the section edge. Changes that overlap them or shift their existing origins by
