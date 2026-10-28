@@ -249,8 +249,10 @@ later duration edit to a reused pattern does not resize its existing blocks.
 The Melody timeline wraps every four bars with numbered rows and continuation
 segments. Blocks show a non-interactive miniature piano roll: horizontal notes
 follow the placement's loops and clipped edges, with consistent pitch height
-across rows. Linked previews refresh together; missing or incompatible content
-shows no cached notes. Edit notes in Piano Roll, not in the preview. Drag the
+across rows, below a separate name strip. Linked previews refresh together;
+missing patterns and missing or incompatible canonical Saves show a warning,
+not cached notes. The detail row identifies unresolved melody content separately
+from an empty pattern. Edit notes in Piano Roll, not in the preview. Drag the
 final edge in whole bars to resize; releasing creates one undo step, while
 cancelling leaves the placement unchanged. Hold the drag near
 the top or bottom of the Writer sheet to scroll to additional rows. The block's action

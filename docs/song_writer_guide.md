@@ -157,8 +157,10 @@ resize existing blocks, so their repeat or clip behavior remains visible.
 
 The Melody timeline wraps in numbered four-bar rows. Each block's miniature,
 non-interactive piano roll shows its notes across loops and clipped edges, with
-pitch aligned across continuation rows. Linked previews update together; missing
-or incompatible content shows no cached notes. Use Piano Roll to edit notes.
+pitch aligned across continuation rows and a separate name strip. Linked previews
+update together; missing patterns or missing/incompatible canonical Saves show
+a warning instead of cached notes. The detail row marks unresolved content so it
+is distinguishable from an empty pattern. Use Piano Roll to edit notes.
 A block crossing rows has continuation segments and one final-edge handle;
 drag to resize in whole bars,
 or use **Adjust placement** to move or resize without dragging. A completed drag

@@ -276,6 +276,20 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(SongwriterMelodyPreview), findsNothing);
+      final name = find.byKey(Key('writerBlockName_${blockId}_0_0'));
+      expect(tester.widget<Text>(name).data, contains('Unresolved'));
+      expect(
+        find.descendant(
+          of: find.byKey(Key('melodySegment_${blockId}_0_0_0')),
+          matching: find.byIcon(Icons.warning_amber_rounded),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Unresolved melody content'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('Unresolved melody content')),
+        findsWidgets,
+      );
       final menu = find.byKey(Key('melodyBlockActions_${blockId}_0'));
       await tester.ensureVisible(menu);
       await tester.tap(menu);
@@ -632,6 +646,22 @@ void main() {
 
     await expectDisabled();
     final writer = f.container.read(songwriterProvider.notifier);
+    expect(find.byType(SongwriterMelodyPreview), findsOneWidget);
+    expect(find.text('Unresolved melody content'), findsNothing);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((p) => p.id == f.patternId)
+          .copyWith(
+            notes: [
+              const NotePatternNote(
+                id: 'cached-note',
+                midiNote: 84,
+                startTick: 0,
+                durationTicks: 4,
+              ),
+            ],
+          ),
+    );
     final project = f.container.read(songwriterProvider);
     final section = project.sections.single;
     final lanes = [
@@ -648,6 +678,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     await expectDisabled();
+    expect(find.byType(SongwriterMelodyPreview), findsNothing);
+    expect(
+      tester
+          .widget<Text>(find.byKey(Key('writerBlockName_${f.blockId}_0_0')))
+          .data,
+      contains('Unresolved'),
+    );
+    expect(find.text('Unresolved melody content'), findsOneWidget);
     expect(
       f.container
           .read(songwriterProvider)
@@ -1461,6 +1499,58 @@ void main() {
       });
     }
   }
+
+  testWidgets('compact long label does not cover populated high notes', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 4,
+      size: const Size(320, 1200),
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((p) => p.id == f.patternId)
+          .copyWith(
+            name: 'A very long melody name that must not hide notes',
+            notes: [
+              const NotePatternNote(
+                id: 'high',
+                midiNote: 90,
+                startTick: 0,
+                durationTicks: 4,
+              ),
+              const NotePatternNote(
+                id: 'low',
+                midiNote: 48,
+                startTick: 8,
+                durationTicks: 4,
+              ),
+            ],
+          ),
+    );
+    await tester.pumpAndSettle();
+    final label = find.byKey(Key('writerBlockName_${f.blockId}_0_0'));
+    final segment = find.byKey(Key('melodySegment_${f.blockId}_0_0_0'));
+    final preview = find.descendant(
+      of: segment,
+      matching: find.byType(SongwriterMelodyPreview),
+    );
+    expect(
+      tester.getRect(label).bottom,
+      lessThanOrEqualTo(tester.getRect(preview).top),
+    );
+    expect(
+      tester.getSize(preview).width,
+      closeTo(tester.getSize(segment).width - 4, 0.01),
+    );
+    expect(
+      tester.widget<SongwriterMelodyPreview>(preview).pattern.notes,
+      hasLength(2),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('resize stops at a neighbor and at the section boundary', (
     tester,
