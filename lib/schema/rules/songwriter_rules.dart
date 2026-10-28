@@ -141,8 +141,14 @@ bool isValidBlockPlacement({
   required SongSection section,
   required SongLane lane,
   required SongBlock candidate,
+  int? melodyBars,
 }) => lane.kind == SongLaneKind.melody
-    ? isValidMelodyPlacement(section: section, lane: lane, candidate: candidate)
+    ? isValidMelodyPlacement(
+        section: section,
+        lane: lane,
+        candidate: candidate,
+        melodyBars: melodyBars,
+      )
     : candidate.startBar >= 0 &&
           candidate.spanBars > 0 &&
           candidate.endBar <= section.lengthBars &&
@@ -194,6 +200,7 @@ bool isValidMelodyPlacement({
   required SongSection section,
   required SongLane lane,
   required SongBlock candidate,
+  int? melodyBars,
 }) {
   if (candidate.startBar < 0 ||
       candidate.spanBars <= 0 ||
@@ -207,6 +214,15 @@ bool isValidMelodyPlacement({
       existing.startBar == candidate.startBar &&
       existing.spanBars == candidate.spanBars) {
     return true;
+  }
+  // A legacy placement may already be longer than its melody. Moving it
+  // without changing its span keeps the occupied bars and silent tail; any
+  // resize has to end within the melody's last-note bar.
+  if (melodyBars != null &&
+      melodyBars > 0 &&
+      candidate.spanBars > melodyBars &&
+      existing?.spanBars != candidate.spanBars) {
+    return false;
   }
   if (blocksOverlap(lane.blocks, candidate)) return false;
   final original = melodyOccurrences(
@@ -539,6 +555,31 @@ NotePattern quantizeMelodyPatternLength(NotePattern pattern, int measureTicks) {
   return pattern.copyWith(
     lengthTicks: melodyBarCount(pattern, safeMeasureTicks) * safeMeasureTicks,
   );
+}
+
+/// Whole-bar placement limit for [pattern].
+///
+/// Newer melodies store a whole-bar length matching their last note. Legacy
+/// patterns may keep a non-bar-aligned stored length (for example 25 ticks);
+/// that length is rounded up for placement limits until the next save
+/// normalizes it.
+int melodyPlacementBarLimit(NotePattern pattern, int measureTicks) {
+  final noteBars = melodyBarCount(pattern, measureTicks);
+  if (measureTicks <= 0) return noteBars;
+  final lengthBars = (pattern.lengthTicks + measureTicks - 1) ~/ measureTicks;
+  if (pattern.lengthTicks % measureTicks != 0 && lengthBars > noteBars) {
+    return lengthBars.clamp(1, melodyMaxBars);
+  }
+  return noteBars;
+}
+
+/// Whole bars occupied by a placement's silent tail.
+int melodySilentTailBars({
+  required int melodyBars,
+  required int placementSpanBars,
+}) {
+  final tail = placementSpanBars - melodyBars;
+  return tail < 0 ? 0 : tail;
 }
 
 GuitarStrumPattern makeGuitarStrumPattern({

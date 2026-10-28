@@ -196,7 +196,7 @@ void main() {
     );
   });
 
-  test('clips looping notes to loop and visible window boundaries', () {
+  test('plays a melody once and clips at the pattern and window end', () {
     final notes = melodyPreviewNotes(
       pattern: pattern,
       segmentStartTick: 16,
@@ -205,10 +205,25 @@ void main() {
     expect(notes.map((n) => (n.startTick, n.endTick, n.midiNote)), [
       (16, 20, 64),
       (22, 24, 67),
-      (24, 28, 60),
-      (36, 44, 64),
-      (46, 48, 67),
     ]);
+    expect(
+      melodyPreviewNotes(
+        pattern: pattern,
+        segmentStartTick: 24,
+        segmentEndTick: 48,
+      ),
+      isEmpty,
+      reason: 'nothing is drawn after the melody end',
+    );
+  });
+
+  test('a zero-length placement window cannot draw a silent tail note', () {
+    final notes = melodyPreviewNotes(
+      pattern: pattern,
+      segmentStartTick: 16,
+      segmentEndTick: 16,
+    );
+    expect(notes, isEmpty);
   });
 
   test('clips a placement and ignores invalid starts and empty patterns', () {

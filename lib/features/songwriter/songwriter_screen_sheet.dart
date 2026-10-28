@@ -1212,7 +1212,7 @@ class _SectionHeading extends ConsumerWidget {
                       laneId: laneId,
                       patternId: patternId,
                       startBar: 0,
-                      spanBars: section.lengthBars,
+                      spanBars: 1,
                     );
                   });
                 }
@@ -3496,9 +3496,10 @@ class _PatternLaneRow extends ConsumerWidget {
       return available;
     }
 
-    int spanForPatternAt(int lengthTicks, int bar) {
+    int spanForPatternAt(int lengthTicks, int bar, {int? melodyBars}) {
       final measureTicks = project.config.measureTicks;
-      final requiredBars = (lengthTicks + measureTicks - 1) ~/ measureTicks;
+      final requiredBars =
+          melodyBars ?? (lengthTicks + measureTicks - 1) ~/ measureTicks;
       final maximum = requiredBars.clamp(1, availableBarsAt(bar));
       if (!isMelody) return maximum;
       for (var span = maximum; span >= 1; span--) {
@@ -3671,7 +3672,14 @@ class _PatternLaneRow extends ConsumerWidget {
             laneId: lane.id,
             patternId: patternId,
             startBar: bar,
-            spanBars: spanForPatternAt(pattern.lengthTicks, bar),
+            spanBars: spanForPatternAt(
+              pattern.lengthTicks,
+              bar,
+              melodyBars: melodyPlacementBarLimit(
+                pattern,
+                project.config.measureTicks,
+              ),
+            ),
           );
         } else {
           final pattern = ref
@@ -4035,7 +4043,10 @@ class _PatternLaneRow extends ConsumerWidget {
                 final summary = pattern == null || !safeContent
                     ? null
                     : _melodyPlacementPlaybackSummary(
-                        pattern.lengthTicks,
+                        melodyPlacementBarLimit(
+                          pattern,
+                          project.config.measureTicks,
+                        ),
                         block.spanBars,
                         project.config,
                       );
@@ -4301,7 +4312,10 @@ class _PatternLaneRow extends ConsumerWidget {
                     final playbackSummary = melodyPattern == null
                         ? null
                         : _melodyPlacementPlaybackSummary(
-                            melodyPattern.lengthTicks,
+                            melodyPlacementBarLimit(
+                              melodyPattern,
+                              project.config.measureTicks,
+                            ),
                             owner.spanBars,
                             project.config,
                           );
@@ -4697,20 +4711,21 @@ String _formatMusicDuration(int durationTicks, SongwriterConfig config) {
 }
 
 String _melodyPlacementPlaybackSummary(
-  int patternLengthTicks,
+  int melodyBars,
   int spanBars,
   SongwriterConfig config,
 ) {
-  final patternTicks = patternLengthTicks < 1 ? 1 : patternLengthTicks;
-  final placedTicks = spanBars * config.measureTicks;
-  if (patternTicks > placedTicks) {
+  final bars = melodyBars < 1 ? 1 : melodyBars;
+  if (bars > spanBars) {
+    final placedTicks = spanBars * config.measureTicks;
     return 'clips after ${_formatMusicDuration(placedTicks, config)}';
   }
-  if (patternTicks == placedTicks) return 'plays once';
-  if (placedTicks % patternTicks == 0) {
-    return 'repeats ×${placedTicks ~/ patternTicks} to fill';
-  }
-  return 'repeats, then clips the final pass';
+  if (bars == spanBars) return 'plays once';
+  final tail = melodySilentTailBars(
+    melodyBars: bars,
+    placementSpanBars: spanBars,
+  );
+  return 'plays once, then $tail silent tail ${tail == 1 ? 'bar' : 'bars'}';
 }
 
 Future<void> _showPatternPlacementDialog(
@@ -4721,20 +4736,29 @@ Future<void> _showPatternPlacementDialog(
   SongBlock block,
 ) => showStudioDialog<void>(
   context: context,
-  builder: (context) => _PatternPlacementDialog(
-    section: section,
-    lane: lane,
-    block: block,
-    onApply: (startBar, spanBars) => ref
-        .read(songwriterProvider.notifier)
-        .setBlockPlacement(
-          sectionId: section.id,
-          laneId: lane.id,
-          blockId: block.id,
-          startBar: startBar,
-          spanBars: spanBars,
-        ),
-  ),
+  builder: (context) {
+    final project = ref.read(songwriterProvider);
+    final pattern = project.melodyPatterns
+        .where((candidate) => candidate.id == block.patternId)
+        .firstOrNull;
+    return _PatternPlacementDialog(
+      section: section,
+      lane: lane,
+      block: block,
+      melodyBars: pattern == null
+          ? null
+          : melodyPlacementBarLimit(pattern, project.config.measureTicks),
+      onApply: (startBar, spanBars) => ref
+          .read(songwriterProvider.notifier)
+          .setBlockPlacement(
+            sectionId: section.id,
+            laneId: lane.id,
+            blockId: block.id,
+            startBar: startBar,
+            spanBars: spanBars,
+          ),
+    );
+  },
 );
 
 class _PatternPlacementDialog extends StatefulWidget {
@@ -4742,12 +4766,14 @@ class _PatternPlacementDialog extends StatefulWidget {
     required this.section,
     required this.lane,
     required this.block,
+    required this.melodyBars,
     required this.onApply,
   });
 
   final SongSection section;
   final SongLane lane;
   final SongBlock block;
+  final int? melodyBars;
   final void Function(int startBar, int spanBars) onApply;
 
   @override
@@ -4787,6 +4813,7 @@ class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
           section: widget.section,
           lane: widget.lane,
           candidate: candidate,
+          melodyBars: widget.melodyBars,
         );
   }
 
@@ -4804,6 +4831,14 @@ class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
     final candidate = _candidate!;
     if (candidate.endBar > widget.section.lengthBars) {
       return 'The block must end by bar ${widget.section.lengthBars}.';
+    }
+    final melodyBars = widget.melodyBars;
+    if (melodyBars != null &&
+        candidate.spanBars != widget.block.spanBars &&
+        candidate.spanBars > melodyBars) {
+      return 'Melody is $melodyBars ${melodyBars == 1 ? 'bar' : 'bars'} '
+          'long. Resize the placement to $melodyBars '
+          '${melodyBars == 1 ? 'bar' : 'bars'} or fewer.';
     }
     if (blocksOverlap(widget.lane.blocks, candidate)) {
       return 'This placement overlaps another block in the lane.';

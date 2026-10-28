@@ -3605,6 +3605,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                     section: section,
                     lane: l,
                     candidate: block,
+                    melodyBars: _melodyPlacementLimit(block.patternId),
                   ))
           ? l
           : l.copyWith(blocks: [...l.blocks, block]),
@@ -3755,6 +3756,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
                 section: section,
                 lane: lane,
                 candidate: expanded,
+                melodyBars: melodyPlacementBarLimit(
+                  updated,
+                  state.config.measureTicks,
+                ),
               )) {
             sections = [
               for (var i = 0; i < sections.length; i++)
@@ -3954,6 +3959,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       return false;
     }
     final id = generateId();
+    final melodyBars = _melodyPlacementLimit(source.patternId);
     for (var span = source.spanBars; span > 0; span--) {
       final candidate = SongBlock(
         id: id,
@@ -3975,6 +3981,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         section: section,
         lane: lane,
         candidate: candidate,
+        melodyBars: melodyBars,
       )) {
         continue;
       }
@@ -3993,6 +4000,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
               section: currentSection,
               lane: currentLane,
               candidate: candidate,
+              melodyBars: melodyBars,
             )) {
           return currentLane;
         }
@@ -4103,6 +4111,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         section: section,
         lane: lane,
         candidate: block,
+        melodyBars: _melodyPlacementLimit(patternId),
       )) {
         return lane;
       }
@@ -4493,6 +4502,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     return newClipIds;
   }
 
+  /// Whole-bar limit of the melody referenced by [patternId], or null when the
+  /// block is not a resolvable melody (non-melody lanes keep their old rules).
+  int? _melodyPlacementLimit(String? patternId) {
+    if (patternId == null) return null;
+    final pattern = state.melodyPatterns
+        .where((candidate) => candidate.id == patternId)
+        .firstOrNull;
+    if (pattern == null) return null;
+    return melodyPlacementBarLimit(pattern, state.config.measureTicks);
+  }
+
   /// Move/resize a block. Rejects (no-op) if it falls outside the section or
   /// overlaps another block in the same lane.
   void setBlockPlacement({
@@ -4518,6 +4538,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       section: section,
       lane: lane,
       candidate: moved,
+      melodyBars: _melodyPlacementLimit(current.patternId),
     )) {
       return;
     }
@@ -5029,6 +5050,12 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
             section: section,
             lane: targetLane,
             candidate: block,
+            melodyBars: writerSnapshot.melodyPattern == null
+                ? null
+                : melodyPlacementBarLimit(
+                    writerSnapshot.melodyPattern!,
+                    state.config.measureTicks,
+                  ),
           )
         : blocksOverlap(retainedBlocks, block)) {
       return false;

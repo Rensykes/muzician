@@ -555,33 +555,132 @@ void main() {
       },
     );
 
+    const threeBarMelody = NotePattern(
+      id: 'melody',
+      name: 'Lead',
+      lengthTicks: 48,
+      notes: [
+        NotePatternNote(id: 'a', midiNote: 60, startTick: 0, durationTicks: 4),
+        NotePatternNote(
+          id: 'b',
+          midiNote: 64,
+          startTick: 20,
+          durationTicks: 20,
+          onsetOffsetMs: 12,
+        ),
+        NotePatternNote(id: 'c', midiNote: 67, startTick: 44, durationTicks: 8),
+      ],
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      snapTicks: 1,
+      highlightedNotes: [],
+    );
+
+    test('a melody plays once from its placement start, not timeline zero', () {
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 2,
+            spanBars: 3,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 8,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
+        const [],
+      );
+
+      expect(events.map((event) => event.tick), [32, 52, 76]);
+      expect(
+        events.first.tick,
+        32,
+        reason: 'the melody starts at the placement bar, not timeline zero',
+      );
+      final clipped = events.last.sequencedNoteGroups.single.notes.single;
+      expect(clipped.id, 'c');
+      expect(clipped.durationTicks, 4);
+      expect(clipped.startTick, 76);
+    });
+
+    test('a shorter placement clips later melody notes', () {
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 2,
+            spanBars: 1,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 8,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
+        const [],
+      );
+
+      expect(events.map((event) => event.tick), [32]);
+      expect(events.single.sequencedNoteGroups.single.notes.single.id, 'a');
+    });
+
+    test('a longer placement plays once then stays silent, never loops', () {
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 2,
+            spanBars: 5,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 8,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
+        const [],
+      );
+
+      expect(events.map((event) => event.tick), [32, 52, 76]);
+      expect(
+        events.where((event) => event.tick >= 80),
+        isEmpty,
+        reason: 'no note repeats after the three-bar melody ends',
+      );
+    });
+
     test(
-      'melody loops from block origin and clips at each pattern boundary',
+      'automatic lane repeats remain arrangement-level placement repeats',
       () {
-        const pattern = NotePattern(
-          id: 'melody',
-          name: 'Lead',
-          lengthTicks: 8,
-          notes: [
-            NotePatternNote(
-              id: 'a',
-              midiNote: 60,
-              startTick: 2,
-              durationTicks: 7,
-            ),
-            NotePatternNote(
-              id: 'b',
-              midiNote: 64,
-              startTick: 7,
-              durationTicks: 4,
-              onsetOffsetMs: 12,
-            ),
-          ],
-          pitchRangeStart: 48,
-          pitchRangeEnd: 84,
-          snapTicks: 1,
-          highlightedNotes: [],
-        );
         const lane = SongLane(
           id: 'melody-lane',
           kind: SongLaneKind.melody,
@@ -605,47 +704,11 @@ void main() {
         );
 
         final events = flattenPlaybackEvents(
-          projectWith(sections: [section], melodyPatterns: [pattern]),
+          projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
           const [],
         );
 
-        expect(events.map((event) => event.tick), [
-          2,
-          7,
-          10,
-          15,
-          18,
-          23,
-          26,
-          31,
-          34,
-          39,
-          42,
-          47,
-          50,
-          55,
-          58,
-          63,
-        ]);
-        final clipped = events.firstWhere((event) => event.tick == 7);
-        expect(
-          clipped.sequencedNoteGroups.single.notes.single.durationTicks,
-          1,
-        );
-        expect(
-          clipped.sequencedNoteGroups.single.notes.single.onsetOffsetMs,
-          12,
-        );
-        expect(
-          events.first.tick,
-          2,
-          reason: 'pattern origin is the block start, not timeline zero',
-        );
-        expect(
-          events.last.tick,
-          63,
-          reason: 'the final repeat is clipped to the section boundary',
-        );
+        expect(events.map((event) => event.tick), [0, 16, 32, 48]);
       },
     );
 

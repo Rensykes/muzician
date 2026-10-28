@@ -41,7 +41,7 @@ void main() {
       sectionId: section.id,
       kind: SongLaneKind.melody,
     );
-    final patternId = writer.addMelodyPattern();
+    final patternId = writer.addMelodyPattern(lengthTicks: 96);
     writer.updateMelodyPattern(
       writer.state.melodyPatterns
           .singleWhere((p) => p.id == patternId)
@@ -52,6 +52,12 @@ void main() {
                 midiNote: 72,
                 startTick: 0,
                 durationTicks: 4,
+              ),
+              const NotePatternNote(
+                id: 'length',
+                midiNote: 67,
+                startTick: 94,
+                durationTicks: 2,
               ),
             ],
           ),
