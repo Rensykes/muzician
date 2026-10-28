@@ -73,7 +73,8 @@ drum editors also group steps by beat and scroll on short screens.
 
 Writer's chord, library, mixer, audio, drum, strum, structure, and melody editors
 follow live appearance changes. An open melody Piano Roll keeps its isolated
-notes, tool, and snap setting; only **Save** commits its edits to Writer.
+notes, tool, and snap setting; its rename action and **Bars** stepper edit the
+melody name and canvas locally, and only **Save** commits both to Writer.
 The mixer uses compact lane rows separated by dividers, with volume, pan,
 rename, and mute controls, rather than a bordered card around each lane.
 
@@ -88,7 +89,7 @@ rename, and mute controls, rather than a bordered card around each lane.
 | `SongSection` | `id`, optional `label`, `lengthBars`, `order`, `repeat`, `lanes`. |
 | `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; Harmony lanes carry a fixed Piano or Fretboard identity, a strum lane stores its selected Fretboard Harmony source, and a Melody lane may carry an explicit `melodySound`. |
 | `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter), canonical `saveId`, and local lyrics/placement; pattern lanes reference their pattern id; legacy content fields and `embedded` snapshot are fallback data. Harmony extras include `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, and `romanNumeral`. |
-| `NotePattern` / `GuitarStrumPattern` | Melody pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. Writer melody performance state is stored alongside the pattern. |
+| `NotePattern` / `GuitarStrumPattern` | Melody name, bar-quantized `lengthTicks`, pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. Writer melody performance state is stored alongside the pattern. |
 | `WriterMelodyPerformance` | Per-pattern Piano or Fretboard target; Piano uses each note's MIDI key, while Fretboard positions map note IDs to playable strings and physical frets. |
 
 All types are immutable (`copyWith` / `toJson` / `fromJson`). A block resolves to
@@ -232,31 +233,49 @@ repeats (the lane's block pattern tiles N× from bar 0, clipped to the section).
 
 ### Melody and guitar-strum lanes
 
-Melody blocks point to reusable patterns. At an empty bar, choose **Use existing
-pattern** to place another block linked to a selected pattern, or **Create new
-pattern** to start one in Piano Roll; reuse preserves the shared pattern and its
-performance mapping, including A–B–A–B arrangements. Pattern duration is its
-actual `lengthTicks`, shown as bars plus any remaining beats and ticks. The
-block's `spanBars` is shown separately against the section's total bars. A new
-block uses the pattern's full duration in bars when that placement is valid;
-it may be shortened to fit or rejected if no valid placement is available, even
-when bars appear free, because existing automatic repeat origins must be
-preserved. Placement can be shortened or extended subject to the same rules.
-Patterns repeat from the block's left edge when the placement is longer, and
-notes clip at the block edge when it is shorter. A
-later duration edit to a reused pattern does not resize its existing blocks.
+Melody blocks point to named, reusable patterns. At an empty bar, choose **Use
+existing pattern** to place another block linked to a selected pattern, or
+**Create new pattern** to start one in Piano Roll; reuse preserves the shared
+pattern and its performance mapping, including A–B–A–B arrangements. A melody's
+length is derived from its last note and stored in whole bars, with a one-bar
+minimum. In the melody editor, the **Bars** stepper extends the Piano Roll
+canvas from 1 to 32 bars and cannot shrink below the bar containing the last
+note; the rename action changes the pattern name. **Save** applies both the name
+and notes and quantizes the stored length to the last-note bar. A note ending
+inside a bar still occupies that whole bar, with silence after it. Changing
+Bars or shortening a placement never deletes notes.
+
+The block's `spanBars` is shown separately against the section's total bars. A
+placement is a bar-aligned window over the melody: a new block uses the
+melody's full bar count when that placement is valid, and may be shortened to
+fit or rejected if no valid placement is available, even when bars appear
+free, because existing automatic repeat origins must be preserved. A placement
+may shrink to any whole bar but cannot extend beyond the melody's last-note
+bar. Shortening clips playback at the placement edge while every note remains
+stored. Adding a Melody lane creates a one-bar pattern and a one-bar placement;
+on the first save of that empty pattern, the placement expands to the melody's
+full bar count when the whole span fits the section and lane. Later saves never
+resize placements. A placement longer than the melody (typically retained from
+an older project) keeps its occupied bars, plays the melody once, and then
+shows a silent tail instead of looping. A later length edit to a reused pattern
+does not resize its existing blocks.
 
 The Melody timeline wraps every four bars with numbered rows and continuation
 segments. Blocks show a non-interactive miniature piano roll: horizontal notes
-follow the placement's loops and clipped edges, with consistent pitch height
-across rows, below a separate name strip. Linked previews refresh together;
-missing patterns and missing or incompatible canonical Saves show a warning,
-not cached notes. The detail row identifies unresolved melody content separately
-from an empty pattern. Edit notes in Piano Roll, not in the preview. Drag the
-final edge in whole bars to resize; releasing creates one undo step, while
-cancelling leaves the placement unchanged. Hold the drag near
-the top or bottom of the Writer sheet to scroll to additional rows. The block's action
-menu also offers **Adjust placement** to move or resize without a gesture.
+follow the placement's single-pass window and clipped edges, with consistent
+pitch height across rows, below a separate name strip. A diagonal hatch and
+summary mark bars occupied by a silent tail after the melody ends. Linked
+previews refresh together; missing patterns and missing or incompatible
+canonical Saves show a warning, not cached notes. The detail row identifies
+unresolved melody content separately from an empty pattern. Edit notes in Piano
+Roll, not in the preview. Drag the final edge in whole bars to resize;
+resizing stops at the melody's last-note bar, an over-long legacy placement can
+shrink directly to a valid span, and releasing creates one undo step while
+cancelling leaves the placement unchanged. Hold the drag near the top or
+bottom of the Writer sheet to scroll to additional rows. The block's action
+menu also offers **Adjust placement** to move or resize without a gesture; it
+explains the melody limit when the requested length exceeds it. Placement
+details summarize whether the window clips, plays once, or has a silent tail.
 Automatic lane repeats are marked as repeats and reserve their occupied bars;
 their visible occupancy is clipped at the section edge. Placement changes also
 cannot shift or remove existing automatic repeat origins by changing the lane's
@@ -329,8 +348,10 @@ tick-indexed event list the transport walks:
   cells map string+fret through the tuning. Broken blocks are silent.
 - **Drum lane blocks** fire their referenced `DrumPattern` hits at native tick
   resolution, tiled across the block's bar span.
-- **Melody lane blocks** play duration-aware notes, looping their pattern from
-  local tick zero and clipping voices at the block/section boundary.
+- **Melody lane blocks** play duration-aware notes once from local tick zero,
+  clip voices at the melody end, the placement edge, and the section boundary,
+  and never loop. A placement longer than its melody sounds silence after the
+  melody ends.
 - **Guitar-strum blocks** resolve each down/up step against their explicitly
   selected Fretboard Harmony source and stay silent when it is unassigned or has
   no playable Harmony at that step. Named exact Harmony uses its native
@@ -374,7 +395,7 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `newProject()` | Reset the active project's Writer session. Writer's **New project** action creates a separate Save System project and uses the protected project-switch flow described above. |
 | `setKey(root, scaleName)` / `setTempo(tempo)` | Config edits; `setKey` recomputes harmony-lane Roman numerals. |
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
-| `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit looped note and strum patterns. |
+| `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit named, bar-quantized melody patterns and strum patterns; melody placement validation applies the last-note bar limit. |
 | `setBlockPlacement(...)` | Move or resize while preserving pattern content; Melody validation also protects expanded repeat occupancy and existing repeat origins. |
 | `repeatMelodyBlock(...)` / `setMelodyLaneSound(...)` | Create a linked placement at a valid start / set an explicit sound for one Melody lane. |
 | `insertInstrumentSelectionAtBar(...)` | Adds a named, saved chord or exact Fretboard/Piano snapshot to a Writer lane after section/bar selection and a name prompt. |
