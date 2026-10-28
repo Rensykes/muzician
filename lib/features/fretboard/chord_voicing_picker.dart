@@ -11,10 +11,11 @@ import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../store/project_config_sync.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import '../instrument_shared/chord_picker_parts.dart';
+import '../instrument_shared/instrument_voicing_search.dart';
 import 'chord_diagram.dart';
 
 const _qualities = [
@@ -213,7 +214,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
     final notes = outOfKey
         .map((note) => formatRootChoiceLabel(note, spelling: spelling))
         .join(', ');
-    final result = await showDialog<OutOfKeyResult>(
+    final result = await showStudioDialog<OutOfKeyResult>(
       context: context,
       builder: (ctx) => OutOfKeyDialog(
         title: 'Chord outside the key',
@@ -228,6 +229,9 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
 
   @override
   Widget build(BuildContext context) {
+    if (StudioPalette.of(context).isStudio) {
+      return const InstrumentVoicingSearch(guitar: true);
+    }
     final state = ref.watch(fretboardProvider);
     final spelling = ref.watch(
       settingsProvider.select((settings) => settings.noteSpelling),
@@ -271,20 +275,22 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
         ? const <DiatonicChord>[]
         : getDiatonicChords(activeKey.root, activeKey.scaleName);
 
+    final studio = StudioPalette.of(context).isStudio;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Header
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-          child: ChordPickerHeader(
-            title: 'CHORD VOICINGS',
-            root: chordNotes.isNotEmpty ? _selectedRoot : null,
-            quality: _selectedQuality,
+        if (!studio)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+            child: ChordPickerHeader(
+              title: 'CHORD VOICINGS',
+              root: chordNotes.isNotEmpty ? _selectedRoot : null,
+              quality: _selectedQuality,
+            ),
           ),
-        ),
         // Diatonic chord hint (project key only)
-        if (diatonic.isNotEmpty) ...[
+        if (!studio && diatonic.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
             child: DiatonicChordsHeader(
@@ -296,7 +302,7 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
             chords: diatonic,
             selectedRoot: _selectedRoot,
             selectedQuality: _selectedQuality,
-            accent: MuzicianTheme.violet,
+            accent: StudioPalette.of(context).violet,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             onTap: (root, quality) => setState(() {
               _selectedRoot = root;
@@ -306,23 +312,41 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
           ),
           const SizedBox(height: 10),
         ],
-        // Root pills
-        RootPillRow(
-          selectedRoot: _selectedRoot,
-          accent: MuzicianTheme.violet,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          onTap: (root) => setState(() {
-            _selectedRoot = _selectedRoot == root ? null : root;
-            _selectedVoicingIdx = null;
-          }),
-        ),
+        // Studio gives root and quality one row, leaving room for diagrams.
+        if (studio)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: StudioChordSelectors(
+              root: _selectedRoot,
+              quality: _selectedQuality,
+              qualities: _qualities,
+              onRootChanged: (root) => setState(() {
+                _selectedRoot = root;
+                _selectedVoicingIdx = null;
+              }),
+              onQualityChanged: (quality) => setState(() {
+                _selectedQuality = quality;
+                _selectedVoicingIdx = null;
+              }),
+            ),
+          ),
+        if (!studio)
+          RootPillRow(
+            selectedRoot: _selectedRoot,
+            accent: StudioPalette.of(context).violet,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            onTap: (root) => setState(() {
+              _selectedRoot = _selectedRoot == root ? null : root;
+              _selectedVoicingIdx = null;
+            }),
+          ),
         // Quality pills
-        if (_selectedRoot != null) ...[
+        if (!studio && _selectedRoot != null) ...[
           const SizedBox(height: 8),
           QualityPillRow(
             qualities: _qualities,
             selectedQuality: _selectedQuality,
-            accent: MuzicianTheme.violet,
+            accent: StudioPalette.of(context).violet,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             onTap: (symbol) => setState(() {
               _selectedQuality = symbol;
@@ -332,17 +356,18 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
         ],
         // Voicings carousel
         if (voicings.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
-            child: Text(
-              '${voicings.length} voicing${voicings.length != 1 ? 's' : ''} — tap to apply',
-              style: const TextStyle(
-                color: Color(0xFF334155),
-                fontSize: 10,
-                letterSpacing: 0.3,
+          if (!studio)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
+              child: Text(
+                '${voicings.length} voicing${voicings.length != 1 ? 's' : ''} — tap to apply',
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
+                  fontSize: 10,
+                  letterSpacing: 0.3,
+                ),
               ),
             ),
-          ),
           SizedBox(
             height: 108,
             child: ListView.builder(
@@ -378,38 +403,60 @@ class _ChordVoicingPickerState extends ConsumerState<ChordVoicingPicker>
             ),
           ),
         ],
+        if (studio && diatonic.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: DiatonicChordsHeader(
+              keyLabel:
+                  '${formatRootChoiceLabel(activeKey!.root, spelling: spelling)} ${activeKey.scaleName}',
+            ),
+          ),
+          DiatonicChordsRow(
+            chords: diatonic,
+            selectedRoot: _selectedRoot,
+            selectedQuality: _selectedQuality,
+            accent: StudioPalette.of(context).sky,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            onTap: (root, quality) => setState(() {
+              _selectedRoot = root;
+              _selectedQuality = quality;
+              _selectedVoicingIdx = null;
+            }),
+          ),
+        ],
         // Empty states
         if (_selectedRoot != null && chordNotes.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
             child: Text(
               'No chord found for "$chordName".',
-              style: const TextStyle(
-                color: Color(0xFF334155),
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),
             ),
           ),
         if (chordNotes.isNotEmpty && voicings.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
             child: Text(
               'No voicings found in standard positions.',
               style: TextStyle(
-                color: Color(0xFF334155),
+                color: StudioPalette.of(context).textMuted,
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),
             ),
           ),
         if (_selectedRoot == null)
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
             child: Text(
               'Select a root note to get started.',
               style: TextStyle(
-                color: Color(0xFF334155),
+                color: StudioPalette.of(context).textMuted,
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),

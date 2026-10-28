@@ -8,6 +8,15 @@ import 'song_project.dart';
 
 enum SongLaneKind { harmony, save, drum, audio, melody, guitarStrum }
 
+enum MelodyLaneSound { piano, cleanGuitar, distortedGuitar }
+
+MelodyLaneSound? _melodyLaneSoundFromName(String? raw) {
+  for (final sound in MelodyLaneSound.values) {
+    if (sound.name == raw) return sound;
+  }
+  return null;
+}
+
 /// Version of the one-time migration that pins legacy guitar-strum Harmony
 /// anchors. Missing versions in old snapshots are treated as version zero.
 const strumAnchorMigrationCurrentVersion = 1;
@@ -458,6 +467,9 @@ class SongLane {
   /// Instrument used by a Harmony Lane; null for other lane kinds.
   final HarmonyLaneInstrument? harmonyInstrument;
 
+  /// Playback sound for a Melody lane; null retains legacy fallback behavior.
+  final MelodyLaneSound? melodySound;
+
   const SongLane({
     required this.id,
     required this.kind,
@@ -470,6 +482,7 @@ class SongLane {
     this.muted = false,
     this.anchorLaneId,
     this.harmonyInstrument,
+    this.melodySound,
   });
 
   SongLane copyWith({
@@ -483,6 +496,7 @@ class SongLane {
     bool? muted,
     String? anchorLaneId,
     HarmonyLaneInstrument? harmonyInstrument,
+    MelodyLaneSound? melodySound,
     bool clearLabel = false,
     bool clearAnchorLaneId = false,
     bool clearHarmonyInstrument = false,
@@ -502,6 +516,7 @@ class SongLane {
     harmonyInstrument: clearHarmonyInstrument
         ? null
         : (harmonyInstrument ?? this.harmonyInstrument),
+    melodySound: melodySound ?? this.melodySound,
   );
 
   Map<String, dynamic> toJson() => {
@@ -516,6 +531,7 @@ class SongLane {
     'muted': muted,
     'anchorLaneId': anchorLaneId,
     'harmonyInstrument': harmonyInstrument?.name,
+    'melodySound': melodySound?.name,
   };
 
   factory SongLane.fromJson(Map<String, dynamic> json) => SongLane(
@@ -536,6 +552,7 @@ class SongLane {
     harmonyInstrument: HarmonyLaneInstrument.fromJson(
       json['harmonyInstrument'] as String?,
     ),
+    melodySound: _melodyLaneSoundFromName(json['melodySound'] as String?),
   );
 }
 

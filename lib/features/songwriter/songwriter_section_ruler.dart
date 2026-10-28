@@ -6,7 +6,7 @@ import '../../schema/rules/songwriter_playback_rules.dart'
     show activePositionForBar, sectionBarGlobalTick;
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import 'songwriter_playhead.dart';
 
 /// A bar ruler at the top of a section card. Tapping/dragging parks the playback
@@ -72,8 +72,10 @@ class SongwriterSectionRuler extends ConsumerWidget {
                   child: CustomPaint(
                     painter: _RulerPainter(
                       bars: bars,
-                      lineColor: Colors.white.withValues(alpha: 0.18),
-                      numberColor: MuzicianTheme.textMuted,
+                      lineColor: StudioPalette.of(
+                        context,
+                      ).textPrimary.withValues(alpha: 0.18),
+                      numberColor: StudioPalette.of(context).textMuted,
                     ),
                   ),
                 ),
@@ -82,10 +84,12 @@ class SongwriterSectionRuler extends ConsumerWidget {
                     left: markerBar * cell,
                     top: 0,
                     bottom: 0,
-                    child: const SizedBox(
-                      key: Key('sectionRulerMarker'),
+                    child: SizedBox(
+                      key: const Key('sectionRulerMarker'),
                       width: 10,
-                      child: CustomPaint(painter: _MarkerPainter()),
+                      child: CustomPaint(
+                        painter: _MarkerPainter(StudioPalette.of(context).sky),
+                      ),
                     ),
                   ),
                 Positioned.fill(
@@ -144,11 +148,12 @@ class _RulerPainter extends CustomPainter {
 }
 
 class _MarkerPainter extends CustomPainter {
-  const _MarkerPainter();
+  const _MarkerPainter(this.color);
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = MuzicianTheme.sky;
+    final p = Paint()..color = color;
     // A small downward flag at the top-left plus a full-height line.
     final path = Path()
       ..moveTo(0, 0)
@@ -164,5 +169,5 @@ class _MarkerPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MarkerPainter old) => false;
+  bool shouldRepaint(_MarkerPainter old) => color != old.color;
 }

@@ -5,6 +5,7 @@ import 'package:flutter/semantics.dart'
     show OrdinalSortKey, SemanticsProperties;
 
 import '../../schema/rules/songwriter_rules.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
 
 const _wedgeCount = 7;
@@ -73,10 +74,16 @@ class ChordWheel extends StatelessWidget {
           keyRootPc: keyRootPc,
           scaleName: scaleName,
           triads: triads,
-          majorColor: scheme.primary,
-          minorColor: scheme.secondary,
-          dimColor: Colors.grey.shade600,
-          textColor: Colors.white,
+          majorColor: StudioPalette.of(context).isStudio
+              ? StudioPalette.of(context).dialogBg
+              : scheme.primary,
+          minorColor: StudioPalette.of(context).isStudio
+              ? StudioPalette.of(context).surface
+              : scheme.secondary,
+          dimColor: StudioPalette.of(context).isStudio
+              ? StudioPalette.of(context).scaffoldBg
+              : Colors.grey.shade600,
+          textColor: StudioPalette.of(context).textPrimary,
           spelling: spelling,
           textScaler: MediaQuery.textScalerOf(context),
           textDirection: Directionality.of(context),

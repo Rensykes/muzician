@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../store/songwriter_playback_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 /// Vertical playhead line over one horizontal bar-row during playback.
 ///
@@ -52,7 +52,7 @@ class SongwriterRowPlayhead extends ConsumerWidget {
           painter: _PlayheadLinePainter(
             col: col,
             barsInRow: barsInRow,
-            color: MuzicianTheme.sky,
+            color: StudioPalette.of(context).sky,
             highlightActiveBar: highlightActiveBar,
           ),
         ),

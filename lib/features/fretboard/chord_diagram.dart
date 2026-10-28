@@ -3,12 +3,12 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../models/fretboard.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 const double _svgW = 80;
 const double _svgH = 98;
-const double _ml = 18;
-const double _mr = 6;
+const double _ml = 12;
+const double _mr = 12;
 const double _mt = 22;
 const double _mb = 6;
 const int _strings = 6;
@@ -49,11 +49,11 @@ class ChordDiagram extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
           color: isSelected
-              ? MuzicianTheme.sky.withValues(alpha: 0.08)
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.08)
               : Colors.white.withValues(alpha: 0.04),
           border: Border.all(
             color: isSelected
-                ? MuzicianTheme.sky.withValues(alpha: 0.5)
+                ? StudioPalette.of(context).sky.withValues(alpha: 0.5)
                 : Colors.white.withValues(alpha: 0.1),
             width: isSelected ? 1.5 : 0.5,
           ),
@@ -61,6 +61,7 @@ class ChordDiagram extends StatelessWidget {
         child: CustomPaint(
           size: const Size(_svgW, _svgH),
           painter: _ChordDiagramPainter(
+            colors: StudioPalette.of(context),
             voicing: voicing,
             rootNote: rootNote,
             openNotes: openNotes,
@@ -72,11 +73,13 @@ class ChordDiagram extends StatelessWidget {
 }
 
 class _ChordDiagramPainter extends CustomPainter {
+  final StudioPalette colors;
   final ChordVoicing voicing;
   final String? rootNote;
   final List<String> openNotes;
 
   _ChordDiagramPainter({
+    required this.colors,
     required this.voicing,
     this.rootNote,
     required this.openNotes,
@@ -84,6 +87,10 @@ class _ChordDiagramPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Border insets can make the paint bounds smaller than the nominal card.
+    // Keep the strings centered within those actual bounds as well.
+    canvas.save();
+    canvas.translate((size.width - _svgW) / 2, (size.height - _svgH) / 2);
     final displayBase = voicing.baseFret < 1 ? 1 : voicing.baseFret;
     final isOpen = voicing.baseFret <= 1;
 
@@ -91,12 +98,13 @@ class _ChordDiagramPainter extends CustomPainter {
     if (!isOpen) {
       final tp = TextPainter(
         text: TextSpan(
-          text: '${displayBase}fr',
-          style: const TextStyle(color: Color(0xFF64748B), fontSize: 8),
+          text: '$displayBase',
+          style: TextStyle(color: colors.textMuted, fontSize: 8),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(_ml - 4 - tp.width, _wireY(0)));
+      tp.paint(canvas, Offset(_ml - 2 - tp.width, _wireY(0)));
+      tp.dispose();
     }
 
     // Fret wires
@@ -133,10 +141,10 @@ class _ChordDiagramPainter extends CustomPainter {
       if (fret == null) {
         // Muted
         final tp = TextPainter(
-          text: const TextSpan(
+          text: TextSpan(
             text: '×',
             style: TextStyle(
-              color: Color(0xFFEF4444),
+              color: colors.red,
               fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
@@ -152,7 +160,7 @@ class _ChordDiagramPainter extends CustomPainter {
           text: TextSpan(
             text: '○',
             style: TextStyle(
-              color: isRoot ? MuzicianTheme.sky : const Color(0xFF94A3B8),
+              color: isRoot ? colors.sky : colors.textSecondary,
               fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
@@ -168,15 +176,17 @@ class _ChordDiagramPainter extends CustomPainter {
             (rootNote != null &&
                 si < openNotes.length &&
                 openNotes[si] == rootNote)
-            ? MuzicianTheme.sky
-            : const Color(0xFF7C3AED);
+            ? colors.sky
+            : colors.violet;
         canvas.drawCircle(Offset(cx, cy), _fg * 0.32, Paint()..color = fill);
       }
     }
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _ChordDiagramPainter old) =>
+      old.colors != colors ||
       old.voicing != voicing ||
       old.rootNote != rootNote ||
       old.openNotes != openNotes;

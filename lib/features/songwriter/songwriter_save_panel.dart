@@ -9,13 +9,13 @@ import '../../schema/rules/save_system_rules.dart';
 import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../../ui/project_required_placeholder.dart';
 import '../../ui/save_browser_panel.dart';
 import '../../utils/note_utils.dart';
 
-/// Writer's named Song versions and reusable Section blocks.
+/// Writer's named Writer versions and reusable Section blocks.
 ///
 /// Whole-project loads are restricted to SongwriterProjectSnapshot entries.
 /// Section blocks are browsed independently so a Writer-native block can
@@ -25,7 +25,7 @@ class SongwriterSavePanel extends ConsumerStatefulWidget {
   /// section and bar picker and inserts the selected root Writer block.
   final ValueChanged<SaveEntry>? onUseInWriter;
 
-  /// Tab to show when the panel opens: 0 for Song versions, 1 for Section blocks.
+  /// Tab to show when the panel opens: 0 for Writer versions, 1 for Section blocks.
   final int initialTabIndex;
 
   const SongwriterSavePanel({
@@ -127,9 +127,9 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
       );
     }
     if (differences.isNotEmpty) {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showStudioDialog<bool>(
         context: context,
-        builder: (dialogContext) => MuzicianDialog(
+        builder: (context) => MuzicianDialog(
           title: 'Project settings differ',
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -150,12 +150,12 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
           actions: [
             MuzicianDialogButton(
               'Cancel',
-              onPressed: () => Navigator.pop(dialogContext, false),
+              onPressed: () => Navigator.pop(context, false),
             ),
             MuzicianDialogButton(
               'Load version',
               emphasis: MuzicianDialogEmphasis.primary,
-              onPressed: () => Navigator.pop(dialogContext, true),
+              onPressed: () => Navigator.pop(context, true),
             ),
           ],
         ),
@@ -185,10 +185,10 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
     String? laneId = _matchingLanes(sections.first, laneKind).firstOrNull?.id;
     String? startBarError;
     var startBarText = '1';
-    return showDialog<_WriterDestination>(
+    return showStudioDialog<_WriterDestination>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
           final section = sections.firstWhere(
             (item) => item.id == sectionId,
             orElse: () => sections.first,
@@ -286,7 +286,7 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
             actions: [
               MuzicianDialogButton(
                 'Cancel',
-                onPressed: () => Navigator.pop(dialogContext),
+                onPressed: () => Navigator.pop(context),
               ),
               MuzicianDialogButton(
                 'Add block',
@@ -302,7 +302,7 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
                     return;
                   }
                   Navigator.pop(
-                    dialogContext,
+                    context,
                     _WriterDestination(
                       sectionId: section.id,
                       startBar: bar - 1,
@@ -365,11 +365,11 @@ class _SongwriterSavePanelState extends ConsumerState<SongwriterSavePanel> {
         mainAxisSize: MainAxisSize.max,
         children: [
           TabBar(
-            labelColor: MuzicianTheme.sky,
-            unselectedLabelColor: MuzicianTheme.textSecondary,
-            indicatorColor: MuzicianTheme.sky,
+            labelColor: StudioPalette.of(context).sky,
+            unselectedLabelColor: StudioPalette.of(context).textSecondary,
+            indicatorColor: StudioPalette.of(context).sky,
             tabs: const [
-              Tab(text: 'Song versions'),
+              Tab(text: 'Writer versions'),
               Tab(text: 'Section blocks'),
             ],
           ),

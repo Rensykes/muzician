@@ -10,7 +10,7 @@ import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../utils/note_utils.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 ({List<String> chords, List<String> scales}) _detect(
   List<PianoRollNote> notes,
@@ -63,8 +63,11 @@ class PianoRollDetectionPanel extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
+        color: StudioPalette.of(context).glassBg,
+        border: Border.all(
+          color: StudioPalette.of(context).glassBorder,
+          width: 0.5,
+        ),
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(12),
@@ -77,8 +80,8 @@ class PianoRollDetectionPanel extends ConsumerWidget {
             children: [
               Text(
                 'Stack at beat ${state.selectedColumnTick! + 1}',
-                style: const TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -86,8 +89,8 @@ class PianoRollDetectionPanel extends ConsumerWidget {
               const Spacer(),
               Text(
                 '${notesAtTick.length} note${notesAtTick.length != 1 ? 's' : ''}',
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -115,12 +118,14 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? MuzicianTheme.sky.withValues(alpha: 0.25)
-                        : MuzicianTheme.sky.withValues(alpha: 0.12),
+                        ? StudioPalette.of(context).sky.withValues(alpha: 0.25)
+                        : StudioPalette.of(context).sky.withValues(alpha: 0.12),
                     border: Border.all(
                       color: isSelected
-                          ? MuzicianTheme.sky
-                          : MuzicianTheme.sky.withValues(alpha: 0.35),
+                          ? StudioPalette.of(context).sky
+                          : StudioPalette.of(
+                              context,
+                            ).sky.withValues(alpha: 0.35),
                       width: 0.5,
                     ),
                     borderRadius: BorderRadius.circular(6),
@@ -132,8 +137,8 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                         formatMidiNoteLabel(note.midiNote, spelling: spelling),
                         style: TextStyle(
                           color: isSelected
-                              ? MuzicianTheme.sky
-                              : MuzicianTheme.textPrimary,
+                              ? StudioPalette.of(context).sky
+                              : StudioPalette.of(context).textPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -148,8 +153,8 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                           Icons.close,
                           size: 12,
                           color: isSelected
-                              ? MuzicianTheme.sky
-                              : MuzicianTheme.textMuted,
+                              ? StudioPalette.of(context).sky
+                              : StudioPalette.of(context).textMuted,
                         ),
                       ),
                     ],
@@ -162,10 +167,10 @@ class PianoRollDetectionPanel extends ConsumerWidget {
           // Chords
           if (detection.chords.isNotEmpty) ...[
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Chords',
               style: TextStyle(
-                color: MuzicianTheme.textSecondary,
+                color: StudioPalette.of(context).textSecondary,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
@@ -181,17 +186,21 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.emerald.withValues(alpha: 0.15),
+                    color: StudioPalette.of(
+                      context,
+                    ).emerald.withValues(alpha: 0.15),
                     border: Border.all(
-                      color: MuzicianTheme.emerald.withValues(alpha: 0.4),
+                      color: StudioPalette.of(
+                        context,
+                      ).emerald.withValues(alpha: 0.4),
                       width: 0.5,
                     ),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     chord,
-                    style: const TextStyle(
-                      color: MuzicianTheme.emerald,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).emerald,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -204,10 +213,10 @@ class PianoRollDetectionPanel extends ConsumerWidget {
           // Scales
           if (detection.scales.isNotEmpty) ...[
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Scales',
               style: TextStyle(
-                color: MuzicianTheme.textSecondary,
+                color: StudioPalette.of(context).textSecondary,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
@@ -223,17 +232,21 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.violet.withValues(alpha: 0.15),
+                    color: StudioPalette.of(
+                      context,
+                    ).violet.withValues(alpha: 0.15),
                     border: Border.all(
-                      color: MuzicianTheme.violet.withValues(alpha: 0.4),
+                      color: StudioPalette.of(
+                        context,
+                      ).violet.withValues(alpha: 0.4),
                       width: 0.5,
                     ),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     scale,
-                    style: const TextStyle(
-                      color: MuzicianTheme.violet,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).violet,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -257,17 +270,17 @@ class PianoRollDetectionPanel extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: MuzicianTheme.red.withValues(alpha: 0.15),
+                  color: StudioPalette.of(context).red.withValues(alpha: 0.15),
                   border: Border.all(
-                    color: MuzicianTheme.red.withValues(alpha: 0.4),
+                    color: StudioPalette.of(context).red.withValues(alpha: 0.4),
                     width: 0.5,
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Text(
+                child: Text(
                   'Delete Selected Note',
                   style: TextStyle(
-                    color: MuzicianTheme.red,
+                    color: StudioPalette.of(context).red,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),

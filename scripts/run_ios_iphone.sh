@@ -57,6 +57,24 @@ PY
 )"
 echo "Using Xcode at ${DEVELOPER_DIR}"
 
+# Some native-asset build hooks (objective_c) shell out to `xcrun` from Xcode's
+# build phase, where DEVELOPER_DIR may not survive. Put a wrapper early on PATH
+# so those hooks resolve the iOS SDK from the Xcode selected above.
+xcode_tools_dir="${TMPDIR:-/tmp}/muzician-xcode-tools"
+mkdir -p "$xcode_tools_dir"
+cat > "${xcode_tools_dir}/xcrun" <<'WRAPPER'
+#!/bin/sh
+if [ -z "${DEVELOPER_DIR:-}" ]; then
+  for candidate in /Applications/Xcode*.app/Contents/Developer; do
+    [ -d "$candidate" ] && DEVELOPER_DIR="$candidate"
+  done
+  export DEVELOPER_DIR
+fi
+exec /usr/bin/xcrun "$@"
+WRAPPER
+chmod +x "${xcode_tools_dir}/xcrun"
+export PATH="${xcode_tools_dir}:${PATH}"
+
 devices_json="$(flutter devices --machine)"
 selection="$(MUZICIAN_IOS_DEVICE_ID="${MUZICIAN_IOS_DEVICE_ID:-}" python3 -c '
 import json
@@ -102,6 +120,29 @@ app_path="$repo_root/build/ios/iphoneos/Runner.app"
 
 echo "Building Muzician Release for ${device_name} (${device_id})."
 flutter build ios --release
+
+# Flutter gives native-asset frameworks such as objective_c an ad-hoc signature.
+# Device installs reject ad-hoc code, so re-sign those frameworks with the app's
+# identity and re-seal the app, which covers the embedded code.
+codesign_identity="$(codesign -dv --verbose=4 "$app_path" 2>&1 | sed -n 's/^Authority=//p' | head -n 1)"
+if [ -n "$codesign_identity" ]; then
+  resigned_framework=false
+  for framework in "$app_path"/Frameworks/*.framework; do
+    [ -d "$framework" ] || continue
+    framework_signature="$(codesign -dv "$framework" 2>&1 || true)"
+    if [[ "$framework_signature" == *$'\nSignature=adhoc'* ]]; then
+      echo "Re-signing $(basename "$framework") with ${codesign_identity}."
+      codesign --force --sign "$codesign_identity" --timestamp=none "$framework"
+      resigned_framework=true
+    fi
+  done
+  if [ "$resigned_framework" = true ]; then
+    codesign --force --sign "$codesign_identity" --preserve-metadata=entitlements,flags --timestamp=none "$app_path"
+    codesign --verify --deep --strict "$app_path"
+  fi
+else
+  echo "Could not determine the app signing identity; install may fail code signature checks." >&2
+fi
 
 echo "Installing the standalone app on ${device_name}."
 xcrun devicectl device install app --device "$device_id" "$app_path"

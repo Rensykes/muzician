@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../schema/rules/drum_presets.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../_mockup_shell.dart';
 
 /// Shows the drum library. Calls [onPick] with the chosen preset and closes.
@@ -34,6 +34,7 @@ class _DrumLibraryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final categories = _orderedCategories;
     // The host sheet (_WidgetSheet) already wraps the child in a scroll view,
     // so a plain Padding is enough here.
@@ -48,16 +49,17 @@ class _DrumLibraryBody extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
               child: Text(
                 category,
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
+                style: TextStyle(
+                  color: palette.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.6,
                 ),
               ),
             ),
-            for (final preset
-                in drumPresets.where((p) => p.category == category))
+            for (final preset in drumPresets.where(
+              (p) => p.category == category,
+            ))
               _PresetTile(
                 preset: preset,
                 onTap: () {
@@ -79,11 +81,12 @@ class _PresetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final voices = preset.hits.entries.where((e) => e.value.isNotEmpty).length;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Material(
-        color: MuzicianTheme.orange.withValues(alpha: 0.10),
+        color: palette.orange.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           key: Key('preset_${preset.name}'),
@@ -93,17 +96,13 @@ class _PresetTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                const Icon(
-                  Icons.graphic_eq,
-                  size: 16,
-                  color: MuzicianTheme.orange,
-                ),
+                Icon(Icons.graphic_eq, size: 16, color: palette.orange),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     preset.name,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
+                    style: TextStyle(
+                      color: palette.textPrimary,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -111,8 +110,8 @@ class _PresetTile extends StatelessWidget {
                 ),
                 Text(
                   voices == 1 ? '1 voice' : '$voices voices',
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
+                  style: TextStyle(
+                    color: palette.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),

@@ -8,7 +8,7 @@ import '../../models/hum_to_midi.dart';
 import '../../store/hum_to_midi_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../schema/rules/mono_pitch_rules.dart' show HumSensitivity;
 import '../../utils/note_utils.dart';
 
@@ -148,10 +148,10 @@ class PianoRollHumRecorderCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Hum to MIDI',
           style: TextStyle(
-            color: MuzicianTheme.textSecondary,
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 13,
             fontWeight: FontWeight.w700,
           ),
@@ -165,16 +165,16 @@ class PianoRollHumRecorderCard extends StatelessWidget {
                 children: [
                   Text(
                     liveNoteLabel,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textPrimary,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   Text(
                     statusLabel,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textMuted,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textMuted,
                       fontSize: 11,
                     ),
                   ),
@@ -183,8 +183,8 @@ class PianoRollHumRecorderCard extends StatelessWidget {
             ),
             Text(
               elapsedLabel,
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
@@ -225,10 +225,10 @@ class _HumSensitivitySelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Pitch sensitivity',
           style: TextStyle(
-            color: MuzicianTheme.textSecondary,
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 11,
             fontWeight: FontWeight.w600,
           ),

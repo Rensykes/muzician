@@ -7,7 +7,7 @@ import '../../models/fretboard.dart';
 import '../../schema/rules/fretboard_rules.dart';
 import '../../store/fretboard_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
 
 const _categories = [
@@ -16,17 +16,12 @@ const _categories = [
   TuningCategory.midwestEmo,
 ];
 
-const _catColor = {
-  TuningCategory.standard: MuzicianTheme.sky,
-  TuningCategory.metal: MuzicianTheme.red,
-  TuningCategory.midwestEmo: MuzicianTheme.violet,
-};
-
-const _catBg = {
-  TuningCategory.standard: Color(0x1F38BDF8),
-  TuningCategory.metal: Color(0x1FF87171),
-  TuningCategory.midwestEmo: Color(0x1FA78BFA),
-};
+Color _categoryColor(BuildContext context, TuningCategory category) =>
+    switch (category) {
+      TuningCategory.standard => StudioPalette.of(context).sky,
+      TuningCategory.metal => StudioPalette.of(context).red,
+      TuningCategory.midwestEmo => StudioPalette.of(context).violet,
+    };
 
 const _catLabel = {
   TuningCategory.standard: 'Standard',
@@ -59,8 +54,9 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
       settingsProvider.select((settings) => settings.noteSpelling),
     );
     final notifier = ref.read(fretboardProvider.notifier);
-    final color = _catColor[_activeCategory]!;
-    final bg = _catBg[_activeCategory]!;
+    final color = _categoryColor(context, _activeCategory);
+    final bg = color.withValues(alpha: 0.12);
+    final studio = StudioPalette.of(context).isStudio;
 
     final allTunings = tunings.values.toList();
     final visibleTunings = allTunings
@@ -82,11 +78,12 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
           child: Row(
             children: _categories.map((cat) {
               final isTab = cat == _activeCategory;
-              final c = _catColor[cat]!;
+              final c = _categoryColor(context, cat);
               return Expanded(
                 child: GestureDetector(
                   onTap: () => setState(() => _activeCategory = cat),
                   child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
                       border: Border(
@@ -100,7 +97,9 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
                       child: Text(
                         _catLabel[cat]!,
                         style: TextStyle(
-                          color: isTab ? c : const Color(0xFF475569),
+                          color: isTab
+                              ? c
+                              : StudioPalette.of(context).textMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
@@ -113,13 +112,13 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
             }).toList(),
           ),
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: studio ? 4 : 10),
         // Tuning pills
         SizedBox(
-          height: 38,
+          height: 48,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: studio ? 0 : 16),
             itemCount: visibleTunings.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
@@ -128,12 +127,17 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
               return GestureDetector(
                 onTap: () => notifier.setTuning(t.name),
                 child: Container(
+                  alignment: Alignment.center,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 7,
                   ),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(studio ? 6 : 20),
                     color: isActive ? bg : Colors.white.withValues(alpha: 0.04),
                     border: Border.all(
                       color: isActive
@@ -143,9 +147,11 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
                     ),
                   ),
                   child: Text(
-                    _displayTuningName(t, spelling),
+                    formatTuningName(t, spelling),
                     style: TextStyle(
-                      color: isActive ? color : const Color(0xFF64748B),
+                      color: isActive
+                          ? color
+                          : StudioPalette.of(context).textMuted,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.3,
@@ -156,15 +162,15 @@ class _TuningSelectorState extends ConsumerState<TuningSelector> {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        if (!studio) const SizedBox(height: 12),
       ],
     );
   }
+}
 
-  String _displayTuningName(Tuning tuning, NoteSpelling spelling) {
-    if (tuning.name == TuningName.ebStandard) {
-      return '${formatRootChoiceLabel('Eb', spelling: spelling)} Standard';
-    }
-    return tuning.displayName;
+String formatTuningName(Tuning tuning, NoteSpelling spelling) {
+  if (tuning.name == TuningName.ebStandard) {
+    return '${formatRootChoiceLabel('Eb', spelling: spelling)} Standard';
   }
+  return tuning.displayName;
 }

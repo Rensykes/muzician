@@ -34,13 +34,18 @@ const contentWorkspaceNames = <String>[
   'writer',
 ];
 
+const songWorkspaceTabIndex = 3;
+
 int contentWorkspaceTabForPreference(String? workspace) {
   final index = contentWorkspaceNames.indexOf(workspace ?? 'writer');
+  if (index == songWorkspaceTabIndex) return 4;
   return index < 0 ? 4 : index;
 }
 
 String? contentWorkspacePreferenceForTab(int tabIndex) =>
-    tabIndex >= 0 && tabIndex < contentWorkspaceNames.length
+    tabIndex >= 0 &&
+        tabIndex < contentWorkspaceNames.length &&
+        tabIndex != songWorkspaceTabIndex
     ? contentWorkspaceNames[tabIndex]
     : null;
 

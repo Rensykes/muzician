@@ -13,7 +13,7 @@ import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_slice_controller.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
 import '../song/song_audio_clip_body.dart';
 import '../_mockup_shell.dart' show showWidgetSheet;
@@ -366,7 +366,7 @@ class _SongwriterAudioClipBodyState
               ),
               Text(
                 '${block.spanBars} bar(s)',
-                style: const TextStyle(color: MuzicianTheme.textPrimary),
+                style: TextStyle(color: StudioPalette.of(context).textPrimary),
               ),
               IconButton(
                 key: const ValueKey('clipSpanPlus'),
@@ -408,7 +408,7 @@ class _SongwriterAudioClipBodyState
             ),
           ),
           if (ref.watch(songwriterStretchProcessingProvider).contains(clipId))
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -421,7 +421,9 @@ class _SongwriterAudioClipBodyState
                   SizedBox(width: 8),
                   Text(
                     'Stretching…',
-                    style: TextStyle(color: MuzicianTheme.textSecondary),
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -465,8 +467,8 @@ class _SliceControls extends StatelessWidget {
       label: Text(sliceMode ? 'Slicing' : 'Slice'),
       style: OutlinedButton.styleFrom(
         foregroundColor: sliceMode
-            ? MuzicianTheme.sky
-            : MuzicianTheme.textPrimary,
+            ? StudioPalette.of(context).sky
+            : StudioPalette.of(context).textPrimary,
       ),
     );
     return Column(
@@ -488,10 +490,10 @@ class _SliceControls extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.graphic_eq,
                 size: 16,
-                color: MuzicianTheme.textSecondary,
+                color: StudioPalette.of(context).textSecondary,
               ),
               Expanded(
                 child: Slider(
@@ -502,7 +504,9 @@ class _SliceControls extends StatelessWidget {
               ),
               Text(
                 '$cutCount cut(s)',
-                style: const TextStyle(color: MuzicianTheme.textSecondary),
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
+                ),
               ),
             ],
           ),
@@ -578,7 +582,9 @@ class _TrimWaveformState extends State<_TrimWaveform> {
                 child: CustomPaint(
                   painter: _BarDividerPainter(
                     bars: widget.spanBars,
-                    color: Colors.white.withValues(alpha: 0.22),
+                    color: StudioPalette.of(
+                      context,
+                    ).textPrimary.withValues(alpha: 0.22),
                   ),
                 ),
               ),
@@ -612,7 +618,7 @@ class _TrimWaveformState extends State<_TrimWaveform> {
         child: Container(
           width: 16,
           alignment: Alignment.center,
-          child: Container(width: 3, color: MuzicianTheme.sky),
+          child: Container(width: 3, color: StudioPalette.of(context).sky),
         ),
       ),
     );
@@ -702,13 +708,21 @@ class _SegmentRow extends ConsumerWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: segmentAtTick(segments, beat * tpb) != null
-                      ? MuzicianTheme.sky.withValues(alpha: 0.18)
-                      : Colors.white.withValues(alpha: 0.03),
-                  border: Border.all(color: MuzicianTheme.glassBorder),
+                      ? StudioPalette.of(context).sky.withValues(alpha: 0.18)
+                      : StudioPalette.of(
+                          context,
+                        ).textPrimary.withValues(alpha: 0.03),
+                  border: Border.all(
+                    color: StudioPalette.of(context).glassBorder,
+                  ),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 alignment: Alignment.center,
-                child: _label(segmentAtTick(segments, beat * tpb), spelling),
+                child: _label(
+                  context,
+                  segmentAtTick(segments, beat * tpb),
+                  spelling,
+                ),
               ),
             ),
           ),
@@ -716,7 +730,11 @@ class _SegmentRow extends ConsumerWidget {
     );
   }
 
-  Widget _label(ChordSegment? seg, NoteSpelling spelling) {
+  Widget _label(
+    BuildContext context,
+    ChordSegment? seg,
+    NoteSpelling spelling,
+  ) {
     if (seg == null) return const SizedBox.shrink();
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -732,8 +750,8 @@ class _SegmentRow extends ConsumerWidget {
                   quality: seg.chordQuality!,
                   spelling: spelling,
                 ),
-          style: const TextStyle(
-            color: MuzicianTheme.textPrimary,
+          style: TextStyle(
+            color: StudioPalette.of(context).textPrimary,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -741,7 +759,10 @@ class _SegmentRow extends ConsumerWidget {
         if (seg.romanNumeral != null)
           Text(
             seg.romanNumeral!,
-            style: const TextStyle(color: MuzicianTheme.textMuted, fontSize: 9),
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
+              fontSize: 9,
+            ),
           ),
       ],
     );
@@ -754,36 +775,35 @@ class _SegmentRow extends ConsumerWidget {
     int tick,
   ) async {
     final tpb = config.ticksPerBeat;
-    final choice = await showModalBottomSheet<String>(
+    final choice = await showStudioModalBottomSheet<String>(
       context: context,
-      backgroundColor: MuzicianTheme.surface,
-      builder: (ctx) => SafeArea(
+      builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               key: const ValueKey('segAddChord'),
-              leading: const Icon(
+              leading: Icon(
                 Icons.piano,
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
               ),
-              title: const Text(
+              title: Text(
                 'Chord',
-                style: TextStyle(color: MuzicianTheme.textPrimary),
+                style: TextStyle(color: StudioPalette.of(context).textPrimary),
               ),
-              onTap: () => Navigator.pop(ctx, 'chord'),
+              onTap: () => Navigator.pop(context, 'chord'),
             ),
             ListTile(
               key: const ValueKey('segAddSave'),
-              leading: const Icon(
+              leading: Icon(
                 Icons.library_music_outlined,
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
               ),
-              title: const Text(
+              title: Text(
                 'From a save',
-                style: TextStyle(color: MuzicianTheme.textPrimary),
+                style: TextStyle(color: StudioPalette.of(context).textPrimary),
               ),
-              onTap: () => Navigator.pop(ctx, 'save'),
+              onTap: () => Navigator.pop(context, 'save'),
             ),
           ],
         ),
@@ -824,16 +844,17 @@ class _SegmentRow extends ConsumerWidget {
 
   Future<String?> _pickSave(BuildContext context, SongwriterNotifier store) {
     final saves = store.searchableSavesForLibraryMatch();
-    return showModalBottomSheet<String>(
+    return showStudioModalBottomSheet<String>(
       context: context,
-      backgroundColor: MuzicianTheme.surface,
-      builder: (ctx) => SafeArea(
+      builder: (context) => SafeArea(
         child: saves.isEmpty
-            ? const Padding(
+            ? Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
                   'No saves in this project',
-                  style: TextStyle(color: MuzicianTheme.textSecondary),
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textSecondary,
+                  ),
                 ),
               )
             : ListView(
@@ -844,11 +865,11 @@ class _SegmentRow extends ConsumerWidget {
                       key: Key('segSavePick_${s.id}'),
                       title: Text(
                         s.name,
-                        style: const TextStyle(
-                          color: MuzicianTheme.textPrimary,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textPrimary,
                         ),
                       ),
-                      onTap: () => Navigator.pop(ctx, s.id),
+                      onTap: () => Navigator.pop(context, s.id),
                     ),
                 ],
               ),

@@ -98,7 +98,7 @@ shown in the startup recovery prompt until the user chooses **Start fresh**.
 | `ProgressionFolderMeta` | Metadata attached to a folder: source type, progression ID, key |
 | `ProgressionChordMeta` | Metadata attached to a save: chord symbol, root, Roman numeral, chord notes |
 | `ActiveSession` | Current navigation context: `saveId` + `folderId` |
-| `AppSettings` | User preferences — includes an optional default Harmony instrument for future projects and the last content workspace |
+| `AppSettings` | Device preferences — includes the appearance theme, optional default Harmony instrument for future projects, and last content workspace |
 | `SaveSystemState` | Root state: `folders`, `saves`, Writer links, `activeSession`, `hydrated`, and `selectedProjectId` |
 
 > `SaveFolder.writerSectionId` marks a Writer-managed section or one of its category folders; `writerLaneKind` identifies the category child. Ordinary folders have neither field. `SaveSystemState.writerLinks` is additive in v3 and defaults to an empty list for older payloads. Legacy saves default to origin `manual`. Snapshots implement `toJson` / `fromJson` for `SharedPreferences` persistence.
@@ -120,6 +120,8 @@ the source key. Settings then exposes preserved entries under **Data Recovery**
 as read-only raw text. Each entry offers **Copy**, **Export**, and confirmed
 **Delete backup**; deletion removes only that entry. Recovery backups remain
 until explicitly deleted.
+The Settings screen presents these controls, including recovery, in compact
+divider-separated groups rather than separate cards.
 
 Export preserves the stored string's UTF-8 bytes without decoding or
 re-encoding JSON. Filenames include a sanitized source key and a unique backup
@@ -181,7 +183,9 @@ Named Song version — ordered `SongSection`s, parallel `SongLane`s, and
 `SongBlock`s with materialized fallback content for recoverable musical state.
 The active Writer session resolves current content through each block's
 canonical save first; fallback content lets a named version restore the content
-as it was when saved. Defined in `lib/models/songwriter.dart`; see
+as it was when saved. **Save version** creates or updates a named Writer
+version; the active project draft is persisted automatically and remains
+separate from that named version. Defined in `lib/models/songwriter.dart`; see
 [`docs/songwriter.md`](songwriter.md).
 
 - `selectedNotes` aggregates unique pitch classes across all harmony-block `chordNotes`.
@@ -379,16 +383,23 @@ Stores app-wide preferences persisted to `SharedPreferences`:
 |---|---|---|
 | `suppressOutOfKeyAlert` | `false` | Suppress the out-of-key confirmation dialog |
 | `noteVolume` | `0.8` | Playback volume (0.0–1.0) |
+| `guitarTone` | `clean` | Device-local Clean or Distorted electric guitar, chosen in Fretboard's Sound menu; shared with Writer Harmony, Guitar Strum and legacy Melody guitar playback, but not explicit Melody lane sounds |
 | `showNoteLabels` | `true` | Render note-name text on instrument canvases |
 | `noteSpelling` | `sharps` | Global musical-label spelling; **Prefer flat note names** selects `flats` |
+| `themeVariant` | `studio` | Device-local **Studio** or **Studio Muzician** appearance preference |
 | `humSensitivity` | `balanced` | Hum-to-MIDI pitch sensitivity preset |
 | `metronomeEnabled` | `true` | Piano roll metronome toggle |
 
-Spelling is persisted in the existing settings JSON; missing or unknown values
-use Sharps. It is a presentation preference, independent of project config and
-saved musical identity. Recognized chord summaries retain their quality and
-slash bass; custom Save names, exact Harmony labels, lyrics, and pattern names
-stay literal. Switching spelling never rewrites snapshots or the shared key.
+Appearance and spelling are persisted in the existing settings JSON; missing or
+unknown theme values select **Studio**, and missing or unknown spelling values
+use Sharps. Settings → **Appearance** offers **Studio** (default graphite/mint)
+and **Studio Muzician** (night/sky/teal/violet). The device-local theme applies
+to Fretboard, Piano, Piano Roll, Writer, and shared panels; Song keeps its
+existing layout and palette. Theme selection is independent of project config
+and named Saves. Spelling is also a presentation preference: recognized chord
+summaries retain their quality and slash bass, while custom Save names, exact
+Harmony labels, lyrics, and pattern names stay literal. Switching spelling
+never rewrites snapshots or the shared key.
 
 ---
 

@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/harmonic_analysis.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
 import 'instrument_binding.dart';
 
@@ -27,23 +27,25 @@ class ChordPickerHeader extends ConsumerWidget {
     final spelling = ref.watch(
       settingsProvider.select((settings) => settings.noteSpelling),
     );
-    return Row(
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(
           title,
-          style: const TextStyle(
-            color: Color(0xFF94A3B8),
+          style: TextStyle(
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.2,
           ),
         ),
-        const Spacer(),
         if (root != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
             decoration: BoxDecoration(
-              color: MuzicianTheme.violet.withValues(alpha: 0.12),
+              color: StudioPalette.of(context).violet.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -51,8 +53,8 @@ class ChordPickerHeader extends ConsumerWidget {
                 ChordDetectionResult(root: root!, quality: quality),
                 spelling: spelling,
               ),
-              style: const TextStyle(
-                color: MuzicianTheme.violet,
+              style: TextStyle(
+                color: StudioPalette.of(context).violet,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -124,7 +126,9 @@ class RootPillRow extends ConsumerWidget {
                     child: Text(
                       formatRootChoiceLabel(root, spelling: spelling),
                       style: TextStyle(
-                        color: active ? accent : const Color(0xFF64748B),
+                        color: active
+                            ? accent
+                            : StudioPalette.of(context).textMuted,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -200,11 +204,15 @@ class DiatonicChordsRow extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(10),
                       color: active
                           ? accent.withValues(alpha: 0.18)
-                          : MuzicianTheme.emerald.withValues(alpha: 0.06),
+                          : StudioPalette.of(
+                              context,
+                            ).emerald.withValues(alpha: 0.06),
                       border: Border.all(
                         color: active
                             ? accent.withValues(alpha: 0.5)
-                            : MuzicianTheme.emerald.withValues(alpha: 0.25),
+                            : StudioPalette.of(
+                                context,
+                              ).emerald.withValues(alpha: 0.25),
                         width: 0.5,
                       ),
                     ),
@@ -214,7 +222,9 @@ class DiatonicChordsRow extends ConsumerWidget {
                         Text(
                           c.romanNumeral,
                           style: TextStyle(
-                            color: active ? accent : MuzicianTheme.emerald,
+                            color: active
+                                ? accent
+                                : StudioPalette.of(context).emerald,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.5,
@@ -224,7 +234,9 @@ class DiatonicChordsRow extends ConsumerWidget {
                         Text(
                           '${formatRootChoiceLabel(c.root, spelling: spelling)}${c.quality}',
                           style: TextStyle(
-                            color: active ? accent : const Color(0xFFE2E8F0),
+                            color: active
+                                ? accent
+                                : StudioPalette.of(context).textPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -254,16 +266,18 @@ class DiatonicChordsHeader extends StatelessWidget {
         Icon(
           Icons.stacked_line_chart,
           size: 12,
-          color: MuzicianTheme.emerald.withValues(alpha: 0.9),
+          color: StudioPalette.of(context).emerald.withValues(alpha: 0.9),
         ),
         const SizedBox(width: 6),
-        Text(
-          'DIATONIC · ${keyLabel.toUpperCase()}',
-          style: TextStyle(
-            color: MuzicianTheme.emerald.withValues(alpha: 0.9),
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.0,
+        Expanded(
+          child: Text(
+            'DIATONIC · ${keyLabel.toUpperCase()}',
+            style: TextStyle(
+              color: StudioPalette.of(context).emerald.withValues(alpha: 0.9),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+            ),
           ),
         ),
       ],
@@ -331,7 +345,9 @@ class QualityPillRow extends StatelessWidget {
                     child: Text(
                       label,
                       style: TextStyle(
-                        color: active ? accent : const Color(0xFF475569),
+                        color: active
+                            ? accent
+                            : StudioPalette.of(context).textMuted,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -396,5 +412,97 @@ mixin ChordPickerSync<T extends ConsumerStatefulWidget> on ConsumerState<T> {
         ref.read(binding.activeChord.notifier).state = next;
       }
     });
+  }
+}
+
+/// Compact Studio controls keep the native voicing previews close to the tabs.
+class StudioChordSelectors extends ConsumerWidget {
+  const StudioChordSelectors({
+    super.key,
+    required this.root,
+    required this.quality,
+    required this.qualities,
+    required this.onRootChanged,
+    required this.onQualityChanged,
+  });
+
+  final String? root;
+  final String quality;
+  final List<(String, String)> qualities;
+  final ValueChanged<String> onRootChanged;
+  final ValueChanged<String> onQualityChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = StudioPalette.of(context);
+    final spelling = ref.watch(settingsProvider.select((s) => s.noteSpelling));
+    Widget selector({
+      required String label,
+      required String? value,
+      required List<DropdownMenuItem<String>> items,
+      required ValueChanged<String> onChanged,
+    }) => Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border.all(color: p.glassBorder),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          hint: Text(label),
+          isExpanded: true,
+          dropdownColor: p.dialogBg,
+          style: TextStyle(color: p.textPrimary, fontSize: 13),
+          borderRadius: BorderRadius.circular(8),
+          items: items,
+          onChanged: (next) {
+            if (next != null) onChanged(next);
+          },
+        ),
+      ),
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: selector(
+            label: 'Root',
+            value: root,
+            items: [
+              for (final note in chromaticNotes)
+                DropdownMenuItem(
+                  value: note,
+                  child: Text(formatRootChoiceLabel(note, spelling: spelling)),
+                ),
+            ],
+            onChanged: onRootChanged,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: selector(
+            label: 'Quality',
+            value: quality,
+            items: [
+              for (final (symbol, label) in qualities)
+                DropdownMenuItem(
+                  value: symbol,
+                  child: Text(
+                    symbol.isEmpty
+                        ? 'Major'
+                        : symbol == 'm'
+                        ? 'Minor'
+                        : label,
+                  ),
+                ),
+            ],
+            onChanged: onQualityChanged,
+          ),
+        ),
+      ],
+    );
   }
 }

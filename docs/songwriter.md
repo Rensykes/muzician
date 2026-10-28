@@ -7,12 +7,76 @@ and audio. Recoverable block content links to a canonical save in the selected
 project's Save System; placement and lyrics stay with the Writer block. If a
 save and its fallback content are both unavailable, Writer keeps the block
 visible as broken rather than inventing replacement content.
-Use Writer to shape the song's sections, then move to **Song** when you want to
-arrange note, drum, or audio clips on a timeline.
+Use Writer to shape the song's sections. **Song is temporarily unavailable in
+V2**; its saved arrangements and clip-arranger implementation are retained.
 
 Writer is the first workspace on a new install. After startup it restores the
-last content workspace (Fretboard, Piano, Roll, Song, or Writer); opening
-Settings does not change that preference.
+last available content workspace (Fretboard, Piano, Roll, or Writer); a saved
+Song destination falls back to Writer. Opening Settings does not change that
+preference.
+
+## Studio workspace
+
+Writer follows the persistent **Studio** or **Studio Muzician** appearance in
+Settings. Editable project context and draft status come first. The next row
+pairs the Writer title with **Save version** and labelled Undo, Redo, and
+Writer versions icons. **Save version** saves through the existing named Save
+flow; **Writer versions** opens whole-project versions alongside **Section
+blocks**. **Draft** means the active project session is saved automatically.
+**Draft changed** means it differs from the bound named Writer version; it is
+not a warning that the draft will disappear. The Writer menu retains New
+project, Undo/Redo, version browsing, structure editing, and project renaming.
+
+The unframed transport exposes key, BPM, play/stop, and metronome. It wraps at narrow
+widths and larger text sizes. Its key and BPM values use a single compact line;
+all transport and history controls retain 44-pixel touch targets. The Writer
+menu keeps these commands available as well. Project-key changes still require
+confirmation.
+
+Sections keep their name, bars, repeat count, Mixer icon, and **Section actions**
+menu in a compact row, reflowing when space is limited. **Remove section** lives
+in that menu and remains recoverable with Undo. Harmony lane headers identify
+the source instrument and keep rename, instrument change, duplicate, and delete controls.
+Fretboard Harmony also exposes **Sound: Clean / Distorted**, shared with Fretboard
+audition, Writer Harmony and Guitar Strum, and legacy Melody guitar playback on
+this device. Explicit Melody lane sounds are independent. This preference changes
+the timbre without changing saved notes, lane identity, or project history.
+Drums, Sample, Guitar Strum, and Melody headers each have a delete control.
+Confirming removes that lane and its placements from every repeat of the
+section; saved ideas remain available, and Undo restores the lane. Section
+lyrics are unchanged.
+Four-bar rows show
+chord, degree when known, linked Save name, and the current verse's lyric.
+Filled cells start at 64 pixels and empty add slots at 44; a distinct Save name
+or a lyric adds the space its text needs. Larger text scales grow the cells.
+Exact Harmony labels remain literal and gain no inferred degree. A single
+section uses the available width; multiple sections flow into two columns
+only at widths of at least 1100 logical pixels.
+
+Tapping a block opens its contextual sheet. Common play, chord-change, and
+verse-lyric actions appear first, with every applicable advanced action below:
+voicings/library, replacement, native instrument editing, rename, standalone
+Save, and removal. This reuses the existing editor flows rather than introducing
+a second editor with separate musical state.
+
+Guitar Strum keeps its title, explicitly labelled **Source** selector, and delete
+control together, wrapping when space is limited. **Unassigned**
+remains visible and silent. Pattern placements use neutral strips with accented
+down/up previews; the pattern name, continuation, shared Save menu, and tap to
+edit remain available. Narrow single-bar placements stack their content to
+keep the controls usable. Its editor follows the canonical project beat grid:
+four 16th steps for a quarter-note beat and two for an eighth-note beat. Beat
+groups keep their bar/beat label and 44×44 step targets; steps can wrap inside their group on
+compact screens. Groups never cross bar boundaries. The sheet scrolls for longer
+patterns and short viewports. Down → up → off behavior is unchanged. Shared
+drum editors also group steps by beat and scroll on short screens.
+
+Writer's chord, library, mixer, audio, drum, strum, structure, and melody editors
+follow live appearance changes. An open melody Piano Roll keeps its isolated
+notes, tool, and snap setting; its rename action and **Bars** stepper edit the
+melody name and canvas locally, and only **Save** commits both to Writer.
+The mixer uses compact lane rows separated by dividers, with volume, pan,
+rename, and mute controls, rather than a bordered card around each lane.
 
 ---
 
@@ -23,9 +87,9 @@ Settings does not change that preference.
 | `SongwriterProjectSnapshot` | `InstrumentSnapshot` subtype (`type: 'songwriter'`) — `config`, ordered `sections`, Writer-specific per-pattern performance state, and the strum-anchor migration marker. |
 | `SongwriterConfig` | `tempo`, `beatsPerBar`, `beatUnit`, optional `keyRoot` (pitch class) + `keyScaleName`. |
 | `SongSection` | `id`, optional `label`, `lengthBars`, `order`, `repeat`, `lanes`. |
-| `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; Harmony lanes carry a fixed Piano or Fretboard identity, and a strum lane stores the ID of its selected Fretboard Harmony source. |
+| `SongLane` | `id`, `kind` (`harmony`, `save`, `drum`, `melody`, `guitarStrum`, or `audio`), optional `label`, `order`, `repeat`, `blocks`; Harmony lanes carry a fixed Piano or Fretboard identity, a strum lane stores its selected Fretboard Harmony source, and a Melody lane may carry an explicit `melodySound`. |
 | `SongBlock` | `id`, `startBar`, `spanBars` (+ `endBar` getter), canonical `saveId`, and local lyrics/placement; pattern lanes reference their pattern id; legacy content fields and `embedded` snapshot are fallback data. Harmony extras include `chordSymbol`, `chordQuality`, `chordRootPc`, `chordNotes`, and `romanNumeral`. |
-| `NotePattern` / `GuitarStrumPattern` | Melody pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. Writer melody performance state is stored alongside the pattern. |
+| `NotePattern` / `GuitarStrumPattern` | Melody name and `lengthTicks` (normalized to whole bars on a melody save; legacy stored lengths may stay non-bar-aligned until then), pitches, local ticks, durations, and optional millisecond onset offsets; strum direction events on a 16th-note grid. Writer melody performance state is stored alongside the pattern. |
 | `WriterMelodyPerformance` | Per-pattern Piano or Fretboard target; Piano uses each note's MIDI key, while Fretboard positions map note IDs to playable strings and physical frets. |
 
 All types are immutable (`copyWith` / `toJson` / `fromJson`). A block resolves to
@@ -134,8 +198,8 @@ lyrics into the new placement once; later lyric edits remain local.
 `WriterBlockSnapshot.defaultLyrics` stores that initial seed, so edits to one
 placement do not change what another new placement receives.
 Linked Melody and Guitar Strum tiles expose **Rename** and **Make Unique**
-alongside their block actions. Melody retains **Adjust placement** and
-**Edit performance** in the same menu.
+alongside their block actions. Melody also offers **Adjust placement**,
+**Repeat / reuse**, and **Edit performance** in the same menu.
 
 ## Rules (`lib/schema/rules/songwriter_rules.dart`)
 
@@ -169,35 +233,112 @@ repeats (the lane's block pattern tiles N× from bar 0, clipped to the section).
 
 ### Melody and guitar-strum lanes
 
-Melody blocks point to reusable patterns. At an empty bar, choose **Use existing
-pattern** to place another block linked to a selected pattern, or **Create new
-pattern** to start one in Piano Roll; reuse preserves the shared pattern and its
-performance mapping, including A–B–A–B arrangements. Pattern duration is its
-actual `lengthTicks`, shown as bars plus any remaining beats and ticks. The
-block's `spanBars` is shown separately against the section's total bars. A new
-block defaults to the pattern's full duration when following bars are free;
-placement can be shortened or extended without crossing the section boundary
-or a neighboring block. Patterns repeat from the block's left edge when the
-placement is longer, and notes clip at the block edge when it is shorter. A
-later duration edit to a reused pattern does not resize its existing blocks.
+Melody blocks point to named, reusable patterns. At an empty bar, choose **Use
+existing pattern** to place another block linked to a selected pattern, or
+**Create new pattern** to start one in Piano Roll; reuse preserves the shared
+pattern and its performance mapping, including A–B–A–B arrangements. A melody's
+length is derived from its last note and stored in whole bars, with a one-bar
+minimum. In the melody editor, the **Bars** stepper extends the Piano Roll
+canvas from 1 to 32 bars and cannot shrink below the bar containing the last
+note; the rename action changes the pattern name. **Save** applies both the name
+and notes and quantizes the stored length to the last-note bar. A note ending
+inside a bar still occupies that whole bar, with silence after it. Changing
+Bars or shortening a placement never deletes notes. The melody Piano Roll locks
+its tempo and time signature to the project, so Bars and the saved project bars
+cannot diverge.
+
+The block's `spanBars` is shown separately against the section's total bars. A
+placement is a bar-aligned window over the melody: a new block uses the
+melody's full bar count when that placement is valid, and may be shortened to
+fit or rejected if no valid placement is available, even when bars appear
+free, because existing automatic repeat origins must be preserved. A
+bar-aligned melody limits placements to its last-note bar. An older
+non-bar-aligned stored length may use its rounded-up bar count for placement
+validation and creation until the next melody save normalizes it. A placement
+may shrink to any whole bar but cannot extend beyond that placement limit.
+Shortening clips playback at the placement edge while every note remains
+stored. Adding a Melody lane creates a one-bar pattern and a one-bar placement;
+on the first save after notes are added to that empty pattern, the placement
+expands to the melody's full bar count when the whole span fits the section and
+lane. This first-save rule runs in the Writer store and applies whether notes
+were authored from the placement tile or through **Edit performance**. Every
+save also normalizes the stored length to whole bars. Later saves never resize
+placements. A placement longer than the melody
+(typically retained from an older project) keeps its occupied bars, plays the
+melody once, and then shows a silent tail instead of looping. It may move only
+with its unchanged span; any resize must end within the placement limit. A
+later length edit to a reused pattern does not resize its existing blocks.
+Legacy melodies stored longer than 32 bars keep their notes, but playback and
+the silent-tail cue stop at bar 32; notes in the hatched bars after that are
+inaudible until the melody is saved again within the 32-bar editor cap.
+
+The Melody timeline wraps every four bars with numbered rows and continuation
+segments. Blocks show a non-interactive miniature piano roll: horizontal notes
+follow the placement's single-pass window and clipped edges, with consistent
+pitch height across rows, below a separate name strip. A diagonal hatch and
+summary mark bars occupied by a silent tail after the melody ends. Linked
+previews refresh together; missing patterns and missing or incompatible
+canonical Saves show a warning, not cached notes. The detail row identifies
+unresolved melody content separately from an empty pattern. Edit notes in Piano
+Roll, not in the preview. Drag the final edge in whole bars to resize;
+resizing stops at the placement limit: the last-note bar for normalized
+melodies, or the rounded-up stored length for legacy non-bar-aligned patterns
+until their next save. An over-long legacy placement can shrink directly to a
+valid span, and moving it without changing its span keeps the occupied bars.
+Releasing creates one undo step while cancelling leaves the placement
+unchanged. Hold the drag near the top or
+bottom of the Writer sheet to scroll to additional rows. The block's action
+menu also offers **Adjust placement** to move or resize without a gesture; it
+explains the melody limit when the requested length exceeds it. Placement
+details summarize whether the window clips, plays once, or has a silent tail.
+Automatic lane repeats are marked as repeats and reserve their occupied bars;
+their visible occupancy is clipped at the section edge. Placement changes also
+cannot shift or remove existing automatic repeat origins by changing the lane's
+natural period; the placement dialog explains repeat conflicts. Adjust the lane
+repeat first with the Melody lane's **Repeat** control if needed. **Repeat / reuse** selects an
+available starting bar in the same lane and creates a linked placement. Reuse
+copies the source placement's span, capped by the melody's placement limit and
+the free space at the chosen start; it does not force the full melody length, so
+a short window can be repeated as-is. A free start can still be rejected if no
+span preserves existing repeats. Missing patterns and missing
+or unresolved canonical Saves cannot be repeated. Reuse shares the pattern and
+canonical Save, so shared edits affect both placements; **Make Unique** detaches
+only the selected placement. Resizing does not alter the shared pattern. A
+separate edit button and block actions remain available on narrow screens.
+Missing references stay visible with a recovery action. **Delete placement**
+removes an authored placement and its own automatic repeats, but refuses to move
+another block's repeat origins. A clipped block can be dragged back inside a
+shortened section. Incompatible canonical Saves remain unchanged and cannot be
+edited or made unique through the incompatible placement.
+
+Song's **Import from Writer** remains a legacy looping conversion: it repeats
+melody content across each converted note clip's block span and does not inherit
+Writer's one-pass or silent-tail rule.
 
 Each melody pattern has one Piano or Fretboard performance target. Piano
 positions use the note's MIDI key. Fretboard positions store a playable string
 and physical fret per note and must match the note's pitch under the current
 tuning, capo, and fret count. The target and positions persist with the Writer
 session and in canonical Writer block saves, so reopen and reuse preserve them.
-The target chooses the physical view and mapping; Writer playback keeps its
-existing synthesized sound. Positions follow a note through Piano Roll edits by note ID and MIDI pitch; a
-removed or pitch-changed note must be mapped again. The selected instrument
+The target chooses the physical view and mapping independently of the Melody
+lane's **Sound**: Piano, Clean guitar, or Distorted guitar. Newly created Melody
+lanes default to Piano. Older lanes without an explicit sound display **Pattern
+sounds**: each pattern's performance target chooses piano or guitar, and guitar
+uses the shared device tone until a sound is chosen. An explicit choice affects
+only that lane, not the global guitar tone or performance mapping, and takes
+effect on the next transport start. Positions follow a note through Piano Roll
+edits by note ID and MIDI pitch; a removed or pitch-changed note must be mapped
+again. The selected instrument
 performance view and position editing are blocked if any note is outside the
 current Piano range or Fretboard's playable positions; Piano Roll remains
 available to correct notes. These Writer-only mappings are kept beside the
 shared `NotePattern`, not added to the Song pattern schema.
 
-Guitar-strum blocks use the same placement rules and open a 16th-note grid with
-down, up, and off steps. Each tile previews the pattern's ordered down/up
-events. A strum lane uses its explicitly selected Fretboard Harmony source; an
-unassigned or invalid source stays silent until repaired, including when the
+Guitar-strum placements must stay within the section and not overlap authored
+blocks in their lane; Melody's repeat-aware restrictions do not apply. Strum
+blocks open a 16th-note grid with down, up, and off steps. Each tile previews
+the pattern's ordered down/up events. A strum lane uses its explicitly selected
+Fretboard Harmony source; an unassigned or invalid source stays silent until repaired, including when the
 primary Harmony lane changes. If the selected source has no chord at a step,
 the strum is silent. Chord tones start 12 ms apart and each voice is gated for
 half a beat. When a melody or strum voice reaches a pattern, block, or section
@@ -228,8 +369,10 @@ tick-indexed event list the transport walks:
   cells map string+fret through the tuning. Broken blocks are silent.
 - **Drum lane blocks** fire their referenced `DrumPattern` hits at native tick
   resolution, tiled across the block's bar span.
-- **Melody lane blocks** play duration-aware notes, looping their pattern from
-  local tick zero and clipping voices at the block/section boundary.
+- **Melody lane blocks** play duration-aware notes once from local tick zero,
+  clip voices at the melody end, the placement edge, and the section boundary,
+  and never loop. A placement longer than its melody sounds silence after the
+  melody ends.
 - **Guitar-strum blocks** resolve each down/up step against their explicitly
   selected Fretboard Harmony source and stay silent when it is unassigned or has
   no playable Harmony at that step. Named exact Harmony uses its native
@@ -273,8 +416,9 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `newProject()` | Reset the active project's Writer session. Writer's **New project** action creates a separate Save System project and uses the protected project-switch flow described above. |
 | `setKey(root, scaleName)` / `setTempo(tempo)` | Config edits; `setKey` recomputes harmony-lane Roman numerals. |
 | `addSection` / `addLane` / `addSaveBlock` / `addHarmonyBlock` / `removeBlock` | CRUD; block adds that overlap are ignored. |
-| `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit looped note and strum patterns. |
-| `setBlockPlacement(...)` | Move or resize a block while preserving its pattern link and data; rejects section-boundary violations and same-lane overlaps. |
+| `addMelodyPattern` / `addGuitarStrumPattern`, their block adders and update methods | Create and edit named melody patterns and strum patterns. Melody `lengthTicks` is normalized to whole bars on save; placement validation uses the last-note bar for normalized melodies and the rounded-up stored length for legacy non-bar-aligned patterns until their next save. |
+| `setBlockPlacement(...)` | Move or resize while preserving pattern content; Melody validation also protects expanded repeat occupancy and existing repeat origins. |
+| `repeatMelodyBlock(...)` / `setMelodyLaneSound(...)` | Create a linked placement at a valid start / set an explicit sound for one Melody lane. |
 | `insertInstrumentSelectionAtBar(...)` | Adds a named, saved chord or exact Fretboard/Piano snapshot to a Writer lane after section/bar selection and a name prompt. |
 | `makeBlockUnique(...)` | Copy the canonical save and detach the selected placement; one Writer history step. |
 | `loadProject(project)` | Replace the active Writer session from a named Song version, materializing its retained block content when shared saves have since changed. |
@@ -311,7 +455,8 @@ versions can be inspected.
 
 ## Undo / Redo
 
-Writer's overflow menu contains **Undo** and **Redo**. Both controls have
+Writer's overflow menu contains **Undo** and **Redo**; Studio also exposes
+labelled history icons beside **Save version** and the version-browser icon. Both controls have
 accessible button labels, can be reached with Tab, and activate with Enter or
 Space. The active project keeps up to 50 prior immutable snapshots in memory,
 including melody and strum
@@ -344,7 +489,7 @@ the symbol/name. Example in C major: a saved F-major voicing shows `IV`.
 
 The Writer save panel has two views:
 
-- **Song versions** save and load a whole `SongwriterProjectSnapshot`. Saving
+- **Writer versions** save and load a whole `SongwriterProjectSnapshot`. Saving
   captures current canonical content for every resolvable block, including
   patterns, clips, and required audio metadata. Loading restores that version's
   recoverable musical content without overwriting shared root saves or changing
@@ -365,10 +510,10 @@ The Writer save panel has two views:
   as a whole-project load.
 
 The panel is scoped to the selected project's folder, keeping both views inside
-the project subtree. If a Song version records different tempo, meter, or key,
+the project subtree. If a Writer version records different tempo, meter, or key,
 Writer summarizes the difference before loading and applies the current
 project config to the active session. The saved version remains unchanged.
-Project config retrofits do not rewrite named Song versions.
+Project config retrofits do not rewrite named Writer versions.
 
 The Writer save sheet keeps its title and tabs fixed while each Save Browser
 scrolls its own contents, so saves remain reachable on short screens.
@@ -426,3 +571,31 @@ project has no Writer section, Writer offers to create its default eight-bar
 section. The blank Writer state also has a visible **Start an 8-bar section**
 action. A separately saved Fretboard/Piano idea can be linked from the project
 root with **Use in Writer**; a fresh instrument selection creates a new save.
+
+Studio section Bars and Repeat use plain text disclosures with chevrons and 44-pixel targets; both open the existing steppers. Save version is also a text action. Mixer keeps its tooltip on compact screens and shows a label on wide screens. Chord-cell boundaries remain visible because they represent musical placement.
+
+Studio Harmony cells in a mixed row share the tallest cell’s height so their top and bottom edges align. Entirely empty rows retain compact 44-pixel slots; scaled text, lyrics and Save names can increase row height.
+
+### Playback correctness and voice lifetime
+
+Harmony plays the saved native Piano register/inversion and Fretboard positions.
+Clean/Distorted is the shared device preference exposed on Fretboard Harmony;
+explicit Melody lane guitar sounds override it for that lane.
+Simultaneous Harmony notes share one PCM source, reducing six-note chord source
+bindings from six to one. The Distorted amplifier uses bass filtering, two
+saturation stages and cabinet filtering with oversampling.
+
+Generated notes release against their requested onset and duration, including
+preparation time. Stop cancels pending starts; old voice cleanup cannot release
+a new run's voice. Rapid strums end by the next stroke, short bars bound Harmony
+stabs, and the transport completes after the final tick interval. These are
+verified with deterministic platform and transport tests; physical iPhone
+listening and latency measurements remain separate validation.
+
+The October 2026 simulator check used populated, isolated fixtures with the
+production instrument and Writer widgets on iPhone 18 Pro and iPad Pro 11-inch
+(M5), running iOS/iPadOS 27. It exercised Full/Solo, Chord/Free, the shared
+Clean/Distorted selector, note audition, and Writer Play/Stop. Compact and wide
+layouts were inspected at runtime; the 320-pixel layout and enlarged text also
+have widget regression coverage. This check does not measure physical-device
+audio latency or establish a subjective listening assessment of the guitar tone.

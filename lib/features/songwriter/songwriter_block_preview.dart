@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../models/save_system.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/save_system_rules.dart';
@@ -32,9 +32,10 @@ Future<String?> showWriterSaveNameDialog(
   BuildContext context, {
   required String initialName,
   required String title,
-}) => showDialog<String>(
+}) => showStudioDialog<String>(
   context: context,
-  builder: (_) => _WriterSaveNameDialog(initialName: initialName, title: title),
+  builder: (context) =>
+      _WriterSaveNameDialog(initialName: initialName, title: title),
 );
 
 Future<void> renameWriterBlockSave(
@@ -142,7 +143,7 @@ Widget writerLinkedBlockActionsMenu(
     padding: EdgeInsets.zero,
     constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
     iconSize: 16,
-    icon: const Icon(Icons.more_vert, color: MuzicianTheme.textPrimary),
+    icon: Icon(Icons.more_vert, color: StudioPalette.of(context).textPrimary),
     onSelected: (action) {
       if (action == 'rename') {
         renameWriterBlockSave(context, ref, entry);
@@ -183,7 +184,7 @@ Widget writerBrokenReferenceAction(
   padding: EdgeInsets.zero,
   constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
   iconSize: 15,
-  color: MuzicianTheme.red,
+  color: StudioPalette.of(context).red,
   icon: const Icon(Icons.link_off),
   onPressed: () => showBrokenReferenceSheet(context, onDelete: onDelete),
 );
@@ -229,7 +230,7 @@ class _WriterSaveNameDialogState extends State<_WriterSaveNameDialog> {
       controller: _controller,
       autofocus: true,
       maxLength: 80,
-      style: const TextStyle(color: MuzicianTheme.textPrimary),
+      style: TextStyle(color: StudioPalette.of(context).textPrimary),
       decoration: const InputDecoration(labelText: 'Save name'),
     ),
     actions: [
@@ -290,40 +291,48 @@ void showBrokenReferenceSheet(
   showWidgetSheet(
     context: context,
     title: 'Broken Reference',
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            'This block references a deleted save.',
-            style: TextStyle(color: MuzicianTheme.textSecondary),
+    child: Builder(
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'This block references a deleted save.',
+              style: TextStyle(color: StudioPalette.of(context).textSecondary),
+            ),
           ),
-        ),
-        if (onRelink != null)
+          if (onRelink != null)
+            ListTile(
+              leading: Icon(
+                Icons.link,
+                color: StudioPalette.of(context).textSecondary,
+              ),
+              title: Text(
+                'Re-link to another save',
+                style: TextStyle(color: StudioPalette.of(context).textPrimary),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                onRelink();
+              },
+            ),
           ListTile(
-            leading: const Icon(Icons.link, color: MuzicianTheme.textSecondary),
-            title: const Text(
-              'Re-link to another save',
-              style: TextStyle(color: MuzicianTheme.textPrimary),
+            leading: Icon(
+              Icons.delete_outline,
+              color: StudioPalette.of(context).red,
+            ),
+            title: Text(
+              'Delete block',
+              style: TextStyle(color: StudioPalette.of(context).textPrimary),
             ),
             onTap: () {
               Navigator.pop(context);
-              onRelink();
+              onDelete();
             },
           ),
-        ListTile(
-          leading: const Icon(Icons.delete_outline, color: MuzicianTheme.red),
-          title: const Text(
-            'Delete block',
-            style: TextStyle(color: MuzicianTheme.textPrimary),
-          ),
-          onTap: () {
-            Navigator.pop(context);
-            onDelete();
-          },
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
@@ -543,7 +552,7 @@ class _ThirdAboveCard extends StatelessWidget {
         width: 96,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -558,9 +567,9 @@ class _ThirdAboveCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '3rd above (${suggestion.targetPcs.map((pc) => formatRootChoiceLabel(chromaticNotes[pc], spelling: spelling)).join(', ')})',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -590,7 +599,7 @@ class _VoicingCard extends StatelessWidget {
         width: 96,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -605,9 +614,9 @@ class _VoicingCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               suggestion.label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -641,14 +650,16 @@ class _LibraryTab extends StatelessWidget {
               Icon(
                 Icons.library_music_outlined,
                 size: 28,
-                color: MuzicianTheme.textMuted.withValues(alpha: 0.5),
+                color: StudioPalette.of(
+                  context,
+                ).textMuted.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 10),
               Text(
                 'No saved voicing matches these notes',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -658,7 +669,9 @@ class _LibraryTab extends StatelessWidget {
                 'Save a voicing with these exact notes to see it here.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: MuzicianTheme.textMuted.withValues(alpha: 0.8),
+                  color: StudioPalette.of(
+                    context,
+                  ).textMuted.withValues(alpha: 0.8),
                   fontSize: 11,
                   height: 1.3,
                 ),
@@ -718,7 +731,7 @@ class _LibraryMatchCard extends StatelessWidget {
         width: 96,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -733,9 +746,9 @@ class _LibraryMatchCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               match.entry.name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,

@@ -13,7 +13,7 @@ import '../../store/settings_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../schema/rules/piano_roll_import_rules.dart' as import_rules;
 import '../../schema/rules/save_system_rules.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../../utils/note_utils.dart';
 
@@ -102,7 +102,7 @@ class _PianoRollSaveStackLoaderState
           .where((n) => n.startTick == startTick)
           .toList();
       if (conflicting.isNotEmpty) {
-        final action = await showDialog<String>(
+        final action = await showStudioDialog<String>(
           context: context,
           builder: (ctx) => MuzicianDialog(
             title: 'Notes already present',
@@ -122,7 +122,7 @@ class _PianoRollSaveStackLoaderState
               ),
               MuzicianDialogButton(
                 'Overwrite',
-                color: MuzicianTheme.orange,
+                color: StudioPalette.of(ctx).orange,
                 onPressed: () => Navigator.pop(ctx, 'overwrite'),
               ),
             ],
@@ -155,8 +155,11 @@ class _PianoRollSaveStackLoaderState
 
     return Container(
       decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
+        color: StudioPalette.of(context).glassBg,
+        border: Border.all(
+          color: StudioPalette.of(context).glassBorder,
+          width: 0.5,
+        ),
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(12),
@@ -164,10 +167,10 @@ class _PianoRollSaveStackLoaderState
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'Load from Saves',
             style: TextStyle(
-              color: MuzicianTheme.textSecondary,
+              color: StudioPalette.of(context).textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
@@ -185,10 +188,10 @@ class _PianoRollSaveStackLoaderState
                       _currentFolderId = null;
                       _selectedSaveId = null;
                     }),
-                    child: const Text(
+                    child: Text(
                       '⌂',
                       style: TextStyle(
-                        color: MuzicianTheme.sky,
+                        color: StudioPalette.of(context).sky,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -196,12 +199,12 @@ class _PianoRollSaveStackLoaderState
                   ),
                   ...breadcrumb.asMap().entries.expand(
                     (e) => [
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.symmetric(horizontal: 4),
                         child: Text(
                           '›',
                           style: TextStyle(
-                            color: MuzicianTheme.textMuted,
+                            color: StudioPalette.of(context).textMuted,
                             fontSize: 12,
                           ),
                         ),
@@ -215,8 +218,8 @@ class _PianoRollSaveStackLoaderState
                           e.value.name,
                           style: TextStyle(
                             color: e.key == breadcrumb.length - 1
-                                ? MuzicianTheme.textPrimary
-                                : MuzicianTheme.textSecondary,
+                                ? StudioPalette.of(context).textPrimary
+                                : StudioPalette.of(context).textSecondary,
                             fontSize: 12,
                             fontWeight: e.key == breadcrumb.length - 1
                                 ? FontWeight.w600
@@ -241,17 +244,25 @@ class _PianoRollSaveStackLoaderState
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
+                  color:
+                      (StudioPalette.of(context).isStudio
+                              ? StudioPalette.of(context).textPrimary
+                              : Colors.white)
+                          .withValues(alpha: 0.06),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color:
+                        (StudioPalette.of(context).isStudio
+                                ? StudioPalette.of(context).textPrimary
+                                : Colors.white)
+                            .withValues(alpha: 0.12),
                     width: 0.5,
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
+                child: Text(
                   '← Back',
                   style: TextStyle(
-                    color: MuzicianTheme.textSecondary,
+                    color: StudioPalette.of(context).textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -269,12 +280,12 @@ class _PianoRollSaveStackLoaderState
               child: Column(
                 children: [
                   if (_currentFolderId == null && subFolders.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         'No folders yet. Create saves in the Fretboard or Piano tab first.',
                         style: TextStyle(
-                          color: MuzicianTheme.textMuted,
+                          color: StudioPalette.of(context).textMuted,
                           fontSize: 12,
                         ),
                         textAlign: TextAlign.center,
@@ -307,17 +318,19 @@ class _PianoRollSaveStackLoaderState
                                 folder.name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: MuzicianTheme.textSecondary,
+                                style: TextStyle(
+                                  color: StudioPalette.of(
+                                    context,
+                                  ).textSecondary,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
-                            const Text(
+                            Text(
                               '›',
                               style: TextStyle(
-                                color: MuzicianTheme.textMuted,
+                                color: StudioPalette.of(context).textMuted,
                                 fontSize: 16,
                               ),
                             ),
@@ -330,12 +343,12 @@ class _PianoRollSaveStackLoaderState
                   if (_currentFolderId != null &&
                       rootSaves.isEmpty &&
                       subFolders.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         'No saves in this folder.',
                         style: TextStyle(
-                          color: MuzicianTheme.textMuted,
+                          color: StudioPalette.of(context).textMuted,
                           fontSize: 12,
                         ),
                         textAlign: TextAlign.center,
@@ -360,7 +373,9 @@ class _PianoRollSaveStackLoaderState
                         ),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                              ? StudioPalette.of(
+                                  context,
+                                ).sky.withValues(alpha: 0.12)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -375,8 +390,8 @@ class _PianoRollSaveStackLoaderState
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: isSelected
-                                      ? MuzicianTheme.sky
-                                      : MuzicianTheme.textSecondary,
+                                      ? StudioPalette.of(context).sky
+                                      : StudioPalette.of(context).textSecondary,
                                   fontSize: 13,
                                   fontWeight: isSelected
                                       ? FontWeight.w700
@@ -397,17 +412,17 @@ class _PianoRollSaveStackLoaderState
           // ── Selected save controls ──
           if (selectedSave != null) ...[
             Divider(
-              color: MuzicianTheme.glassBorder,
+              color: StudioPalette.of(context).glassBorder,
               height: 16,
               thickness: 0.5,
             ),
             // Note preview
             Row(
               children: [
-                const Text(
+                Text(
                   'Notes:',
                   style: TextStyle(
-                    color: MuzicianTheme.textSecondary,
+                    color: StudioPalette.of(context).textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -427,13 +442,13 @@ class _PianoRollSaveStackLoaderState
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: MuzicianTheme.sky.withValues(
-                                        alpha: 0.15,
-                                      ),
+                                      color: StudioPalette.of(
+                                        context,
+                                      ).sky.withValues(alpha: 0.15),
                                       border: Border.all(
-                                        color: MuzicianTheme.sky.withValues(
-                                          alpha: 0.35,
-                                        ),
+                                        color: StudioPalette.of(
+                                          context,
+                                        ).sky.withValues(alpha: 0.35),
                                         width: 0.5,
                                       ),
                                       borderRadius: BorderRadius.circular(6),
@@ -443,8 +458,8 @@ class _PianoRollSaveStackLoaderState
                                         note,
                                         spelling: spelling,
                                       ),
-                                      style: const TextStyle(
-                                        color: MuzicianTheme.sky,
+                                      style: TextStyle(
+                                        color: StudioPalette.of(context).sky,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -453,10 +468,10 @@ class _PianoRollSaveStackLoaderState
                                 )
                                 .toList()
                           : [
-                              const Text(
+                              Text(
                                 'No pitch classes saved.',
                                 style: TextStyle(
-                                  color: MuzicianTheme.textMuted,
+                                  color: StudioPalette.of(context).textMuted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -472,8 +487,8 @@ class _PianoRollSaveStackLoaderState
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'Chord: ${formatRecognizedChordLabel(symbol: selectedSave.snapshot.pendingChord!.symbol, rootPc: noteToPC[toSharp(selectedSave.snapshot.pendingChord!.root)] ?? -1, quality: selectedSave.snapshot.pendingChord!.quality, spelling: spelling)}',
-                  style: const TextStyle(
-                    color: MuzicianTheme.violet,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).violet,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -484,8 +499,8 @@ class _PianoRollSaveStackLoaderState
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'Scale: ${formatRootChoiceLabel(selectedSave.snapshot.pendingScale!.root, spelling: spelling)} ${selectedSave.snapshot.pendingScale!.scaleName}',
-                  style: const TextStyle(
-                    color: MuzicianTheme.violet,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).violet,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -497,10 +512,10 @@ class _PianoRollSaveStackLoaderState
             // Placement mode toggle
             Row(
               children: [
-                const Text(
+                Text(
                   'Placement:',
                   style: TextStyle(
-                    color: MuzicianTheme.textSecondary,
+                    color: StudioPalette.of(context).textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -526,8 +541,8 @@ class _PianoRollSaveStackLoaderState
             if (previewMidis.isNotEmpty)
               Text(
                 '${previewMidis.length} MIDI note${previewMidis.length != 1 ? 's' : ''} · MIDI [${previewMidis.join(', ')}]',
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
                   fontSize: 11,
                   fontStyle: FontStyle.italic,
                 ),
@@ -537,8 +552,8 @@ class _PianoRollSaveStackLoaderState
                 _placementMode == 'exact'
                     ? 'No exact positions saved. Try Pitch Class mode.'
                     : 'No pitch classes could be mapped to the current range.',
-                style: const TextStyle(
-                  color: MuzicianTheme.orange,
+                style: TextStyle(
+                  color: StudioPalette.of(context).orange,
                   fontSize: 11,
                 ),
               ),
@@ -555,17 +570,21 @@ class _PianoRollSaveStackLoaderState
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.18),
+                    color: StudioPalette.of(
+                      context,
+                    ).sky.withValues(alpha: 0.18),
                     border: Border.all(
-                      color: MuzicianTheme.sky.withValues(alpha: 0.45),
+                      color: StudioPalette.of(
+                        context,
+                      ).sky.withValues(alpha: 0.45),
                       width: 0.5,
                     ),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '＋ Add Stack${prState.selectedColumnTick != null ? ' at beat ${prState.selectedColumnTick! + 1}' : ''}',
-                    style: const TextStyle(
-                      color: MuzicianTheme.sky,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).sky,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -601,12 +620,18 @@ class _ModePill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 12),
         decoration: BoxDecoration(
           color: active
-              ? MuzicianTheme.sky.withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.05),
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.2)
+              : (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).textPrimary
+                        : Colors.white)
+                    .withValues(alpha: 0.05),
           border: Border.all(
             color: active
-                ? MuzicianTheme.sky
-                : Colors.white.withValues(alpha: 0.14),
+                ? StudioPalette.of(context).sky
+                : (StudioPalette.of(context).isStudio
+                          ? StudioPalette.of(context).textPrimary
+                          : Colors.white)
+                      .withValues(alpha: 0.14),
             width: 0.5,
           ),
           borderRadius: BorderRadius.circular(8),
@@ -614,7 +639,9 @@ class _ModePill extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color: active ? MuzicianTheme.sky : MuzicianTheme.textMuted,
+            color: active
+                ? StudioPalette.of(context).sky
+                : StudioPalette.of(context).textMuted,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),

@@ -7,7 +7,7 @@ import '../models/project_config.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../store/save_system_store.dart';
 import '../store/settings_store.dart';
-import '../theme/muzician_theme.dart';
+import '../theme/studio_theme.dart';
 import 'core/muzician_dialog.dart';
 import '../utils/note_utils.dart';
 
@@ -22,9 +22,8 @@ class ProjectConfigSheet extends ConsumerStatefulWidget {
   const ProjectConfigSheet({super.key, required this.projectId});
 
   static Future<void> show(BuildContext context, String projectId) =>
-      showModalBottomSheet<void>(
+      showStudioModalBottomSheet<void>(
         context: context,
-        backgroundColor: Colors.transparent,
         isScrollControlled: true,
         builder: (_) => ProjectConfigSheet(projectId: projectId),
       );
@@ -81,7 +80,7 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
       state.saves,
       widget.projectId,
     ).length;
-    final confirm = await showDialog<bool>(
+    final confirm = await showStudioDialog<bool>(
       context: context,
       builder: (ctx) => MuzicianDialog(
         title: 'Apply project config?',
@@ -111,8 +110,8 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF141826),
+      decoration: BoxDecoration(
+        color: StudioPalette.of(context).dialogBg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         border: Border(top: BorderSide(color: Color(0x33FFFFFF), width: 0.5)),
       ),
@@ -129,7 +128,7 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.textDim,
+                    color: StudioPalette.of(context).textMuted,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -139,28 +138,32 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
                 label: 'NAME',
                 child: TextField(
                   controller: _nameCtrl,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 10),
                     enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: MuzicianTheme.textDim),
+                      borderSide: BorderSide(
+                        color: StudioPalette.of(context).textDim,
+                      ),
                     ),
                     focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: MuzicianTheme.sky),
+                      borderSide: BorderSide(
+                        color: StudioPalette.of(context).sky,
+                      ),
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 'PROJECT CONFIG',
                 style: TextStyle(
-                  color: MuzicianTheme.textDim,
+                  color: StudioPalette.of(context).textMuted,
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.4,
@@ -194,19 +197,23 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(3),
                   ],
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 10),
                     enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: MuzicianTheme.textDim),
+                      borderSide: BorderSide(
+                        color: StudioPalette.of(context).textDim,
+                      ),
                     ),
                     focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: MuzicianTheme.sky),
+                      borderSide: BorderSide(
+                        color: StudioPalette.of(context).sky,
+                      ),
                     ),
                   ),
                   onChanged: (v) => setState(() {
@@ -252,7 +259,7 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
                   Expanded(
                     child: _SheetButton(
                       label: 'Cancel',
-                      accent: MuzicianTheme.textSecondary,
+                      accent: StudioPalette.of(context).textSecondary,
                       onTap: () => Navigator.of(context).pop(),
                     ),
                   ),
@@ -260,7 +267,7 @@ class _ProjectConfigSheetState extends ConsumerState<ProjectConfigSheet> {
                   Expanded(
                     child: _SheetButton(
                       label: 'Apply',
-                      accent: MuzicianTheme.sky,
+                      accent: StudioPalette.of(context).sky,
                       filled: true,
                       onTap: _save,
                     ),
@@ -286,8 +293,8 @@ class _Section extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: MuzicianTheme.textDim,
+          style: TextStyle(
+            color: StudioPalette.of(context).textMuted,
             fontSize: 10,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.4,
@@ -321,7 +328,7 @@ class _KeyPicker extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          height: 38,
+          height: StudioPalette.of(context).isStudio ? 44 : 38,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: chromaticNotes.length + 1,
@@ -351,7 +358,7 @@ class _KeyPicker extends ConsumerWidget {
         if (rootPc != null) ...[
           const SizedBox(height: 8),
           SizedBox(
-            height: 38,
+            height: StudioPalette.of(context).isStudio ? 44 : 38,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: scales.length,
@@ -383,7 +390,9 @@ class _Pill extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    final accent = selected ? MuzicianTheme.sky : MuzicianTheme.textSecondary;
+    final accent = selected
+        ? StudioPalette.of(context).sky
+        : StudioPalette.of(context).textSecondary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -429,7 +438,9 @@ class _NumberDropdown extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: (StudioPalette.of(context).isStudio
+            ? StudioPalette.of(context).glassBg
+            : Colors.white.withValues(alpha: 0.04)),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.10),
           width: 0.6,
@@ -440,10 +451,10 @@ class _NumberDropdown extends StatelessWidget {
         child: DropdownButton<int>(
           value: options.contains(value) ? value : options.first,
           isExpanded: true,
-          dropdownColor: const Color(0xFF141826),
-          iconEnabledColor: MuzicianTheme.textMuted,
-          style: const TextStyle(
-            color: MuzicianTheme.textPrimary,
+          dropdownColor: StudioPalette.of(context).dialogBg,
+          iconEnabledColor: StudioPalette.of(context).textMuted,
+          style: TextStyle(
+            color: StudioPalette.of(context).textPrimary,
             fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
@@ -483,7 +494,9 @@ class _SheetButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: filled
                 ? accent.withValues(alpha: 0.18)
-                : Colors.white.withValues(alpha: 0.04),
+                : (StudioPalette.of(context).isStudio
+                      ? StudioPalette.of(context).glassBg
+                      : Colors.white.withValues(alpha: 0.04)),
             border: Border.all(
               color: filled
                   ? accent.withValues(alpha: 0.55)

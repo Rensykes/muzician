@@ -1070,6 +1070,26 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           var existing = originalSave == null
               ? adoptSaves[linkedSaveId]
               : (nextSaves[originalSave.id] ?? originalSave);
+          if (lane.kind == SongLaneKind.melody &&
+              existing != null &&
+              !isCanonicalMelodyForBlock(existing.snapshot, block) &&
+              !(block.patternId == null &&
+                  oldBlock != null &&
+                  oldBlock.saveId == block.saveId &&
+                  isCanonicalMelodyForBlock(existing.snapshot, oldBlock))) {
+            // Keep the original link and fallback intact for recovery. Never
+            // replace an unrelated canonical Save with this placement's data.
+            links.add(
+              WriterSaveLink(
+                blockId: blockId,
+                sectionId: section.id,
+                folderId: categoryFolder.id,
+                saveId: existing.id,
+                laneKind: lane.kind,
+              ),
+            );
+            continue;
+          }
           final isSaveRebind =
               oldBlock != null && oldBlock.saveId != block.saveId;
           if (lane.kind == SongLaneKind.harmony &&
@@ -2328,7 +2348,10 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           : null,
     );
     _replaceSection(sectionId, (s) {
-      final positioned = lane.copyWith(order: s.lanes.length);
+      final positioned = lane.copyWith(
+        order: s.lanes.length,
+        melodySound: kind == SongLaneKind.melody ? MelodyLaneSound.piano : null,
+      );
       return s.copyWith(lanes: [...s.lanes, positioned]);
     });
     return lane.id;
@@ -2483,6 +2506,18 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String laneId,
     required bool muted,
   }) => _replaceLane(sectionId, laneId, (l) => l.copyWith(muted: muted));
+
+  void setMelodyLaneSound({
+    required String sectionId,
+    required String laneId,
+    required MelodyLaneSound sound,
+  }) => _replaceLane(
+    sectionId,
+    laneId,
+    (lane) => lane.kind != SongLaneKind.melody || lane.melodySound == sound
+        ? lane
+        : lane.copyWith(melodySound: sound),
+  );
 
   /// Selects the Harmony lane used by Save voicings or Guitar Strum.
   /// A null Save anchor follows the primary Harmony lane; a null Strum anchor
@@ -3467,6 +3502,36 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String laneId,
     required String blockId,
   }) {
+    final section = state.sections.where((s) => s.id == sectionId).firstOrNull;
+    final lane = section?.lanes.where((l) => l.id == laneId).firstOrNull;
+    if (section == null ||
+        lane == null ||
+        !lane.blocks.any((b) => b.id == blockId)) {
+      return;
+    }
+    if (lane.kind == SongLaneKind.melody) {
+      final remaining = lane.copyWith(
+        blocks: lane.blocks.where((b) => b.id != blockId).toList(),
+      );
+      final after = {
+        for (final occurrence in melodyOccurrences(
+          lane: remaining,
+          sectionLengthBars: section.lengthBars,
+        ))
+          (occurrence.source.id, occurrence.repeatIndex): occurrence.startBar,
+      };
+      for (final occurrence in melodyOccurrences(
+        lane: lane,
+        sectionLengthBars: section.lengthBars,
+      )) {
+        if (occurrence.source.id != blockId &&
+            occurrence.repeatIndex > 0 &&
+            after[(occurrence.source.id, occurrence.repeatIndex)] !=
+                occurrence.startBar) {
+          return;
+        }
+      }
+    }
     _replaceLane(
       sectionId,
       laneId,
@@ -3526,10 +3591,24 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     required String laneId,
     required SongBlock block,
   }) {
+    final section = state.sections
+        .where((item) => item.id == sectionId)
+        .firstOrNull;
+    if (section == null) return;
     _replaceLane(
       sectionId,
       laneId,
-      (l) => l.copyWith(blocks: [...l.blocks, block]),
+      (l) =>
+          l.kind == SongLaneKind.melody &&
+              (l.blocks.any((existing) => existing.id == block.id) ||
+                  !isValidMelodyPlacement(
+                    section: section,
+                    lane: l,
+                    candidate: block,
+                    melodyBars: _melodyPlacementLimit(block.patternId),
+                  ))
+          ? l
+          : l.copyWith(blocks: [...l.blocks, block]),
     );
   }
 
@@ -3628,80 +3707,121 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     saveMelodyPattern(updated);
   }
 
-  /// Saves a Piano Roll melody edit and, for a newly-created pattern only,
-  /// expands the explicitly supplied first block to the pattern's full bar
-  /// duration when that complete placement fits the section and lane.
+  /// Saves a Piano Roll melody edit, normalizing its stored length to whole
+  /// bars and, for a pattern's first authored save, expanding its eligible
+  /// one-bar placements to the melody's full bar duration when that complete
+  /// placement fits the section and lane.
+  ///
+  /// A first authored save is an empty pattern that gains its first notes. The
+  /// expansion rule belongs here rather than in one editor route so authoring
+  /// from a tile, Edit performance, or the initial creation editor behaves the
+  /// same. Later saves never resize existing placements.
   void saveMelodyPattern(
     NotePattern updated, {
     ({String sectionId, String laneId, String blockId})? initialPlacement,
   }) {
-    final existing = state.melodyPerformancesByPatternId[updated.id];
+    final measureTicks = state.config.measureTicks;
+    final normalized = quantizeMelodyPatternLength(updated, measureTicks);
+    final previous = state.melodyPatterns
+        .where((pattern) => pattern.id == normalized.id)
+        .firstOrNull;
+    final firstAuthoredSave =
+        (previous?.notes.isEmpty ?? true) && normalized.notes.isNotEmpty;
+    final existing = state.melodyPerformancesByPatternId[normalized.id];
     final performances = {...state.melodyPerformancesByPatternId};
     if (existing != null) {
-      performances[updated.id] = existing.copyWith(
+      performances[normalized.id] = existing.copyWith(
         fretboardPositionsByNoteId: reconcileFretboardPositions(
-          pattern: updated,
+          pattern: normalized,
           positions: existing.fretboardPositionsByNoteId,
           state: ref.read(fretboardProvider),
         ),
       );
     }
     var sections = state.sections;
-    if (initialPlacement != null && updated.lengthTicks > 0) {
-      final sectionIndex = sections.indexWhere(
-        (section) => section.id == initialPlacement.sectionId,
-      );
-      if (sectionIndex >= 0) {
-        final section = sections[sectionIndex];
-        final lane = section.lanes
+    if (firstAuthoredSave) {
+      List<SongSection> expand({
+        required String sectionId,
+        required String laneId,
+        required String blockId,
+      }) {
+        final section = sections
+            .where((candidate) => candidate.id == sectionId)
+            .firstOrNull;
+        final lane = section?.lanes
             .where(
               (candidate) =>
-                  candidate.id == initialPlacement.laneId &&
+                  candidate.id == laneId &&
                   candidate.kind == SongLaneKind.melody,
             )
             .firstOrNull;
         final block = lane?.blocks
             .where(
               (candidate) =>
-                  candidate.id == initialPlacement.blockId &&
-                  candidate.patternId == updated.id,
+                  candidate.id == blockId &&
+                  candidate.patternId == normalized.id,
             )
             .firstOrNull;
-        if (lane != null && block != null) {
-          final desiredSpan =
-              (updated.lengthTicks + state.config.measureTicks - 1) ~/
-              state.config.measureTicks;
-          final expanded = block.copyWith(spanBars: desiredSpan);
-          if (desiredSpan > block.spanBars &&
-              isValidBlockPlacement(
-                section: section,
-                lane: lane,
-                candidate: expanded,
-              )) {
-            sections = [
-              for (var i = 0; i < sections.length; i++)
-                if (i == sectionIndex)
-                  section.copyWith(
-                    lanes: [
-                      for (final currentLane in section.lanes)
-                        if (currentLane.id != lane.id)
-                          currentLane
-                        else
-                          currentLane.copyWith(
-                            blocks: [
-                              for (final currentBlock in currentLane.blocks)
-                                if (currentBlock.id == block.id)
-                                  expanded
-                                else
-                                  currentBlock,
-                            ],
-                          ),
-                    ],
-                  )
-                else
-                  sections[i],
-            ];
-          }
+        if (section == null || lane == null || block == null) return sections;
+        final desiredSpan = melodyBarCount(normalized, measureTicks);
+        if (block.spanBars != 1 || desiredSpan <= block.spanBars) {
+          return sections;
+        }
+        final expanded = block.copyWith(spanBars: desiredSpan);
+        if (!isValidBlockPlacement(
+          section: section,
+          lane: lane,
+          candidate: expanded,
+          melodyBars: desiredSpan,
+        )) {
+          return sections;
+        }
+        return [
+          for (final currentSection in sections)
+            if (currentSection.id != section.id)
+              currentSection
+            else
+              currentSection.copyWith(
+                lanes: [
+                  for (final currentLane in currentSection.lanes)
+                    if (currentLane.id != lane.id)
+                      currentLane
+                    else
+                      currentLane.copyWith(
+                        blocks: [
+                          for (final currentBlock in currentLane.blocks)
+                            if (currentBlock.id == block.id)
+                              expanded
+                            else
+                              currentBlock,
+                        ],
+                      ),
+                ],
+              ),
+        ];
+      }
+
+      if (initialPlacement != null) {
+        sections = expand(
+          sectionId: initialPlacement.sectionId,
+          laneId: initialPlacement.laneId,
+          blockId: initialPlacement.blockId,
+        );
+      } else {
+        final targets = [
+          for (final section in sections)
+            for (final lane in section.lanes)
+              if (lane.kind == SongLaneKind.melody)
+                for (final block in lane.blocks)
+                  if (block.patternId == normalized.id && block.spanBars == 1)
+                    (sectionId: section.id, laneId: lane.id, blockId: block.id),
+        ];
+        for (final target in targets) {
+          sections = expand(
+            sectionId: target.sectionId,
+            laneId: target.laneId,
+            blockId: target.blockId,
+          );
         }
       }
     }
@@ -3709,7 +3829,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       state.copyWith(
         sections: sections,
         melodyPatterns: state.melodyPatterns
-            .map((pattern) => pattern.id == updated.id ? updated : pattern)
+            .map(
+              (pattern) => pattern.id == normalized.id ? normalized : pattern,
+            )
             .toList(),
         melodyPerformancesByPatternId: performances,
       ),
@@ -3841,6 +3963,105 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     spanBars: spanBars,
   );
 
+  /// Creates a linked placement, shortening it to the largest valid span.
+  bool repeatMelodyBlock({
+    required String sectionId,
+    required String laneId,
+    required String blockId,
+    required int startBar,
+  }) {
+    final section = state.sections
+        .where((item) => item.id == sectionId)
+        .firstOrNull;
+    final lane = section?.lanes
+        .where((item) => item.id == laneId && item.kind == SongLaneKind.melody)
+        .firstOrNull;
+    final source = lane?.blocks.where((item) => item.id == blockId).firstOrNull;
+    bool hasCanonicalSave() {
+      final saveState = ref.read(saveSystemProvider);
+      final projectId = saveState.selectedProjectId;
+      final saveId = source?.saveId;
+      if (projectId == null || saveId == null || source == null) return false;
+      final entry = resolveSaveInProject(saveState, projectId, saveId);
+      return isCanonicalMelodyForBlock(entry?.snapshot, source);
+    }
+
+    if (section == null ||
+        lane == null ||
+        source == null ||
+        source.spanBars <= 0 ||
+        source.patternId == null ||
+        !hasCanonicalSave() ||
+        !state.melodyPatterns.any(
+          (pattern) => pattern.id == source.patternId,
+        )) {
+      return false;
+    }
+    final id = generateId();
+    final melodyBars = _melodyPlacementLimit(source.patternId);
+    for (var span = source.spanBars; span > 0; span--) {
+      final candidate = SongBlock(
+        id: id,
+        startBar: startBar,
+        spanBars: span,
+        saveId: source.saveId,
+        embedded: source.embedded,
+        chordSymbol: source.chordSymbol,
+        chordQuality: source.chordQuality,
+        chordRootPc: source.chordRootPc,
+        chordNotes: source.chordNotes,
+        romanNumeral: source.romanNumeral,
+        patternId: source.patternId,
+        audioClipId: source.audioClipId,
+        lyrics: source.lyrics,
+        isSilent: source.isSilent,
+      );
+      if (!isValidMelodyPlacement(
+        section: section,
+        lane: lane,
+        candidate: candidate,
+        melodyBars: melodyBars,
+      )) {
+        continue;
+      }
+      _replaceLane(sectionId, laneId, (currentLane) {
+        final currentSection = state.sections
+            .where((item) => item.id == sectionId)
+            .firstOrNull;
+        if (currentSection == null ||
+            currentLane.kind != SongLaneKind.melody ||
+            !currentLane.blocks.any((item) => identical(item, source)) ||
+            !hasCanonicalSave() ||
+            !state.melodyPatterns.any(
+              (pattern) => pattern.id == source.patternId,
+            ) ||
+            !isValidMelodyPlacement(
+              section: currentSection,
+              lane: currentLane,
+              candidate: candidate,
+              melodyBars: melodyBars,
+            )) {
+          return currentLane;
+        }
+        return currentLane.copyWith(blocks: [...currentLane.blocks, candidate]);
+      });
+      final committedSection = state.sections
+          .where((item) => item.id == sectionId)
+          .firstOrNull;
+      final committedLane = committedSection?.lanes
+          .where((item) => item.id == laneId)
+          .firstOrNull;
+      return committedLane?.blocks.any(
+            (item) =>
+                item.id == candidate.id &&
+                item.saveId == candidate.saveId &&
+                item.patternId == candidate.patternId,
+          ) ??
+          false;
+    }
+    return false;
+  }
+
   String addGuitarStrumPattern({String name = 'Strum', int? lengthTicks}) {
     final pattern = makeGuitarStrumPattern(
       name: name,
@@ -3929,6 +4150,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         section: section,
         lane: lane,
         candidate: block,
+        melodyBars: _melodyPlacementLimit(patternId),
       )) {
         return lane;
       }
@@ -4319,6 +4541,17 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     return newClipIds;
   }
 
+  /// Whole-bar limit of the melody referenced by [patternId], or null when the
+  /// block is not a resolvable melody (non-melody lanes keep their old rules).
+  int? _melodyPlacementLimit(String? patternId) {
+    if (patternId == null) return null;
+    final pattern = state.melodyPatterns
+        .where((candidate) => candidate.id == patternId)
+        .firstOrNull;
+    if (pattern == null) return null;
+    return melodyPlacementBarLimit(pattern, state.config.measureTicks);
+  }
+
   /// Move/resize a block. Rejects (no-op) if it falls outside the section or
   /// overlaps another block in the same lane.
   void setBlockPlacement({
@@ -4344,6 +4577,7 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       section: section,
       lane: lane,
       candidate: moved,
+      melodyBars: _melodyPlacementLimit(current.patternId),
     )) {
       return;
     }
@@ -4376,6 +4610,15 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
         .where((candidate) => candidate.id == blockId)
         .firstOrNull;
     if (section == null || lane == null || block == null) return false;
+
+    if (lane.kind == SongLaneKind.melody &&
+        block.saveId != null &&
+        !isCanonicalMelodyForBlock(
+          canonicalSaveForBlock(blockId)?.snapshot,
+          block,
+        )) {
+      return false;
+    }
 
     snapshot ??= canonicalSaveForBlock(blockId)?.snapshot;
     snapshot ??= _contentSnapshot(state, lane, block) ?? block.embedded;
@@ -4793,6 +5036,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
           harmonyInstrument: laneKind == SongLaneKind.harmony
               ? targetHarmonyInstrument ?? defaultInstrument
               : null,
+          melodySound: laneKind == SongLaneKind.melody
+              ? MelodyLaneSound.piano
+              : null,
         );
     final source = replaceBlockId == null
         ? null
@@ -4838,7 +5084,21 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     final retainedBlocks = targetLane.blocks
         .where((currentBlock) => currentBlock.id != source?.id)
         .toList();
-    if (blocksOverlap(retainedBlocks, block)) return false;
+    if (laneKind == SongLaneKind.melody
+        ? !isValidMelodyPlacement(
+            section: section,
+            lane: targetLane,
+            candidate: block,
+            melodyBars: writerSnapshot.melodyPattern == null
+                ? null
+                : melodyPlacementBarLimit(
+                    writerSnapshot.melodyPattern!,
+                    state.config.measureTicks,
+                  ),
+          )
+        : blocksOverlap(retainedBlocks, block)) {
+      return false;
+    }
     final laneWithBlock = targetLane.copyWith(
       blocks: source == null
           ? [...targetLane.blocks, block]

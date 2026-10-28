@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
@@ -114,7 +115,21 @@ void main() {
       );
       final patternId = writer.addMelodyPattern(
         name: 'Long phrase',
-        lengthTicks: 25,
+        lengthTicks: 48,
+      );
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((pattern) => pattern.id == patternId)
+            .copyWith(
+              notes: const [
+                NotePatternNote(
+                  id: 'last',
+                  midiNote: 72,
+                  startTick: 46,
+                  durationTicks: 2,
+                ),
+              ],
+            ),
       );
       writer.addMelodyBlock(
         sectionId: section.id,
@@ -122,6 +137,28 @@ void main() {
         patternId: patternId,
         startBar: 3,
         spanBars: 3,
+      );
+      // Seed a legacy non-bar-aligned stored length directly; a save path now
+      // normalizes it to whole bars.
+      final legacyProject = writer.state;
+      writer.state = legacyProject.copyWith(
+        melodyPatterns: [
+          for (final pattern in legacyProject.melodyPatterns)
+            if (pattern.id == patternId)
+              pattern.copyWith(
+                lengthTicks: 25,
+                notes: const [
+                  NotePatternNote(
+                    id: 'last',
+                    midiNote: 72,
+                    startTick: 21,
+                    durationTicks: 4,
+                  ),
+                ],
+              )
+            else
+              pattern,
+        ],
       );
       final block = container
           .read(songwriterProvider)
@@ -142,7 +179,7 @@ void main() {
       );
       expect(find.text('Duration: 1 bar + 2 beats + 1 tick'), findsOneWidget);
       expect(
-        find.text('Placement: bars 4–6 · repeats, then clips the final pass'),
+        find.text('Placement: bars 4–6 · plays once, then 1 silent tail bar'),
         findsOneWidget,
       );
       expect(
@@ -206,7 +243,7 @@ void main() {
     expect(melodyLane.blocks, hasLength(1));
     expect(melodyLane.blocks.single.patternId, patternId);
     expect(melodyLane.blocks.single.startBar, 1);
-    expect(melodyLane.blocks.single.spanBars, 2);
+    expect(melodyLane.blocks.single.spanBars, 1);
     expect(writer.undoCount, undoCount + 1);
 
     expect(writer.undo(), isTrue);
@@ -254,7 +291,21 @@ void main() {
       kind: SongLaneKind.melody,
       label: 'Melody',
     );
-    final patternId = writer.addMelodyPattern(name: 'A', lengthTicks: 16);
+    final patternId = writer.addMelodyPattern(name: 'A', lengthTicks: 48);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'a-last',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     final obstaclePatternId = writer.addMelodyPattern(
       name: 'B',
       lengthTicks: 16,

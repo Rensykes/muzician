@@ -8,7 +8,7 @@ import '../../models/piano_roll_composer.dart';
 import '../../models/piano_roll_stack_builder.dart';
 import '../../store/piano_roll_stack_builder_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
 
 const _inversionLabels = <String>['Root', '1st', '2nd', '3rd'];
@@ -80,12 +80,18 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
     );
     final notifier = ref.read(pianoRollStackBuilderProvider.notifier);
 
+    if (StudioPalette.of(context).isStudio) {
+      return _buildStudio(builderState, notifier, spelling);
+    }
+
     return Container(
-      decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: MuzicianTheme.glassBorder),
-      ),
+      decoration: StudioPalette.of(context).isStudio
+          ? null
+          : BoxDecoration(
+              color: StudioPalette.of(context).glassBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: StudioPalette.of(context).glassBorder),
+            ),
       padding: const EdgeInsets.all(12),
       child: SingleChildScrollView(
         child: Column(
@@ -95,7 +101,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
             _buildHeader(builderState, spelling),
             const SizedBox(height: 8),
             _buildTabRow(builderState, notifier),
-            Divider(color: MuzicianTheme.glassBorder, height: 1),
+            Divider(color: StudioPalette.of(context).glassBorder, height: 1),
             const SizedBox(height: 8),
             if (builderState.activeView == PianoRollStackBuilderView.canonical)
               _buildCanonicalBody(builderState, notifier, spelling)
@@ -110,6 +116,249 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
             const SizedBox(height: 8),
             _buildAddStackButton(notifier, spelling),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudio(
+    PianoRollStackBuilderState state,
+    PianoRollStackBuilderNotifier notifier,
+    NoteSpelling spelling,
+  ) {
+    final p = StudioPalette.of(context);
+    final canonical = state.activeView == PianoRollStackBuilderView.canonical;
+    final recognition = state.recognition;
+    return SingleChildScrollView(
+      key: const ValueKey('studio-stack-builder'),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              for (final (label, view) in [
+                ('Chord', PianoRollStackBuilderView.canonical),
+                ('Custom', PianoRollStackBuilderView.advanced),
+              ])
+                Expanded(
+                  child: TextButton(
+                    onPressed: () {
+                      if (view == PianoRollStackBuilderView.canonical) {
+                        _closeWizard();
+                      }
+                      notifier.switchView(view);
+                    },
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(44, 44),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: state.activeView == view
+                          ? p.onAccent
+                          : p.textSecondary,
+                      backgroundColor: state.activeView == view
+                          ? p.sky
+                          : p.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    child: Text(label),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (canonical)
+            Row(
+              children: [
+                Expanded(
+                  child: _studioChoice<String>(
+                    label: 'Root',
+                    value: recognition.recognizedRoot ?? 'C',
+                    choices: [
+                      for (final root in chromaticNotes)
+                        (root, formatRootChoiceLabel(root, spelling: spelling)),
+                    ],
+                    onSelected: notifier.setCanonicalRoot,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _studioChoice<String>(
+                    label: 'Quality',
+                    value: recognition.recognizedQuality ?? '',
+                    choices: [
+                      for (final e in qualityLabelBySymbol.entries)
+                        (e.key, e.value),
+                    ],
+                    onSelected: notifier.setCanonicalQuality,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _studioChoice<int>(
+                    label: 'Inversion',
+                    value: recognition.recognizedInversionIndex ?? 0,
+                    choices: [
+                      for (final (i, label) in _inversionLabels.indexed)
+                        (i, label),
+                    ],
+                    onSelected: notifier.setCanonicalInversion,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _studioChoice<int>(
+                    label: 'Duration',
+                    value: state.durationTicks,
+                    choices: [
+                      for (final (label, ticks) in _durationOptions)
+                        (ticks, label),
+                    ],
+                    onSelected: notifier.setDurationTicks,
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            _buildHeader(state, spelling),
+            const SizedBox(height: 8),
+            _buildAdvancedBody(state, notifier, spelling),
+          ],
+          if (state.errorMessage != null) ...[
+            const SizedBox(height: 6),
+            _buildError(state.errorMessage!, notifier),
+          ],
+          const SizedBox(height: 8),
+          FilledButton(
+            key: const ValueKey('studio-add-stack'),
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              final added = notifier.addStack(spelling: spelling);
+              if (added && widget.dismissOnAdd) {
+                Navigator.of(context).maybePop();
+              }
+            },
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(44, 44),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              backgroundColor: p.sky,
+              foregroundColor: p.onAccent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.add_rounded, size: 18),
+                const SizedBox(width: 6),
+                const Text('Add stack'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    state.midiNotes
+                        .map(
+                          (midi) =>
+                              formatMidiNoteLabel(midi, spelling: spelling),
+                        )
+                        .join(' · '),
+                    textAlign: TextAlign.end,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _studioChoice<T>({
+    required String label,
+    required T value,
+    required List<(T, String)> choices,
+    required ValueChanged<T> onSelected,
+  }) {
+    final p = StudioPalette.of(context);
+    final selected = choices.where((choice) => choice.$1 == value).firstOrNull;
+    return Semantics(
+      label: '$label: ${selected?.$2 ?? 'Custom'}',
+      button: true,
+      child: InkWell(
+        key: ValueKey('studio-stack-${label.toLowerCase()}'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: () async {
+          final choice = await showStudioDialog<T>(
+            context: context,
+            builder: (dialogContext) => SimpleDialog(
+              title: Row(
+                children: [
+                  Expanded(child: Text(label)),
+                  IconButton(
+                    tooltip: 'Close $label',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              children: [
+                for (final (item, name) in choices)
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.of(dialogContext).pop(item),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(name)),
+                        if (item == value)
+                          const Icon(Icons.check_rounded, size: 18),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+          if (mounted && choice != null) onSelected(choice);
+        },
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: p.glassBorder),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label == 'Inversion'
+                          ? 'Inv.'
+                          : label == 'Duration'
+                          ? 'Length'
+                          : label,
+                      style: TextStyle(color: p.textMuted, fontSize: 11),
+                    ),
+                    Text(
+                      selected?.$2 ?? 'Custom',
+                      style: TextStyle(color: p.textPrimary, fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.expand_more_rounded, color: p.textSecondary, size: 14),
+            ],
+          ),
         ),
       ),
     );
@@ -150,8 +399,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
 
     return Text(
       parts.join(' • '),
-      style: const TextStyle(
-        color: MuzicianTheme.textPrimary,
+      style: TextStyle(
+        color: StudioPalette.of(context).textPrimary,
         fontSize: 14,
         fontWeight: FontWeight.w700,
       ),
@@ -165,7 +414,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
     PianoRollStackBuilderNotifier notifier,
   ) {
     return SizedBox(
-      height: 34,
+      height: StudioPalette.of(context).isStudio ? 44 : 34,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -211,7 +460,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         _sectionLabel('Root'),
         const SizedBox(height: 4),
         SizedBox(
-          height: 32,
+          height: StudioPalette.of(context).isStudio ? 44 : 32,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -232,7 +481,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         _sectionLabel('Quality'),
         const SizedBox(height: 4),
         SizedBox(
-          height: 32,
+          height: StudioPalette.of(context).isStudio ? 44 : 32,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -253,7 +502,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         _sectionLabel('Inversion'),
         const SizedBox(height: 4),
         SizedBox(
-          height: 32,
+          height: StudioPalette.of(context).isStudio ? 44 : 32,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -274,7 +523,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         _sectionLabel('Duration'),
         const SizedBox(height: 4),
         SizedBox(
-          height: 32,
+          height: StudioPalette.of(context).isStudio ? 44 : 32,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -321,11 +570,14 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         _sectionLabel('Notes'),
         const SizedBox(height: 4),
         if (state.midiNotes.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Text(
               'No notes',
-              style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
+                fontSize: 12,
+              ),
             ),
           )
         else
@@ -354,7 +606,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         _sectionLabel('Degree shortcuts'),
         const SizedBox(height: 4),
         SizedBox(
-          height: 36,
+          height: StudioPalette.of(context).isStudio ? 44 : 36,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -402,8 +654,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textPrimary,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -411,8 +663,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                   const SizedBox(height: 2),
                   Text(
                     detail,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textMuted,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textMuted,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -423,18 +675,24 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
             GestureDetector(
               onTap: _closeWizard,
               child: Container(
-                width: 32,
-                height: 32,
+                width: StudioPalette.of(context).isStudio ? 44 : 32,
+                height: StudioPalette.of(context).isStudio ? 44 : 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
+                  color:
+                      (StudioPalette.of(context).isStudio
+                              ? StudioPalette.of(context).textPrimary
+                              : Colors.white)
+                          .withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: MuzicianTheme.glassBorder),
+                  border: Border.all(
+                    color: StudioPalette.of(context).glassBorder,
+                  ),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.arrow_back_rounded,
                   size: 16,
-                  color: MuzicianTheme.textSecondary,
+                  color: StudioPalette.of(context).textSecondary,
                 ),
               ),
             ),
@@ -452,21 +710,25 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: MuzicianTheme.violet.withValues(alpha: 0.12),
+          color: StudioPalette.of(context).violet.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: MuzicianTheme.violet.withValues(alpha: 0.3),
+            color: StudioPalette.of(context).violet.withValues(alpha: 0.3),
           ),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_rounded, size: 14, color: MuzicianTheme.violet),
+            Icon(
+              Icons.add_rounded,
+              size: 14,
+              color: StudioPalette.of(context).violet,
+            ),
             SizedBox(width: 4),
             Text(
               'Add note',
               style: TextStyle(
-                color: MuzicianTheme.violet,
+                color: StudioPalette.of(context).violet,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -489,18 +751,22 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
       key: const ValueKey('stack-builder-note-wizard-card'),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color:
+            (StudioPalette.of(context).isStudio
+                    ? StudioPalette.of(context).textPrimary
+                    : Colors.white)
+                .withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Note',
             style: TextStyle(
-              color: MuzicianTheme.textMuted,
+              color: StudioPalette.of(context).textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.8,
@@ -518,9 +784,9 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                 return GestureDetector(
                   onTap: () => setState(() => _wizardPc = i),
                   child: Container(
-                    constraints: const BoxConstraints.tightFor(
+                    constraints: BoxConstraints.tightFor(
                       width: 52,
-                      height: 36,
+                      height: StudioPalette.of(context).isStudio ? 44 : 36,
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -528,13 +794,18 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                     ),
                     decoration: BoxDecoration(
                       color: active
-                          ? MuzicianTheme.sky.withValues(alpha: 0.16)
-                          : Colors.white.withValues(alpha: 0.04),
+                          ? StudioPalette.of(
+                              context,
+                            ).sky.withValues(alpha: 0.16)
+                          : (StudioPalette.of(context).isStudio
+                                    ? StudioPalette.of(context).textPrimary
+                                    : Colors.white)
+                                .withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: active
-                            ? MuzicianTheme.sky
-                            : MuzicianTheme.glassBorder,
+                            ? StudioPalette.of(context).sky
+                            : StudioPalette.of(context).glassBorder,
                       ),
                     ),
                     child: Center(
@@ -542,8 +813,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                         formatRootChoiceLabel(note, spelling: spelling),
                         style: TextStyle(
                           color: active
-                              ? MuzicianTheme.sky
-                              : MuzicianTheme.textSecondary,
+                              ? StudioPalette.of(context).sky
+                              : StudioPalette.of(context).textSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -555,10 +826,10 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Octave',
             style: TextStyle(
-              color: MuzicianTheme.textMuted,
+              color: StudioPalette.of(context).textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.8,
@@ -576,17 +847,22 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                 return GestureDetector(
                   onTap: () => setState(() => _wizardOctave = oct),
                   child: Container(
-                    width: 36,
-                    height: 34,
+                    width: StudioPalette.of(context).isStudio ? 44 : 36,
+                    height: StudioPalette.of(context).isStudio ? 44 : 34,
                     decoration: BoxDecoration(
                       color: active
-                          ? MuzicianTheme.teal.withValues(alpha: 0.16)
-                          : Colors.white.withValues(alpha: 0.04),
+                          ? StudioPalette.of(
+                              context,
+                            ).teal.withValues(alpha: 0.16)
+                          : (StudioPalette.of(context).isStudio
+                                    ? StudioPalette.of(context).textPrimary
+                                    : Colors.white)
+                                .withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: active
-                            ? MuzicianTheme.teal
-                            : MuzicianTheme.glassBorder,
+                            ? StudioPalette.of(context).teal
+                            : StudioPalette.of(context).glassBorder,
                       ),
                     ),
                     child: Center(
@@ -594,8 +870,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                         '$oct',
                         style: TextStyle(
                           color: active
-                              ? MuzicianTheme.teal
-                              : MuzicianTheme.textSecondary,
+                              ? StudioPalette.of(context).teal
+                              : StudioPalette.of(context).textSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -611,8 +887,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
           Center(
             child: Text(
               noteName,
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
+              style: TextStyle(
+                color: StudioPalette.of(context).textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
               ),
@@ -631,14 +907,20 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
+                    color:
+                        (StudioPalette.of(context).isStudio
+                                ? StudioPalette.of(context).textPrimary
+                                : Colors.white)
+                            .withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: MuzicianTheme.glassBorder),
+                    border: Border.all(
+                      color: StudioPalette.of(context).glassBorder,
+                    ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Cancel',
                     style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
+                      color: StudioPalette.of(context).textSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -654,16 +936,20 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.18),
+                    color: StudioPalette.of(
+                      context,
+                    ).sky.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: MuzicianTheme.sky.withValues(alpha: 0.4),
+                      color: StudioPalette.of(
+                        context,
+                      ).sky.withValues(alpha: 0.4),
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Confirm',
                     style: TextStyle(
-                      color: MuzicianTheme.sky,
+                      color: StudioPalette.of(context).sky,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -683,23 +969,25 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: MuzicianTheme.orange.withValues(alpha: 0.12),
+        color: StudioPalette.of(context).orange.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: MuzicianTheme.orange.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: StudioPalette.of(context).orange.withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.warning_amber_rounded,
             size: 14,
-            color: MuzicianTheme.orange,
+            color: StudioPalette.of(context).orange,
           ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: MuzicianTheme.orange,
+              style: TextStyle(
+                color: StudioPalette.of(context).orange,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -707,10 +995,10 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
           ),
           GestureDetector(
             onTap: () => notifier.clearError(),
-            child: const Icon(
+            child: Icon(
               Icons.close_rounded,
               size: 14,
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
           ),
         ],
@@ -732,8 +1020,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
       preview,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        color: MuzicianTheme.textSecondary,
+      style: TextStyle(
+        color: StudioPalette.of(context).textSecondary,
         fontSize: 12,
         fontWeight: FontWeight.w500,
         fontFeatures: [FontFeature.tabularFigures()],
@@ -756,18 +1044,25 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
         }
       },
       child: Container(
+        constraints: BoxConstraints(
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: MuzicianTheme.violet.withValues(alpha: 0.18),
+          color: StudioPalette.of(context).violet.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: MuzicianTheme.violet.withValues(alpha: 0.4),
+            color: StudioPalette.of(context).violet.withValues(alpha: 0.4),
           ),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_rounded, size: 16, color: MuzicianTheme.violet),
+            Icon(
+              Icons.add_rounded,
+              size: 16,
+              color: StudioPalette.of(context).violet,
+            ),
             SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -776,7 +1071,7 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: MuzicianTheme.violet,
+                  color: StudioPalette.of(context).violet,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -793,8 +1088,8 @@ class _PianoRollStackBuilderState extends ConsumerState<PianoRollStackBuilder> {
   Widget _sectionLabel(String label) {
     return Text(
       label,
-      style: const TextStyle(
-        color: MuzicianTheme.textMuted,
+      style: TextStyle(
+        color: StudioPalette.of(context).textMuted,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
@@ -821,22 +1116,30 @@ class _TabPill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: BoxConstraints(
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: active
-              ? MuzicianTheme.sky.withValues(alpha: 0.16)
-              : Colors.white.withValues(alpha: 0.04),
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.16)
+              : (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).textPrimary
+                        : Colors.white)
+                    .withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: active
-                ? MuzicianTheme.sky.withValues(alpha: 0.45)
-                : MuzicianTheme.glassBorder,
+                ? StudioPalette.of(context).sky.withValues(alpha: 0.45)
+                : StudioPalette.of(context).glassBorder,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+            color: active
+                ? StudioPalette.of(context).sky
+                : StudioPalette.of(context).textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -858,23 +1161,34 @@ class _Pill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: BoxConstraints(
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 0,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? MuzicianTheme.sky.withValues(alpha: 0.16)
-              : Colors.white.withValues(alpha: 0.05),
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.16)
+              : (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).textPrimary
+                        : Colors.white)
+                    .withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: active
-                ? MuzicianTheme.sky.withValues(alpha: 0.45)
-                : Colors.white.withValues(alpha: 0.16),
+                ? StudioPalette.of(context).sky.withValues(alpha: 0.45)
+                : (StudioPalette.of(context).isStudio
+                          ? StudioPalette.of(context).textPrimary
+                          : Colors.white)
+                      .withValues(alpha: 0.16),
             width: 0.5,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? MuzicianTheme.sky : MuzicianTheme.textSecondary,
+            color: active
+                ? StudioPalette.of(context).sky
+                : StudioPalette.of(context).textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -895,21 +1209,24 @@ class _DegreePill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        constraints: BoxConstraints(
+          minWidth: StudioPalette.of(context).isStudio ? 44 : 32,
+          minHeight: StudioPalette.of(context).isStudio ? 44 : 32,
+        ),
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: MuzicianTheme.teal.withValues(alpha: 0.12),
+          color: StudioPalette.of(context).teal.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: MuzicianTheme.teal.withValues(alpha: 0.3),
+            color: StudioPalette.of(context).teal.withValues(alpha: 0.3),
             width: 0.5,
           ),
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: MuzicianTheme.teal,
+          style: TextStyle(
+            color: StudioPalette.of(context).teal,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -938,13 +1255,16 @@ class _NoteRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: isEditing
-            ? MuzicianTheme.sky.withValues(alpha: 0.08)
-            : Colors.white.withValues(alpha: 0.04),
+            ? StudioPalette.of(context).sky.withValues(alpha: 0.08)
+            : (StudioPalette.of(context).isStudio
+                      ? StudioPalette.of(context).textPrimary
+                      : Colors.white)
+                  .withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isEditing
-              ? MuzicianTheme.sky.withValues(alpha: 0.3)
-              : MuzicianTheme.glassBorder,
+              ? StudioPalette.of(context).sky.withValues(alpha: 0.3)
+              : StudioPalette.of(context).glassBorder,
         ),
       ),
       child: Row(
@@ -954,8 +1274,8 @@ class _NoteRow extends StatelessWidget {
               noteName,
               style: TextStyle(
                 color: isEditing
-                    ? MuzicianTheme.sky
-                    : MuzicianTheme.textPrimary,
+                    ? StudioPalette.of(context).sky
+                    : StudioPalette.of(context).textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -969,17 +1289,19 @@ class _NoteRow extends StatelessWidget {
               child: GestureDetector(
                 onTap: onEdit,
                 child: Container(
-                  width: 32,
-                  height: 32,
+                  width: StudioPalette.of(context).isStudio ? 44 : 32,
+                  height: StudioPalette.of(context).isStudio ? 44 : 32,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.12),
+                    color: StudioPalette.of(
+                      context,
+                    ).sky.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.edit_rounded,
                     size: 14,
-                    color: MuzicianTheme.sky,
+                    color: StudioPalette.of(context).sky,
                   ),
                 ),
               ),
@@ -991,17 +1313,19 @@ class _NoteRow extends StatelessWidget {
             child: GestureDetector(
               onTap: onRemove,
               child: Container(
-                width: 32,
-                height: 32,
+                width: StudioPalette.of(context).isStudio ? 44 : 32,
+                height: StudioPalette.of(context).isStudio ? 44 : 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: MuzicianTheme.orange.withValues(alpha: 0.12),
+                  color: StudioPalette.of(
+                    context,
+                  ).orange.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.close_rounded,
                   size: 14,
-                  color: MuzicianTheme.orange,
+                  color: StudioPalette.of(context).orange,
                 ),
               ),
             ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,7 @@ import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/app_bootstrap.dart' show hydrateStores;
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
+import 'package:muzician/store/song_audio_repository.dart';
 import 'package:muzician/store/writer_save_binding_store.dart';
 import 'package:muzician/store/writer_save_sync_store.dart'
     show
@@ -25,6 +27,7 @@ import 'package:muzician/store/writer_save_sync_store.dart'
         writerSaveBindingsStorageKey,
         writerSaveSyncJournalStorageKey,
         writerSaveSyncProvider,
+        writerProjectWriteFenceProvider,
         writerSaveSyncStorageProvider;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/utils/note_utils.dart'
@@ -141,6 +144,734 @@ void main() {
     await writer.reconcileCurrentProject();
     return (container, projectId, writer);
   }
+
+  test(
+    'incompatible canonical melody survives content edits and unique',
+    () async {
+      final (container, projectId, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final saves = container.read(saveSystemProvider.notifier);
+      const incompatible = WriterBlockSnapshot(laneKind: SongLaneKind.drum);
+      final saveId = saves.saveSnapshot('Other', projectId, incompatible)!;
+      final section = writer.state.sections.single;
+      final lane = section.lanes.singleWhere((l) => l.id == laneId);
+      final block = lane.blocks.single.copyWith(saveId: saveId);
+      writer.state = writer.state.copyWith(
+        sections: [
+          section.copyWith(
+            lanes: [
+              for (final l in section.lanes)
+                if (l.id == laneId) lane.copyWith(blocks: [block]) else l,
+            ],
+          ),
+        ],
+      );
+      expect(
+        writer.makeBlockUnique(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: block.id,
+        ),
+        isFalse,
+      );
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns.single.copyWith(name: 'Changed'),
+      );
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((s) => s.id == saveId)
+            .snapshot
+            .toJson(),
+        incompatible.toJson(),
+      );
+      final retained = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks
+          .single;
+      expect(retained.saveId, saveId);
+      expect(retained.patternId, patternId);
+      final fallback = retained.embedded?.toJson();
+      await writer.reconcileCurrentProject();
+      final recovered = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks
+          .single;
+      expect(recovered.saveId, saveId);
+      expect(recovered.embedded?.toJson(), fallback);
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .singleWhere((s) => s.id == saveId)
+            .snapshot
+            .toJson(),
+        incompatible.toJson(),
+      );
+      expect(
+        container
+            .read(saveSystemProvider)
+            .writerLinks
+            .singleWhere((link) => link.blockId == block.id)
+            .saveId,
+        saveId,
+      );
+    },
+  );
+
+  test(
+    'repeat rejects resolved saves without compatible canonical melody content',
+    () async {
+      final (container, projectId, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final saves = container.read(saveSystemProvider.notifier);
+      final pattern = writer.state.melodyPatterns.single;
+      for (final snapshot in [
+        const WriterBlockSnapshot(laneKind: SongLaneKind.melody),
+        WriterBlockSnapshot(
+          laneKind: SongLaneKind.drum,
+          melodyPattern: pattern,
+        ),
+        WriterBlockSnapshot(
+          laneKind: SongLaneKind.melody,
+          melodyPattern: pattern.copyWith(id: 'different-pattern'),
+        ),
+        chord('C', 0),
+      ]) {
+        final saveId = saves.saveSnapshot('Incompatible', projectId, snapshot)!;
+        final section = writer.state.sections.single;
+        final lane = section.lanes.singleWhere((l) => l.id == laneId);
+        final block = lane.blocks.single.copyWith(saveId: saveId);
+        writer.state = writer.state.copyWith(
+          sections: [
+            section.copyWith(
+              lanes: [
+                for (final item in section.lanes)
+                  if (item.id == laneId)
+                    lane.copyWith(blocks: [block])
+                  else
+                    item,
+              ],
+            ),
+          ],
+        );
+        final before = writer.state;
+        final savesBefore = container.read(saveSystemProvider);
+        final revision = writer.historyRevision;
+        expect(
+          writer.repeatMelodyBlock(
+            sectionId: sectionId,
+            laneId: laneId,
+            blockId: block.id,
+            startBar: 1,
+          ),
+          isFalse,
+          reason: snapshot.toJson().toString(),
+        );
+        expect(writer.state, same(before));
+        expect(container.read(saveSystemProvider), same(savesBefore));
+        expect(writer.historyRevision, revision);
+      }
+    },
+  );
+
+  test(
+    'repeat reports failure when the project write fence blocks the commit',
+    () async {
+      final (container, _, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final source = writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single;
+      final before = writer.state;
+      final savesBefore = container.read(saveSystemProvider);
+      final revisionBefore = writer.historyRevision;
+      container.read(writerProjectWriteFenceProvider.notifier).state = true;
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 1,
+        ),
+        isFalse,
+      );
+      expect(writer.state, same(before));
+      expect(container.read(saveSystemProvider), same(savesBefore));
+      expect(writer.historyRevision, revisionBefore);
+      container.read(writerProjectWriteFenceProvider.notifier).state = false;
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 1,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'repeat rejects a live pattern with an unresolved canonical Save',
+    () async {
+      final (container, _, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final saveSystem = container.read(saveSystemProvider.notifier);
+      final foreignProject = saveSystem.createProject(
+        'Foreign',
+        const ProjectConfig(),
+      )!;
+      final foreignSave = saveSystem.saveSnapshot(
+        'Foreign melody',
+        foreignProject,
+        const WriterBlockSnapshot(
+          laneKind: SongLaneKind.melody,
+          melodyPattern: NotePattern(
+            id: 'foreign',
+            name: 'Foreign',
+            lengthTicks: 16,
+            notes: [],
+            pitchRangeStart: 48,
+            pitchRangeEnd: 84,
+            snapTicks: 1,
+            highlightedNotes: [],
+          ),
+        ),
+      )!;
+      for (final unresolved in ['missing-save', foreignSave]) {
+        final section = writer.state.sections.single;
+        final lane = section.lanes.singleWhere((item) => item.id == laneId);
+        final block = lane.blocks.single.copyWith(saveId: unresolved);
+        writer.state = writer.state.copyWith(
+          sections: [
+            section.copyWith(
+              lanes: [
+                for (final item in section.lanes)
+                  if (item.id == laneId)
+                    lane.copyWith(blocks: [block])
+                  else
+                    item,
+              ],
+            ),
+          ],
+        );
+        final before = writer.state;
+        final savesBefore = container.read(saveSystemProvider);
+        final revisionBefore = writer.historyRevision;
+        expect(
+          writer.repeatMelodyBlock(
+            sectionId: sectionId,
+            laneId: laneId,
+            blockId: block.id,
+            startBar: 1,
+          ),
+          isFalse,
+          reason: unresolved,
+        );
+        expect(writer.state, same(before));
+        expect(container.read(saveSystemProvider), same(savesBefore));
+        expect(writer.historyRevision, revisionBefore);
+      }
+    },
+  );
+
+  test(
+    'repeat melody defaults to the melody bars and available space',
+    () async {
+      final (container, _, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 10);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern(lengthTicks: 48);
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns.single.copyWith(
+          notes: const [
+            NotePatternNote(
+              id: 'note',
+              midiNote: 67,
+              startTick: 0,
+              durationTicks: 48,
+            ),
+          ],
+        ),
+      );
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 3,
+      );
+      final source = writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single;
+      final section = writer.state.sections.single;
+      final lane = section.lanes.singleWhere((item) => item.id == laneId);
+      writer.state = writer.state.copyWith(
+        sections: [
+          section.copyWith(
+            lanes: [
+              for (final item in section.lanes)
+                if (item.id == laneId)
+                  lane.copyWith(blocks: [source.copyWith(spanBars: 4)])
+                else
+                  item,
+            ],
+          ),
+        ],
+      );
+
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 5,
+        ),
+        isTrue,
+      );
+      expect(
+        writer.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .blocks
+            .last
+            .spanBars,
+        3,
+        reason: 'an over-long source repeats at the melody bar count',
+      );
+
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 8,
+        ),
+        isTrue,
+      );
+      final repeated = writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .last;
+      expect(
+        (repeated.startBar, repeated.spanBars),
+        (8, 2),
+        reason: 'the melody limit shrinks to the available section space',
+      );
+    },
+  );
+
+  test('use in Writer rejects a placement beyond the melody bars', () async {
+    final (container, projectId, writer) = await makeProject();
+    addTearDown(container.dispose);
+    writer.addSection(lengthBars: 8);
+    final sectionId = writer.state.sections.single.id;
+    final laneId = writer.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.melody,
+    );
+    const pattern = NotePattern(
+      id: 'lead',
+      name: 'Lead',
+      lengthTicks: 48,
+      notes: [
+        NotePatternNote(
+          id: 'last',
+          midiNote: 67,
+          startTick: 46,
+          durationTicks: 2,
+        ),
+      ],
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      snapTicks: 1,
+      highlightedNotes: [],
+    );
+    final saves = container.read(saveSystemProvider.notifier);
+    final saveId = saves.saveSnapshot(
+      'Lead',
+      projectId,
+      const WriterBlockSnapshot(
+        laneKind: SongLaneKind.melody,
+        melodyPattern: pattern,
+      ),
+    )!;
+
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        laneId: laneId,
+        startBar: 0,
+        spanBars: 4,
+      ),
+      isFalse,
+    );
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        laneId: laneId,
+        startBar: 0,
+        spanBars: 3,
+      ),
+      isTrue,
+    );
+  });
+
+  test(
+    'repeat melody links one shortened placement and Make Unique detaches it',
+    () async {
+      final (container, _, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(lengthBars: 7);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern(lengthTicks: 48);
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns.single.copyWith(
+          notes: const [
+            NotePatternNote(
+              id: 'note',
+              midiNote: 67,
+              startTick: 0,
+              durationTicks: 48,
+            ),
+          ],
+        ),
+      );
+      expect(
+        writer.setMelodyPerformanceInstrument(
+          patternId: patternId,
+          instrument: HarmonyLaneInstrument.fretboard,
+        ),
+        isTrue,
+      );
+      const position = FretboardNotePosition(stringIndex: 0, fret: 3);
+      expect(
+        writer.setMelodyNoteFretboardPosition(
+          patternId: patternId,
+          noteId: 'note',
+          position: position,
+        ),
+        isTrue,
+      );
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 3,
+      );
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 5,
+        spanBars: 1,
+      );
+      final source = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks
+          .first;
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 3,
+        ),
+        isTrue,
+      );
+      var blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      final repeated = blocks.last;
+      expect(repeated.id, isNot(source.id));
+      expect((repeated.startBar, repeated.spanBars), (3, 2));
+      expect(repeated.patternId, source.patternId);
+      expect(repeated.saveId, source.saveId);
+      expect(repeated.embedded?.toJson(), source.embedded?.toJson());
+      expect(
+        container
+            .read(saveSystemProvider)
+            .writerLinks
+            .singleWhere((link) => link.blockId == repeated.id)
+            .saveId,
+        source.saveId,
+      );
+      expect(writer.undo(), isTrue);
+      blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      expect(blocks.map((b) => b.id), isNot(contains(repeated.id)));
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 3,
+        ),
+        isTrue,
+      );
+      blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      final copy = blocks.last;
+      expect(
+        writer.makeBlockUnique(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: copy.id,
+        ),
+        isTrue,
+      );
+      blocks = writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == laneId)
+          .blocks;
+      final unique = blocks.last;
+      expect(blocks.first.patternId, patternId);
+      expect(blocks.first.saveId, source.saveId);
+      expect(unique.patternId, isNot(patternId));
+      expect(unique.saveId, isNot(source.saveId));
+      expect(
+        writer
+            .state
+            .melodyPerformancesByPatternId[unique.patternId]!
+            .fretboardPositionsByNoteId['note'],
+        position,
+      );
+      final before = writer.state;
+      for (final (s, l, b, bar) in [
+        (sectionId, laneId, source.id, 0),
+        (sectionId, laneId, source.id, -1),
+        (sectionId, laneId, 'missing', 6),
+        ('missing', laneId, source.id, 6),
+        (sectionId, 'missing', source.id, 6),
+      ]) {
+        expect(
+          writer.repeatMelodyBlock(
+            sectionId: s,
+            laneId: l,
+            blockId: b,
+            startBar: bar,
+          ),
+          isFalse,
+        );
+        expect(writer.state, same(before));
+      }
+      writer.removeMelodyPattern(patternId);
+      final missingContent = writer.state;
+      expect(
+        writer.repeatMelodyBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          blockId: source.id,
+          startBar: 6,
+        ),
+        isFalse,
+      );
+      expect(writer.state, same(missingContent));
+    },
+  );
+
+  test(
+    'deleting a populated lane preserves its reusable save and undo',
+    () async {
+      final (container, _, writer) = await makeProject();
+      addTearDown(container.dispose);
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.drum,
+      );
+      final patternId = writer.addDrumPattern(name: 'Beat');
+      writer.addDrumBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      await writer.reconcileCurrentProject();
+      final saveId = writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single
+          .saveId;
+      expect(saveId, isNotNull);
+      writer.removeLane(sectionId: sectionId, laneId: laneId);
+      await writer.reconcileCurrentProject();
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .any((save) => save.id == saveId),
+        isTrue,
+      );
+      expect(
+        writer.state.drumPatterns.any((pattern) => pattern.id == patternId),
+        isTrue,
+      );
+      expect(writer.undo(), isTrue);
+      expect(
+        writer.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .blocks
+            .single
+            .saveId,
+        saveId,
+      );
+    },
+  );
+
+  test(
+    'deleting an audio lane retains the reusable audio save and file',
+    () async {
+      final root = await Directory.systemTemp.createTemp('writer-lane-audio-');
+      addTearDown(() => root.delete(recursive: true));
+      final repository = SongAudioRepository.testWith(rootDirectory: root);
+      final file = await repository.resolvePath('source-audio', 'wav');
+      await file.writeAsBytes([1, 2, 3]);
+      final container = ProviderContainer(
+        overrides: [
+          songwriterAudioRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      final saves = container.read(saveSystemProvider.notifier);
+      final projectId = saves.createProject('Audio', const ProjectConfig())!;
+      saves.selectProject(projectId);
+      const asset = AudioAsset(
+        id: 'source-audio',
+        durationMs: 1000,
+        sampleRate: 44100,
+        channels: 1,
+        format: 'wav',
+        peaks: [],
+        sourceLabel: 'Take',
+      );
+      final saveId = saves.saveSnapshot(
+        'Take',
+        projectId,
+        const WriterBlockSnapshot(
+          laneKind: SongLaneKind.audio,
+          audioClip: AudioClip(
+            id: 'clip',
+            assetId: 'source-audio',
+            trimEndMs: 1000,
+          ),
+          audioAsset: asset,
+        ),
+      )!;
+      final writer = container.read(songwriterProvider.notifier);
+      await writer.reconcileCurrentProject();
+      writer.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      expect(
+        writer.insertWriterBlockFromSave(
+          saveId: saveId,
+          sectionId: sectionId,
+          laneKind: SongLaneKind.audio,
+          startBar: 0,
+        ),
+        isTrue,
+      );
+      final laneId = writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.kind == SongLaneKind.audio)
+          .id;
+      writer.removeLane(sectionId: sectionId, laneId: laneId);
+      await writer.reconcileCurrentProject();
+      expect(await file.exists(), isTrue);
+      expect(
+        container
+            .read(saveSystemProvider)
+            .saves
+            .any((save) => save.id == saveId),
+        isTrue,
+      );
+      expect(writer.undo(), isTrue);
+      expect(
+        writer.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .blocks
+            .single
+            .saveId,
+        saveId,
+      );
+      expect(await file.exists(), isTrue);
+    },
+  );
 
   test(
     'startup preserves only genuine canonical and fallback conflicts',
@@ -641,6 +1372,126 @@ void main() {
         expect((snapshot as WriterBlockSnapshot).laneKind, link.laneKind);
       }
     }
+  });
+
+  test('Use in Writer defaults a newly created Melody lane to piano', () async {
+    final (container, projectId, writer) = await makeProject();
+    addTearDown(container.dispose);
+    final saveId = container
+        .read(saveSystemProvider.notifier)
+        .saveSnapshot(
+          'Melody',
+          projectId,
+          const WriterBlockSnapshot(
+            laneKind: SongLaneKind.melody,
+            melodyPattern: NotePattern(
+              id: 'saved-melody',
+              name: 'Melody',
+              lengthTicks: 16,
+              notes: [],
+              pitchRangeStart: 48,
+              pitchRangeEnd: 84,
+              snapTicks: 1,
+              highlightedNotes: [],
+            ),
+          ),
+        )!;
+    writer.addSection(label: 'Verse', lengthBars: 4);
+    final sectionId = writer.state.sections.single.id;
+
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        startBar: 0,
+      ),
+      isTrue,
+    );
+    final lane = writer.state.sections.single.lanes.singleWhere(
+      (lane) => lane.kind == SongLaneKind.melody,
+    );
+    expect(lane.blocks.single.saveId, saveId);
+    expect(lane.melodySound, MelodyLaneSound.piano);
+
+    writer.setMelodyLaneSound(
+      sectionId: sectionId,
+      laneId: lane.id,
+      sound: MelodyLaneSound.cleanGuitar,
+    );
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        startBar: 1,
+      ),
+      isTrue,
+    );
+    final reused = writer.state.sections.single.lanes.singleWhere(
+      (candidate) => candidate.id == lane.id,
+    );
+    expect(reused.blocks, hasLength(2));
+    expect(reused.melodySound, MelodyLaneSound.cleanGuitar);
+  });
+
+  test('Use in Writer cannot insert over an automatic melody repeat', () async {
+    final (container, projectId, writer) = await makeProject();
+    addTearDown(container.dispose);
+    final saveId = container
+        .read(saveSystemProvider.notifier)
+        .saveSnapshot(
+          'Melody',
+          projectId,
+          const WriterBlockSnapshot(
+            laneKind: SongLaneKind.melody,
+            melodyPattern: NotePattern(
+              id: 'saved',
+              name: 'Melody',
+              lengthTicks: 32,
+              notes: [
+                NotePatternNote(
+                  id: 'last',
+                  midiNote: 72,
+                  startTick: 30,
+                  durationTicks: 2,
+                ),
+              ],
+              pitchRangeStart: 48,
+              pitchRangeEnd: 84,
+              snapTicks: 1,
+              highlightedNotes: [],
+            ),
+          ),
+        )!;
+    writer.addSection(lengthBars: 6);
+    final sectionId = writer.state.sections.single.id;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        startBar: 0,
+        spanBars: 2,
+      ),
+      isTrue,
+    );
+    final laneId = writer.state.sections.single.lanes
+        .singleWhere((lane) => lane.kind == SongLaneKind.melody)
+        .id;
+    writer.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 3);
+    final before = writer.state;
+    expect(
+      writer.insertWriterBlockFromSave(
+        saveId: saveId,
+        sectionId: sectionId,
+        laneKind: SongLaneKind.melody,
+        laneId: laneId,
+        startBar: 2,
+      ),
+      isFalse,
+    );
+    expect(writer.state, same(before));
   });
 
   test('explicit Use in Writer reuses a root manual Writer save ID', () async {

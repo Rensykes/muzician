@@ -16,7 +16,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../theme/muzician_theme.dart';
+import '../theme/studio_theme.dart';
 
 // ── Scaffold ────────────────────────────────────────────────────────────────
 
@@ -32,13 +32,13 @@ class MockupScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MuzicianTheme.scaffoldBg,
+      backgroundColor: StudioPalette.of(context).scaffoldBg,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: MuzicianTheme.gradientColors,
+            colors: StudioPalette.of(context).gradientColors,
           ),
         ),
         child: SafeArea(bottom: false, child: child),
@@ -83,8 +83,8 @@ class CompactAppBar extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MuzicianTheme.textPrimary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textPrimary,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.3,
@@ -104,6 +104,68 @@ class CompactAppBar extends StatelessWidget {
   }
 }
 
+/// Project context and utilities above the full workspace title.
+/// Legacy workspace compositions keep [CompactAppBar]'s original 44px height.
+class WorkspaceHeader extends StatelessWidget {
+  const WorkspaceHeader({
+    super.key,
+    required this.title,
+    this.chipLabel,
+    this.actions = const [],
+    this.onClose,
+  });
+  final String title;
+  final String? chipLabel;
+  final List<Widget> actions;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = StudioPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (chipLabel != null || actions.isNotEmpty)
+            Row(
+              children: [
+                if (chipLabel != null)
+                  Expanded(child: StatusChip(label: chipLabel!))
+                else if (actions.isNotEmpty)
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: actions.first,
+                    ),
+                  ),
+                ...actions.skip(chipLabel == null ? 1 : 0),
+              ],
+            ),
+          Row(
+            children: [
+              if (onClose != null)
+                IconBtn(icon: Icons.close_rounded, onTap: onClose!),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: p.textPrimary,
+                    fontSize: 28,
+                    height: 1.15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.6,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Neutral status chip. White-on-glass — no cyan competition.
 class StatusChip extends StatelessWidget {
   final String label;
@@ -114,16 +176,20 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(999),
+        color: (StudioPalette.of(context).isStudio
+            ? StudioPalette.of(context).glassBg
+            : Colors.white.withValues(alpha: 0.07)),
+        borderRadius: BorderRadius.circular(
+          StudioPalette.of(context).isStudio ? 6 : 999,
+        ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),
       child: Text(
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: MuzicianTheme.textPrimary,
+        style: TextStyle(
+          color: StudioPalette.of(context).textPrimary,
           fontSize: 11.5,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.2,
@@ -154,7 +220,7 @@ class IconBtn extends StatelessWidget {
         radius: 24,
         child: Icon(
           icon,
-          color: color ?? MuzicianTheme.textSecondary,
+          color: color ?? StudioPalette.of(context).textSecondary,
           size: 22,
         ),
       ),
@@ -178,13 +244,15 @@ class ModeSegment<T extends Object> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 52,
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      padding: const EdgeInsets.all(3),
+      height: StudioPalette.of(context).isStudio ? 50 : 52,
+      margin: const EdgeInsets.fromLTRB(12, 2, 12, 2),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: (StudioPalette.of(context).isStudio
+            ? StudioPalette.of(context).glassBg
+            : Colors.white.withValues(alpha: 0.04)),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
       ),
       child: Row(
         children: [
@@ -227,11 +295,14 @@ class _Segment extends StatelessWidget {
         child: Center(
           child: AnimatedContainer(
             width: double.infinity,
+            height: StudioPalette.of(context).isStudio ? 44 : null,
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
             decoration: BoxDecoration(
               color: selected
-                  ? Colors.white.withValues(alpha: 0.16)
+                  ? (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).sky
+                        : Colors.white.withValues(alpha: 0.16))
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(7),
               border: Border.all(
@@ -247,18 +318,25 @@ class _Segment extends StatelessWidget {
                   icon,
                   size: 14,
                   color: selected
-                      ? MuzicianTheme.textPrimary
-                      : MuzicianTheme.textMuted,
+                      ? (StudioPalette.of(context).isStudio
+                            ? StudioPalette.of(context).onAccent
+                            : StudioPalette.of(context).textPrimary)
+                      : StudioPalette.of(context).textMuted,
                 ),
                 const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: selected
-                        ? MuzicianTheme.textPrimary
-                        : MuzicianTheme.textMuted,
-                    fontSize: 12,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: selected
+                          ? (StudioPalette.of(context).isStudio
+                                ? StudioPalette.of(context).onAccent
+                                : StudioPalette.of(context).textPrimary)
+                          : StudioPalette.of(context).textMuted,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -289,18 +367,22 @@ class DetectionRibbon extends StatelessWidget {
               margin: const EdgeInsets.fromLTRB(12, 2, 12, 4),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: MuzicianTheme.emerald.withValues(alpha: 0.10),
+                color: StudioPalette.of(
+                  context,
+                ).emerald.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: MuzicianTheme.emerald.withValues(alpha: 0.40),
+                  color: StudioPalette.of(
+                    context,
+                  ).emerald.withValues(alpha: 0.40),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.auto_fix_high_rounded,
                     size: 13,
-                    color: MuzicianTheme.emerald,
+                    color: StudioPalette.of(context).emerald,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -308,8 +390,8 @@ class DetectionRibbon extends StatelessWidget {
                       detectedLabel!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: MuzicianTheme.emerald,
+                      style: TextStyle(
+                        color: StudioPalette.of(context).emerald,
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -334,9 +416,9 @@ class DockedToolbar extends StatelessWidget {
       height: 68,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       decoration: BoxDecoration(
-        color: MuzicianTheme.glassBg,
+        color: StudioPalette.of(context).glassBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MuzicianTheme.glassBorder),
+        border: Border.all(color: StudioPalette.of(context).glassBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.35),
@@ -389,7 +471,7 @@ class DockTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor = warning ? MuzicianTheme.orange : color;
+    final effectiveColor = warning ? StudioPalette.of(context).orange : color;
     final labelScale = MediaQuery.textScalerOf(context).scale(10) / 10;
     final verticalPadding = (7 - (labelScale - 1) * 5).clamp(0.0, 7.0);
     return Expanded(
@@ -402,16 +484,18 @@ class DockTab extends StatelessWidget {
           padding: EdgeInsets.symmetric(vertical: verticalPadding),
           decoration: BoxDecoration(
             color: warning
-                ? MuzicianTheme.orange.withValues(alpha: 0.10)
+                ? StudioPalette.of(context).orange.withValues(alpha: 0.10)
                 : hasValue
                 ? color.withValues(alpha: 0.10)
-                : Colors.white.withValues(alpha: 0.04),
+                : (StudioPalette.of(context).isStudio
+                      ? StudioPalette.of(context).glassBg
+                      : Colors.white.withValues(alpha: 0.04)),
             border: Border.all(
               color: warning
-                  ? MuzicianTheme.orange.withValues(alpha: 0.55)
+                  ? StudioPalette.of(context).orange.withValues(alpha: 0.55)
                   : hasValue
                   ? color.withValues(alpha: 0.40)
-                  : MuzicianTheme.glassBorder,
+                  : StudioPalette.of(context).glassBorder,
               width: warning ? 1.0 : 0.5,
             ),
             borderRadius: BorderRadius.circular(10),
@@ -427,7 +511,7 @@ class DockTab extends StatelessWidget {
                     size: 18,
                     color: (hasValue || warning)
                         ? effectiveColor
-                        : MuzicianTheme.textMuted,
+                        : StudioPalette.of(context).textMuted,
                   ),
                   if (warning)
                     Positioned(
@@ -439,10 +523,10 @@ class DockTab extends StatelessWidget {
                           color: Color(0xFF1E293B),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.warning_amber_rounded,
                           size: 11,
-                          color: MuzicianTheme.orange,
+                          color: StudioPalette.of(context).orange,
                         ),
                       ),
                     )
@@ -469,7 +553,7 @@ class DockTab extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: (hasValue || warning)
                       ? effectiveColor
-                      : MuzicianTheme.textMuted,
+                      : StudioPalette.of(context).textMuted,
                 ),
               ),
             ],
@@ -503,9 +587,11 @@ class DockField extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 0, 6, 0),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.04),
+            color: (StudioPalette.of(context).isStudio
+                ? StudioPalette.of(context).glassBg
+                : Colors.white.withValues(alpha: 0.04)),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: MuzicianTheme.glassBorder),
+            border: Border.all(color: StudioPalette.of(context).glassBorder),
           ),
           child: Row(
             children: [
@@ -514,17 +600,17 @@ class DockField extends StatelessWidget {
                   value,
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 18,
-                color: MuzicianTheme.textMuted,
+                color: StudioPalette.of(context).textMuted,
               ),
             ],
           ),
@@ -549,10 +635,14 @@ class DockPrimaryButton extends StatelessWidget {
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: MuzicianTheme.violet,
+          color: StudioPalette.of(context).violet,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 24, color: MuzicianTheme.scaffoldBg),
+        child: Icon(
+          icon,
+          size: 24,
+          color: StudioPalette.of(context).scaffoldBg,
+        ),
       ),
     );
   }
@@ -576,14 +666,21 @@ class GlassFrame extends StatelessWidget {
     return Padding(
       padding: margin,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(
+          StudioPalette.of(context).isStudio ? 6 : 14,
+        ),
         child: BackdropFilter(
+          enabled: !StudioPalette.of(context).isStudio,
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             decoration: BoxDecoration(
-              color: MuzicianTheme.glassBg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: MuzicianTheme.glassBorder),
+              color: StudioPalette.of(context).isStudio
+                  ? StudioPalette.of(context).surface
+                  : StudioPalette.of(context).glassBg,
+              borderRadius: BorderRadius.circular(
+                StudioPalette.of(context).isStudio ? 6 : 14,
+              ),
+              border: Border.all(color: StudioPalette.of(context).glassBorder),
             ),
             padding: padding,
             child: child,
@@ -602,9 +699,8 @@ Future<T?> showPickerSheet<T extends Object>({
   required List<T> options,
   required T current,
 }) {
-  return showModalBottomSheet<T>(
+  return showStudioModalBottomSheet<T>(
     context: context,
-    backgroundColor: Colors.transparent,
     isScrollControlled: true,
     constraints: BoxConstraints(
       maxHeight: MediaQuery.of(context).size.height * 0.7,
@@ -623,9 +719,8 @@ Future<void> showWidgetSheet({
   required Widget child,
   bool scrollBody = true,
 }) {
-  return showModalBottomSheet<void>(
+  return showStudioModalBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
     isScrollControlled: true,
     constraints: BoxConstraints(
       maxHeight: MediaQuery.of(context).size.height * 0.85,
@@ -650,11 +745,16 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: BackdropFilter(
+        enabled: !StudioPalette.of(context).isStudio,
         filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: Container(
           decoration: BoxDecoration(
-            color: MuzicianTheme.surface.withValues(alpha: 0.96),
-            border: Border(top: BorderSide(color: MuzicianTheme.glassBorder)),
+            color: StudioPalette.of(context).isStudio
+                ? StudioPalette.of(context).dialogBg
+                : StudioPalette.of(context).surface.withValues(alpha: 0.96),
+            border: Border(
+              top: BorderSide(color: StudioPalette.of(context).glassBorder),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -666,7 +766,7 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -675,8 +775,8 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -709,19 +809,21 @@ class _PickerSheet<T extends Object> extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: selected
                                 ? Colors.white.withValues(alpha: 0.10)
-                                : Colors.white.withValues(alpha: 0.04),
+                                : (StudioPalette.of(context).isStudio
+                                      ? StudioPalette.of(context).glassBg
+                                      : Colors.white.withValues(alpha: 0.04)),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: selected
                                   ? Colors.white.withValues(alpha: 0.30)
-                                  : MuzicianTheme.glassBorder,
+                                  : StudioPalette.of(context).glassBorder,
                             ),
                           ),
                           alignment: Alignment.center,
                           child: Text(
                             '$o',
                             style: TextStyle(
-                              color: MuzicianTheme.textPrimary,
+                              color: StudioPalette.of(context).textPrimary,
                               fontSize: 14,
                               fontWeight: selected
                                   ? FontWeight.w700
@@ -768,19 +870,25 @@ class ToggleRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          border: Border.all(color: MuzicianTheme.glassBorder),
+          color: (StudioPalette.of(context).isStudio
+              ? StudioPalette.of(context).glassBg
+              : Colors.white.withValues(alpha: 0.04)),
+          border: Border.all(color: StudioPalette.of(context).glassBorder),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: MuzicianTheme.textSecondary),
+            Icon(
+              icon,
+              size: 18,
+              color: StudioPalette.of(context).textSecondary,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: MuzicianTheme.textPrimary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -789,7 +897,7 @@ class ToggleRow extends StatelessWidget {
             Switch.adaptive(
               value: value,
               onChanged: onChanged,
-              activeThumbColor: MuzicianTheme.sky,
+              activeThumbColor: StudioPalette.of(context).sky,
             ),
           ],
         ),
@@ -810,29 +918,32 @@ class ClearAllButton extends StatelessWidget {
       onTap: onClear,
       child: Container(
         width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 44),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: MuzicianTheme.red.withValues(alpha: 0.10),
+          color: StudioPalette.of(context).red.withValues(alpha: 0.10),
           border: Border.all(
-            color: MuzicianTheme.red.withValues(alpha: 0.40),
+            color: StudioPalette.of(context).red.withValues(alpha: 0.40),
             width: 0.5,
           ),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Row(
+        child: Row(
           children: [
             Icon(
               Icons.delete_sweep_rounded,
               size: 18,
-              color: MuzicianTheme.red,
+              color: StudioPalette.of(context).red,
             ),
             SizedBox(width: 10),
-            Text(
-              'Clear all selections',
-              style: TextStyle(
-                color: MuzicianTheme.red,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
+            Expanded(
+              child: Text(
+                'Clear all selections',
+                style: TextStyle(
+                  color: StudioPalette.of(context).red,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -860,11 +971,16 @@ class _WidgetSheet extends StatelessWidget {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: BackdropFilter(
+        enabled: !StudioPalette.of(context).isStudio,
         filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: Container(
           decoration: BoxDecoration(
-            color: MuzicianTheme.surface.withValues(alpha: 0.96),
-            border: Border(top: BorderSide(color: MuzicianTheme.glassBorder)),
+            color: StudioPalette.of(context).isStudio
+                ? StudioPalette.of(context).dialogBg
+                : StudioPalette.of(context).surface.withValues(alpha: 0.96),
+            border: Border(
+              top: BorderSide(color: StudioPalette.of(context).glassBorder),
+            ),
           ),
           child: Column(
             mainAxisSize: scrollBody ? MainAxisSize.min : MainAxisSize.max,
@@ -876,7 +992,7 @@ class _WidgetSheet extends StatelessWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -890,8 +1006,8 @@ class _WidgetSheet extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MuzicianTheme.textPrimary,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
@@ -947,8 +1063,10 @@ class MockBottomNav extends StatelessWidget {
       height: 56 + pad,
       padding: EdgeInsets.only(bottom: pad),
       decoration: BoxDecoration(
-        color: MuzicianTheme.surface.withValues(alpha: 0.92),
-        border: Border(top: BorderSide(color: MuzicianTheme.glassBorder)),
+        color: StudioPalette.of(context).surface.withValues(alpha: 0.92),
+        border: Border(
+          top: BorderSide(color: StudioPalette.of(context).glassBorder),
+        ),
       ),
       child: Row(
         children: [
@@ -990,7 +1108,9 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? MuzicianTheme.sky : MuzicianTheme.textMuted;
+    final color = selected
+        ? StudioPalette.of(context).sky
+        : StudioPalette.of(context).textMuted;
     return Expanded(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
