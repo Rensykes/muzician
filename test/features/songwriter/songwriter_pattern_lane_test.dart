@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
 import 'package:muzician/features/songwriter/songwriter_melody_preview.dart';
+import 'package:muzician/features/songwriter/songwriter_melody_timeline.dart';
 import 'package:muzician/features/songwriter/guitar_strum_pattern_sheet.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/app_theme_variant.dart';
@@ -1549,6 +1550,87 @@ void main() {
       tester.widget<SongwriterMelodyPreview>(preview).pattern.notes,
       hasLength(2),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('large accessibility text does not clip melody labels', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(name: 'Lead');
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 4,
+    );
+    final project = container.read(songwriterProvider);
+    final lane = project.sections.single.lanes.firstWhere(
+      (candidate) => candidate.id == laneId,
+    );
+    final pattern = project.melodyPatterns.singleWhere(
+      (candidate) => candidate.id == patternId,
+    );
+    final textScaler = TextScaler.linear(2.5);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: SongwriterMelodyTimeline(
+                section: section,
+                lane: lane,
+                instanceIndex: 0,
+                patternNames: {patternId: pattern.name},
+                patterns: {patternId: pattern},
+                measureTicks: 16,
+                onEdit: (_) {},
+                onCreate: (_) {},
+                canEdit: (_) => true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final label = find.byKey(
+      Key('writerBlockName_${lane.blocks.single.id}_0_0'),
+    );
+    final segment = find.byKey(
+      Key('melodySegment_${lane.blocks.single.id}_0_0_0'),
+    );
+    final preview = find.descendant(
+      of: segment,
+      matching: find.byType(SongwriterMelodyPreview),
+    );
+    final labelRect = tester.getRect(label);
+    final previewRect = tester.getRect(preview);
+    expect(
+      labelRect.height,
+      greaterThanOrEqualTo(textScaler.scale(11)),
+      reason: 'the scaled label must fit inside its strip',
+    );
+    expect(previewRect.top, greaterThanOrEqualTo(labelRect.bottom));
+    expect(previewRect.height, greaterThanOrEqualTo(20));
     expect(tester.takeException(), isNull);
   });
 
