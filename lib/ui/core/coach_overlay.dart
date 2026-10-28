@@ -4,7 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 /// One step: highlights [key]'s widget with a [title]/[body] tooltip.
 class CoachStep {
@@ -24,7 +24,10 @@ void startCoachTour(BuildContext context, List<CoachStep> steps) {
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
   entry = OverlayEntry(
-    builder: (_) => _CoachTour(steps: mountable, onDismiss: entry.remove),
+    builder: StudioRouteTheme.builder(
+      context,
+      (_) => _CoachTour(steps: mountable, onDismiss: entry.remove),
+    ),
   );
   overlay.insert(entry);
 }
@@ -93,7 +96,9 @@ class _CoachTourState extends State<_CoachTour> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _advance,
-            child: CustomPaint(painter: _ScrimPainter(spot)),
+            child: CustomPaint(
+              painter: _ScrimPainter(spot, StudioPalette.of(context)),
+            ),
           ),
         ),
         _buildCard(size, safe, spot, step),
@@ -107,8 +112,10 @@ class _CoachTourState extends State<_CoachTour> {
     // card itself is mainAxisSize.min.
     const estCardHeight = 210.0;
     final minTop = safe.top + 8;
-    final maxTop = (size.height - safe.bottom - estCardHeight - 8)
-        .clamp(minTop, size.height);
+    final maxTop = (size.height - safe.bottom - estCardHeight - 8).clamp(
+      minTop,
+      size.height,
+    );
     // Prefer the side of the target with room; never let the card slide under
     // the status bar / Dynamic Island or below the home indicator.
     final double top;
@@ -133,9 +140,9 @@ class _CoachTourState extends State<_CoachTour> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: MuzicianTheme.surface,
+            color: StudioPalette.of(context).surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: MuzicianTheme.glassBorder),
+            border: Border.all(color: StudioPalette.of(context).glassBorder),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -143,8 +150,8 @@ class _CoachTourState extends State<_CoachTour> {
             children: [
               Text(
                 step.title,
-                style: const TextStyle(
-                  color: MuzicianTheme.textPrimary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
                 ),
@@ -152,8 +159,8 @@ class _CoachTourState extends State<_CoachTour> {
               const SizedBox(height: 8),
               Text(
                 step.body,
-                style: const TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 13,
                   height: 1.35,
                 ),
@@ -168,8 +175,8 @@ class _CoachTourState extends State<_CoachTour> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: i == _index
-                            ? MuzicianTheme.sky
-                            : MuzicianTheme.textDim,
+                            ? StudioPalette.of(context).sky
+                            : StudioPalette.of(context).textDim,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -201,7 +208,8 @@ class _CoachTourState extends State<_CoachTour> {
 }
 
 class _ScrimPainter extends CustomPainter {
-  const _ScrimPainter(this.spot);
+  const _ScrimPainter(this.spot, this.palette);
+  final StudioPalette palette;
   final Rect spot;
 
   @override
@@ -216,12 +224,13 @@ class _ScrimPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(spot, const Radius.circular(12)),
       Paint()
-        ..color = MuzicianTheme.sky
+        ..color = palette.sky
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _ScrimPainter old) => old.spot != spot;
+  bool shouldRepaint(covariant _ScrimPainter old) =>
+      old.spot != spot || old.palette != palette;
 }

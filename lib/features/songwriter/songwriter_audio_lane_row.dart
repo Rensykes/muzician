@@ -8,13 +8,14 @@ import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
 import '../song/song_audio_clip_body.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_audio_actions.dart';
 import 'songwriter_audio_clip_sheet.dart';
 import 'songwriter_playhead.dart';
+import 'songwriter_lane_delete_control.dart';
 
 IconData fitGlyph(AudioFitMode m) => switch (m) {
   AudioFitMode.loop => Icons.repeat,
@@ -100,7 +101,11 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                     children: [
                       Positioned.fill(
                         child: asset == null
-                            ? Container(color: const Color(0xFF13314A))
+                            ? Container(
+                                color: StudioPalette.of(
+                                  context,
+                                ).sky.withValues(alpha: .14),
+                              )
                             : AudioClipBody(
                                 name: saveEntry?.name ?? asset.sourceLabel,
                                 durationMs:
@@ -124,7 +129,7 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                                 Icon(
                                   fitGlyph(clip.fitMode),
                                   size: 12,
-                                  color: MuzicianTheme.textPrimary,
+                                  color: StudioPalette.of(context).textPrimary,
                                 ),
                               if (saveEntry != null)
                                 writerLinkedBlockActionsMenu(
@@ -165,8 +170,8 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: MuzicianTheme.textPrimary,
+                            style: TextStyle(
+                              color: StudioPalette.of(context).textPrimary,
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
                             ),
@@ -207,8 +212,8 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                                 .join('  '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: MuzicianTheme.textPrimary,
+                            style: TextStyle(
+                              color: StudioPalette.of(context).textPrimary,
                               fontSize: 9,
                             ),
                           ),
@@ -243,7 +248,9 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
                 height: 40,
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  border: Border.all(color: MuzicianTheme.glassBorder),
+                  border: Border.all(
+                    color: StudioPalette.of(context).glassBorder,
+                  ),
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
@@ -258,13 +265,25 @@ class SongwriterAudioLaneRow extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 4),
-          child: Text(
-            lane.label ?? laneKindFallbackLabel(lane.kind),
-            style: const TextStyle(
-              color: MuzicianTheme.textMuted,
-              fontSize: 11,
-              letterSpacing: 1.2,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  lane.label ?? laneKindFallbackLabel(lane.kind),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
+                    fontSize: 11,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              SongwriterLaneDeleteControl(
+                section: section,
+                lane: lane,
+                instanceIndex: instanceIndex,
+              ),
+            ],
           ),
         ),
         Stack(

@@ -222,7 +222,10 @@ SongProject songFromSongwriter(
           blockLengthTicks,
           loopOffset + source.lengthTicks,
         );
-        for (final event in source.events) {
+        final strokes = [...source.events]
+          ..sort((a, b) => a.tick.compareTo(b.tick));
+        for (var strokeIndex = 0; strokeIndex < strokes.length; strokeIndex++) {
+          final event = strokes[strokeIndex];
           if (event.tick < 0 || event.tick >= source.lengthTicks) continue;
           final startTick = loopOffset + event.tick;
           if (startTick >= blockLengthTicks || startTick >= loopEnd) continue;
@@ -236,9 +239,18 @@ SongProject songFromSongwriter(
             gateTicks,
             math.min(loopEnd - startTick, blockLengthTicks - startTick),
           );
+          // Mirror Writer playback: a stroke's tail is bounded by the next
+          // stroke so released notes keep the same stagger on import.
+          int? nextStrokeTick;
+          for (final stroke in strokes.skip(strokeIndex + 1)) {
+            if (stroke.tick > event.tick) {
+              nextStrokeTick = loopOffset + stroke.tick;
+              break;
+            }
+          }
           final availableTicks = math.min(
-            loopEnd - startTick,
-            blockLengthTicks - startTick,
+            math.min(loopEnd - startTick, blockLengthTicks - startTick),
+            nextStrokeTick == null ? gateTicks : nextStrokeTick - startTick,
           );
           for (var i = 0; i < pitches.length; i++) {
             final onsetOffsetMs = i * 12;

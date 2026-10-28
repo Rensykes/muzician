@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
+import 'package:muzician/features/songwriter/songwriter_lane_delete_control.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/project_config.dart';
@@ -22,8 +23,9 @@ void main() {
     WidgetTester tester, {
     required void Function(SongwriterNotifier n) seed,
     ValueChanged<SaveEntry>? onEditInstrumentSave,
+    Size size = const Size(400, 1200),
   }) async {
-    await tester.binding.setSurfaceSize(const Size(400, 1200));
+    await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -860,6 +862,231 @@ void main() {
           .where((candidate) => candidate.kind == SongLaneKind.save),
       isEmpty,
     );
+  });
+
+  for (final kind in [
+    SongLaneKind.drum,
+    SongLaneKind.audio,
+    SongLaneKind.guitarStrum,
+    SongLaneKind.melody,
+  ]) {
+    testWidgets('$kind lane deletion confirms, cancels and undoes', (
+      tester,
+    ) async {
+      late String laneId;
+      final container = await pumpSheet(
+        tester,
+        seed: (n) {
+          n.addSection(label: 'Verse', lengthBars: 4);
+          final sectionId = n.state.sections.single.id;
+          laneId = n.addLane(
+            sectionId: sectionId,
+            kind: kind,
+            label: 'My lane',
+          );
+        },
+      );
+      final writer = container.read(songwriterProvider.notifier);
+      final control = find.byKey(Key('deleteWriterLane_${laneId}_0'));
+      expect(control, findsOneWidget);
+      await tester.ensureVisible(control);
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(
+        writer.state.sections.single.lanes.any((l) => l.id == laneId),
+        isTrue,
+      );
+
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+      expect(
+        writer.state.sections.single.lanes.any((l) => l.id == laneId),
+        isTrue,
+      );
+
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirmDeleteWriterLane')));
+      await tester.pumpAndSettle();
+      expect(
+        writer.state.sections.single.lanes.any((l) => l.id == laneId),
+        isFalse,
+      );
+      expect(writer.state.sections.single.lanes, hasLength(1));
+      expect(writer.undo(), isTrue);
+      await tester.pumpAndSettle();
+      expect(
+        writer.state.sections.single.lanes.any((l) => l.id == laneId),
+        isTrue,
+      );
+    });
+  }
+
+  testWidgets('deleting a repeated lane removes all repeats but not lyrics', (
+    tester,
+  ) async {
+    late String laneId;
+    final container = await pumpSheet(
+      tester,
+      seed: (writer) {
+        writer.addSection(label: 'Verse', lengthBars: 1);
+        final sectionId = writer.state.sections.single.id;
+        writer.setSectionRepeat(sectionId, 2);
+        writer.setSectionLyric(
+          sectionId: sectionId,
+          verseIndex: 0,
+          text: 'Words',
+        );
+        laneId = writer.addLane(sectionId: sectionId, kind: SongLaneKind.drum);
+        final patternId = writer.addDrumPattern(name: 'Beat');
+        writer.addDrumBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          patternId: patternId,
+          startBar: 0,
+          spanBars: 1,
+        );
+      },
+    );
+    final first = find.byKey(Key('deleteWriterLane_${laneId}_0'));
+    final second = find.byKey(Key('deleteWriterLane_${laneId}_1'));
+    expect(first, findsOneWidget);
+    expect(second, findsOneWidget);
+    await tester.ensureVisible(second);
+    await tester.tap(second);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmDeleteWriterLane')));
+    await tester.pumpAndSettle();
+    final writer = container.read(songwriterProvider.notifier);
+    expect(
+      writer.state.sections.single.lanes.any((lane) => lane.id == laneId),
+      isFalse,
+    );
+    expect(writer.state.sections.single.lyrics, ['Words']);
+    expect(writer.undo(), isTrue);
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks,
+      hasLength(1),
+    );
+  });
+
+  for (final size in [const Size(320, 700), const Size(1024, 768)]) {
+    testWidgets('lane controls remain reachable at $size with long labels', (
+      tester,
+    ) async {
+      final ids = <String>[];
+      await pumpSheet(
+        tester,
+        size: size,
+        seed: (writer) {
+          writer.addSection(label: 'Verse', lengthBars: 1);
+          final sectionId = writer.state.sections.single.id;
+          for (final kind in [
+            SongLaneKind.drum,
+            SongLaneKind.audio,
+            SongLaneKind.guitarStrum,
+            SongLaneKind.melody,
+          ]) {
+            ids.add(
+              writer.addLane(
+                sectionId: sectionId,
+                kind: kind,
+                label: 'A particularly long lane name for testing',
+              ),
+            );
+          }
+        },
+      );
+      for (final id in ids) {
+        final control = find.byKey(Key('deleteWriterLane_${id}_0'));
+        await tester.ensureVisible(control);
+        await tester.pumpAndSettle();
+        expect(control, findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+      expect(find.byKey(Key('strumAnchor_${ids[2]}_0')), findsOneWidget);
+    });
+  }
+
+  testWidgets('lane deletion remains valid if its row is disposed', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 1);
+    final sectionId = writer.state.sections.single.id;
+    final laneId = writer.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.drum,
+    );
+    final section = writer.state.sections.single;
+    final lane = section.lanes.singleWhere((lane) => lane.id == laneId);
+    final visible = ValueNotifier(true);
+    addTearDown(visible.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: visible,
+              builder: (_, isVisible, _) => isVisible
+                  ? SongwriterLaneDeleteControl(
+                      section: section,
+                      lane: lane,
+                      instanceIndex: 0,
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(Key('deleteWriterLane_${laneId}_0')));
+    await tester.pumpAndSettle();
+    visible.value = false;
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmDeleteWriterLane')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      writer.state.sections.single.lanes.any((lane) => lane.id == laneId),
+      isFalse,
+    );
+  });
+
+  testWidgets('long lane names keep the deletion dialog usable', (
+    tester,
+  ) async {
+    late String laneId;
+    await pumpSheet(
+      tester,
+      size: const Size(320, 700),
+      seed: (writer) {
+        writer.addSection(label: 'Verse', lengthBars: 1);
+        laneId = writer.addLane(
+          sectionId: writer.state.sections.single.id,
+          kind: SongLaneKind.drum,
+          label: 'Long name ' * 120,
+        );
+      },
+    );
+    final control = find.byKey(Key('deleteWriterLane_${laneId}_0'));
+    await tester.ensureVisible(control);
+    await tester.tap(control);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('confirmDeleteWriterLane')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirmDeleteWriterLane')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('secondary lane header deletes the lane after confirm', (

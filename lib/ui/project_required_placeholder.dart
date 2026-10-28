@@ -1,7 +1,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../theme/muzician_theme.dart';
+import '../theme/studio_theme.dart';
 import 'project_picker_sheet.dart';
 
 /// Empty-state shown by Song / Songwriter save panels when no project is
@@ -25,24 +25,27 @@ class ProjectRequiredPlaceholder extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         decoration: BoxDecoration(
-          color: MuzicianTheme.glassBg,
-          border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
+          color: StudioPalette.of(context).glassBg,
+          border: Border.all(
+            color: StudioPalette.of(context).glassBorder,
+            width: 0.5,
+          ),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.folder_open_outlined,
-              color: MuzicianTheme.textMuted,
+              color: StudioPalette.of(context).textMuted,
               size: 28,
             ),
             const SizedBox(height: 10),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MuzicianTheme.textSecondary,
+              style: TextStyle(
+                color: StudioPalette.of(context).textSecondary,
                 fontSize: 13,
                 height: 1.4,
               ),
@@ -57,17 +60,17 @@ class ProjectRequiredPlaceholder extends StatelessWidget {
                   vertical: 9,
                 ),
                 decoration: BoxDecoration(
-                  color: MuzicianTheme.sky.withValues(alpha: 0.14),
+                  color: StudioPalette.of(context).sky.withValues(alpha: 0.14),
                   border: Border.all(
-                    color: MuzicianTheme.sky.withValues(alpha: 0.4),
+                    color: StudioPalette.of(context).sky.withValues(alpha: 0.4),
                     width: 0.5,
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Text(
+                child: Text(
                   'Choose project',
                   style: TextStyle(
-                    color: MuzicianTheme.sky,
+                    color: StudioPalette.of(context).sky,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),

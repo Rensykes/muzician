@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
+import '../../models/guitar_sound.dart' show GuitarTone;
 import '../../models/harmony_lane_instrument.dart';
 import '../../schema/rules/save_system_rules.dart' show resolveSaveInProject;
 import '../../schema/rules/songwriter_library_match_rules.dart';
@@ -31,7 +32,7 @@ import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_coach_steps.dart';
 import 'songwriter_playhead.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import 'drum_pattern_sheet.dart';
 import 'guitar_strum_pattern_sheet.dart';
@@ -43,8 +44,10 @@ import 'songwriter_structure_editor.dart';
 import 'songwriter_undo.dart';
 import '../_mockup_shell.dart';
 import 'songwriter_audio_lane_row.dart';
+import 'songwriter_lane_delete_control.dart';
 import 'songwriter_section_ruler.dart';
 import 'songwriter_melody_pattern_editor.dart';
+import 'songwriter_melody_timeline.dart';
 
 class SongwriterScreenSheet extends ConsumerStatefulWidget {
   const SongwriterScreenSheet({
@@ -67,7 +70,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
   void _openSaveLoad(BuildContext context, {int initialTabIndex = 0}) {
     showWidgetSheet(
       context: context,
-      title: 'Browse saves',
+      title: 'Writer saves',
       scrollBody: false,
       child: SongwriterSavePanel(initialTabIndex: initialTabIndex),
     );
@@ -118,7 +121,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
     if (!mounted) return;
     if (!saved) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(content: Text('Could not save this Song version.')),
+        const SnackBar(content: Text('Could not save this Writer version.')),
       );
       return;
     }
@@ -132,7 +135,10 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
   void _openStructure(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const SongwriterStructureEditor(),
+        builder: StudioRouteTheme.builder(
+          context,
+          (_) => const SongwriterStructureEditor(),
+        ),
         fullscreenDialog: true,
       ),
     );
@@ -151,11 +157,11 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
         .where((conflict) => conflict.projectId == selectedProjectId)
         .toList();
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: MuzicianTheme.gradientColors,
+          colors: StudioPalette.of(context).gradientColors,
         ),
       ),
       child: SafeArea(
@@ -176,13 +182,17 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
             if (reconciliationConflicts.isNotEmpty && selectedProjectId != null)
               MaterialBanner(
                 key: const Key('writerReconciliationConflictBanner'),
-                backgroundColor: MuzicianTheme.orange.withValues(alpha: 0.10),
+                backgroundColor: StudioPalette.of(
+                  context,
+                ).orange.withValues(alpha: 0.10),
                 forceActionsBelow: true,
                 content: Text(
                   reconciliationConflicts.length == 1
                       ? 'A Writer block had two saved versions. Both were kept, and the arrangement uses the recovered version.'
                       : '${reconciliationConflicts.length} Writer blocks had two saved versions. Both were kept, and the arrangement uses the recovered versions.',
-                  style: const TextStyle(color: MuzicianTheme.textPrimary),
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textPrimary,
+                  ),
                 ),
                 actions: [
                   TextButton(
@@ -203,12 +213,19 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                 key: _coachKeys.body,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final twoColumns = constraints.maxWidth >= 700;
+                    final twoColumns =
+                        constraints.maxWidth >= 1100 &&
+                        project.sections.length > 1;
                     final columnWidth = twoColumns
-                        ? (constraints.maxWidth - 28 * 2 - 24) / 2
+                        ? (constraints.maxWidth - 48 - 24) / 2
                         : null;
                     return ListView(
-                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 80),
+                      padding: EdgeInsets.fromLTRB(
+                        constraints.maxWidth < 700 ? 16 : 24,
+                        4,
+                        constraints.maxWidth < 700 ? 16 : 24,
+                        80,
+                      ),
                       children: [
                         if (project.sections.isEmpty)
                           _EmptyState(
@@ -220,7 +237,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                           // Wide layout: sections flow in two columns.
                           Wrap(
                             spacing: 24,
-                            runSpacing: 36,
+                            runSpacing: 24,
                             children: [
                               for (final section in project.sections)
                                 SizedBox(
@@ -238,7 +255,7 @@ class _SongwriterScreenSheetState extends ConsumerState<SongwriterScreenSheet> {
                         else
                           for (final section in project.sections)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 36),
+                              padding: const EdgeInsets.only(bottom: 24),
                               child: _SectionSheet(
                                 sectionId: section.id,
                                 onEditInstrumentSave:
@@ -312,7 +329,7 @@ class _SectionSheet extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeading(section: section),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
         for (var i = 0; i < section.repeat.clamp(1, 32); i++)
           Padding(
             padding: EdgeInsets.only(bottom: i == section.repeat - 1 ? 0 : 18),
@@ -388,8 +405,8 @@ class _SectionInstance extends ConsumerWidget {
             padding: const EdgeInsets.only(left: 4, bottom: 6),
             child: Text(
               '\u2014 ${instanceIndex + 1} of ${section.repeat} \u2014',
-              style: const TextStyle(
-                color: MuzicianTheme.textMuted,
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
                 fontSize: 11,
                 letterSpacing: 1.2,
               ),
@@ -572,25 +589,25 @@ class _UnresolvedSaveLaneRow extends ConsumerWidget {
   }
 
   void _confirmRemoveLane(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
+    showStudioDialog<void>(
       context: context,
-      builder: (dialogContext) => MuzicianDialog(
+      builder: (context) => MuzicianDialog(
         title: 'Remove Save / Voicing lane?',
-        content: const Text(
+        content: Text(
           'This removes the lane and its placements. The saved ideas remain in the project.',
-          style: TextStyle(color: MuzicianTheme.textSecondary),
+          style: TextStyle(color: StudioPalette.of(context).textSecondary),
         ),
         actions: [
           MuzicianDialogButton(
             'Cancel',
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => Navigator.of(context).pop(),
           ),
           MuzicianDialogButton(
             'Remove lane',
             key: Key('confirmRemoveUnresolvedSaveLane_${lane.id}'),
             emphasis: MuzicianDialogEmphasis.destructive,
             onPressed: () {
-              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
               HapticFeedback.mediumImpact();
               ref
                   .read(songwriterProvider.notifier)
@@ -622,8 +639,10 @@ class _UnresolvedSaveLaneRow extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
-        color: MuzicianTheme.orange.withValues(alpha: 0.07),
-        border: Border.all(color: MuzicianTheme.orange.withValues(alpha: 0.3)),
+        color: StudioPalette.of(context).orange.withValues(alpha: 0.07),
+        border: Border.all(
+          color: StudioPalette.of(context).orange.withValues(alpha: 0.3),
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -631,14 +650,18 @@ class _UnresolvedSaveLaneRow extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.link_off, size: 13, color: MuzicianTheme.orange),
+              Icon(
+                Icons.link_off,
+                size: 13,
+                color: StudioPalette.of(context).orange,
+              ),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   '${lane.label ?? 'Save / Voicing'} · Unresolved Harmony anchor',
                   key: Key('unresolvedSaveLaneLabel_${lane.id}_$instanceIndex'),
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
                     fontSize: 11,
                     letterSpacing: 0.6,
                   ),
@@ -652,9 +675,9 @@ class _UnresolvedSaveLaneRow extends ConsumerWidget {
                     hint: const Text('Reanchor'),
                     isDense: true,
                     iconSize: 16,
-                    dropdownColor: MuzicianTheme.surface,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textSecondary,
+                    dropdownColor: StudioPalette.of(context).surface,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textSecondary,
                       fontSize: 10,
                     ),
                     items: [
@@ -695,11 +718,11 @@ class _UnresolvedSaveLaneRow extends ConsumerWidget {
               padding: const EdgeInsets.only(left: 18, top: 4),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'No compatible Harmony lane',
                       style: TextStyle(
-                        color: MuzicianTheme.textMuted,
+                        color: StudioPalette.of(context).textMuted,
                         fontSize: 10,
                       ),
                     ),
@@ -712,7 +735,7 @@ class _UnresolvedSaveLaneRow extends ConsumerWidget {
                     icon: const Icon(Icons.delete_outline, size: 14),
                     label: const Text('Remove lane'),
                     style: TextButton.styleFrom(
-                      foregroundColor: MuzicianTheme.red,
+                      foregroundColor: StudioPalette.of(context).red,
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
@@ -720,11 +743,14 @@ class _UnresolvedSaveLaneRow extends ConsumerWidget {
               ),
             ),
           if (lane.blocks.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(left: 18, top: 4),
               child: Text(
                 'No Save blocks',
-                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 10),
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
+                  fontSize: 10,
+                ),
               ),
             )
           else
@@ -776,22 +802,25 @@ class _SectionLyrics extends ConsumerWidget {
       onTap: () => _edit(context, ref, text),
       child: Container(
         width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 44),
         margin: const EdgeInsets.only(left: 4, right: 4),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: MuzicianTheme.sky.withValues(alpha: 0.10),
-          border: Border.all(color: MuzicianTheme.sky.withValues(alpha: 0.35)),
+          color: StudioPalette.of(context).sky.withValues(alpha: 0.10),
+          border: Border.all(
+            color: StudioPalette.of(context).sky.withValues(alpha: 0.35),
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 1, right: 8),
               child: Icon(
                 Icons.lyrics_outlined,
                 size: 14,
-                color: MuzicianTheme.textMuted,
+                color: StudioPalette.of(context).textMuted,
               ),
             ),
             Expanded(
@@ -801,8 +830,8 @@ class _SectionLyrics extends ConsumerWidget {
                   fontSize: 13,
                   height: 1.35,
                   color: text.isEmpty
-                      ? MuzicianTheme.textMuted
-                      : MuzicianTheme.textPrimary,
+                      ? StudioPalette.of(context).textMuted
+                      : StudioPalette.of(context).textPrimary,
                 ),
               ),
             ),
@@ -813,9 +842,9 @@ class _SectionLyrics extends ConsumerWidget {
   }
 
   void _edit(BuildContext context, WidgetRef ref, String current) {
-    showDialog<void>(
+    showStudioDialog<void>(
       context: context,
-      builder: (_) => _SectionLyricsDialog(
+      builder: (context) => _SectionLyricsDialog(
         initialText: current,
         onSave: (text) => ref
             .read(songwriterProvider.notifier)
@@ -859,7 +888,7 @@ class _SectionLyricsDialogState extends State<_SectionLyricsDialog> {
         autofocus: true,
         maxLines: null,
         minLines: 3,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        style: TextStyle(color: StudioPalette.of(context).textPrimary),
         decoration: const InputDecoration(hintText: 'Type the lyrics…'),
       ),
       actions: [
@@ -913,7 +942,7 @@ class _VerseLyricDialogState extends State<_VerseLyricDialog> {
         autofocus: true,
         maxLines: null,
         minLines: 2,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        style: TextStyle(color: StudioPalette.of(context).textPrimary),
         decoration: const InputDecoration(hintText: 'Words for this verse…'),
       ),
       actions: [
@@ -940,98 +969,175 @@ class _SectionHeading extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(songwriterProvider.notifier);
     final canAddGuitarStrumLane = notifier.canAddGuitarStrumLane(section.id);
+    final studio = StudioPalette.of(context).isStudio;
+    final disclosureStyle = TextButton.styleFrom(
+      minimumSize: const Size(44, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      foregroundColor: StudioPalette.of(context).textSecondary,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    );
     final title = (section.label?.isNotEmpty ?? false)
-        ? section.label!.toUpperCase()
-        : 'SECTION';
+        ? (studio ? section.label! : section.label!.toUpperCase())
+        : (studio ? 'Section' : 'SECTION');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 4,
           children: [
-            Expanded(
+            SizedBox(
+              width: studio ? 96 : double.infinity,
               child: GestureDetector(
                 onTap: () => _editName(context, notifier),
                 behavior: HitTestBehavior.opaque,
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.0,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textPrimary,
+                        fontSize: studio ? 15 : 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              key: Key('barsPill_${section.id}'),
-              onTap: () => _openStepper(
-                context,
-                title: 'Bars',
-                value: section.lengthBars,
-                min: 1,
-                onChanged: (v) => notifier.setSectionLength(section.id, v),
-              ),
-              child: Text(
-                '${section.lengthBars} bars',
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
+            if (!studio) const SizedBox(width: 8),
+            if (studio)
+              TextButton.icon(
+                key: Key('barsPill_${section.id}'),
+                style: disclosureStyle,
+                iconAlignment: IconAlignment.end,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
+                label: Text('${section.lengthBars} bars'),
+                onPressed: () => _openStepper(
+                  context,
+                  title: 'Bars',
+                  value: section.lengthBars,
+                  min: 1,
+                  onChanged: (v) => notifier.setSectionLength(section.id, v),
+                ),
+              )
+            else
+              GestureDetector(
+                key: Key('barsPill_${section.id}'),
+                onTap: () => _openStepper(
+                  context,
+                  title: 'Bars',
+                  value: section.lengthBars,
+                  min: 1,
+                  onChanged: (v) => notifier.setSectionLength(section.id, v),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Text(
+                      '${section.lengthBars} bars',
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
+            if (!studio) const SizedBox(width: 10),
             // Always-visible repeat control: \u00d7N tiles the section into N verses.
             // Muted at \u00d71 so it stays discoverable; accented once repeated.
-            GestureDetector(
-              key: Key('repeatPill_${section.id}'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _openStepper(
-                context,
-                title: 'Verses',
-                value: section.repeat,
-                min: 1,
-                onChanged: (v) => notifier.setSectionRepeat(section.id, v),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                child: Text(
-                  '\u00d7${section.repeat}',
-                  style: TextStyle(
-                    color: section.repeat > 1
-                        ? MuzicianTheme.sky
-                        : MuzicianTheme.textMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+            if (studio)
+              TextButton.icon(
+                key: Key('repeatPill_${section.id}'),
+                style: disclosureStyle,
+                iconAlignment: IconAlignment.end,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
+                label: Text('×${section.repeat}'),
+                onPressed: () => _openStepper(
+                  context,
+                  title: 'Verses',
+                  value: section.repeat,
+                  min: 1,
+                  onChanged: (v) => notifier.setSectionRepeat(section.id, v),
+                ),
+              )
+            else
+              GestureDetector(
+                key: Key('repeatPill_${section.id}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openStepper(
+                  context,
+                  title: 'Verses',
+                  value: section.repeat,
+                  min: 1,
+                  onChanged: (v) => notifier.setSectionRepeat(section.id, v),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 14,
+                  ),
+                  child: Text(
+                    '\u00d7${section.repeat}',
+                    style: TextStyle(
+                      color: section.repeat > 1
+                          ? StudioPalette.of(context).sky
+                          : StudioPalette.of(context).textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
-            ),
-            IconButton(
-              key: Key('sectionMixer_${section.id}'),
-              tooltip: 'Mixer',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(
-                Icons.tune,
-                size: 18,
-                color: MuzicianTheme.textPrimary,
+            if (studio && MediaQuery.sizeOf(context).width < 700)
+              IconButton(
+                key: Key('sectionMixer_${section.id}'),
+                tooltip: 'Mixer',
+                icon: const Icon(Icons.tune, size: 19),
+                onPressed: () => showSongwriterMixerSheet(
+                  context,
+                  sectionId: section.id,
+                  title: 'Mixer — ${section.label ?? 'Section'}',
+                ),
+              )
+            else
+              TextButton.icon(
+                key: Key('sectionMixer_${section.id}'),
+                icon: Icon(
+                  Icons.tune,
+                  size: 18,
+                  color: StudioPalette.of(context).textPrimary,
+                ),
+                label: const Text('Mixer'),
+                onPressed: () => showSongwriterMixerSheet(
+                  context,
+                  sectionId: section.id,
+                  title: 'Mixer — ${section.label ?? 'Section'}',
+                ),
               ),
-              onPressed: () => showSongwriterMixerSheet(
-                context,
-                sectionId: section.id,
-                title: 'Mixer — ${section.label ?? 'Section'}',
-              ),
-            ),
             PopupMenuButton<String>(
               key: Key('sheetSectionMenu_${section.id}'),
-              icon: const Icon(
+              icon: Icon(
                 Icons.more_vert,
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
               ),
               onSelected: (value) async {
+                if (value == 'removeSection') {
+                  _removeSection(context, ref, notifier);
+                }
                 if (value == 'addHarmonyLane') {
                   final instrument = await _promptHarmonyLaneInstrument(
                     context,
@@ -1106,7 +1212,7 @@ class _SectionHeading extends ConsumerWidget {
                       laneId: laneId,
                       patternId: patternId,
                       startBar: 0,
-                      spanBars: section.lengthBars,
+                      spanBars: 1,
                     );
                   });
                 }
@@ -1136,7 +1242,18 @@ class _SectionHeading extends ConsumerWidget {
                   });
                 }
               },
+              tooltip: 'Section actions',
               itemBuilder: (_) => [
+                if (studio)
+                  PopupMenuItem(
+                    key: Key('removeSection_${section.id}'),
+                    value: 'removeSection',
+                    child: const ListTile(
+                      leading: Icon(Icons.close_rounded),
+                      title: Text('Remove section'),
+                      dense: true,
+                    ),
+                  ),
                 const PopupMenuItem(
                   key: Key('addHarmonyLaneSheetAction'),
                   value: 'addHarmonyLane',
@@ -1185,58 +1302,65 @@ class _SectionHeading extends ConsumerWidget {
                   ),
               ],
             ),
-            const SizedBox(width: 4),
-            IconButton(
-              key: Key('removeSection_${section.id}'),
-              onPressed: () {
-                final sections = ref.read(songwriterProvider).sections;
-                final idx = sections.indexWhere((s) => s.id == section.id);
-                if (idx < 0) return;
-                HapticFeedback.mediumImpact();
-                notifier.removeSection(section.id);
-                final revision = notifier.historyRevision;
-                showUndoSnack(
-                  context,
-                  'Section deleted',
-                  historyRevision: notifier.historyRevisionListenable,
-                  expectedRevision: revision,
-                  onUndo: () => notifier.undo(ifRevision: revision),
-                );
-              },
-              icon: const Icon(
-                Icons.close_rounded,
-                size: 18,
-                color: MuzicianTheme.textMuted,
+            if (!studio) const SizedBox(width: 4),
+            if (!studio)
+              IconButton(
+                key: Key('removeSection_${section.id}'),
+                onPressed: () => _removeSection(context, ref, notifier),
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: StudioPalette.of(context).textMuted,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                splashRadius: 16,
               ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              splashRadius: 16,
-            ),
           ],
         ),
-        const SizedBox(height: 6),
-        Container(height: 1, color: MuzicianTheme.glassBorder),
+        SizedBox(height: studio ? 2 : 6),
+        Container(height: 1, color: StudioPalette.of(context).glassBorder),
       ],
+    );
+  }
+
+  void _removeSection(
+    BuildContext context,
+    WidgetRef ref,
+    SongwriterNotifier notifier,
+  ) {
+    if (!ref.read(songwriterProvider).sections.any((s) => s.id == section.id)) {
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    notifier.removeSection(section.id);
+    final revision = notifier.historyRevision;
+    showUndoSnack(
+      context,
+      'Section deleted',
+      historyRevision: notifier.historyRevisionListenable,
+      expectedRevision: revision,
+      onUndo: () => notifier.undo(ifRevision: revision),
     );
   }
 
   void _editName(BuildContext context, SongwriterNotifier notifier) {
     final controller = TextEditingController(text: section.label ?? '');
-    showDialog<void>(
+    showStudioDialog<void>(
       context: context,
-      builder: (dialogCtx) => MuzicianDialog(
+      builder: (context) => MuzicianDialog(
         title: 'Section name',
         content: TextField(
           key: Key('sectionLabel_${section.id}'),
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: MuzicianTheme.textPrimary),
+          style: TextStyle(color: StudioPalette.of(context).textPrimary),
           decoration: const InputDecoration(hintText: 'Verse, Chorus\u2026'),
         ),
         actions: [
           MuzicianDialogButton(
             'Cancel',
-            onPressed: () => Navigator.pop(dialogCtx),
+            onPressed: () => Navigator.pop(context),
           ),
           MuzicianDialogButton(
             'Save',
@@ -1246,7 +1370,7 @@ class _SectionHeading extends ConsumerWidget {
                 section.id,
                 controller.text.isEmpty ? null : controller.text,
               );
-              Navigator.pop(dialogCtx);
+              Navigator.pop(context);
             },
           ),
         ],
@@ -1282,39 +1406,75 @@ Future<void> showBarActionSheet({
   return showWidgetSheet(
     context: context,
     title: title,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final a in actions)
-          ListTile(
-            key: a.key,
-            leading: Icon(
-              a.icon,
-              color: a.destructive
-                  ? MuzicianTheme.red
-                  : MuzicianTheme.textPrimary,
-            ),
-            title: Text(
-              a.label,
-              style: TextStyle(
-                color: a.destructive
-                    ? MuzicianTheme.red
-                    : MuzicianTheme.textPrimary,
+    child: Builder(
+      builder: (context) {
+        final palette = StudioPalette.of(context);
+        final common = palette.isStudio
+            ? actions
+                  .where(
+                    (a) => const [
+                      'barActionPlayFromHere',
+                      'barActionChangeChord',
+                      'barActionLyrics',
+                      'barActionAddChord',
+                    ].any((key) => a.key == Key(key)),
+                  )
+                  .toList()
+            : <BarAction>[];
+        void run(BarAction action) {
+          Navigator.of(context).pop();
+          action.onTap();
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (common.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final action in common)
+                      OutlinedButton.icon(
+                        key: action.key,
+                        onPressed: () => run(action),
+                        icon: Icon(action.icon, size: 18),
+                        label: Text(action.label),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            onTap: () {
-              Navigator.of(context).pop();
-              a.onTap();
-            },
-          ),
-      ],
+            for (final action in actions.where(
+              (action) => !common.contains(action),
+            ))
+              ListTile(
+                key: action.key,
+                leading: Icon(
+                  action.icon,
+                  color: action.destructive ? palette.red : palette.textPrimary,
+                ),
+                title: Text(
+                  action.label,
+                  style: TextStyle(
+                    color: action.destructive
+                        ? palette.red
+                        : palette.textPrimary,
+                  ),
+                ),
+                onTap: () => run(action),
+              ),
+          ],
+        );
+      },
     ),
   );
 }
 
-/// Label row above a harmony lane's bar grid, shown only when the section has
-/// more than one harmony lane. Secondary lanes get a delete action.
+/// Source and playback controls above each harmony lane's bar grid.
+/// Secondary lanes also get a delete action.
 class _HarmonyLaneHeader extends ConsumerWidget {
   const _HarmonyLaneHeader({
     required this.section,
@@ -1343,7 +1503,9 @@ class _HarmonyLaneHeader extends ConsumerWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 280;
-          return Row(
+          return Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
             children: [
               if (!compact) ...[
                 Icon(
@@ -1353,7 +1515,7 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                     null => Icons.help_outline,
                   },
                   size: 12,
-                  color: MuzicianTheme.textMuted,
+                  color: StudioPalette.of(context).textMuted,
                 ),
                 const SizedBox(width: 5),
               ],
@@ -1370,9 +1532,9 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                       ),
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
-                    fontSize: 11,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.6,
                   ),
@@ -1384,14 +1546,15 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                 label: '$instrumentLabel Harmony instrument',
                 child: Text(
                   instrumentLabel,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textSecondary,
-                    fontSize: 10,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textSecondary,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              const Spacer(),
+              if (instrument == HarmonyLaneInstrument.fretboard)
+                _HarmonyGuitarSound(laneId: lane.id),
               if (lane.id.isNotEmpty &&
                   ref
                       .read(songwriterProvider.notifier)
@@ -1404,9 +1567,9 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                   tooltip: 'Change Harmony instrument',
                   visualDensity: VisualDensity.compact,
                   iconSize: 15,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.swap_horiz,
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                   ),
                   onPressed: () async {
                     final instrument = await _promptHarmonyLaneInstrument(
@@ -1437,9 +1600,9 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                   tooltip: 'Duplicate Harmony lane',
                   visualDensity: VisualDensity.compact,
                   iconSize: 15,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.copy_all_outlined,
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                   ),
                   onPressed: () => ref
                       .read(songwriterProvider.notifier)
@@ -1454,9 +1617,9 @@ class _HarmonyLaneHeader extends ConsumerWidget {
                   tooltip: 'Delete Harmony lane',
                   visualDensity: VisualDensity.compact,
                   iconSize: 15,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.delete_outline,
-                    color: MuzicianTheme.textMuted,
+                    color: StudioPalette.of(context).textMuted,
                   ),
                   onPressed: () => _confirmDelete(context, ref, label),
                 ),
@@ -1468,26 +1631,26 @@ class _HarmonyLaneHeader extends ConsumerWidget {
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref, String label) {
-    showDialog<void>(
+    showStudioDialog<void>(
       context: context,
-      builder: (dialogContext) => MuzicianDialog(
+      builder: (context) => MuzicianDialog(
         title: 'Delete $label?',
-        content: const Text(
+        content: Text(
           'The chords in this lane and any Save / Voicing lanes anchored to it are removed.',
           key: Key('deleteHarmonyLaneImpact'),
-          style: TextStyle(color: MuzicianTheme.textSecondary),
+          style: TextStyle(color: StudioPalette.of(context).textSecondary),
         ),
         actions: [
           MuzicianDialogButton(
             'Cancel',
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () => Navigator.of(context).pop(),
           ),
           MuzicianDialogButton(
             'Delete',
             key: const Key('confirmDeleteHarmonyLane'),
             emphasis: MuzicianDialogEmphasis.destructive,
             onPressed: () {
-              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
               HapticFeedback.mediumImpact();
               ref
                   .read(songwriterProvider.notifier)
@@ -1500,11 +1663,61 @@ class _HarmonyLaneHeader extends ConsumerWidget {
   }
 }
 
+class _HarmonyGuitarSound extends ConsumerWidget {
+  const _HarmonyGuitarSound({required this.laneId});
+  final String laneId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tone = ref.watch(settingsProvider.select((s) => s.guitarTone));
+    final palette = StudioPalette.of(context);
+    final label = tone == GuitarTone.clean ? 'Clean' : 'Distorted';
+    return PopupMenuButton<GuitarTone>(
+      key: Key('harmonyGuitarSound_$laneId'),
+      tooltip: 'Guitar sound, shared with Fretboard and Writer',
+      initialValue: tone,
+      onSelected: (value) =>
+          ref.read(settingsProvider.notifier).setGuitarTone(value),
+      itemBuilder: (_) => [
+        for (final value in GuitarTone.values)
+          CheckedPopupMenuItem(
+            value: value,
+            checked: value == tone,
+            child: Text(value == GuitarTone.clean ? 'Clean' : 'Distorted'),
+          ),
+      ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  'Sound: $label',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: palette.textSecondary, fontSize: 12),
+                ),
+              ),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: palette.textMuted,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Future<HarmonyLaneInstrument?> _promptHarmonyLaneInstrument(
   BuildContext context,
-) => showModalBottomSheet<HarmonyLaneInstrument>(
+) => showStudioModalBottomSheet<HarmonyLaneInstrument>(
   context: context,
-  backgroundColor: MuzicianTheme.surface,
   builder: (context) => SafeArea(
     child: Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
@@ -1517,11 +1730,14 @@ Future<HarmonyLaneInstrument?> _promptHarmonyLaneInstrument(
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'All chords in this lane will use the selected instrument.',
-            style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
+              fontSize: 12,
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           for (final instrument in HarmonyLaneInstrument.values)
             ListTile(
               key: Key('harmonyInstrumentOption_${instrument.name}'),
@@ -1529,7 +1745,7 @@ Future<HarmonyLaneInstrument?> _promptHarmonyLaneInstrument(
                 instrument == HarmonyLaneInstrument.piano
                     ? Icons.piano
                     : Icons.music_note,
-                color: MuzicianTheme.sky,
+                color: StudioPalette.of(context).sky,
               ),
               title: Text(
                 instrument == HarmonyLaneInstrument.piano
@@ -1633,7 +1849,9 @@ class _BarRow extends ConsumerWidget {
               final save = saveBySpan[i];
               cells.add(
                 _BarCell(
-                  key: activeKey(i, span),
+                  key:
+                      activeKey(i, span) ??
+                      Key('writerHarmonyCell_${lane.id}_${instanceIndex}_$i'),
                   flex: span,
                   block: owner,
                   displayChordSymbol: _displayChordSymbol(
@@ -1730,7 +1948,9 @@ class _BarRow extends ConsumerWidget {
               final bar = i;
               cells.add(
                 _BarCell(
-                  key: activeKey(bar, 1),
+                  key:
+                      activeKey(bar, 1) ??
+                      Key('writerHarmonyCell_${lane.id}_${instanceIndex}_$bar'),
                   flex: 1,
                   block: null,
                   instanceIndex: instanceIndex,
@@ -1752,7 +1972,23 @@ class _BarRow extends ConsumerWidget {
                 padding: EdgeInsets.only(bottom: r == rows.length - 1 ? 0 : 8),
                 child: Stack(
                   children: [
-                    Row(children: rows[r]),
+                    SizedBox(
+                      height: StudioPalette.of(context).isStudio
+                          ? rows[r].whereType<_BarCell>().fold<double>(
+                                  44,
+                                  (height, cell) => cell._studioHeight > height
+                                      ? cell._studioHeight
+                                      : height,
+                                ) *
+                                MediaQuery.textScalerOf(context).scale(1)
+                          : null,
+                      child: Row(
+                        crossAxisAlignment: StudioPalette.of(context).isStudio
+                            ? CrossAxisAlignment.stretch
+                            : CrossAxisAlignment.center,
+                        children: rows[r],
+                      ),
+                    ),
                     Positioned.fill(
                       child: SongwriterRowPlayhead(
                         sectionId: section.id,
@@ -2251,51 +2487,55 @@ class _BarRow extends ConsumerWidget {
     showWidgetSheet(
       context: context,
       title: title,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (entries.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'No ${instrument.name == 'piano' ? 'Piano' : 'Fretboard'} Harmony saves yet.',
-                style: const TextStyle(color: MuzicianTheme.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-            )
-          else
-            for (final entry in entries)
-              ListTile(
-                key: Key('harmonyLibrarySave_${entry.id}'),
-                leading: Icon(
-                  instrument == HarmonyLaneInstrument.piano
-                      ? Icons.piano
-                      : Icons.music_note,
-                  color: MuzicianTheme.violet,
+      child: Builder(
+        builder: (context) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (entries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  'No ${instrument.name == 'piano' ? 'Piano' : 'Fretboard'} Harmony saves yet.',
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                title: Text(entry.name),
-                subtitle: Text(
-                  _displayChordSymbol(
-                        (entry.snapshot as HarmonyChordSnapshot)
-                            .writerBlock
-                            .chordSymbol,
-                        (entry.snapshot as HarmonyChordSnapshot)
-                            .writerBlock
-                            .chordRootPc,
-                        (entry.snapshot as HarmonyChordSnapshot)
-                            .writerBlock
-                            .chordQuality,
-                        spelling,
-                      ) ??
-                      'Harmony chord',
+              )
+            else
+              for (final entry in entries)
+                ListTile(
+                  key: Key('harmonyLibrarySave_${entry.id}'),
+                  leading: Icon(
+                    instrument == HarmonyLaneInstrument.piano
+                        ? Icons.piano
+                        : Icons.music_note,
+                    color: StudioPalette.of(context).violet,
+                  ),
+                  title: Text(entry.name),
+                  subtitle: Text(
+                    _displayChordSymbol(
+                          (entry.snapshot as HarmonyChordSnapshot)
+                              .writerBlock
+                              .chordSymbol,
+                          (entry.snapshot as HarmonyChordSnapshot)
+                              .writerBlock
+                              .chordRootPc,
+                          (entry.snapshot as HarmonyChordSnapshot)
+                              .writerBlock
+                              .chordQuality,
+                          spelling,
+                        ) ??
+                        'Harmony chord',
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    onPick(entry);
+                  },
                 ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  onPick(entry);
-                },
-              ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2354,9 +2594,9 @@ class _BarRow extends ConsumerWidget {
     final current = instanceIndex < block.lyrics.length
         ? block.lyrics[instanceIndex]
         : '';
-    showDialog<void>(
+    showStudioDialog<void>(
       context: context,
-      builder: (_) => _VerseLyricDialog(
+      builder: (context) => _VerseLyricDialog(
         verseNumber: instanceIndex + 1,
         initialText: current,
         onSave: (text) => ref
@@ -2585,6 +2825,20 @@ class _BarCell extends StatelessWidget {
 
   bool get _isSaveOnly => block == null && saveBlock != null;
 
+  double get _studioHeight {
+    if (block == null && saveBlock == null) return 44;
+    final content = block ?? saveBlock!;
+    final hasLyrics =
+        instanceIndex < content.lyrics.length &&
+        content.lyrics[instanceIndex].isNotEmpty;
+    final hasSaveName =
+        block != null &&
+        blockName != null &&
+        blockName!.isNotEmpty &&
+        blockName != block!.chordSymbol;
+    return 64 + (hasLyrics ? 16 : 0) + (hasSaveName ? 14 : 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Expanded(
@@ -2599,38 +2853,69 @@ class _BarCell extends StatelessWidget {
           onLongPress: onLongPress,
           behavior: HitTestBehavior.opaque,
           child: Container(
-            height: 64,
+            height: StudioPalette.of(context).isStudio
+                ? _studioHeight * MediaQuery.textScalerOf(context).scale(1)
+                : 64,
             margin: const EdgeInsets.symmetric(horizontal: 2),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? MuzicianTheme.violet.withValues(alpha: 0.34)
-                  : (block != null
-                        ? MuzicianTheme.violet.withValues(alpha: 0.18)
-                        : _isSaveOnly
-                        ? MuzicianTheme.sky.withValues(alpha: 0.14)
-                        : Colors.transparent),
-              border: Border(
-                left: BorderSide(
-                  color: isActive
-                      ? MuzicianTheme.violet
-                      : _isSaveOnly
-                      ? MuzicianTheme.sky.withValues(alpha: 0.5)
-                      : MuzicianTheme.textMuted.withValues(alpha: 0.4),
-                  width: 1.5,
-                ),
-                right: BorderSide(
-                  color: isActive
-                      ? MuzicianTheme.violet
-                      : _isSaveOnly
-                      ? MuzicianTheme.sky.withValues(alpha: 0.5)
-                      : MuzicianTheme.textMuted.withValues(alpha: 0.4),
-                  width: 1.5,
-                ),
-              ),
-            ),
+            decoration: StudioPalette.of(context).isStudio
+                ? BoxDecoration(
+                    color: isActive
+                        ? StudioPalette.of(
+                            context,
+                          ).violet.withValues(alpha: .20)
+                        : StudioPalette.of(context).surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isActive
+                          ? StudioPalette.of(context).violet
+                          : StudioPalette.of(context).glassBorder,
+                      width: isActive ? 2 : 1,
+                    ),
+                  )
+                : BoxDecoration(
+                    color: isActive
+                        ? StudioPalette.of(
+                            context,
+                          ).violet.withValues(alpha: 0.34)
+                        : (block != null
+                              ? StudioPalette.of(
+                                  context,
+                                ).violet.withValues(alpha: 0.18)
+                              : _isSaveOnly
+                              ? StudioPalette.of(
+                                  context,
+                                ).sky.withValues(alpha: 0.14)
+                              : Colors.transparent),
+                    border: Border(
+                      left: BorderSide(
+                        color: isActive
+                            ? StudioPalette.of(context).violet
+                            : _isSaveOnly
+                            ? StudioPalette.of(
+                                context,
+                              ).sky.withValues(alpha: 0.5)
+                            : StudioPalette.of(
+                                context,
+                              ).textMuted.withValues(alpha: 0.4),
+                        width: 1.5,
+                      ),
+                      right: BorderSide(
+                        color: isActive
+                            ? StudioPalette.of(context).violet
+                            : _isSaveOnly
+                            ? StudioPalette.of(
+                                context,
+                              ).sky.withValues(alpha: 0.5)
+                            : StudioPalette.of(
+                                context,
+                              ).textMuted.withValues(alpha: 0.4),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
             child: Stack(
               children: [
-                Positioned.fill(child: _content()),
+                Positioned.fill(child: _content(context)),
                 // Badge marking a save that shares the bar with a chord. Its own
                 // tap target so it opens the save action menu directly, instead of
                 // the chord's menu.
@@ -2648,7 +2933,11 @@ class _BarCell extends StatelessWidget {
                       ),
                       padding: EdgeInsets.zero,
                       onPressed: onSaveTap,
-                      icon: Icon(saveIcon, size: 16, color: MuzicianTheme.sky),
+                      icon: Icon(
+                        saveIcon,
+                        size: 16,
+                        color: StudioPalette.of(context).sky,
+                      ),
                     ),
                   ),
                 if (brokenReference && block != null)
@@ -2679,13 +2968,13 @@ class _BarCell extends StatelessWidget {
     );
   }
 
-  Widget _content() {
+  Widget _content(BuildContext context) {
     if (_isSaveOnly) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(saveIcon, size: 16, color: MuzicianTheme.sky),
+          Icon(saveIcon, size: 16, color: StudioPalette.of(context).sky),
           const SizedBox(height: 2),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -2694,9 +2983,9 @@ class _BarCell extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
-                fontSize: 11,
+              style: TextStyle(
+                color: StudioPalette.of(context).textPrimary,
+                fontSize: StudioPalette.of(context).isStudio ? 12 : 11,
                 fontWeight: FontWeight.w600,
                 height: 1.1,
               ),
@@ -2707,9 +2996,9 @@ class _BarCell extends StatelessWidget {
             Text(
               saveRoman!,
               key: Key('saveRoman_${saveBlock!.id}_$instanceIndex'),
-              style: const TextStyle(
-                color: MuzicianTheme.violet,
-                fontSize: 11,
+              style: TextStyle(
+                color: StudioPalette.of(context).violet,
+                fontSize: StudioPalette.of(context).isStudio ? 12 : 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,
               ),
@@ -2725,9 +3014,9 @@ class _BarCell extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 11,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
+                  fontSize: StudioPalette.of(context).isStudio ? 12 : 11,
                   height: 1.1,
                 ),
               ),
@@ -2741,11 +3030,14 @@ class _BarCell extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (block == null)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 8),
             child: Text(
-              '\u00b7',
-              style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 18),
+              StudioPalette.of(context).isStudio ? '+' : '\u00b7',
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
+                fontSize: 18,
+              ),
             ),
           )
         else if (block!.isSilent)
@@ -2756,9 +3048,9 @@ class _BarCell extends StatelessWidget {
                 key: Key('silentCell_${block!.id}_$instanceIndex'),
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: MuzicianTheme.textMuted,
+                  color: StudioPalette.of(context).textMuted,
                 ),
               ),
               if (blockName != null && blockName!.isNotEmpty) ...[
@@ -2771,9 +3063,9 @@ class _BarCell extends StatelessWidget {
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MuzicianTheme.textSecondary,
-                      fontSize: 9,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textSecondary,
+                      fontSize: StudioPalette.of(context).isStudio ? 12 : 9,
                     ),
                   ),
                 ),
@@ -2787,8 +3079,8 @@ class _BarCell extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: MuzicianTheme.textPrimary,
+            style: TextStyle(
+              color: StudioPalette.of(context).textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
@@ -2805,9 +3097,9 @@ class _BarCell extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MuzicianTheme.textSecondary,
-                  fontSize: 9,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
+                  fontSize: StudioPalette.of(context).isStudio ? 12 : 9,
                   height: 1.1,
                 ),
               ),
@@ -2817,16 +3109,18 @@ class _BarCell extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               block!.romanNumeral!,
-              style: const TextStyle(
-                color: MuzicianTheme.violet,
-                fontSize: 11,
+              style: TextStyle(
+                color: StudioPalette.of(context).violet,
+                fontSize: StudioPalette.of(context).isStudio ? 12 : 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,
               ),
             ),
           ],
         ],
-        if (block != null) ...[
+        if (block != null &&
+            instanceIndex < block!.lyrics.length &&
+            block!.lyrics[instanceIndex].isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
             instanceIndex < block!.lyrics.length
@@ -2835,14 +3129,14 @@ class _BarCell extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
+            style: TextStyle(
+              color: StudioPalette.of(context).textSecondary,
               fontSize: 12,
               height: 1.25,
             ),
           ),
-          const Spacer(),
         ],
+        if (block != null) const Spacer(),
       ],
     );
   }
@@ -2956,9 +3250,13 @@ class _DrumLaneRow extends ConsumerWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: MuzicianTheme.orange.withValues(alpha: 0.18),
+                          color: StudioPalette.of(
+                            context,
+                          ).orange.withValues(alpha: 0.18),
                           border: Border.all(
-                            color: MuzicianTheme.orange.withValues(alpha: 0.5),
+                            color: StudioPalette.of(
+                              context,
+                            ).orange.withValues(alpha: 0.5),
                           ),
                           borderRadius: BorderRadius.circular(6),
                         ),
@@ -2966,10 +3264,10 @@ class _DrumLaneRow extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (!narrowCells) ...[
-                              const Icon(
+                              Icon(
                                 Icons.graphic_eq,
                                 size: 14,
-                                color: MuzicianTheme.textPrimary,
+                                color: StudioPalette.of(context).textPrimary,
                               ),
                               const SizedBox(width: 6),
                             ],
@@ -2980,9 +3278,9 @@ class _DrumLaneRow extends ConsumerWidget {
                                   'writerBlockName_${owner.id}_$instanceIndex',
                                 ),
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: MuzicianTheme.textPrimary,
+                                  color: StudioPalette.of(context).textPrimary,
                                 ),
                               ),
                             ),
@@ -3026,7 +3324,7 @@ class _DrumLaneRow extends ConsumerWidget {
                     height: 28,
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: MuzicianTheme.glassBorder,
+                        color: StudioPalette.of(context).glassBorder,
                         style: BorderStyle.solid,
                       ),
                       borderRadius: BorderRadius.circular(6),
@@ -3044,13 +3342,25 @@ class _DrumLaneRow extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 4),
-              child: Text(
-                lane.label ?? laneKindFallbackLabel(lane.kind),
-                style: const TextStyle(
-                  color: MuzicianTheme.textMuted,
-                  fontSize: 11,
-                  letterSpacing: 1.2,
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      lane.label ?? laneKindFallbackLabel(lane.kind),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textMuted,
+                        fontSize: 11,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  SongwriterLaneDeleteControl(
+                    section: section,
+                    lane: lane,
+                    instanceIndex: instanceIndex,
+                  ),
+                ],
               ),
             ),
             for (var r = 0; r < rows.length; r++)
@@ -3143,11 +3453,34 @@ class _PatternLaneRow extends ConsumerWidget {
         ownerByBar[bar] = block;
       }
     }
+    if (isMelody) {
+      for (final occurrence in melodyOccurrences(
+        lane: lane,
+        sectionLengthBars: section.lengthBars,
+      )) {
+        for (var bar = occurrence.startBar; bar < occurrence.endBar; bar++) {
+          ownerByBar[bar] = occurrence.source;
+        }
+      }
+    }
 
     void openPattern(SongBlock block) {
       final patternId = block.patternId;
       if (patternId == null || !patternNames.containsKey(patternId)) return;
       if (isMelody) {
+        if (block.saveId != null &&
+            !isCanonicalMelodyForBlock(
+              writerSaveEntryForBlock(
+                ref.read(saveSystemProvider),
+                block,
+              )?.snapshot,
+              block,
+            )) {
+          return;
+        }
+        // The store owns the first-authored-save rule: an empty melody that
+        // gains notes expands its eligible one-bar placements, whichever route
+        // opened this editor (tile or Edit performance).
         showSongwriterMelodyPatternEditor(
           context: context,
           patternId: patternId,
@@ -3166,38 +3499,84 @@ class _PatternLaneRow extends ConsumerWidget {
       return available;
     }
 
-    int spanForPatternAt(int lengthTicks, int bar) {
+    int spanForPatternAt(int lengthTicks, int bar, {int? melodyBars}) {
       final measureTicks = project.config.measureTicks;
-      final requiredBars = (lengthTicks + measureTicks - 1) ~/ measureTicks;
-      return requiredBars.clamp(1, availableBarsAt(bar));
+      final requiredBars =
+          melodyBars ?? (lengthTicks + measureTicks - 1) ~/ measureTicks;
+      final maximum = requiredBars.clamp(1, availableBarsAt(bar));
+      if (!isMelody) return maximum;
+      for (var span = maximum; span >= 1; span--) {
+        if (isValidMelodyPlacement(
+          section: section,
+          lane: lane,
+          candidate: SongBlock(
+            id: '__new_melody__',
+            startBar: bar,
+            spanBars: span,
+          ),
+        )) {
+          return span;
+        }
+      }
+      return 1;
     }
 
     Future<void> createPatternAt(int bar) async {
-      final patternId = await showModalBottomSheet<String>(
+      if (isMelody) {
+        final currentSection = ref
+            .read(songwriterProvider)
+            .sections
+            .where((s) => s.id == section.id)
+            .firstOrNull;
+        final currentLane = currentSection?.lanes
+            .where((l) => l.id == lane.id)
+            .firstOrNull;
+        if (currentSection == null ||
+            currentLane == null ||
+            !isValidMelodyPlacement(
+              section: currentSection,
+              lane: currentLane,
+              candidate: SongBlock(
+                id: '__new_melody__',
+                startBar: bar,
+                spanBars: 1,
+              ),
+            )) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'This placement conflicts with automatic repeats. Adjust the lane repeat first.',
+              ),
+            ),
+          );
+          return;
+        }
+      }
+      final patternId = await showStudioModalBottomSheet<String>(
         context: context,
-        backgroundColor: MuzicianTheme.dialogBg,
-        showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
+        builder: (context) => SafeArea(
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: Text(
                   'Use existing pattern',
                   style: TextStyle(
-                    color: MuzicianTheme.textPrimary,
+                    color: StudioPalette.of(context).textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               if (patternNames.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Text(
                     'No existing patterns yet.',
-                    style: TextStyle(color: MuzicianTheme.textSecondary),
+                    style: TextStyle(
+                      color: StudioPalette.of(context).textSecondary,
+                    ),
                   ),
                 ),
               for (final entry in patternNames.entries)
@@ -3206,18 +3585,20 @@ class _PatternLaneRow extends ConsumerWidget {
                   minTileHeight: 48,
                   leading: Icon(
                     isMelody ? Icons.music_note : Icons.music_note_outlined,
-                    color: isMelody ? MuzicianTheme.sky : MuzicianTheme.emerald,
+                    color: isMelody
+                        ? StudioPalette.of(context).sky
+                        : StudioPalette.of(context).emerald,
                   ),
                   title: Text(entry.value),
-                  onTap: () => Navigator.of(sheetContext).pop(entry.key),
+                  onTap: () => Navigator.of(context).pop(entry.key),
                 ),
               const Divider(height: 16),
               ListTile(
                 key: const Key('createWriterPattern'),
                 minTileHeight: 48,
-                leading: const Icon(Icons.add, color: MuzicianTheme.sky),
+                leading: Icon(Icons.add, color: StudioPalette.of(context).sky),
                 title: const Text('Create new pattern'),
-                onTap: () => Navigator.of(sheetContext).pop('__create__'),
+                onTap: () => Navigator.of(context).pop('__create__'),
               ),
             ],
           ),
@@ -3294,7 +3675,14 @@ class _PatternLaneRow extends ConsumerWidget {
             laneId: lane.id,
             patternId: patternId,
             startBar: bar,
-            spanBars: spanForPatternAt(pattern.lengthTicks, bar),
+            spanBars: spanForPatternAt(
+              pattern.lengthTicks,
+              bar,
+              melodyBars: melodyPlacementBarLimit(
+                pattern,
+                project.config.measureTicks,
+              ),
+            ),
           );
         } else {
           final pattern = ref
@@ -3314,397 +3702,995 @@ class _PatternLaneRow extends ConsumerWidget {
       });
     }
 
+    Future<void> repeatPattern(SongBlock block) async {
+      final start = await showStudioDialog<int>(
+        context: context,
+        builder: (dialogContext) => Consumer(
+          builder: (context, ref, _) {
+            final currentProject = ref.watch(songwriterProvider);
+            final currentSection = currentProject.sections
+                .where((s) => s.id == section.id)
+                .firstOrNull;
+            final currentLane = currentSection?.lanes
+                .where((l) => l.id == lane.id)
+                .firstOrNull;
+            final source = currentLane?.blocks
+                .where((b) => b.id == block.id)
+                .firstOrNull;
+            final canRepeat =
+                source != null &&
+                currentProject.melodyPatterns.any(
+                  (p) => p.id == source.patternId,
+                ) &&
+                isCanonicalMelodyForBlock(
+                  writerSaveEntryForBlock(
+                    ref.watch(saveSystemProvider),
+                    source,
+                  )?.snapshot,
+                  source,
+                );
+            return MuzicianDialog(
+              title: 'Repeat / reuse',
+              content: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (
+                      var bar = 0;
+                      bar < (currentSection?.lengthBars ?? 0);
+                      bar++
+                    )
+                      Builder(
+                        builder: (context) {
+                          final occupied =
+                              currentLane != null &&
+                              melodyOccurrences(
+                                lane: currentLane,
+                                sectionLengthBars: currentSection!.lengthBars,
+                              ).any((o) => o.startBar <= bar && o.endBar > bar);
+                          final valid =
+                              canRepeat &&
+                              isValidMelodyPlacement(
+                                section: currentSection!,
+                                lane: currentLane!,
+                                candidate: SongBlock(
+                                  id: '__repeat_melody__',
+                                  startBar: bar,
+                                  spanBars: 1,
+                                ),
+                              );
+                          return OutlinedButton(
+                            key: Key('repeatMelodyBar_$bar'),
+                            onPressed: valid
+                                ? () => Navigator.of(dialogContext).pop(bar)
+                                : null,
+                            child: Text(
+                              'Bar ${bar + 1}\n${valid
+                                  ? 'Free'
+                                  : occupied
+                                  ? 'Occupied'
+                                  : 'Unavailable'}',
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                MuzicianDialogButton(
+                  'Cancel',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (start == null || !context.mounted) return;
+      notifier.repeatMelodyBlock(
+        sectionId: section.id,
+        laneId: lane.id,
+        blockId: block.id,
+        startBar: start,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 4),
-          child: Row(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
             children: [
               Icon(
                 isMelody ? Icons.music_note : Icons.music_note_outlined,
                 size: 13,
-                color: isMelody ? MuzicianTheme.sky : MuzicianTheme.emerald,
+                color: isMelody
+                    ? StudioPalette.of(context).sky
+                    : (StudioPalette.of(context).isStudio
+                          ? StudioPalette.of(context).sky
+                          : StudioPalette.of(context).emerald),
               ),
               const SizedBox(width: 5),
-              Expanded(
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: StudioPalette.of(context).isStudio ? 112 : 240,
+                ),
                 child: Text(
                   lane.label ?? laneKindFallbackLabel(lane.kind),
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
-                    fontSize: 11,
-                    letterSpacing: 1.2,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
+                    fontSize: 13,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ),
-              if (!isMelody)
-                Semantics(
-                  label:
-                      'Select Fretboard Harmony source for ${lane.label ?? 'Guitar Strum'}',
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      key: Key('strumAnchor_${lane.id}_$instanceIndex'),
-                      value: hasUnresolvedStrumAnchor
-                          ? null
-                          : resolvedAnchor ?? '',
-                      hint: hasUnresolvedStrumAnchor
-                          ? const Text('Unresolved')
-                          : null,
-                      isDense: false,
-                      iconSize: 16,
-                      dropdownColor: MuzicianTheme.surface,
-                      style: const TextStyle(
-                        color: MuzicianTheme.textSecondary,
-                        fontSize: 10,
+              if (isMelody)
+                PopupMenuButton<int>(
+                  key: Key('melodyLaneRepeat_${lane.id}_$instanceIndex'),
+                  tooltip: 'Melody lane repeats',
+                  onSelected: (repeat) => notifier.setLaneRepeat(
+                    sectionId: section.id,
+                    laneId: lane.id,
+                    repeat: repeat,
+                  ),
+                  itemBuilder: (_) => [
+                    for (
+                      var count = 1;
+                      count <= section.lengthBars.clamp(1, 64);
+                      count++
+                    )
+                      PopupMenuItem(
+                        value: count,
+                        child: Text('$count repeats'),
                       ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: '',
-                          child: Text('Unassigned'),
-                        ),
-                        for (
-                          var index = 0;
-                          index < harmonyLanes.length;
-                          index++
-                        )
-                          DropdownMenuItem(
-                            value: harmonyLanes[index].id,
-                            child: Text(
-                              harmonyLanes[index].label ??
-                                  fallbackHarmonyLaneLabels[harmonyLanes[index]
-                                      .id]!,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        notifier.setLaneAnchorLane(
-                          sectionId: section.id,
-                          laneId: lane.id,
-                          harmonyLaneId: value == null || value.isEmpty
-                              ? null
-                              : value,
-                        );
-                      },
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Repeat: ${lane.repeat}',
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textSecondary,
+                      ),
                     ),
                   ),
                 ),
+              if (isMelody)
+                SizedBox(
+                  width: 180,
+                  child: Semantics(
+                    label: 'Sound for ${lane.label ?? 'Melody'}',
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<MelodyLaneSound>(
+                        key: Key('melodySound_${lane.id}_$instanceIndex'),
+                        value: lane.melodySound,
+                        hint: const Text('Sound: Pattern sounds'),
+                        isExpanded: true,
+                        dropdownColor: StudioPalette.of(context).surface,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textSecondary,
+                          fontSize: 12,
+                        ),
+                        selectedItemBuilder: (_) => [
+                          for (final label in [
+                            'Piano',
+                            'Clean guitar',
+                            'Distorted guitar',
+                          ])
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Sound: $label',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        items: const [
+                          DropdownMenuItem(
+                            value: MelodyLaneSound.piano,
+                            child: Text('Piano'),
+                          ),
+                          DropdownMenuItem(
+                            value: MelodyLaneSound.cleanGuitar,
+                            child: Text('Clean guitar'),
+                          ),
+                          DropdownMenuItem(
+                            value: MelodyLaneSound.distortedGuitar,
+                            child: Text('Distorted guitar'),
+                          ),
+                        ],
+                        onChanged: (sound) {
+                          if (sound != null) {
+                            notifier.setMelodyLaneSound(
+                              sectionId: section.id,
+                              laneId: lane.id,
+                              sound: sound,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              if (!isMelody && !StudioPalette.of(context).isStudio)
+                Text(
+                  'Source',
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              if (!isMelody)
+                SizedBox(
+                  width: StudioPalette.of(context).isStudio ? 132 : 220,
+                  child: Semantics(
+                    label:
+                        'Select Fretboard Harmony source for ${lane.label ?? 'Guitar Strum'}',
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        key: Key('strumAnchor_${lane.id}_$instanceIndex'),
+                        value: hasUnresolvedStrumAnchor
+                            ? null
+                            : resolvedAnchor ?? '',
+                        hint: hasUnresolvedStrumAnchor
+                            ? const Text('Unresolved')
+                            : null,
+                        selectedItemBuilder: StudioPalette.of(context).isStudio
+                            ? (_) =>
+                                  [
+                                        'Unassigned',
+                                        for (final source in harmonyLanes)
+                                          source.label ??
+                                              fallbackHarmonyLaneLabels[source
+                                                  .id]!,
+                                      ]
+                                      .map(
+                                        (label) => Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Source: $label',
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      )
+                                      .toList()
+                            : null,
+                        isDense: false,
+                        isExpanded: true,
+                        iconSize: 16,
+                        dropdownColor: StudioPalette.of(context).surface,
+                        style: TextStyle(
+                          color: StudioPalette.of(context).textSecondary,
+                          fontSize: 12,
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: '',
+                            child: Text('Unassigned'),
+                          ),
+                          for (
+                            var index = 0;
+                            index < harmonyLanes.length;
+                            index++
+                          )
+                            DropdownMenuItem(
+                              value: harmonyLanes[index].id,
+                              child: Text(
+                                harmonyLanes[index].label ??
+                                    fallbackHarmonyLaneLabels[harmonyLanes[index]
+                                        .id]!,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          notifier.setLaneAnchorLane(
+                            sectionId: section.id,
+                            laneId: lane.id,
+                            harmonyLaneId: value == null || value.isEmpty
+                                ? null
+                                : value,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              SongwriterLaneDeleteControl(
+                section: section,
+                lane: lane,
+                instanceIndex: instanceIndex,
+              ),
             ],
           ),
         ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final perRow = constraints.maxWidth < 360 ? 2 : 4;
-            final narrowCells = constraints.maxWidth / perRow < 90;
-            final rows = <List<Widget>>[];
-            final bars = section.lengthBars.clamp(1, 64);
-            for (var start = 0; start < bars; start += perRow) {
-              final end = (start + perRow).clamp(0, bars);
-              final cells = <Widget>[];
-              var bar = start;
-              while (bar < end) {
-                final owner = ownerByBar[bar];
-                if (owner != null) {
-                  final span = (owner.endBar.clamp(bar + 1, end)) - bar;
-                  final isContinuation = owner.startBar < bar;
-                  final patternName = owner.patternId == null
-                      ? null
-                      : patternNames[owner.patternId];
-                  final displayName = patternName ?? 'pattern?';
-                  final melodyPattern = isMelody
-                      ? project.melodyPatterns
-                            .where((pattern) => pattern.id == owner.patternId)
-                            .firstOrNull
-                      : null;
-                  final strumPattern = isMelody
-                      ? null
-                      : project.guitarStrumPatterns
-                            .where((pattern) => pattern.id == owner.patternId)
-                            .firstOrNull;
-                  final saveEntry = writerSaveEntryForBlock(saveState, owner);
-                  final hasBrokenReference =
-                      owner.saveId != null && saveEntry == null;
-                  final patternDuration = melodyPattern == null
-                      ? null
-                      : _formatMusicDuration(
-                          melodyPattern.lengthTicks,
-                          project.config,
-                        );
-                  final playbackSummary = melodyPattern == null
-                      ? null
-                      : _melodyPlacementPlaybackSummary(
-                          melodyPattern.lengthTicks,
-                          owner.spanBars,
-                          project.config,
-                        );
-                  final tileLabel = isContinuation
-                      ? 'Continue ${isMelody ? 'melody' : 'guitar strum'} pattern $displayName, bars ${owner.startBar + 1} through ${owner.endBar}'
-                      : isMelody
-                      ? 'Edit melody pattern $displayName. Pattern duration $patternDuration. Placed bars ${owner.startBar + 1} through ${owner.endBar}. $playbackSummary.'
-                      : 'Edit guitar strum pattern $displayName';
-                  Widget? melodyActions;
-                  if (isMelody && !isContinuation) {
-                    final menu = PopupMenuButton<String>(
-                      key: Key('melodyBlockActions_${owner.id}_$instanceIndex'),
-                      tooltip: saveEntry == null
-                          ? 'Melody block actions'
-                          : 'Actions for ${saveEntry.name}',
-                      padding: EdgeInsets.zero,
-                      child: const SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: Icon(
-                          Icons.more_vert,
-                          size: 18,
-                          color: MuzicianTheme.textSecondary,
+        if (isMelody) ...[
+          SongwriterMelodyTimeline(
+            section: section,
+            lane: lane,
+            instanceIndex: instanceIndex,
+            patternNames: patternNames,
+            patterns: {
+              for (final pattern in project.melodyPatterns) pattern.id: pattern,
+            },
+            measureTicks: project.config.measureTicks,
+            onEdit: openPattern,
+            onCreate: createPatternAt,
+            canEdit: (block) =>
+                patternNames.containsKey(block.patternId) &&
+                (block.saveId == null ||
+                    isCanonicalMelodyForBlock(
+                      writerSaveEntryForBlock(saveState, block)?.snapshot,
+                      block,
+                    )),
+          ),
+          for (final block in lane.blocks)
+            Builder(
+              builder: (context) {
+                final pattern = project.melodyPatterns
+                    .where((p) => p.id == block.patternId)
+                    .firstOrNull;
+                final entry = writerSaveEntryForBlock(saveState, block);
+                final safeContent =
+                    block.saveId == null ||
+                    isCanonicalMelodyForBlock(entry?.snapshot, block);
+                final name = pattern?.name ?? 'Missing pattern';
+                final duration = pattern == null || !safeContent
+                    ? null
+                    : _formatMusicDuration(pattern.lengthTicks, project.config);
+                final summary = pattern == null || !safeContent
+                    ? null
+                    : _melodyPlacementPlaybackSummary(
+                        melodyBarCount(pattern, project.config.measureTicks),
+                        block.spanBars,
+                        project.config,
+                      );
+                return Semantics(
+                  label: pattern != null && !safeContent
+                      ? 'Unresolved melody content for $name. Placed bars ${block.startBar + 1} through ${block.endBar}.'
+                      : 'Edit melody pattern $name. Pattern duration $duration. Placed bars ${block.startBar + 1} through ${block.endBar}. $summary.',
+                  explicitChildNodes: true,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: TextStyle(
+                                color: StudioPalette.of(context).textPrimary,
+                              ),
+                            ),
+                            if (pattern != null && !safeContent)
+                              Text(
+                                'Unresolved melody content',
+                                style: TextStyle(
+                                  color: StudioPalette.of(context).orange,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            if (duration != null)
+                              Text(
+                                'Duration: $duration',
+                                style: TextStyle(
+                                  color: StudioPalette.of(
+                                    context,
+                                  ).textSecondary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            if (summary != null)
+                              Text(
+                                'Placement: bars ${block.startBar + 1}–${block.endBar} · $summary',
+                                style: TextStyle(
+                                  color: StudioPalette.of(
+                                    context,
+                                  ).textSecondary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      onSelected: (action) {
-                        if (action == 'placement') {
-                          _showPatternPlacementDialog(
-                            context,
-                            ref,
-                            section,
-                            lane,
-                            owner,
-                          );
-                        } else if (action == 'performance' &&
-                            owner.patternId != null) {
-                          onEditMelodyPerformance?.call(owner.patternId!);
-                        } else if (action == 'rename' && saveEntry != null) {
-                          renameWriterBlockSave(context, ref, saveEntry);
-                        } else if (action == 'unique' && saveEntry != null) {
-                          makeWriterBlockUnique(
-                            context,
-                            ref,
-                            section: section,
-                            lane: lane,
-                            block: owner,
-                            entry: saveEntry,
-                          );
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'placement',
-                          child: ListTile(
-                            leading: Icon(Icons.open_with),
-                            title: Text('Adjust placement'),
-                            dense: true,
+                      if (pattern != null)
+                        IconButton(
+                          key: Key(
+                            'editMelodyBlock_${block.id}_$instanceIndex',
+                          ),
+                          tooltip: 'Edit melody $name',
+                          onPressed: safeContent
+                              ? () => openPattern(block)
+                              : null,
+                          icon: const Icon(Icons.edit_note),
+                        ),
+                      Semantics(
+                        key: entry == null
+                            ? null
+                            : Key('writerBlockActions_${block.id}'),
+                        label: entry == null
+                            ? 'Melody block actions'
+                            : 'Actions for ${entry.name}',
+                        explicitChildNodes: true,
+                        child: PopupMenuButton<String>(
+                          key: Key(
+                            'melodyBlockActions_${block.id}_$instanceIndex',
+                          ),
+                          tooltip: entry == null
+                              ? 'Melody block actions'
+                              : 'Actions for ${entry.name}',
+                          onSelected: (action) {
+                            if (action == 'placement') {
+                              _showPatternPlacementDialog(
+                                context,
+                                ref,
+                                section,
+                                lane,
+                                block,
+                              );
+                            }
+                            if (action == 'repeat') repeatPattern(block);
+                            if (action == 'delete') {
+                              notifier.removeBlock(
+                                sectionId: section.id,
+                                laneId: lane.id,
+                                blockId: block.id,
+                              );
+                              final current = ref
+                                  .read(songwriterProvider)
+                                  .sections
+                                  .where((s) => s.id == section.id)
+                                  .firstOrNull
+                                  ?.lanes
+                                  .where((l) => l.id == lane.id)
+                                  .firstOrNull;
+                              if (current?.blocks.any(
+                                    (b) => b.id == block.id,
+                                  ) ??
+                                  false) {
+                                ScaffoldMessenger.maybeOf(
+                                  context,
+                                )?.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'This deletion conflicts with automatic repeats. Adjust the lane repeat first.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                            if (action == 'performance' &&
+                                safeContent &&
+                                block.patternId != null) {
+                              onEditMelodyPerformance?.call(block.patternId!);
+                            }
+                            if (action == 'rename' &&
+                                entry != null &&
+                                safeContent) {
+                              renameWriterBlockSave(context, ref, entry);
+                            }
+                            if (action == 'unique' &&
+                                entry != null &&
+                                safeContent) {
+                              makeWriterBlockUnique(
+                                context,
+                                ref,
+                                section: section,
+                                lane: lane,
+                                block: block,
+                                entry: entry,
+                              );
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'placement',
+                              child: Text('Adjust placement'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete placement'),
+                            ),
+                            PopupMenuItem(
+                              value: 'repeat',
+                              enabled:
+                                  pattern != null &&
+                                  isCanonicalMelodyForBlock(
+                                    entry?.snapshot,
+                                    block,
+                                  ),
+                              child: const Text('Repeat / reuse'),
+                            ),
+                            if (onEditMelodyPerformance != null &&
+                                pattern != null)
+                              PopupMenuItem(
+                                value: 'performance',
+                                enabled: safeContent,
+                                child: const Text('Edit performance'),
+                              ),
+                            if (entry != null) ...[
+                              PopupMenuItem(
+                                key: Key('writerRename_${block.id}'),
+                                value: 'rename',
+                                enabled: safeContent,
+                                child: const Text('Rename'),
+                              ),
+                              PopupMenuItem(
+                                key: Key('writerMakeUnique_${block.id}'),
+                                value: 'unique',
+                                enabled: safeContent,
+                                child: const Text('Make Unique'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (pattern == null)
+                        IconButton(
+                          key: Key('writerBrokenReference_${block.id}'),
+                          tooltip: 'Missing melody pattern',
+                          icon: const Icon(Icons.link_off),
+                          onPressed: () => showBarActionSheet(
+                            context: context,
+                            title: 'Missing melody pattern',
+                            actions: [
+                              BarAction(
+                                label: 'Delete block',
+                                icon: Icons.delete_outline,
+                                destructive: true,
+                                onTap: () => notifier.removeBlock(
+                                  sectionId: section.id,
+                                  laneId: lane.id,
+                                  blockId: block.id,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (block.saveId != null && entry == null)
+                        writerBrokenReferenceAction(
+                          context,
+                          block: block,
+                          onDelete: () => notifier.removeBlock(
+                            sectionId: section.id,
+                            laneId: lane.id,
+                            blockId: block.id,
                           ),
                         ),
-                        if (onEditMelodyPerformance != null)
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
+        if (!isMelody)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final perRow = StudioPalette.of(context).isStudio
+                  ? 4
+                  : (constraints.maxWidth < 360 ? 2 : 4);
+              final narrowCells = constraints.maxWidth / perRow < 90;
+              final rows = <List<Widget>>[];
+              final bars = section.lengthBars.clamp(1, 64);
+              for (var start = 0; start < bars; start += perRow) {
+                final end = (start + perRow).clamp(0, bars);
+                final cells = <Widget>[];
+                var bar = start;
+                while (bar < end) {
+                  final owner = ownerByBar[bar];
+                  if (owner != null) {
+                    final span = (owner.endBar.clamp(bar + 1, end)) - bar;
+                    final isContinuation = owner.startBar < bar;
+                    final patternName = owner.patternId == null
+                        ? null
+                        : patternNames[owner.patternId];
+                    final displayName = patternName ?? 'pattern?';
+                    final melodyPattern = isMelody
+                        ? project.melodyPatterns
+                              .where((pattern) => pattern.id == owner.patternId)
+                              .firstOrNull
+                        : null;
+                    final strumPattern = isMelody
+                        ? null
+                        : project.guitarStrumPatterns
+                              .where((pattern) => pattern.id == owner.patternId)
+                              .firstOrNull;
+                    final saveEntry = writerSaveEntryForBlock(saveState, owner);
+                    final hasBrokenReference =
+                        owner.saveId != null && saveEntry == null;
+                    final patternDuration = melodyPattern == null
+                        ? null
+                        : _formatMusicDuration(
+                            melodyPattern.lengthTicks,
+                            project.config,
+                          );
+                    final playbackSummary = melodyPattern == null
+                        ? null
+                        : _melodyPlacementPlaybackSummary(
+                            melodyBarCount(
+                              melodyPattern,
+                              project.config.measureTicks,
+                            ),
+                            owner.spanBars,
+                            project.config,
+                          );
+                    final tileLabel = isContinuation
+                        ? 'Continue ${isMelody ? 'melody' : 'guitar strum'} pattern $displayName, bars ${owner.startBar + 1} through ${owner.endBar}'
+                        : isMelody
+                        ? 'Edit melody pattern $displayName. Pattern duration $patternDuration. Placed bars ${owner.startBar + 1} through ${owner.endBar}. $playbackSummary.'
+                        : 'Edit guitar strum pattern $displayName';
+                    Widget? melodyActions;
+                    if (isMelody && !isContinuation) {
+                      final menu = PopupMenuButton<String>(
+                        key: Key(
+                          'melodyBlockActions_${owner.id}_$instanceIndex',
+                        ),
+                        tooltip: saveEntry == null
+                            ? 'Melody block actions'
+                            : 'Actions for ${saveEntry.name}',
+                        padding: EdgeInsets.zero,
+                        child: SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Icon(
+                            Icons.more_vert,
+                            size: 18,
+                            color: StudioPalette.of(context).textSecondary,
+                          ),
+                        ),
+                        onSelected: (action) {
+                          if (action == 'placement') {
+                            _showPatternPlacementDialog(
+                              context,
+                              ref,
+                              section,
+                              lane,
+                              owner,
+                            );
+                          } else if (action == 'performance' &&
+                              owner.patternId != null) {
+                            onEditMelodyPerformance?.call(owner.patternId!);
+                          } else if (action == 'rename' && saveEntry != null) {
+                            renameWriterBlockSave(context, ref, saveEntry);
+                          } else if (action == 'unique' && saveEntry != null) {
+                            makeWriterBlockUnique(
+                              context,
+                              ref,
+                              section: section,
+                              lane: lane,
+                              block: owner,
+                              entry: saveEntry,
+                            );
+                          }
+                        },
+                        itemBuilder: (_) => [
                           const PopupMenuItem(
-                            value: 'performance',
+                            value: 'placement',
                             child: ListTile(
-                              leading: Icon(Icons.piano),
-                              title: Text('Edit performance'),
+                              leading: Icon(Icons.open_with),
+                              title: Text('Adjust placement'),
                               dense: true,
                             ),
                           ),
-                        if (saveEntry != null) ...[
-                          const PopupMenuDivider(height: 8),
-                          PopupMenuItem(
-                            key: Key('writerRename_${owner.id}'),
-                            value: 'rename',
-                            child: const Text('Rename'),
-                          ),
-                          PopupMenuItem(
-                            key: Key('writerMakeUnique_${owner.id}'),
-                            value: 'unique',
-                            child: const Text('Make Unique'),
-                          ),
+                          if (onEditMelodyPerformance != null)
+                            const PopupMenuItem(
+                              value: 'performance',
+                              child: ListTile(
+                                leading: Icon(Icons.piano),
+                                title: Text('Edit performance'),
+                                dense: true,
+                              ),
+                            ),
+                          if (saveEntry != null) ...[
+                            const PopupMenuDivider(height: 8),
+                            PopupMenuItem(
+                              key: Key('writerRename_${owner.id}'),
+                              value: 'rename',
+                              child: const Text('Rename'),
+                            ),
+                            PopupMenuItem(
+                              key: Key('writerMakeUnique_${owner.id}'),
+                              value: 'unique',
+                              child: const Text('Make Unique'),
+                            ),
+                          ],
                         ],
-                      ],
-                    );
-                    melodyActions = saveEntry == null
-                        ? menu
-                        : Semantics(
-                            key: Key('writerBlockActions_${owner.id}'),
-                            label: 'Actions for ${saveEntry.name}',
-                            explicitChildNodes: true,
-                            child: menu,
-                          );
-                  }
-                  cells.add(
-                    Expanded(
-                      flex: span,
-                      child: Semantics(
-                        button: true,
-                        explicitChildNodes: true,
-                        label: tileLabel,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            key: Key(
-                              '${isMelody ? 'sheetMelodyTile' : 'sheetGuitarStrumTile'}_${owner.patternId ?? owner.id}_${instanceIndex}_$bar',
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                            onTap: () => openPattern(owner),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              constraints: const BoxConstraints(minHeight: 48),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 5,
+                      );
+                      melodyActions = saveEntry == null
+                          ? menu
+                          : Semantics(
+                              key: Key('writerBlockActions_${owner.id}'),
+                              label: 'Actions for ${saveEntry.name}',
+                              explicitChildNodes: true,
+                              child: menu,
+                            );
+                    }
+                    final inlineStrum =
+                        StudioPalette.of(context).isStudio &&
+                        !isMelody &&
+                        constraints.maxWidth * span / perRow >= 180;
+                    cells.add(
+                      Expanded(
+                        flex: span,
+                        child: Semantics(
+                          button: true,
+                          explicitChildNodes: true,
+                          label: tileLabel,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              key: Key(
+                                '${isMelody ? 'sheetMelodyTile' : 'sheetGuitarStrumTile'}_${owner.patternId ?? owner.id}_${instanceIndex}_$bar',
                               ),
-                              decoration: BoxDecoration(
-                                color:
-                                    (isMelody
-                                            ? MuzicianTheme.sky
-                                            : MuzicianTheme.emerald)
-                                        .withValues(alpha: .14),
-                                border: Border.all(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => openPattern(owner),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
+                                constraints: BoxConstraints(
+                                  minHeight: inlineStrum ? 44 : 48,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: inlineStrum ? 0 : 5,
+                                ),
+                                decoration: BoxDecoration(
                                   color:
-                                      (isMelody
-                                              ? MuzicianTheme.sky
-                                              : MuzicianTheme.emerald)
-                                          .withValues(alpha: .45),
-                                ),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      if (!narrowCells) ...[
-                                        Icon(
-                                          isMelody
-                                              ? Icons.edit_note
-                                              : Icons.music_note_outlined,
-                                          size: 14,
-                                          color: MuzicianTheme.textPrimary,
-                                        ),
-                                        const SizedBox(width: 6),
-                                      ],
-                                      Expanded(
-                                        child: Text(
-                                          isContinuation
-                                              ? '$displayName · continued'
-                                              : displayName,
-                                          key: Key(
-                                            'writerBlockName_${owner.id}_${instanceIndex}_$bar',
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: MuzicianTheme.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                      ?melodyActions,
-                                      if (!isMelody &&
-                                          !isContinuation &&
-                                          saveEntry != null)
-                                        writerLinkedBlockActionsMenu(
-                                          context,
-                                          ref,
-                                          section: section,
-                                          lane: lane,
-                                          block: owner,
-                                          entry: saveEntry,
-                                        ),
-                                      if (!isContinuation && hasBrokenReference)
-                                        writerBrokenReferenceAction(
-                                          context,
-                                          block: owner,
-                                          onDelete: () => notifier.removeBlock(
-                                            sectionId: section.id,
-                                            laneId: lane.id,
-                                            blockId: owner.id,
-                                          ),
-                                        ),
-                                    ],
+                                      StudioPalette.of(context).isStudio &&
+                                          !isMelody
+                                      ? StudioPalette.of(context).surface
+                                      : (isMelody
+                                                ? StudioPalette.of(context).sky
+                                                : StudioPalette.of(
+                                                    context,
+                                                  ).emerald)
+                                            .withValues(alpha: .14),
+                                  border: Border.all(
+                                    color:
+                                        StudioPalette.of(context).isStudio &&
+                                            !isMelody
+                                        ? StudioPalette.of(context).glassBorder
+                                        : (isMelody
+                                                  ? StudioPalette.of(
+                                                      context,
+                                                    ).sky
+                                                  : StudioPalette.of(
+                                                      context,
+                                                    ).emerald)
+                                              .withValues(alpha: .45),
                                   ),
-                                  if (isMelody &&
-                                      !isContinuation &&
-                                      melodyPattern != null) ...[
-                                    Text(
-                                      'Duration: $patternDuration',
-                                      style: const TextStyle(
-                                        color: MuzicianTheme.textSecondary,
-                                        fontSize: 10,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: inlineStrum
+                                    ? Row(
+                                        children: [
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 104,
+                                            ),
+                                            child: Text(
+                                              isContinuation
+                                                  ? '$displayName · continued'
+                                                  : displayName,
+                                              key: Key(
+                                                'writerBlockName_${owner.id}_${instanceIndex}_$bar',
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: StudioPalette.of(
+                                                  context,
+                                                ).textSecondary,
+                                              ),
+                                            ),
+                                          ),
+                                          if (strumPattern != null)
+                                            Expanded(
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                    ),
+                                                child:
+                                                    _StrumPatternTimelinePreview(
+                                                      pattern: strumPattern,
+                                                      beatTicks: project
+                                                          .config
+                                                          .ticksPerBeat,
+                                                    ),
+                                              ),
+                                            ),
+                                          if (!isContinuation &&
+                                              saveEntry != null)
+                                            writerLinkedBlockActionsMenu(
+                                              context,
+                                              ref,
+                                              section: section,
+                                              lane: lane,
+                                              block: owner,
+                                              entry: saveEntry,
+                                            ),
+                                          if (!isContinuation &&
+                                              hasBrokenReference)
+                                            writerBrokenReferenceAction(
+                                              context,
+                                              block: owner,
+                                              onDelete: () =>
+                                                  notifier.removeBlock(
+                                                    sectionId: section.id,
+                                                    laneId: lane.id,
+                                                    blockId: owner.id,
+                                                  ),
+                                            ),
+                                        ],
+                                      )
+                                    : Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              if (!narrowCells) ...[
+                                                Icon(
+                                                  isMelody
+                                                      ? Icons.edit_note
+                                                      : Icons
+                                                            .music_note_outlined,
+                                                  size: 14,
+                                                  color: StudioPalette.of(
+                                                    context,
+                                                  ).textPrimary,
+                                                ),
+                                                const SizedBox(width: 6),
+                                              ],
+                                              Expanded(
+                                                child: Text(
+                                                  isContinuation
+                                                      ? '$displayName · continued'
+                                                      : displayName,
+                                                  key: Key(
+                                                    'writerBlockName_${owner.id}_${instanceIndex}_$bar',
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: StudioPalette.of(
+                                                      context,
+                                                    ).textPrimary,
+                                                  ),
+                                                ),
+                                              ),
+                                              ?melodyActions,
+                                              if (!isMelody &&
+                                                  !isContinuation &&
+                                                  saveEntry != null)
+                                                writerLinkedBlockActionsMenu(
+                                                  context,
+                                                  ref,
+                                                  section: section,
+                                                  lane: lane,
+                                                  block: owner,
+                                                  entry: saveEntry,
+                                                ),
+                                              if (!isContinuation &&
+                                                  hasBrokenReference)
+                                                writerBrokenReferenceAction(
+                                                  context,
+                                                  block: owner,
+                                                  onDelete: () =>
+                                                      notifier.removeBlock(
+                                                        sectionId: section.id,
+                                                        laneId: lane.id,
+                                                        blockId: owner.id,
+                                                      ),
+                                                ),
+                                            ],
+                                          ),
+                                          if (isMelody &&
+                                              !isContinuation &&
+                                              melodyPattern != null) ...[
+                                            Text(
+                                              'Duration: $patternDuration',
+                                              style: TextStyle(
+                                                color: StudioPalette.of(
+                                                  context,
+                                                ).textSecondary,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Placement: bars ${owner.startBar + 1}–${owner.endBar} · $playbackSummary',
+                                              style: TextStyle(
+                                                color: StudioPalette.of(
+                                                  context,
+                                                ).textSecondary,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
+                                          if (!isMelody && strumPattern != null)
+                                            _StrumPatternTimelinePreview(
+                                              pattern: strumPattern,
+                                              beatTicks:
+                                                  project.config.ticksPerBeat,
+                                            ),
+                                        ],
                                       ),
-                                    ),
-                                    Text(
-                                      'Placement: bars ${owner.startBar + 1}–${owner.endBar} · $playbackSummary',
-                                      style: const TextStyle(
-                                        color: MuzicianTheme.textSecondary,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ],
-                                  if (!isMelody && strumPattern != null)
-                                    _StrumPatternTimelinePreview(
-                                      pattern: strumPattern,
-                                      beatTicks: project.config.ticksPerBeat,
-                                    ),
-                                ],
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                  bar += span;
-                } else {
-                  final emptyBar = bar++;
-                  cells.add(
-                    Expanded(
-                      child: Semantics(
-                        button: true,
-                        label:
-                            'Create ${isMelody ? 'melody' : 'guitar strum'} pattern at bar ${emptyBar + 1}',
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            key: Key(
-                              'empty${isMelody ? 'Melody' : 'GuitarStrum'}Bar_${lane.id}_${instanceIndex}_$emptyBar',
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                            onTap: () => createPatternAt(emptyBar),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              height: 44,
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: MuzicianTheme.glassBorder,
-                                ),
-                                borderRadius: BorderRadius.circular(6),
+                    );
+                    bar += span;
+                  } else {
+                    final emptyBar = bar++;
+                    cells.add(
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          label:
+                              'Create ${isMelody ? 'melody' : 'guitar strum'} pattern at bar ${emptyBar + 1}',
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              key: Key(
+                                'empty${isMelody ? 'Melody' : 'GuitarStrum'}Bar_${lane.id}_${instanceIndex}_$emptyBar',
                               ),
-                              child: Center(
-                                child: Icon(
-                                  Icons.add_rounded,
-                                  size: 18,
-                                  color: MuzicianTheme.textMuted,
-                                  semanticLabel: 'Add pattern',
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => createPatternAt(emptyBar),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: StudioPalette.of(
+                                      context,
+                                    ).glassBorder,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.add_rounded,
+                                    size: 18,
+                                    color: StudioPalette.of(context).textMuted,
+                                    semanticLabel: 'Add pattern',
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 }
+                rows.add(cells);
               }
-              rows.add(cells);
-            }
-            return Column(
-              children: [
-                for (var row = 0; row < rows.length; row++)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      bottom: row == rows.length - 1 ? 0 : 6,
+              return Column(
+                children: [
+                  for (var row = 0; row < rows.length; row++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: row == rows.length - 1 ? 0 : 6,
+                      ),
+                      child: Row(children: rows[row]),
                     ),
-                    child: Row(children: rows[row]),
-                  ),
-              ],
-            );
-          },
-        ),
+                ],
+              );
+            },
+          ),
       ],
     );
   }
@@ -3725,20 +4711,21 @@ String _formatMusicDuration(int durationTicks, SongwriterConfig config) {
 }
 
 String _melodyPlacementPlaybackSummary(
-  int patternLengthTicks,
+  int melodyBars,
   int spanBars,
   SongwriterConfig config,
 ) {
-  final patternTicks = patternLengthTicks < 1 ? 1 : patternLengthTicks;
-  final placedTicks = spanBars * config.measureTicks;
-  if (patternTicks > placedTicks) {
+  final bars = melodyBars < 1 ? 1 : melodyBars;
+  if (bars > spanBars) {
+    final placedTicks = spanBars * config.measureTicks;
     return 'clips after ${_formatMusicDuration(placedTicks, config)}';
   }
-  if (patternTicks == placedTicks) return 'plays once';
-  if (placedTicks % patternTicks == 0) {
-    return 'repeats ×${placedTicks ~/ patternTicks} to fill';
-  }
-  return 'repeats, then clips the final pass';
+  if (bars == spanBars) return 'plays once';
+  final tail = melodySilentTailBars(
+    melodyBars: bars,
+    placementSpanBars: spanBars,
+  );
+  return 'plays once, then $tail silent tail ${tail == 1 ? 'bar' : 'bars'}';
 }
 
 Future<void> _showPatternPlacementDialog(
@@ -3747,22 +4734,31 @@ Future<void> _showPatternPlacementDialog(
   SongSection section,
   SongLane lane,
   SongBlock block,
-) => showDialog<void>(
+) => showStudioDialog<void>(
   context: context,
-  builder: (_) => _PatternPlacementDialog(
-    section: section,
-    lane: lane,
-    block: block,
-    onApply: (startBar, spanBars) => ref
-        .read(songwriterProvider.notifier)
-        .setBlockPlacement(
-          sectionId: section.id,
-          laneId: lane.id,
-          blockId: block.id,
-          startBar: startBar,
-          spanBars: spanBars,
-        ),
-  ),
+  builder: (context) {
+    final project = ref.read(songwriterProvider);
+    final pattern = project.melodyPatterns
+        .where((candidate) => candidate.id == block.patternId)
+        .firstOrNull;
+    return _PatternPlacementDialog(
+      section: section,
+      lane: lane,
+      block: block,
+      melodyBars: pattern == null
+          ? null
+          : melodyPlacementBarLimit(pattern, project.config.measureTicks),
+      onApply: (startBar, spanBars) => ref
+          .read(songwriterProvider.notifier)
+          .setBlockPlacement(
+            sectionId: section.id,
+            laneId: lane.id,
+            blockId: block.id,
+            startBar: startBar,
+            spanBars: spanBars,
+          ),
+    );
+  },
 );
 
 class _PatternPlacementDialog extends StatefulWidget {
@@ -3770,12 +4766,14 @@ class _PatternPlacementDialog extends StatefulWidget {
     required this.section,
     required this.lane,
     required this.block,
+    required this.melodyBars,
     required this.onApply,
   });
 
   final SongSection section;
   final SongLane lane;
   final SongBlock block;
+  final int? melodyBars;
   final void Function(int startBar, int spanBars) onApply;
 
   @override
@@ -3815,6 +4813,7 @@ class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
           section: widget.section,
           lane: widget.lane,
           candidate: candidate,
+          melodyBars: widget.melodyBars,
         );
   }
 
@@ -3833,8 +4832,19 @@ class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
     if (candidate.endBar > widget.section.lengthBars) {
       return 'The block must end by bar ${widget.section.lengthBars}.';
     }
+    final melodyBars = widget.melodyBars;
+    if (melodyBars != null &&
+        candidate.spanBars != widget.block.spanBars &&
+        candidate.spanBars > melodyBars) {
+      return 'Melody is $melodyBars ${melodyBars == 1 ? 'bar' : 'bars'} '
+          'long. Resize the placement to $melodyBars '
+          '${melodyBars == 1 ? 'bar' : 'bars'} or fewer.';
+    }
     if (blocksOverlap(widget.lane.blocks, candidate)) {
       return 'This placement overlaps another block in the lane.';
+    }
+    if (!_isValid) {
+      return 'This placement conflicts with automatic repeats. Adjust the lane repeat first.';
     }
     return '';
   }
@@ -3842,7 +4852,7 @@ class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: MuzicianTheme.dialogBg,
+      backgroundColor: StudioPalette.of(context).dialogBg,
       title: const Text('Adjust melody placement'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3882,8 +4892,8 @@ class _PatternPlacementDialogState extends State<_PatternPlacementDialog> {
               _validationMessage(),
               style: TextStyle(
                 color: _isValid
-                    ? MuzicianTheme.textSecondary
-                    : MuzicianTheme.orange,
+                    ? StudioPalette.of(context).textSecondary
+                    : StudioPalette.of(context).orange,
                 fontSize: 12,
               ),
             ),
@@ -3953,6 +4963,7 @@ class _StrumPatternTimelinePreview extends StatelessWidget {
                       painter: _PatternTickGridPainter(
                         lengthTicks: lengthTicks,
                         beatTicks: beatTicks,
+                        color: StudioPalette.of(context).textMuted,
                       ),
                     ),
                   ),
@@ -3970,7 +4981,9 @@ class _StrumPatternTimelinePreview extends StatelessWidget {
                             ? Icons.arrow_downward_rounded
                             : Icons.arrow_upward_rounded,
                         size: 14,
-                        color: MuzicianTheme.emerald,
+                        color: StudioPalette.of(context).isStudio
+                            ? StudioPalette.of(context).sky
+                            : StudioPalette.of(context).emerald,
                       ),
                     ),
                 ],
@@ -3995,15 +5008,17 @@ class _PatternTickGridPainter extends CustomPainter {
   const _PatternTickGridPainter({
     required this.lengthTicks,
     required this.beatTicks,
+    required this.color,
   });
 
+  final Color color;
   final int lengthTicks;
   final int beatTicks;
 
   @override
   void paint(Canvas canvas, Size size) {
     final line = Paint()
-      ..color = MuzicianTheme.textMuted.withValues(alpha: 0.38)
+      ..color = color.withValues(alpha: 0.38)
       ..strokeWidth = 1;
     final ticksPerBeat = beatTicks < 1 ? 1 : beatTicks;
     final beatCount = (lengthTicks + ticksPerBeat - 1) ~/ ticksPerBeat;
@@ -4018,7 +5033,8 @@ class _PatternTickGridPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PatternTickGridPainter oldDelegate) =>
       lengthTicks != oldDelegate.lengthTicks ||
-      beatTicks != oldDelegate.beatTicks;
+      beatTicks != oldDelegate.beatTicks ||
+      color != oldDelegate.color;
 }
 
 class _AddSectionRule extends StatelessWidget {
@@ -4035,22 +5051,25 @@ class _AddSectionRule extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Container(height: 1, color: MuzicianTheme.glassBorder),
+              child: Container(
+                height: 1,
+                color: StudioPalette.of(context).glassBorder,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.add_rounded,
                     size: 16,
-                    color: MuzicianTheme.sky,
+                    color: StudioPalette.of(context).sky,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     'Add section',
-                    style: const TextStyle(
-                      color: MuzicianTheme.sky,
+                    style: TextStyle(
+                      color: StudioPalette.of(context).sky,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.8,
@@ -4060,7 +5079,10 @@ class _AddSectionRule extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Container(height: 1, color: MuzicianTheme.glassBorder),
+              child: Container(
+                height: 1,
+                color: StudioPalette.of(context).glassBorder,
+              ),
             ),
           ],
         ),
@@ -4083,21 +5105,24 @@ class _EmptyState extends StatelessWidget {
           Icon(
             Icons.menu_book_rounded,
             size: 56,
-            color: MuzicianTheme.sky.withValues(alpha: 0.7),
+            color: StudioPalette.of(context).sky.withValues(alpha: 0.7),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Blank sheet',
             style: TextStyle(
-              color: MuzicianTheme.textPrimary,
+              color: StudioPalette.of(context).textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Add a section, then tap a bar to drop a chord.',
-            style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 13),
+            style: TextStyle(
+              color: StudioPalette.of(context).textMuted,
+              fontSize: 13,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
@@ -4120,9 +5145,9 @@ void _openStepper(
   required int min,
   required ValueChanged<int> onChanged,
 }) {
-  showDialog<void>(
+  showStudioDialog<void>(
     context: context,
-    builder: (_) => _StepperDialog(
+    builder: (context) => _StepperDialog(
       title: title,
       initial: value,
       min: min,
@@ -4169,8 +5194,8 @@ class _StepperDialogState extends State<_StepperDialog> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
               '$_v',
-              style: const TextStyle(
-                color: MuzicianTheme.textPrimary,
+              style: TextStyle(
+                color: StudioPalette.of(context).textPrimary,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
               ),

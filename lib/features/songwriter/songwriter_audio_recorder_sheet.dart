@@ -8,7 +8,7 @@ import '../../store/settings_store.dart';
 import '../../store/song_audio_recorder_store.dart'
     show SongAudioRecorderStatus;
 import '../../store/songwriter_audio_recorder_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 /// Recorder sheet. Pops with the recorded [AudioAsset] (or null on cancel).
 ///
@@ -183,8 +183,8 @@ class _SongwriterAudioRecorderSheetState
         }
       },
       child: Container(
-        decoration: const BoxDecoration(
-          color: MuzicianTheme.surface,
+        decoration: BoxDecoration(
+          color: StudioPalette.of(context).surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -195,8 +195,8 @@ class _SongwriterAudioRecorderSheetState
             children: [
               Text(
                 label,
-                style: const TextStyle(
-                  color: MuzicianTheme.textPrimary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
@@ -248,12 +248,12 @@ class _SongwriterAudioRecorderSheetState
                     ref.read(settingsProvider.notifier).setRecordCountIn(v);
                   },
                 ),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     'Use headphones — speaker playback bleeds into the mic.',
                     style: TextStyle(
-                      color: MuzicianTheme.textSecondary,
+                      color: StudioPalette.of(context).textSecondary,
                       fontSize: 12,
                     ),
                     textAlign: TextAlign.center,
@@ -330,16 +330,18 @@ class _BarProgress extends StatelessWidget {
           child: LinearProgressIndicator(
             value: progress,
             minHeight: 6,
-            backgroundColor: Colors.white.withValues(alpha: 0.10),
-            valueColor: const AlwaysStoppedAnimation(MuzicianTheme.sky),
+            backgroundColor: StudioPalette.of(
+              context,
+            ).textPrimary.withValues(alpha: 0.10),
+            valueColor: AlwaysStoppedAnimation(StudioPalette.of(context).sky),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           'Bar $currentBar / $targetBars',
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: MuzicianTheme.textSecondary,
+          style: TextStyle(
+            color: StudioPalette.of(context).textSecondary,
             fontSize: 13,
             fontWeight: FontWeight.w600,
             fontFeatures: [FontFeature.tabularFigures()],
@@ -376,15 +378,18 @@ class _MonitorToggle extends StatelessWidget {
       onChanged: enabled ? onChanged : null,
       title: Text(
         title,
-        style: const TextStyle(
-          color: MuzicianTheme.textPrimary,
+        style: TextStyle(
+          color: StudioPalette.of(context).textPrimary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(color: MuzicianTheme.textSecondary, fontSize: 12),
+        style: TextStyle(
+          color: StudioPalette.of(context).textSecondary,
+          fontSize: 12,
+        ),
       ),
     );
   }

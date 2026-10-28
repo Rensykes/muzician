@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/profile_writer_playback.dart'
@@ -19,6 +20,23 @@ import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/settings_store.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const audioChannels = [
+    MethodChannel('xyz.luan/audioplayers.global'),
+    MethodChannel('xyz.luan/audioplayers.global/events'),
+  ];
+  setUp(() {
+    for (final channel in audioChannels) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (_) async => null);
+    }
+  });
+  tearDown(() {
+    for (final channel in audioChannels) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    }
+  });
   test('isolated Writer fixtures flatten to their expected voice counts', () {
     expect(verifyWriterPlaybackProfileFixtures(), {
       'plain_harmony': 32,

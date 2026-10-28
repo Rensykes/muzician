@@ -380,15 +380,16 @@ SongwriterProjectSnapshot _fixtureFor(
             NotePattern(
               id: 'qa_melody_pattern',
               name: 'Eight notes per bar',
-              lengthTicks: 16,
+              lengthTicks: 16 * bars,
               notes: [
-                for (var index = 0; index < 8; index++)
-                  NotePatternNote(
-                    id: 'qa_melody_$index',
-                    midiNote: 60 + (index % 5) * 2,
-                    startTick: index * 2,
-                    durationTicks: 2,
-                  ),
+                for (var bar = 0; bar < bars; bar++)
+                  for (var index = 0; index < 8; index++)
+                    NotePatternNote(
+                      id: 'qa_melody_${bar}_$index',
+                      midiNote: 60 + (index % 5) * 2,
+                      startTick: bar * 16 + index * 2,
+                      durationTicks: 2,
+                    ),
               ],
               pitchRangeStart: 60,
               pitchRangeEnd: 72,

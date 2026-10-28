@@ -3,11 +3,142 @@ import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test(
+    'new Melody lanes default to piano while legacy snapshots stay unset',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = n.state.sections.single.id;
+      final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+      expect(
+        n.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == laneId)
+            .melodySound,
+        MelodyLaneSound.piano,
+      );
+
+      final json = n.state.toJson();
+      final section = (json['sections'] as List).single as Map<String, dynamic>;
+      final lane = (section['lanes'] as List).last as Map<String, dynamic>;
+      lane.remove('melodySound');
+      final legacy = SongwriterProjectSnapshot.fromJson(json);
+      expect(legacy.sections.single.lanes.last.melodySound, isNull);
+    },
+  );
+
+  test(
+    'Melody sound edits target only the chosen lane and support history',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = n.state.sections.single.id;
+      final harmonyId = n.state.sections.single.lanes.single.id;
+      final firstId = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final secondId = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      SongLane lane(String id) => n.state.sections.single.lanes.singleWhere(
+        (candidate) => candidate.id == id,
+      );
+
+      final revision = n.historyRevision;
+      n.setMelodyLaneSound(
+        sectionId: sectionId,
+        laneId: harmonyId,
+        sound: MelodyLaneSound.cleanGuitar,
+      );
+      expect(lane(harmonyId).melodySound, isNull);
+      expect(n.historyRevision, revision);
+
+      n.setMelodyLaneSound(
+        sectionId: sectionId,
+        laneId: firstId,
+        sound: MelodyLaneSound.distortedGuitar,
+      );
+      expect(lane(firstId).melodySound, MelodyLaneSound.distortedGuitar);
+      expect(lane(secondId).melodySound, MelodyLaneSound.piano);
+      expect(lane(harmonyId).melodySound, isNull);
+      final snapshot = SongwriterProjectSnapshot.fromJson(n.state.toJson());
+      expect(
+        snapshot.sections.single.lanes
+            .singleWhere((lane) => lane.id == firstId)
+            .melodySound,
+        MelodyLaneSound.distortedGuitar,
+      );
+      expect(n.undo(), isTrue);
+      expect(lane(firstId).melodySound, MelodyLaneSound.piano);
+      expect(n.redo(), isTrue);
+      expect(lane(firstId).melodySound, MelodyLaneSound.distortedGuitar);
+    },
+  );
+
+  test(
+    'removing an audio lane retains shared clips and undo restores placements',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(songwriterProvider.notifier);
+      n.addSection(label: 'Verse', lengthBars: 4);
+      final sectionId = n.state.sections.single.id;
+      final removed = n.addLane(sectionId: sectionId, kind: SongLaneKind.audio);
+      final retained = n.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.audio,
+      );
+      n.addAudioAsset(
+        const AudioAsset(
+          id: 'asset',
+          durationMs: 1000,
+          sampleRate: 44100,
+          channels: 1,
+          format: 'wav',
+          peaks: [],
+          sourceLabel: 'sample.wav',
+        ),
+      );
+      final clipId = n.addAudioClip(assetId: 'asset', durationMs: 1000);
+      for (final laneId in [removed, retained]) {
+        n.addAudioBlock(
+          sectionId: sectionId,
+          laneId: laneId,
+          audioClipId: clipId,
+          startBar: 0,
+          spanBars: 1,
+        );
+      }
+      n.removeLane(sectionId: sectionId, laneId: removed);
+      expect(n.state.audioAssets.any((asset) => asset.id == 'asset'), isTrue);
+      expect(n.state.audioClips.any((clip) => clip.id == clipId), isTrue);
+      expect(
+        n.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == retained)
+            .blocks,
+        hasLength(1),
+      );
+      expect(n.undo(), isTrue);
+      expect(
+        n.state.sections.single.lanes
+            .singleWhere((lane) => lane.id == removed)
+            .blocks,
+        hasLength(1),
+      );
+    },
+  );
 
   test('set lane repeat and remove lane', () {
     final c = ProviderContainer();

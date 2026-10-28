@@ -410,7 +410,7 @@ void main() {
           NotePattern(
             id: 'melody-pattern',
             name: 'Lead',
-            lengthTicks: 8,
+            lengthTicks: 16,
             notes: [
               NotePatternNote(
                 id: 'lead-note',

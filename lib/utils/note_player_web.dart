@@ -9,3 +9,6 @@ Future<String> ioTempDir() async => throw UnsupportedError('web');
 
 Future<void> ioWriteIfAbsent(String path, Uint8List bytes) async =>
     throw UnsupportedError('web');
+
+Future<void> ioDeleteIfExists(String path) async =>
+    throw UnsupportedError('web');

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,14 +8,2671 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/rendering.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
+import 'package:muzician/features/songwriter/songwriter_screen.dart';
+import 'package:muzician/features/songwriter/songwriter_melody_preview.dart';
+import 'package:muzician/features/songwriter/songwriter_melody_timeline.dart';
 import 'package:muzician/features/songwriter/guitar_strum_pattern_sheet.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
+import 'package:muzician/models/app_theme_variant.dart';
+import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/song_project.dart';
+import 'package:muzician/store/save_system_store.dart';
+import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
+import 'package:muzician/theme/studio_theme.dart';
+
+Future<
+  ({
+    ProviderContainer container,
+    String laneId,
+    String blockId,
+    String patternId,
+    String harmonyId,
+  })
+>
+_timelineFixture(
+  WidgetTester tester, {
+  required int bars,
+  int span = 1,
+  Size size = const Size(390, 1000),
+  int? patternLengthTicks,
+  List<NotePatternNote> notes = const [],
+  AppThemeVariant? themeVariant,
+  bool seedPlacementDirectly = false,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  final container = ProviderContainer();
+  addTearDown(container.dispose);
+  final writer = container.read(songwriterProvider.notifier);
+  writer.addSection(lengthBars: bars);
+  final section = container.read(songwriterProvider).sections.single;
+  final harmonyId = section.lanes.single.id;
+  final laneId = writer.addLane(
+    sectionId: section.id,
+    kind: SongLaneKind.melody,
+  );
+  final patternId = writer.addMelodyPattern(
+    name: 'Lead',
+    lengthTicks: patternLengthTicks,
+  );
+  final measureTicks = container.read(songwriterProvider).config.measureTicks;
+  final minimumBars = math.max(1, span);
+  final fixtureLength = notes.isEmpty
+      ? math.max(patternLengthTicks ?? 0, minimumBars * measureTicks)
+      : patternLengthTicks ?? minimumBars * measureTicks;
+  final fixtureNotes = notes.isNotEmpty
+      ? notes
+      : [
+          NotePatternNote(
+            id: 'fixture-length',
+            midiNote: 60,
+            startTick: fixtureLength - 1,
+            durationTicks: 1,
+          ),
+        ];
+  // Seed the already-loaded pattern directly so fixtures can model legacy
+  // non-bar-aligned stored lengths; a save path would normalize them.
+  final seeded = writer.state;
+  writer.state = seeded.copyWith(
+    melodyPatterns: [
+      for (final pattern in seeded.melodyPatterns)
+        if (pattern.id == patternId)
+          pattern.copyWith(lengthTicks: fixtureLength, notes: fixtureNotes)
+        else
+          pattern,
+    ],
+  );
+  if (seedPlacementDirectly) {
+    final seededProject = container.read(songwriterProvider);
+    final seededSection = seededProject.sections.single;
+    writer.state = seededProject.copyWith(
+      sections: [
+        seededSection.copyWith(
+          lanes: [
+            for (final candidate in seededSection.lanes)
+              if (candidate.id == laneId)
+                candidate.copyWith(
+                  blocks: [
+                    SongBlock(
+                      id: 'legacy-placement',
+                      startBar: 0,
+                      spanBars: span,
+                      patternId: patternId,
+                    ),
+                  ],
+                )
+              else
+                candidate,
+          ],
+        ),
+      ],
+    );
+  } else {
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: span,
+    );
+  }
+  final blockId = container
+      .read(songwriterProvider)
+      .sections
+      .single
+      .lanes
+      .firstWhere((l) => l.id == laneId)
+      .blocks
+      .single
+      .id;
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: themeVariant == null ? null : StudioTheme.data(themeVariant),
+        home: const Scaffold(body: SongwriterScreenSheet()),
+      ),
+    ),
+  );
+  await tester.pump(const Duration(milliseconds: 600));
+  return (
+    container: container,
+    laneId: laneId,
+    blockId: blockId,
+    patternId: patternId,
+    harmonyId: harmonyId,
+  );
+}
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets('automatic repeat and wrapped rows use occurrence-local ticks', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 12,
+      span: 5,
+      size: const Size(1024, 1400),
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = writer.state.sections.single.id;
+    writer.setLaneRepeat(sectionId: sectionId, laneId: f.laneId, repeat: 2);
+    await tester.pumpAndSettle();
+    final ticks = writer.state.config.measureTicks;
+    SongwriterMelodyPreview preview(int repeat, int start) =>
+        tester.widget<SongwriterMelodyPreview>(
+          find.descendant(
+            of: find.byKey(
+              Key('melodySegment_${f.blockId}_0_${repeat}_$start'),
+            ),
+            matching: find.byType(SongwriterMelodyPreview),
+          ),
+        );
+    expect(
+      (preview(0, 0).segmentStartTick, preview(0, 0).segmentEndTick),
+      (0, 4 * ticks),
+    );
+    expect(
+      (preview(0, 4).segmentStartTick, preview(0, 4).segmentEndTick),
+      (4 * ticks, 5 * ticks),
+    );
+    expect(
+      (preview(1, 5).segmentStartTick, preview(1, 5).segmentEndTick),
+      (0, 3 * ticks),
+    );
+    expect(
+      (preview(1, 8).segmentStartTick, preview(1, 8).segmentEndTick),
+      (3 * ticks, 5 * ticks),
+    );
+    final segment = find.byKey(Key('melodySegment_${f.blockId}_0_0_4'));
+    final previewFinder = find.descendant(
+      of: segment,
+      matching: find.byType(SongwriterMelodyPreview),
+    );
+    expect(
+      tester.getSize(previewFinder).width,
+      closeTo(tester.getSize(segment).width - 4, 0.01),
+    );
+  });
+
+  testWidgets('a wrapped over-long placement keeps segment-local tail counts', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 12,
+      span: 6,
+      size: const Size(1024, 1400),
+      patternLengthTicks: 16,
+      notes: const [
+        NotePatternNote(
+          id: 'only',
+          midiNote: 60,
+          startTick: 0,
+          durationTicks: 4,
+        ),
+      ],
+      seedPlacementDirectly: true,
+    );
+
+    expect(
+      find.bySemanticsLabel(RegExp('silent tail bars 2 through 4')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp('silent tail bars 5 through 6')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp('silent tail bars 2 through 6')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(Key('melodySilentTail_${f.blockId}_0_1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(Key('melodySilentTail_${f.blockId}_0_4')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('automatic lane repeats each keep their silent tail', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 12,
+      span: 2,
+      size: const Size(1024, 1400),
+      patternLengthTicks: 16,
+      notes: const [
+        NotePatternNote(
+          id: 'only',
+          midiNote: 60,
+          startTick: 0,
+          durationTicks: 4,
+        ),
+      ],
+      seedPlacementDirectly: true,
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    writer.setLaneRepeat(
+      sectionId: writer.state.sections.single.id,
+      laneId: f.laneId,
+      repeat: 2,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel(RegExp('silent tail bar 2')), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(
+        RegExp('Automatic repeat of Lead, bars 3 through 4, silent tail bar 4'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(Key('melodySilentTail_${f.blockId}_0_1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(Key('melodySilentTail_${f.blockId}_0_3')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('melody lane exposes repeat control and placement deletion', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8);
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = writer.state.sections.single.id;
+    final repeat = find.byKey(Key('melodyLaneRepeat_${f.laneId}_0'));
+    await tester.ensureVisible(repeat);
+    await tester.tap(repeat);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 repeats').last);
+    await tester.pumpAndSettle();
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == f.laneId)
+          .repeat,
+      2,
+    );
+    final menu = find.byKey(Key('melodyBlockActions_${f.blockId}_0'));
+    await tester.ensureVisible(menu);
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete placement'));
+    await tester.pumpAndSettle();
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == f.laneId)
+          .blocks,
+      isEmpty,
+    );
+    expect(writer.undo(), isTrue);
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((l) => l.id == f.laneId)
+          .blocks,
+      hasLength(1),
+    );
+    expect(writer.state.sections.single.id, sectionId);
+  });
+
+  testWidgets('resize repairs a block clipped by a shorter section', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8, span: 7);
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = writer.state.sections.single.id;
+    writer.setSectionLength(sectionId, 4);
+    await tester.pumpAndSettle();
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final before = writer.undoCount;
+    await tester.drag(handle, const Offset(-100, 0));
+    await tester.pumpAndSettle();
+    final block = writer.state.sections.single.lanes
+        .singleWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, lessThanOrEqualTo(4));
+    expect(writer.undoCount, before + 1);
+    expect(writer.undo(), isTrue);
+    expect(
+      writer.state.sections.single.lanes
+          .singleWhere((lane) => lane.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      7,
+    );
+  });
+
+  testWidgets(
+    'repeat is disabled when a resolved Save has no compatible melody',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final saves = container.read(saveSystemProvider.notifier);
+      final projectId = saves.createProject('Project', const ProjectConfig())!;
+      saves.selectProject(projectId);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(lengthBars: 4);
+      final sectionId = writer.state.sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern();
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((p) => p.id == patternId)
+            .copyWith(
+              notes: [
+                const NotePatternNote(
+                  id: 'cached',
+                  midiNote: 60,
+                  startTick: 0,
+                  durationTicks: 4,
+                ),
+              ],
+            ),
+      );
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final project = container.read(songwriterProvider);
+      final section = project.sections.single;
+      final lane = section.lanes.singleWhere((l) => l.id == laneId);
+      final blockId = lane.blocks.single.id;
+      final saveId = saves.saveSnapshot(
+        'Empty melody',
+        projectId,
+        const WriterBlockSnapshot(laneKind: SongLaneKind.melody),
+      )!;
+      writer.state = project.copyWith(
+        sections: [
+          section.copyWith(
+            lanes: [
+              for (final item in section.lanes)
+                if (item.id == lane.id)
+                  lane.copyWith(
+                    blocks: [lane.blocks.single.copyWith(saveId: saveId)],
+                  )
+                else
+                  item,
+            ],
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(SongwriterMelodyPreview), findsNothing);
+      final name = find.byKey(Key('writerBlockName_${blockId}_0_0'));
+      expect(tester.widget<Text>(name).data, contains('Unresolved'));
+      expect(
+        find.descendant(
+          of: find.byKey(Key('melodySegment_${blockId}_0_0_0')),
+          matching: find.byIcon(Icons.warning_amber_rounded),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Unresolved melody content'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('Unresolved melody content')),
+        findsWidgets,
+      );
+      final menu = find.byKey(Key('melodyBlockActions_${blockId}_0'));
+      await tester.ensureVisible(menu);
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Repeat / reuse'),
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Make Unique'),
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Rename'),
+            )
+            .enabled,
+        isFalse,
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      final tile = find.byKey(Key('sheetMelodyTile_${patternId}_0_0'));
+      await tester.ensureVisible(tile);
+      expect(tester.widget<InkWell>(tile).onTap, isNull);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('saveWriterMelodyPattern')), findsNothing);
+    },
+  );
+
+  testWidgets('repeat picker scrolls to a later bar at 320 by 480', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final saves = container.read(saveSystemProvider.notifier);
+    final projectId = saves.createProject('Project', const ProjectConfig())!;
+    saves.selectProject(projectId);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 24);
+    final sectionId = writer.state.sections.single.id;
+    final laneId = writer.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern();
+    writer.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    final source = writer.state.sections.single.lanes
+        .singleWhere((l) => l.id == laneId)
+        .blocks
+        .single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final menu = find.byKey(Key('melodyBlockActions_${source.id}_0'));
+    await tester.ensureVisible(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Repeat / reuse'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final target = find.byKey(const Key('repeatMelodyBar_23'));
+    final scroll = find
+        .ancestor(of: target, matching: find.byType(Scrollable))
+        .first;
+    expect(tester.state<ScrollableState>(scroll).position.pixels, 0);
+    await tester.dragUntilVisible(target, scroll, const Offset(0, -200));
+    expect(
+      tester.state<ScrollableState>(scroll).position.pixels,
+      greaterThan(0),
+    );
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    final blocks = writer.state.sections.single.lanes
+        .singleWhere((l) => l.id == laneId)
+        .blocks;
+    expect(blocks, hasLength(2));
+    expect(blocks.last.startBar, 23);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'repeat picker creates a shortened linked and independently unique occurrence',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final saves = container.read(saveSystemProvider.notifier);
+      final projectId = saves.createProject('Project', const ProjectConfig())!;
+      saves.selectProject(projectId);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(lengthBars: 8);
+      final sectionId = container.read(songwriterProvider).sections.single.id;
+      final laneId = writer.addLane(
+        sectionId: sectionId,
+        kind: SongLaneKind.melody,
+      );
+      final saveId = saves.saveSnapshot(
+        'Lead',
+        projectId,
+        const WriterBlockSnapshot(
+          laneKind: SongLaneKind.melody,
+          melodyPattern: NotePattern(
+            id: 'lead',
+            name: 'Lead',
+            lengthTicks: 48,
+            notes: [
+              NotePatternNote(
+                id: 'length-note',
+                midiNote: 67,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+            pitchRangeStart: 48,
+            pitchRangeEnd: 84,
+            snapTicks: 1,
+            highlightedNotes: [],
+          ),
+        ),
+      )!;
+      expect(
+        writer.insertWriterBlockFromSave(
+          saveId: saveId,
+          sectionId: sectionId,
+          laneKind: SongLaneKind.melody,
+          laneId: laneId,
+          startBar: 0,
+        ),
+        isTrue,
+      );
+      SongLane currentLane() => container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == laneId);
+      final source = currentLane().blocks.single;
+      writer.setBlockPlacement(
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: source.id,
+        startBar: 0,
+        spanBars: 3,
+      );
+      final other = writer.addMelodyPattern(name: 'Other');
+      writer.addMelodyBlock(
+        sectionId: sectionId,
+        laneId: laneId,
+        patternId: other,
+        startBar: 5,
+        spanBars: 1,
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      Future<void> openPicker() async {
+        final menu = find.byKey(Key('melodyBlockActions_${source.id}_0'));
+        await tester.ensureVisible(menu);
+        await tester.tap(menu);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Repeat / reuse'));
+        await tester.pumpAndSettle();
+      }
+
+      final before = writer.undoCount;
+      await openPicker();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(writer.undoCount, before);
+      expect(currentLane().blocks, hasLength(2));
+      writer.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 2);
+      await tester.pump();
+      await openPicker();
+      expect(
+        tester
+            .widget<OutlinedButton>(find.byKey(const Key('repeatMelodyBar_6')))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      writer.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 1);
+      await tester.pump();
+      await openPicker();
+      await tester.tap(find.byKey(const Key('repeatMelodyBar_3')));
+      await tester.pumpAndSettle();
+      final copy = currentLane().blocks.singleWhere(
+        (b) => b.id != source.id && b.startBar == 3,
+      );
+      expect(
+        (copy.startBar, copy.spanBars, copy.patternId, copy.saveId),
+        (3, 2, source.patternId, saveId),
+      );
+      final tile = find.byKey(Key('sheetMelodyTile_${copy.patternId}_0_3'));
+      List<SongwriterMelodyPreview> previews() => tester
+          .widgetList<SongwriterMelodyPreview>(
+            find.byType(SongwriterMelodyPreview),
+          )
+          .where((p) => p.pattern.id == source.patternId)
+          .toList();
+      expect(previews(), hasLength(3)); // source, copy, wrapped continuation
+      expect(previews().every((p) => p.pattern.notes.length == 1), isTrue);
+      await tester.ensureVisible(tile);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      final editor = tester
+          .widgetList<UncontrolledProviderScope>(
+            find.byType(UncontrolledProviderScope),
+          )
+          .last
+          .container;
+      editor.read(pianoRollProvider.notifier).addNote(72, 0, 4);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+      await tester.pumpAndSettle();
+      expect(previews(), hasLength(3));
+      expect(
+        previews().every(
+          (p) => p.pattern.notes.any((note) => note.midiNote == 72),
+        ),
+        isTrue,
+      );
+      SongwriterMelodyPreview segment(String blockId, int start) =>
+          tester.widget<SongwriterMelodyPreview>(
+            find.descendant(
+              of: find.byKey(Key('melodySegment_${blockId}_0_0_$start')),
+              matching: find.byType(SongwriterMelodyPreview),
+            ),
+          );
+      final first = segment(source.id, 0);
+      final repeat = segment(copy.id, 3);
+      final continuation = segment(copy.id, 4);
+      final barTicks = writer.state.config.measureTicks;
+      expect((repeat.segmentStartTick, repeat.segmentEndTick), (0, barTicks));
+      expect(
+        (continuation.segmentStartTick, continuation.segmentEndTick),
+        (barTicks, 2 * barTicks),
+      );
+      expect(
+        melodyPreviewNotes(
+          pattern: repeat.pattern,
+          segmentStartTick: 0,
+          segmentEndTick: barTicks,
+        ),
+        melodyPreviewNotes(
+          pattern: first.pattern,
+          segmentStartTick: 0,
+          segmentEndTick: barTicks,
+        ),
+      );
+      expect(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((p) => p.id == source.patternId)
+            .notes,
+        hasLength(2),
+      );
+      final copyMenu = find.byKey(Key('melodyBlockActions_${copy.id}_0'));
+      await tester.ensureVisible(copyMenu);
+      await tester.tap(copyMenu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Make Unique'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('writerBlockNameSave')));
+      await tester.pumpAndSettle();
+      final unique = currentLane().blocks.singleWhere((b) => b.id == copy.id);
+      expect(unique.patternId, isNot(source.patternId));
+      expect(unique.saveId, isNot(saveId));
+      writer.updateMelodyPattern(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((p) => p.id == unique.patternId)
+            .copyWith(
+              notes: [
+                const NotePatternNote(
+                  id: 'unique-note',
+                  midiNote: 80,
+                  startTick: 0,
+                  durationTicks: 4,
+                ),
+              ],
+            ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        previews().single.pattern.notes.any((note) => note.midiNote == 72),
+        isTrue,
+      );
+      final uniquePreviews = tester
+          .widgetList<SongwriterMelodyPreview>(
+            find.byType(SongwriterMelodyPreview),
+          )
+          .where((p) => p.pattern.id == unique.patternId);
+      expect(uniquePreviews, hasLength(2));
+      expect(
+        uniquePreviews.every((p) => p.pattern.notes.single.midiNote == 80),
+        isTrue,
+      );
+      expect(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((p) => p.id == unique.patternId)
+            .notes,
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets('repeat is disabled for missing and unresolved canonical saves', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 4);
+    Future<void> expectDisabled() async {
+      final menu = find.byKey(Key('melodyBlockActions_${f.blockId}_0'));
+      await tester.ensureVisible(menu);
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Repeat / reuse'),
+            )
+            .enabled,
+        isFalse,
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+    }
+
+    await expectDisabled();
+    final writer = f.container.read(songwriterProvider.notifier);
+    expect(find.byType(SongwriterMelodyPreview), findsOneWidget);
+    expect(find.text('Unresolved melody content'), findsNothing);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((p) => p.id == f.patternId)
+          .copyWith(
+            notes: [
+              const NotePatternNote(
+                id: 'cached-note',
+                midiNote: 84,
+                startTick: 0,
+                durationTicks: 4,
+              ),
+            ],
+          ),
+    );
+    final project = f.container.read(songwriterProvider);
+    final section = project.sections.single;
+    final lanes = [
+      for (final lane in section.lanes)
+        if (lane.id == f.laneId)
+          lane.copyWith(
+            blocks: [lane.blocks.single.copyWith(saveId: 'missing-save')],
+          )
+        else
+          lane,
+    ];
+    await writer.loadProject(
+      project.copyWith(sections: [section.copyWith(lanes: lanes)]),
+    );
+    await tester.pumpAndSettle();
+    await expectDisabled();
+    expect(find.byType(SongwriterMelodyPreview), findsNothing);
+    expect(
+      tester
+          .widget<Text>(find.byKey(Key('writerBlockName_${f.blockId}_0_0')))
+          .data,
+      contains('Unresolved'),
+    );
+    expect(find.text('Unresolved melody content'), findsOneWidget);
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks,
+      hasLength(1),
+    );
+  });
+
+  testWidgets('melody sound is lane local and legacy sound is displayed', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 4,
+      size: const Size(1024, 1200),
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = f.container.read(songwriterProvider).sections.single.id;
+    final secondId = writer.addLane(
+      sectionId: sectionId,
+      kind: SongLaneKind.melody,
+    );
+    final project = f.container.read(songwriterProvider);
+    final section = project.sections.single;
+    final lanes = [
+      for (final lane in section.lanes)
+        if (lane.id == f.laneId)
+          SongLane(
+            id: lane.id,
+            kind: lane.kind,
+            order: lane.order,
+            blocks: lane.blocks,
+          )
+        else
+          lane,
+    ];
+    await writer.loadProject(
+      project.copyWith(sections: [section.copyWith(lanes: lanes)]),
+    );
+    await tester.pumpAndSettle();
+    final performance = f.container
+        .read(songwriterProvider)
+        .melodyPerformancesByPatternId;
+    final tone = f.container.read(settingsProvider).guitarTone;
+    expect(find.textContaining('Pattern sounds'), findsOneWidget);
+    for (final choice in [
+      (MelodyLaneSound.cleanGuitar, 'Clean guitar'),
+      (MelodyLaneSound.distortedGuitar, 'Distorted guitar'),
+      (MelodyLaneSound.piano, 'Piano'),
+    ]) {
+      final selector = find.byKey(Key('melodySound_${f.laneId}_0'));
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(choice.$2).last);
+      await tester.pumpAndSettle();
+      final updated = f.container.read(songwriterProvider);
+      expect(
+        updated.sections.single.lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .melodySound,
+        choice.$1,
+      );
+      expect(
+        updated.sections.single.lanes
+            .firstWhere((l) => l.id == secondId)
+            .melodySound,
+        MelodyLaneSound.piano,
+      );
+      expect(updated.melodyPerformancesByPatternId, performance);
+      expect(f.container.read(settingsProvider).guitarTone, tone);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: f.container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining(choice.$2), findsWidgets);
+    }
+  });
+
+  testWidgets(
+    'autoscroll preserves a drag beyond the originating section cache',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 8,
+        patternLengthTicks: 128,
+        size: const Size(390, 650),
+      );
+      final writer = f.container.read(songwriterProvider.notifier);
+      for (var i = 0; i < 10; i++) {
+        writer.addSection(label: 'Later $i', lengthBars: 8);
+      }
+      await tester.pump();
+      final sectionId = f.container.read(songwriterProvider).sections.first.id;
+      SongBlock block() => f.container
+          .read(songwriterProvider)
+          .sections
+          .firstWhere((s) => s.id == sectionId)
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single;
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final initial = scrollable.position.pixels;
+      final before = writer.undoCount;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 250; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial + 1500));
+      await gesture.up();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(block().spanBars, 8);
+      expect(writer.undoCount, before + 1);
+      expect(writer.undo(), isTrue);
+      expect(block().spanBars, 1);
+    },
+  );
+
+  testWidgets('release uses final autoscroll layout for snapped extent', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 24,
+      patternLengthTicks: 128,
+      size: const Size(390, 650),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final scrollable = Scrollable.of(tester.element(handle));
+    final viewport = tester.getRect(find.byWidget(scrollable.widget));
+    final row0 = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_0')),
+    );
+    final row1 = tester.getRect(
+      find.byKey(Key('emptyMelodyBar_${f.laneId}_0_4')),
+    );
+    final pointer = Offset(viewport.right - 12, viewport.bottom - 4);
+    final boundary = (row0.bottom + row1.top) / 2;
+    scrollable.position.jumpTo(
+      scrollable.position.pixels + boundary - pointer.dy - 5,
+    );
+    await tester.pump();
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveTo(pointer);
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump(const Duration(milliseconds: 30));
+    await gesture.up();
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      8,
+    );
+  });
+
+  testWidgets('release at the bottom scroll bound commits the final row', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 24,
+      patternLengthTicks: 384,
+      size: const Size(390, 650),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final scrollable = Scrollable.of(tester.element(handle));
+    final viewport = tester.getRect(find.byWidget(scrollable.widget));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+    for (var i = 0; i < 300; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(scrollable.position.pixels, scrollable.position.maxScrollExtent);
+    await tester.pump(const Duration(milliseconds: 30));
+    await gesture.up();
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      24,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'unmounting a timeline during drag makes later pointer release safe',
+    (tester) async {
+      final f = await _timelineFixture(tester, bars: 8);
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(90, 0));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox());
+      await gesture.moveBy(const Offset(30, 0));
+      await gesture.up();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+    },
+  );
+
+  testWidgets(
+    'cancelling a drag beyond the section cache preserves placement',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 8,
+        size: const Size(390, 650),
+      );
+      final writer = f.container.read(songwriterProvider.notifier);
+      for (var i = 0; i < 10; i++) {
+        writer.addSection(label: 'Later $i', lengthBars: 8);
+      }
+      await tester.pump();
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final initial = scrollable.position.pixels;
+      final before = writer.undoCount;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 250; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial + 1500));
+      await gesture.cancel();
+      await tester.pump();
+      final stopped = scrollable.position.pixels;
+      await tester.pump(const Duration(seconds: 1));
+      expect(scrollable.position.pixels, stopped);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .first
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+      expect(writer.undoCount, before);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('partial melody row aligns with Harmony cells', (tester) async {
+    final f = await _timelineFixture(tester, bars: 6);
+    for (final bar in [4, 5]) {
+      final harmony = tester.getRect(
+        find.byKey(Key('writerHarmonyCell_${f.harmonyId}_0_$bar')),
+      );
+      final melody = tester.getRect(
+        find.byKey(Key('emptyMelodyBar_${f.laneId}_0_$bar')),
+      );
+      expect(melody.left, closeTo(harmony.left, 1));
+      expect(melody.right, closeTo(harmony.right, 1));
+    }
+  });
+
+  testWidgets('tapping the segment background opens its melody editor', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8, span: 3);
+    final segment = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_0')),
+    );
+    await tester.tapAt(Offset(segment.left + 12, segment.top + 3));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('saveWriterMelodyPattern')), findsOneWidget);
+  });
+
+  testWidgets('secondary pointer cannot replace or finish a resize', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 2,
+      patternLengthTicks: 48,
+    );
+    SongBlock current() => f.container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == f.laneId)
+        .blocks
+        .single;
+    final writer = f.container.read(songwriterProvider.notifier);
+    final before = writer.undoCount;
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    final point = tester.getCenter(handle);
+    final first = await tester.startGesture(point, pointer: 11);
+    final second = await tester.startGesture(point, pointer: 12);
+    await second.moveBy(const Offset(140, 0));
+    await second.up();
+    await tester.pump();
+    expect(current().spanBars, 2);
+    expect(writer.undoCount, before);
+    await first.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    expect(current().spanBars, 3);
+    expect(writer.undoCount, before + 1);
+  });
+
+  testWidgets(
+    'edge autoscroll reaches offscreen rows during a continuous drag',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 24,
+        patternLengthTicks: 384,
+        size: const Size(390, 650),
+      );
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final initial = scrollable.position.pixels;
+      final writer = f.container.read(songwriterProvider.notifier);
+      final undoCount = writer.undoCount;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 100; i++) {
+        await gesture.moveTo(
+          Offset(viewport.right - 12 - (i % 2) * 4, viewport.bottom - 4),
+        );
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial + 100));
+      await gesture.up();
+      await tester.pump();
+      final block = f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single;
+      expect(block.spanBars, greaterThan(8));
+      expect(writer.undoCount, undoCount + 1);
+      expect(writer.undo(), isTrue);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+    },
+  );
+
+  testWidgets('secondary cancellation does not cancel the initiating resize', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 2,
+      patternLengthTicks: 48,
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final before = writer.undoCount;
+    final point = tester.getCenter(
+      find.byKey(Key('melodyResize_${f.blockId}_0')),
+    );
+    final first = await tester.startGesture(point, pointer: 21);
+    final second = await tester.startGesture(point, pointer: 22);
+    await second.cancel();
+    await first.moveBy(const Offset(100, 0));
+    await tester.pump();
+    await first.up();
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      3,
+    );
+    expect(writer.undoCount, before + 1);
+  });
+
+  testWidgets(
+    'cancelling an edge-scrolling resize stops scrolling without an edit',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 24,
+        size: const Size(390, 650),
+      );
+      final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+      await tester.ensureVisible(handle);
+      await tester.pumpAndSettle();
+      final scrollable = Scrollable.of(tester.element(handle));
+      final viewport = tester.getRect(find.byWidget(scrollable.widget));
+      final writer = f.container.read(songwriterProvider.notifier);
+      final before = writer.undoCount;
+      final initial = scrollable.position.pixels;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveTo(Offset(viewport.right - 12, viewport.bottom - 4));
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(scrollable.position.pixels, greaterThan(initial));
+      await gesture.cancel();
+      await tester.pump();
+      final stopped = scrollable.position.pixels;
+      await tester.pump(const Duration(seconds: 1));
+      expect(scrollable.position.pixels, stopped);
+      expect(
+        f.container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == f.laneId)
+            .blocks
+            .single
+            .spanBars,
+        1,
+      );
+      expect(writer.undoCount, before);
+    },
+  );
+
+  testWidgets('top edge scrolls backwards and stops when pointer leaves it', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 24,
+      span: 16,
+      size: const Size(390, 650),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final scrollable = Scrollable.of(tester.element(handle));
+    final viewport = tester.getRect(find.byWidget(scrollable.widget));
+    final initial = scrollable.position.pixels;
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveTo(Offset(viewport.left + 20, viewport.top + 4));
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(scrollable.position.pixels, lessThan(initial));
+    expect(
+      scrollable.position.pixels,
+      greaterThanOrEqualTo(scrollable.position.minScrollExtent),
+    );
+    await gesture.moveTo(viewport.center);
+    await tester.pump();
+    final stopped = scrollable.position.pixels;
+    await tester.pump(const Duration(seconds: 1));
+    expect(scrollable.position.pixels, stopped);
+    await gesture.cancel();
+  });
+
+  testWidgets('partial-row handle snaps using expanded bar widths', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 6, span: 6);
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    final row = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_4')),
+    );
+    await tester.drag(handle, Offset(-row.width / 2, 0));
+    await tester.pump();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == f.laneId)
+          .blocks
+          .single
+          .spanBars,
+      5,
+    );
+  });
+
+  testWidgets('placement dialog moves and resizes a melody', (tester) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern();
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 30,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    final block = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == laneId)
+        .blocks
+        .single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byKey(Key('melodyBlockActions_${block.id}_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Adjust placement'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('melodyPlacementStartBar')),
+      '3',
+    );
+    await tester.enterText(
+      find.byKey(const Key('melodyPlacementSpanBars')),
+      '2',
+    );
+    await tester.tap(find.byKey(const Key('applyMelodyPlacement')));
+    await tester.pumpAndSettle();
+    final moved = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == laneId)
+        .blocks
+        .single;
+    expect((moved.startBar, moved.spanBars), (2, 2));
+  });
+
+  testWidgets('dragging the resize edge does not scroll the Writer sheet', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 650);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(lengthTicks: 48);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'lead-last',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 3,
+    );
+    final block = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == laneId)
+        .blocks
+        .single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    final handle = find.byKey(Key('melodyResize_${block.id}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final scrollable = Scrollable.of(tester.element(handle));
+    final before = scrollable.position.pixels;
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(-120, 65));
+    await tester.pump();
+    expect(scrollable.position.pixels, before);
+    await gesture.cancel();
+  });
+
+  testWidgets('creating beyond automatic repeats does not orphan a pattern', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(lengthTicks: 32);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'lead-last',
+                midiNote: 72,
+                startTick: 30,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 2,
+    );
+    writer.setLaneRepeat(sectionId: section.id, laneId: laneId, repeat: 3);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byKey(Key('emptyMelodyBar_${laneId}_0_6')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('automatic repeats'), findsOneWidget);
+    expect(container.read(songwriterProvider).melodyPatterns.length, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('missing melody pattern remains visible and removable', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(name: 'Lost');
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    final project = container.read(songwriterProvider);
+    final block = project.sections.single.lanes
+        .firstWhere((l) => l.id == laneId)
+        .blocks
+        .single;
+    await writer.loadProject(project.copyWith(melodyPatterns: []));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byKey(Key('melodySegment_${block.id}_0_0_0')), findsOneWidget);
+    expect(find.text('Missing pattern'), findsWidgets);
+    expect(find.byKey(Key('melodyBlockActions_${block.id}_0')), findsOneWidget);
+    await tester.tap(find.byKey(Key('writerBrokenReference_${block.id}')));
+    await tester.pumpAndSettle();
+    expect(find.text('Missing melody pattern'), findsOneWidget);
+    expect(find.text('Delete block'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final variant in AppThemeVariant.values) {
+    for (final width in [320.0, 390.0, 1024.0]) {
+      testWidgets('melody controls fit $width ${variant.name}', (tester) async {
+        tester.view.physicalSize = Size(width, 1200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final writer = container.read(songwriterProvider.notifier);
+        writer.addSection(lengthBars: 8);
+        final section = container.read(songwriterProvider).sections.single;
+        final laneId = writer.addLane(
+          sectionId: section.id,
+          kind: SongLaneKind.melody,
+        );
+        final patternId = writer.addMelodyPattern(
+          name: 'Lead',
+          lengthTicks: 96,
+        );
+        writer.updateMelodyPattern(
+          writer.state.melodyPatterns
+              .singleWhere((p) => p.id == patternId)
+              .copyWith(
+                notes: [
+                  const NotePatternNote(
+                    id: 'preview',
+                    midiNote: 64,
+                    startTick: 0,
+                    durationTicks: 4,
+                  ),
+                  const NotePatternNote(
+                    id: 'length',
+                    midiNote: 67,
+                    startTick: 94,
+                    durationTicks: 2,
+                  ),
+                ],
+              ),
+        );
+        writer.addMelodyBlock(
+          sectionId: section.id,
+          laneId: laneId,
+          patternId: patternId,
+          startBar: 0,
+          spanBars: 6,
+        );
+        final block = container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == laneId)
+            .blocks
+            .single;
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              theme: StudioTheme.data(variant),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(width == 320 ? 1.5 : 1),
+                ),
+                child: child!,
+              ),
+              home: const Scaffold(body: SongwriterScreenSheet()),
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(tester.takeException(), isNull);
+        expect(
+          tester
+              .getSize(find.byKey(Key('editMelodyBlock_${block.id}_0')))
+              .width,
+          greaterThanOrEqualTo(44),
+        );
+        expect(
+          tester
+              .getSize(find.byKey(Key('melodyBlockActions_${block.id}_0')))
+              .width,
+          greaterThanOrEqualTo(44),
+        );
+        await tester.ensureVisible(
+          find.byKey(Key('melodyBlockActions_${block.id}_0')),
+        );
+        await tester.tap(find.byKey(Key('melodyBlockActions_${block.id}_0')));
+        await tester.pumpAndSettle();
+        expect(find.text('Adjust placement'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('compact long label does not cover populated high notes', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 4,
+      size: const Size(320, 1200),
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((p) => p.id == f.patternId)
+          .copyWith(
+            name: 'A very long melody name that must not hide notes',
+            notes: [
+              const NotePatternNote(
+                id: 'high',
+                midiNote: 90,
+                startTick: 0,
+                durationTicks: 4,
+              ),
+              const NotePatternNote(
+                id: 'low',
+                midiNote: 48,
+                startTick: 8,
+                durationTicks: 4,
+              ),
+            ],
+          ),
+    );
+    await tester.pumpAndSettle();
+    final label = find.byKey(Key('writerBlockName_${f.blockId}_0_0'));
+    final segment = find.byKey(Key('melodySegment_${f.blockId}_0_0_0'));
+    final preview = find.descendant(
+      of: segment,
+      matching: find.byType(SongwriterMelodyPreview),
+    );
+    expect(
+      tester.getRect(label).bottom,
+      lessThanOrEqualTo(tester.getRect(preview).top),
+    );
+    expect(
+      tester.getSize(preview).width,
+      closeTo(tester.getSize(segment).width - 4, 0.01),
+    );
+    expect(
+      tester.widget<SongwriterMelodyPreview>(preview).pattern.notes,
+      hasLength(2),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('large accessibility text does not clip melody labels', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(name: 'Lead', lengthTicks: 64);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 62,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 4,
+    );
+    final project = container.read(songwriterProvider);
+    final lane = project.sections.single.lanes.firstWhere(
+      (candidate) => candidate.id == laneId,
+    );
+    final pattern = project.melodyPatterns.singleWhere(
+      (candidate) => candidate.id == patternId,
+    );
+    final textScaler = TextScaler.linear(2.5);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: SongwriterMelodyTimeline(
+                section: section,
+                lane: lane,
+                instanceIndex: 0,
+                patternNames: {patternId: pattern.name},
+                patterns: {patternId: pattern},
+                measureTicks: 16,
+                onEdit: (_) {},
+                onCreate: (_) {},
+                canEdit: (_) => true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final label = find.byKey(
+      Key('writerBlockName_${lane.blocks.single.id}_0_0'),
+    );
+    final segment = find.byKey(
+      Key('melodySegment_${lane.blocks.single.id}_0_0_0'),
+    );
+    final preview = find.descendant(
+      of: segment,
+      matching: find.byType(SongwriterMelodyPreview),
+    );
+    final labelRect = tester.getRect(label);
+    final previewRect = tester.getRect(preview);
+    expect(
+      labelRect.height,
+      greaterThanOrEqualTo(textScaler.scale(11)),
+      reason: 'the scaled label must fit inside its strip',
+    );
+    expect(previewRect.top, greaterThanOrEqualTo(labelRect.bottom));
+    expect(previewRect.height, greaterThanOrEqualTo(20));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('resize stops at a neighbor and at the section boundary', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final a = writer.addMelodyPattern(name: 'A', lengthTicks: 48);
+    final b = writer.addMelodyPattern(name: 'B', lengthTicks: 128);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == a)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'a-last',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == b)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'b-last',
+                midiNote: 72,
+                startTick: 126,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: a,
+      startBar: 0,
+      spanBars: 1,
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: b,
+      startBar: 3,
+      spanBars: 1,
+    );
+    List<SongBlock> blocks() => container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((l) => l.id == laneId)
+        .blocks;
+    final firstId = blocks().first.id;
+    final secondId = blocks().last.id;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.drag(
+      find.byKey(Key('melodyResize_${firstId}_0')),
+      const Offset(500, 0),
+    );
+    await tester.pump();
+    expect(blocks().first.spanBars, 3);
+    final secondHandle = find.byKey(Key('melodyResize_${secondId}_0'));
+    await tester.ensureVisible(secondHandle);
+    final gesture = await tester.startGesture(tester.getCenter(secondHandle));
+    await gesture.moveTo(
+      tester.getBottomRight(find.byKey(Key('emptyMelodyBar_${laneId}_0_7'))) +
+          const Offset(100, 0),
+    );
+    await gesture.up();
+    await tester.pump();
+    expect(blocks().last.endBar, 8);
+  });
+
+  testWidgets(
+    'automatic occurrences remain visible and explain resize conflicts',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(lengthBars: 8);
+      final section = container.read(songwriterProvider).sections.single;
+      final laneId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern(name: 'Lead', lengthTicks: 48);
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((pattern) => pattern.id == patternId)
+            .copyWith(
+              notes: const [
+                NotePatternNote(
+                  id: 'lead-last',
+                  midiNote: 72,
+                  startTick: 46,
+                  durationTicks: 2,
+                ),
+              ],
+            ),
+      );
+      writer.addMelodyBlock(
+        sectionId: section.id,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 2,
+      );
+      writer.setLaneRepeat(sectionId: section.id, laneId: laneId, repeat: 3);
+      final block = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == laneId)
+          .blocks
+          .single;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(
+        find.byKey(Key('melodySegment_${block.id}_0_1_2')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('repeat'), findsWidgets);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label ==
+                  'Automatic repeat of Lead, bars 3 through 4',
+        ),
+        findsOneWidget,
+      );
+      final before = writer.undoCount;
+      await tester.drag(
+        find.byKey(Key('melodyResize_${block.id}_0')),
+        const Offset(100, 0),
+      );
+      await tester.pump();
+      expect(
+        container
+            .read(songwriterProvider)
+            .sections
+            .single
+            .lanes
+            .firstWhere((l) => l.id == laneId)
+            .blocks
+            .single
+            .spanBars,
+        2,
+      );
+      expect(writer.undoCount, before);
+      await tester.tap(find.byKey(Key('melodyBlockActions_${block.id}_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Adjust placement'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('melodyPlacementSpanBars')),
+        '3',
+      );
+      await tester.pump();
+      expect(
+        find.textContaining('conflicts with automatic repeats'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('applyMelodyPlacement')))
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'resize preview can cross a row and cancellation preserves history',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(lengthBars: 8);
+      final section = container.read(songwriterProvider).sections.single;
+      final laneId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern(lengthTicks: 96);
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((pattern) => pattern.id == patternId)
+            .copyWith(
+              notes: const [
+                NotePatternNote(
+                  id: 'last',
+                  midiNote: 72,
+                  startTick: 94,
+                  durationTicks: 2,
+                ),
+              ],
+            ),
+      );
+      writer.addMelodyBlock(
+        sectionId: section.id,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 3,
+      );
+      SongBlock block() => container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((l) => l.id == laneId)
+          .blocks
+          .single;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: SongwriterScreenSheet()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      final handle = find.byKey(Key('melodyResize_${block().id}_0'));
+      await tester.ensureVisible(handle);
+      final before = writer.undoCount;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      final target = tester.getCenter(
+        find.byKey(Key('emptyMelodyBar_${laneId}_0_5')),
+      );
+      await gesture.moveTo(target);
+      await tester.pump();
+      expect(block().spanBars, 3);
+      await gesture.cancel();
+      await tester.pump();
+      expect(block().spanBars, 3);
+      expect(writer.undoCount, before);
+      final second = await tester.startGesture(tester.getCenter(handle));
+      await second.moveTo(target);
+      await tester.pump();
+      await second.up();
+      await tester.pump();
+      expect(block().spanBars, greaterThan(4));
+      expect(writer.undoCount, before + 1);
+    },
+  );
+
+  testWidgets('six-bar melody wraps with one resize handle', (tester) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(label: 'Verse', lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(name: 'Lead', lengthTicks: 96);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'lead-last',
+                midiNote: 72,
+                startTick: 94,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 6,
+    );
+    final block = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byKey(Key('melodySegment_${block.id}_0_0_0')), findsOneWidget);
+    expect(find.byKey(Key('melodySegment_${block.id}_0_0_4')), findsOneWidget);
+    expect(find.byKey(Key('melodyResize_${block.id}_0')), findsOneWidget);
+    expect(find.text('Bar 5'), findsWidgets);
+    final before = writer.undoCount;
+    final handle = find.byKey(Key('melodyResize_${block.id}_0'));
+    await tester.ensureVisible(handle);
+    await tester.drag(handle, const Offset(-85, 0));
+    await tester.pump();
+    final resized = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+    expect(resized.spanBars, lessThan(6));
+    expect(writer.undoCount, before + 1);
+    expect(writer.undo(), isTrue);
+    expect(
+      container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .firstWhere((lane) => lane.id == laneId)
+          .blocks
+          .single
+          .spanBars,
+      6,
+    );
+  });
+
+  testWidgets('resize stops at the melody bar limit', (tester) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      patternLengthTicks: 48,
+      notes: const [
+        NotePatternNote(
+          id: 'last',
+          midiNote: 72,
+          startTick: 46,
+          durationTicks: 2,
+        ),
+      ],
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.drag(handle, const Offset(500, 0));
+    await tester.pump();
+    final block = f.container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, 3);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an over-long block can shrink directly to a valid span', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      patternLengthTicks: 32,
+      notes: const [
+        NotePatternNote(
+          id: 'last',
+          midiNote: 72,
+          startTick: 30,
+          durationTicks: 2,
+        ),
+      ],
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final section = writer.state.sections.single;
+    final lane = section.lanes.firstWhere((lane) => lane.id == f.laneId);
+    writer.state = writer.state.copyWith(
+      sections: [
+        section.copyWith(
+          lanes: [
+            for (final item in section.lanes)
+              if (item.id == f.laneId)
+                lane.copyWith(
+                  blocks: [lane.blocks.single.copyWith(spanBars: 4)],
+                )
+              else
+                item,
+          ],
+        ),
+      ],
+    );
+    await tester.pump();
+    final segment = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_0')),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.drag(handle, Offset(-segment.width / 2, 0));
+    await tester.pump();
+    final block = writer.state.sections.single.lanes
+        .firstWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, 2);
+  });
+
+  testWidgets('a silent tail stays occupied and cannot host another block', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      patternLengthTicks: 32,
+      notes: const [
+        NotePatternNote(
+          id: 'last',
+          midiNote: 72,
+          startTick: 30,
+          durationTicks: 2,
+        ),
+      ],
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final section = writer.state.sections.single;
+    final lane = section.lanes.firstWhere((lane) => lane.id == f.laneId);
+    writer.state = writer.state.copyWith(
+      sections: [
+        section.copyWith(
+          lanes: [
+            for (final item in section.lanes)
+              if (item.id == f.laneId)
+                lane.copyWith(
+                  blocks: [lane.blocks.single.copyWith(spanBars: 4)],
+                )
+              else
+                item,
+          ],
+        ),
+      ],
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(Key('emptyMelodyBar_${f.laneId}_0_2')),
+      findsNothing,
+      reason: 'the silent tail remains part of the placed block',
+    );
+    expect(find.byKey(Key('emptyMelodyBar_${f.laneId}_0_3')), findsNothing);
+    expect(
+      find.byKey(Key('melodySilentTail_${f.blockId}_0_2')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp('silent tail', caseSensitive: false)),
+      findsWidgets,
+    );
+    expect(
+      find.textContaining('silent tail', findRichText: true),
+      findsWidgets,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Adjust placement allows a move-only over-long block but requires a valid '
+    'resize',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 8,
+        patternLengthTicks: 32,
+        notes: const [
+          NotePatternNote(
+            id: 'last',
+            midiNote: 72,
+            startTick: 30,
+            durationTicks: 2,
+          ),
+        ],
+      );
+      final writer = f.container.read(songwriterProvider.notifier);
+      final section = writer.state.sections.single;
+      final lane = section.lanes.firstWhere((lane) => lane.id == f.laneId);
+      writer.state = writer.state.copyWith(
+        sections: [
+          section.copyWith(
+            lanes: [
+              for (final item in section.lanes)
+                if (item.id == f.laneId)
+                  lane.copyWith(
+                    blocks: [lane.blocks.single.copyWith(spanBars: 4)],
+                  )
+                else
+                  item,
+            ],
+          ),
+        ],
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(Key('melodyBlockActions_${f.blockId}_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Adjust placement'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('applyMelodyPlacement')))
+            .onPressed,
+        isNotNull,
+        reason: 'an unchanged over-long span is a valid move-only placement',
+      );
+      await tester.enterText(
+        find.byKey(const Key('melodyPlacementStartBar')),
+        '3',
+      );
+      await tester.tap(find.byKey(const Key('applyMelodyPlacement')));
+      await tester.pumpAndSettle();
+      var block = writer.state.sections.single.lanes
+          .firstWhere((lane) => lane.id == f.laneId)
+          .blocks
+          .single;
+      expect((block.startBar, block.spanBars), (2, 4));
+
+      await tester.tap(find.byKey(Key('melodyBlockActions_${f.blockId}_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Adjust placement'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('melodyPlacementSpanBars')),
+        '5',
+      );
+      await tester.pump();
+      expect(find.textContaining('Resize the placement'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('applyMelodyPlacement')))
+            .onPressed,
+        isNull,
+      );
+      await tester.enterText(
+        find.byKey(const Key('melodyPlacementSpanBars')),
+        '2',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('applyMelodyPlacement')));
+      await tester.pumpAndSettle();
+      block = writer.state.sections.single.lanes
+          .firstWhere((lane) => lane.id == f.laneId)
+          .blocks
+          .single;
+      expect((block.startBar, block.spanBars), (2, 2));
+    },
+  );
+
+  testWidgets('a new melody lane expands its block on the first save', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byKey(Key('sheetSectionMenu_${section.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('addMelodyLaneSheetAction')));
+    await tester.pumpAndSettle();
+
+    final lane = writer.state.sections.single.lanes.singleWhere(
+      (candidate) => candidate.kind == SongLaneKind.melody,
+    );
+    final patternId = lane.blocks.single.patternId!;
+    expect((lane.blocks.single.startBar, lane.blocks.single.spanBars), (0, 1));
+
+    final editor = await _openMelodyEditor(tester, patternId);
+    editor.read(pianoRollProvider.notifier)
+      ..setTotalMeasures(4)
+      ..addNote(72, 0, 4)
+      ..addNote(76, 48, 4);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    final project = writer.state;
+    final savedPattern = project.melodyPatterns.singleWhere(
+      (pattern) => pattern.id == patternId,
+    );
+    final savedBlock = project.sections.single.lanes
+        .singleWhere((candidate) => candidate.id == lane.id)
+        .blocks
+        .single;
+    expect(savedPattern.lengthTicks, 64);
+    expect((savedBlock.startBar, savedBlock.spanBars), (0, 4));
+  });
+
+  testWidgets('a silent tail follows the last-note bar, not the legacy limit', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(name: 'Legacy', lengthTicks: 25);
+    // Seed the legacy stored length directly; the save path normalizes it.
+    final legacy = writer.state;
+    writer.state = legacy.copyWith(
+      melodyPatterns: [
+        for (final pattern in legacy.melodyPatterns)
+          if (pattern.id == patternId)
+            pattern.copyWith(
+              notes: const [
+                NotePatternNote(
+                  id: 'last',
+                  midiNote: 72,
+                  startTick: 12,
+                  durationTicks: 4,
+                ),
+              ],
+            )
+          else
+            pattern,
+      ],
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 2,
+    );
+    final blockId = writer.state.sections.single.lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single
+        .id;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(
+      find.textContaining('plays once, then 1 silent tail bar'),
+      findsOneWidget,
+    );
+    expect(find.byKey(Key('melodySilentTail_${blockId}_0_1')), findsOneWidget);
+
+    final sectionState = writer.state.sections.single;
+    final laneState = sectionState.lanes.singleWhere(
+      (lane) => lane.id == laneId,
+    );
+    writer.state = writer.state.copyWith(
+      sections: [
+        sectionState.copyWith(
+          lanes: [
+            for (final item in sectionState.lanes)
+              if (item.id == laneId)
+                laneState.copyWith(
+                  blocks: [laneState.blocks.single.copyWith(spanBars: 3)],
+                )
+              else
+                item,
+          ],
+        ),
+      ],
+    );
+    await tester.pump();
+
+    expect(
+      find.textContaining('plays once, then 2 silent tail bars'),
+      findsOneWidget,
+    );
+    expect(find.byKey(Key('melodySilentTail_${blockId}_0_1')), findsOneWidget);
+  });
+
+  testWidgets('new and reused melody blocks default to melody or free bars', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(lengthTicks: 48);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byKey(Key('emptyMelodyBar_${laneId}_0_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('reuseWriterPattern_$patternId')));
+    await tester.pumpAndSettle();
+    var blocks = writer.state.sections.single.lanes
+        .firstWhere((lane) => lane.id == laneId)
+        .blocks;
+    expect((blocks.single.startBar, blocks.single.spanBars), (0, 3));
+
+    await tester.tap(find.byKey(Key('emptyMelodyBar_${laneId}_0_6')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('reuseWriterPattern_$patternId')));
+    await tester.pumpAndSettle();
+    blocks = writer.state.sections.single.lanes
+        .firstWhere((lane) => lane.id == laneId)
+        .blocks;
+    expect((blocks.last.startBar, blocks.last.spanBars), (6, 2));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('section menu creates an editable melody pattern lane', (
     tester,
@@ -40,7 +2699,7 @@ void main() {
     final lane = project.sections.single.lanes.singleWhere(
       (candidate) => candidate.kind == SongLaneKind.melody,
     );
-    expect(lane.blocks.single.spanBars, 4);
+    expect(lane.blocks.single.spanBars, 1);
     expect(find.byKey(Key('sheetMelodyLane_${lane.id}_0')), findsOneWidget);
     expect(
       find.byWidgetPredicate(
@@ -48,7 +2707,7 @@ void main() {
             widget is Semantics &&
             widget.properties.label ==
                 'Edit melody pattern Melody. Pattern duration 1 bar. '
-                    'Placed bars 1 through 4. repeats ×4 to fill.',
+                    'Placed bars 1 through 1. plays once.',
       ),
       findsOneWidget,
     );
@@ -285,6 +2944,20 @@ void main() {
       name: 'Lead',
       lengthTicks: container.read(songwriterProvider).config.measureTicks * 2,
     );
+    notifier.updateMelodyPattern(
+      notifier.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 30,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     notifier.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -307,7 +2980,18 @@ void main() {
     expect(tile, findsOneWidget);
     expect(duration, findsOneWidget);
     expect(placement, findsOneWidget);
-    expect(tester.getSize(tile).width, greaterThan(100));
+    final block = container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+    expect(
+      tester.getSize(find.byKey(Key('editMelodyBlock_${block.id}_0'))).width,
+      greaterThanOrEqualTo(44),
+    );
     for (final finder in [duration, placement]) {
       final summary = tester.widget<Text>(finder);
       expect(summary.maxLines, isNull);
@@ -369,7 +3053,7 @@ void main() {
     final lane = project.sections.single.lanes.singleWhere(
       (candidate) => candidate.id == laneId,
     );
-    expect(project.melodyPatterns.single.lengthTicks, 20);
+    expect(project.melodyPatterns.single.lengthTicks, 32);
     expect((lane.blocks.single.startBar, lane.blocks.single.spanBars), (1, 2));
   });
 
@@ -538,4 +3222,556 @@ void main() {
       const Size(44, 44),
     );
   });
+
+  testWidgets(
+    'melody editor shows its name and bar count and steps whole bars',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final f = await _timelineFixture(
+        tester,
+        bars: 12,
+        size: const Size(390, 1000),
+      );
+      final editor = await _openMelodyEditor(tester, f.patternId);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('melodyEditorName'))).data,
+        'Lead',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+        '1',
+      );
+      final initialBars = tester
+          .getSemantics(find.byKey(const Key('melodyBarsSemantics')))
+          .getSemanticsData();
+      expect(initialBars.label, contains('Bars'));
+      expect(initialBars.value, contains('1 of 32'));
+      expect(initialBars.hint, contains('Minimum 1'));
+      expect(initialBars.hint, contains('maximum 32'));
+      for (final key in ['melodyBarsDecrease', 'melodyBarsIncrease']) {
+        final size = tester.getSize(find.byKey(Key(key)));
+        expect(size.width, greaterThanOrEqualTo(44));
+        expect(size.height, greaterThanOrEqualTo(44));
+      }
+
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.byKey(const Key('melodyBarsIncrease')));
+        await tester.pump();
+      }
+      expect(editor.read(pianoRollProvider).config.totalMeasures, 4);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+        '4',
+      );
+
+      editor.read(pianoRollProvider.notifier).addNote(72, 0, 4);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('melodyBarsDecrease')));
+      await tester.pump();
+      expect(editor.read(pianoRollProvider).config.totalMeasures, 3);
+
+      editor.read(pianoRollProvider.notifier).addNote(76, 32, 4);
+      await tester.pump();
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('melodyBarsDecrease')))
+            .onPressed,
+        isNull,
+      );
+      final disabledBars = tester
+          .getSemantics(find.byKey(const Key('melodyBarsSemantics')))
+          .getSemanticsData();
+      expect(disabledBars.value, contains('3 of 32'));
+      expect(disabledBars.hint, contains('Cannot decrease'));
+      expect(disabledBars.hint, contains('bar 3'));
+      await tester.tap(find.byKey(const Key('melodyBarsDecrease')));
+      await tester.pump();
+      expect(editor.read(pianoRollProvider).config.totalMeasures, 3);
+      semantics.dispose();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Edit performance first-save expands the one-bar placement, later saves do not',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final writer = container.read(songwriterProvider.notifier);
+      writer.addSection(lengthBars: 8);
+      final section = container.read(songwriterProvider).sections.single;
+      final laneId = writer.addLane(
+        sectionId: section.id,
+        kind: SongLaneKind.melody,
+      );
+      final patternId = writer.addMelodyPattern(name: 'Lead');
+      writer.addMelodyBlock(
+        sectionId: section.id,
+        laneId: laneId,
+        patternId: patternId,
+        startBar: 0,
+        spanBars: 1,
+      );
+      final blockId = container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single
+          .id;
+      SongBlock block() => container
+          .read(songwriterProvider)
+          .sections
+          .single
+          .lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single;
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SongwriterScreen())),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+
+      Future<ProviderContainer> openRollViaPerformance() async {
+        final menu = find.byKey(Key('melodyBlockActions_${blockId}_0'));
+        await tester.ensureVisible(menu);
+        await tester.tap(menu);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Edit performance'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Edit notes in Piano Roll'));
+        await tester.pumpAndSettle();
+        return tester
+            .widgetList<UncontrolledProviderScope>(
+              find.byType(UncontrolledProviderScope),
+            )
+            .last
+            .container;
+      }
+
+      final firstEditor = await openRollViaPerformance();
+      await tester.tap(find.byKey(const Key('melodyBarsIncrease')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('melodyBarsIncrease')));
+      await tester.pump();
+      firstEditor.read(pianoRollProvider.notifier).addNote(72, 0, 4);
+      firstEditor.read(pianoRollProvider.notifier).addNote(67, 46, 2);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close performance editor'));
+      await tester.pumpAndSettle();
+
+      expect((block().startBar, block().spanBars), (0, 3));
+      expect(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((pattern) => pattern.id == patternId)
+            .lengthTicks,
+        48,
+      );
+
+      final secondEditor = await openRollViaPerformance();
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(find.byKey(const Key('melodyBarsIncrease')));
+        await tester.pump();
+      }
+      secondEditor.read(pianoRollProvider.notifier).addNote(69, 78, 2);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close performance editor'));
+      await tester.pumpAndSettle();
+
+      expect(block().spanBars, 3, reason: 'a later save must not resize it');
+      expect(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((pattern) => pattern.id == patternId)
+            .lengthTicks,
+        80,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('renaming a melody updates every linked block label on save', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8);
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = f.container.read(songwriterProvider).sections.single.id;
+    writer.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: f.laneId,
+      patternId: f.patternId,
+      startBar: 2,
+      spanBars: 1,
+    );
+    await tester.pumpAndSettle();
+    final blocks = f.container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == f.laneId)
+        .blocks;
+
+    await _openMelodyEditor(tester, f.patternId);
+    await tester.tap(find.byKey(const Key('renameWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('melodyNameField')),
+      'Verse Lead',
+    );
+    await tester.tap(find.byKey(const Key('melodyNameApply')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyEditorName'))).data,
+      'Verse Lead',
+    );
+
+    await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .melodyPatterns
+          .singleWhere((pattern) => pattern.id == f.patternId)
+          .name,
+      'Verse Lead',
+    );
+    expect(blocks, hasLength(2));
+    for (final block in blocks) {
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                Key('writerBlockName_${block.id}_0_${block.startBar}'),
+              ),
+            )
+            .data,
+        'Verse Lead',
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty or whitespace melody rename shows a validation message', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 4);
+    await _openMelodyEditor(tester, f.patternId);
+    await tester.tap(find.byKey(const Key('renameWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('melodyNameField')), '');
+    await tester.tap(find.byKey(const Key('melodyNameApply')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('melodyNameField')), findsOneWidget);
+    expect(find.text('Enter a melody name.'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('melodyNameField')), '   ');
+    await tester.tap(find.byKey(const Key('melodyNameApply')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('melodyNameField')), findsOneWidget);
+    expect(find.text('Enter a melody name.'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyEditorName'))).data,
+      'Lead',
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('melodyNameField')),
+      'Verse Lead',
+    );
+    await tester.tap(find.byKey(const Key('melodyNameApply')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('melodyNameField')), findsNothing);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyEditorName'))).data,
+      'Verse Lead',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('leaving the melody editor discards an unsaved rename', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 4);
+    await _openMelodyEditor(tester, f.patternId);
+    await tester.tap(find.byKey(const Key('renameWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('melodyNameField')), 'Draft');
+    await tester.tap(find.byKey(const Key('melodyNameApply')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyEditorName'))).data,
+      'Draft',
+    );
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .melodyPatterns
+          .singleWhere((pattern) => pattern.id == f.patternId)
+          .name,
+      'Lead',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(Key('writerBlockName_${f.blockId}_0_0')))
+          .data,
+      'Lead',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('melody editor controls survive large accessibility text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(name: 'Lead');
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.5)),
+            child: child!,
+          ),
+          home: const Scaffold(body: SongwriterScreenSheet()),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await _openMelodyEditor(tester, patternId);
+
+    expect(find.byKey(const Key('melodyEditorName')), findsOneWidget);
+    expect(find.byKey(const Key('melodyBarsLabel')), findsOneWidget);
+    for (final key in ['melodyBarsDecrease', 'melodyBarsIncrease']) {
+      final size = tester.getSize(find.byKey(Key(key)));
+      expect(size.width, greaterThanOrEqualTo(44));
+      expect(size.height, greaterThanOrEqualTo(44));
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('melody editor locks tempo and time-signature controls', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8);
+    final editor = await _openMelodyEditor(tester, f.patternId);
+    final project = f.container.read(songwriterProvider);
+    final tempo = editor.read(pianoRollProvider).config.tempo;
+
+    expect(find.text('SIG'), findsNothing);
+    await tester.ensureVisible(find.text('BPM'));
+    await tester.tap(find.text('BPM'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tempo'), findsNothing);
+    expect(editor.read(pianoRollProvider).config.tempo, tempo);
+
+    await tester.tap(find.byKey(const Key('melodyBarsIncrease')));
+    await tester.pump();
+    editor.read(pianoRollProvider.notifier).addNote(67, 30, 2);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    expect(
+      f.container
+          .read(songwriterProvider)
+          .melodyPatterns
+          .singleWhere((pattern) => pattern.id == f.patternId)
+          .lengthTicks,
+      2 * project.config.measureTicks,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final variant in AppThemeVariant.values) {
+    testWidgets('melody editor controls fit 1024 ${variant.name}', (
+      tester,
+    ) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 8,
+        size: const Size(1024, 1200),
+        themeVariant: variant,
+      );
+      await _openMelodyEditor(tester, f.patternId);
+
+      expect(find.byKey(const Key('melodyEditorName')), findsOneWidget);
+      expect(find.byKey(const Key('melodyBarsSemantics')), findsOneWidget);
+      expect(
+        find.byKey(const Key('renameWriterMelodyPattern')),
+        findsOneWidget,
+      );
+      for (final key in ['melodyBarsDecrease', 'melodyBarsIncrease']) {
+        final size = tester.getSize(find.byKey(Key(key)));
+        expect(size.width, greaterThanOrEqualTo(44));
+        expect(size.height, greaterThanOrEqualTo(44));
+      }
+      expect(
+        tester
+            .getSize(find.byKey(const Key('renameWriterMelodyPattern')))
+            .width,
+        greaterThanOrEqualTo(44),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('editor time signature changes cannot let Bars delete notes', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 2,
+      patternLengthTicks: 64,
+      notes: const [
+        NotePatternNote(
+          id: 'late',
+          midiNote: 72,
+          startTick: 16,
+          durationTicks: 16,
+        ),
+      ],
+    );
+    final editor = await _openMelodyEditor(tester, f.patternId);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+      '4',
+    );
+
+    editor
+        .read(pianoRollProvider.notifier)
+        .setTimeSignature(const TimeSignature(beatsPerMeasure: 2, beatUnit: 4));
+    await tester.pump();
+    final roll = editor.read(pianoRollProvider);
+    expect(roll.config.timeSignature.beatsPerMeasure, 2);
+    expect(roll.config.totalMeasures, 4);
+    expect(roll.notes, hasLength(1));
+    expect(roll.notes.single.startTick, 16);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+      '4',
+    );
+    final decrease = find.byKey(const Key('melodyBarsDecrease'));
+
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await tester.tap(decrease);
+      await tester.pump();
+    }
+    final after = editor.read(pianoRollProvider);
+    expect(after.config.totalMeasures, 4);
+    expect(after.notes, hasLength(1));
+    expect(after.notes.single.startTick, 16);
+    expect(after.notes.single.durationTicks, 16);
+    expect(tester.widget<IconButton>(decrease).onPressed, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleting the last notes shortens the melody on save', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 2,
+      patternLengthTicks: 32,
+      notes: const [
+        NotePatternNote(
+          id: 'tail',
+          midiNote: 67,
+          startTick: 20,
+          durationTicks: 4,
+        ),
+      ],
+    );
+    final editor = await _openMelodyEditor(tester, f.patternId);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('melodyBarsValue'))).data,
+      '2',
+    );
+
+    editor
+        .read(pianoRollProvider.notifier)
+        .removeNote(editor.read(pianoRollProvider).notes.single.id);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    final project = f.container.read(songwriterProvider);
+    final pattern = project.melodyPatterns.singleWhere(
+      (candidate) => candidate.id == f.patternId,
+    );
+    expect(pattern.notes, isEmpty);
+    expect(pattern.lengthTicks, project.config.measureTicks);
+    final block = project.sections.single.lanes
+        .singleWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, 2, reason: 'the existing placement keeps its span');
+    expect(
+      find.byKey(Key('melodySilentTail_${f.blockId}_0_1')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel(RegExp('silent tail bar 2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<ProviderContainer> _openMelodyEditor(
+  WidgetTester tester,
+  String patternId,
+) async {
+  final tile = find.byKey(Key('sheetMelodyTile_${patternId}_0_0'));
+  await tester.ensureVisible(tile);
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
+  return tester
+      .widgetList<UncontrolledProviderScope>(
+        find.byType(UncontrolledProviderScope),
+      )
+      .last
+      .container;
 }

@@ -3,6 +3,7 @@ import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/save_system.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 
@@ -654,5 +655,118 @@ void main() {
         );
       },
     );
+  });
+
+  group('Writer melody bar-aligned length', () {
+    const measureTicks = 16;
+
+    NotePattern melody({
+      String name = 'Lead',
+      int lengthTicks = 16,
+      List<NotePatternNote> notes = const [],
+    }) => NotePattern(
+      id: 'melody',
+      name: name,
+      lengthTicks: lengthTicks,
+      notes: notes,
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      snapTicks: 1,
+      highlightedNotes: const [],
+    );
+
+    test('empty melodies occupy one bar', () {
+      expect(melodyBarCount(melody(), measureTicks), 1);
+      expect(
+        quantizeMelodyPatternLength(
+          melody(lengthTicks: 48),
+          measureTicks,
+        ).lengthTicks,
+        measureTicks,
+      );
+    });
+
+    test('a note ending exactly on a barline keeps that bar', () {
+      final pattern = melody(
+        notes: const [
+          NotePatternNote(
+            id: 'note',
+            midiNote: 60,
+            startTick: 8,
+            durationTicks: 8,
+          ),
+        ],
+      );
+      expect(melodyBarCount(pattern, measureTicks), 1);
+      expect(
+        quantizeMelodyPatternLength(pattern, measureTicks).lengthTicks,
+        measureTicks,
+      );
+    });
+
+    test('a note ending one tick into a bar adds the next bar', () {
+      final pattern = melody(
+        notes: const [
+          NotePatternNote(
+            id: 'note',
+            midiNote: 60,
+            startTick: 15,
+            durationTicks: 2,
+          ),
+        ],
+      );
+      expect(melodyBarCount(pattern, measureTicks), 2);
+      expect(
+        quantizeMelodyPatternLength(pattern, measureTicks).lengthTicks,
+        2 * measureTicks,
+      );
+    });
+
+    test('bar counts cap at the editor maximum of 32 bars', () {
+      final pattern = melody(
+        notes: const [
+          NotePatternNote(
+            id: 'note',
+            midiNote: 60,
+            startTick: 32 * measureTicks,
+            durationTicks: 1,
+          ),
+        ],
+      );
+      expect(melodyBarCount(pattern, measureTicks), 32);
+      expect(
+        quantizeMelodyPatternLength(pattern, measureTicks).lengthTicks,
+        32 * measureTicks,
+      );
+    });
+
+    test('quantizing changes only the length', () {
+      final pattern = melody(
+        name: 'Verse motif',
+        lengthTicks: 20,
+        notes: const [
+          NotePatternNote(
+            id: 'a',
+            midiNote: 64,
+            startTick: 4,
+            durationTicks: 16,
+            onsetOffsetMs: 12,
+            durationOffsetMs: -4,
+          ),
+        ],
+      ).copyWith(pitchRangeStart: 40, pitchRangeEnd: 90, snapTicks: 2);
+      final highlighted = pattern.copyWith(
+        highlightedNotes: const ['C', 'E', 'G'],
+      );
+      final quantized = quantizeMelodyPatternLength(highlighted, measureTicks);
+      expect(quantized.lengthTicks, 2 * measureTicks);
+      expect(quantized.id, highlighted.id);
+      expect(quantized.name, highlighted.name);
+      expect(quantized.notes, highlighted.notes);
+      expect(quantized.pitchRangeStart, highlighted.pitchRangeStart);
+      expect(quantized.pitchRangeEnd, highlighted.pitchRangeEnd);
+      expect(quantized.snapTicks, highlighted.snapTicks);
+      expect(quantized.highlightedNotes, highlighted.highlightedNotes);
+    });
   });
 }

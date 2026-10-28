@@ -11,7 +11,7 @@ import '../../models/save_system.dart';
 import '../../store/piano_store.dart';
 import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
 import '../../ui/core/project_off_scale_dialog.dart';
 import '../../utils/note_player.dart';
@@ -126,7 +126,9 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: SizedBox(
             width: totalWidth,
-            height: _whiteKeyH,
+            height: StudioPalette.of(context).isStudio && widget.hideToolbar
+                ? 190
+                : _whiteKeyH,
             child: Stack(
               children: [
                 // White keys first
@@ -165,14 +167,9 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     final isFocusedPitchClass =
         !isControlled && state.focusedNotes.contains(key.noteName);
 
-    // In Solo mode, hide keys that are neither selected nor focused.
-    final inExactFocusMode =
-        !isControlled &&
-        state.viewMode == PianoViewMode.exactFocus &&
-        state.selectedKeys.isNotEmpty;
-    if (inExactFocusMode && !selectedExact && !isFocusedPitchClass) {
-      return const SizedBox.shrink();
-    }
+    // Keep every physical key playable; Solo filters labels only.
+    final showLabel =
+        isControlled || state.viewMode == PianoViewMode.exact || isSelected;
 
     final isHighlighted =
         state.highlightedNotes.isNotEmpty &&
@@ -192,21 +189,25 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
         ? const Color(0xFF0F172A)
         : const Color(0xFFF8FAFC);
     final accentBg = key.isNatural
-        ? MuzicianTheme.sky
-        : const Color(0xFFC084FC);
+        ? StudioPalette.of(context).sky
+        : StudioPalette.of(context).purple;
     final bgColor = (isSelected || isFocusedPitchClass) ? accentBg : baseBg;
     final keyContent = Container(
       width: key.isBlack ? _blackKeyW : _whiteKeyW,
-      height: key.isBlack ? _blackKeyH : _whiteKeyH,
+      height: StudioPalette.of(context).isStudio && widget.hideToolbar
+          ? (key.isBlack ? 118 : 190)
+          : (key.isBlack ? _blackKeyH : _whiteKeyH),
       decoration: BoxDecoration(
-        color: bgColor,
+        color: StudioPalette.of(context).isStudio
+            ? Color.lerp(baseBg, bgColor, opacity)
+            : bgColor,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(key.isBlack ? 6 : 8),
           bottomRight: Radius.circular(key.isBlack ? 6 : 8),
         ),
         border: Border.all(
-          color: isSelected
-              ? Colors.white.withValues(alpha: 0.8)
+          color: (isSelected || isFocusedPitchClass)
+              ? StudioPalette.of(context).onAccent.withValues(alpha: 0.8)
               : key.isBlack
               ? Colors.white.withValues(alpha: 0.2)
               : const Color(0x330F172A),
@@ -215,26 +216,28 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
       ),
       alignment: Alignment.bottomCenter,
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        note_utils.formatMidiNoteLabel(key.midiNote, spelling: spelling),
-        style: TextStyle(
-          color: isSelected
-              ? Colors.white
-              : key.isBlack
-              ? const Color(0xFFE2E8F0)
-              : const Color(0xFF0F172A),
-          fontSize: key.isBlack ? 9 : 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.2,
-        ),
-      ),
+      child: showLabel
+          ? Text(
+              note_utils.formatMidiNoteLabel(key.midiNote, spelling: spelling),
+              style: TextStyle(
+                color: (isSelected || isFocusedPitchClass)
+                    ? StudioPalette.of(context).onAccent
+                    : key.isBlack
+                    ? StudioPalette.of(context).textPrimary
+                    : const Color(0xFF0F172A),
+                fontSize: key.isBlack ? 9 : 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            )
+          : null,
     );
 
     return Positioned(
       left: pk.x,
       top: 0,
       child: Opacity(
-        opacity: opacity,
+        opacity: StudioPalette.of(context).isStudio ? 1 : opacity,
         child: Semantics(
           label:
               '${note_utils.formatMidiNoteLabel(key.midiNote, spelling: spelling)}, MIDI ${key.midiNote}'
@@ -280,7 +283,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     final project = ref.read(selectedProjectProvider);
     if (project != null && project.kind == SaveFolderKind.project) {
       if (!mounted) return;
-      final decision = await showDialog<ProjectOffScaleDecision>(
+      final decision = await showStudioDialog<ProjectOffScaleDecision>(
         context: context,
         builder: (ctx) => ProjectOffScaleDialog(
           projectName: project.name,
@@ -310,7 +313,7 @@ class _PianoKeyboardState extends ConsumerState<PianoKeyboard> {
     }
 
     if (!mounted) return;
-    final result = await showDialog<OutOfKeyResult>(
+    final result = await showStudioDialog<OutOfKeyResult>(
       context: context,
       builder: (ctx) => const OutOfKeyDialog(),
     );
@@ -351,8 +354,8 @@ class _ViewModeBar extends StatelessWidget {
   const _ViewModeBar({required this.current, required this.onSelect});
 
   static const _modes = [
-    (PianoViewMode.exact, 'Exact', 'Tapped positions only'),
-    (PianoViewMode.exactFocus, 'Solo', 'Exact positions only'),
+    (PianoViewMode.exact, 'Full', 'All note labels'),
+    (PianoViewMode.exactFocus, 'Solo', 'Selected note labels'),
   ];
 
   @override
@@ -373,11 +376,11 @@ class _ViewModeBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color: active
-                      ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                      ? StudioPalette.of(context).sky.withValues(alpha: 0.12)
                       : Colors.white.withValues(alpha: 0.03),
                   border: Border.all(
                     color: active
-                        ? MuzicianTheme.sky.withValues(alpha: 0.4)
+                        ? StudioPalette.of(context).sky.withValues(alpha: 0.4)
                         : Colors.white.withValues(alpha: 0.08),
                     width: 0.5,
                   ),
@@ -389,8 +392,8 @@ class _ViewModeBar extends StatelessWidget {
                       m.$2,
                       style: TextStyle(
                         color: active
-                            ? MuzicianTheme.sky
-                            : MuzicianTheme.textSecondary,
+                            ? StudioPalette.of(context).sky
+                            : StudioPalette.of(context).textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -401,8 +404,10 @@ class _ViewModeBar extends StatelessWidget {
                       m.$3,
                       style: TextStyle(
                         color: active
-                            ? MuzicianTheme.sky.withValues(alpha: 0.6)
-                            : MuzicianTheme.textMuted,
+                            ? StudioPalette.of(
+                                context,
+                              ).sky.withValues(alpha: 0.6)
+                            : StudioPalette.of(context).textMuted,
                         fontSize: 8,
                       ),
                       textAlign: TextAlign.center,

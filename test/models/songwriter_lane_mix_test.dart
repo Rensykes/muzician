@@ -2,6 +2,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/songwriter.dart';
 
 void main() {
+  test('legacy and unknown Melody sounds remain unset', () {
+    final json = {'id': 'melody', 'kind': 'melody', 'order': 0};
+    expect(SongLane.fromJson(json).melodySound, isNull);
+    expect(
+      SongLane.fromJson({...json, 'melodySound': 'futureSound'}).melodySound,
+      isNull,
+    );
+  });
+
+  test('Melody sounds serialize by name and survive lane copies', () {
+    for (final (sound, name) in [
+      (MelodyLaneSound.piano, 'piano'),
+      (MelodyLaneSound.cleanGuitar, 'cleanGuitar'),
+      (MelodyLaneSound.distortedGuitar, 'distortedGuitar'),
+    ]) {
+      final lane = SongLane(
+        id: 'melody',
+        kind: SongLaneKind.melody,
+        order: 0,
+        melodySound: sound,
+      );
+      expect(lane.toJson()['melodySound'], name);
+      expect(SongLane.fromJson(lane.toJson()).melodySound, sound);
+      expect(lane.copyWith(order: 1).melodySound, sound);
+    }
+  });
+
   test('SongLane defaults volume 1, pan 0, unmuted', () {
     const lane = SongLane(id: 'l1', kind: SongLaneKind.harmony, order: 0);
     expect(lane.volume, 1.0);

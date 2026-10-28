@@ -20,7 +20,7 @@ import '../../schema/rules/save_system_rules.dart'
 import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
 import '../../store/songwriter_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../../ui/project_picker_sheet.dart';
 import '../../utils/note_utils.dart';
@@ -112,9 +112,8 @@ Future<void> startWriterHandoff({
 
   _WriterTransferChoice? choice;
   if (reuseSave == null) {
-    choice = await showModalBottomSheet<_WriterTransferChoice>(
+    choice = await showStudioModalBottomSheet<_WriterTransferChoice>(
       context: context,
-      backgroundColor: MuzicianTheme.surface,
       isScrollControlled: true,
       builder: (sheetContext) => _WriterTransferChoices(
         chordResults: chordResults,
@@ -180,7 +179,7 @@ Future<void> startWriterHandoff({
       ? null
       : project.sections.first.id;
   if (project.sections.isEmpty) {
-    final createSection = await showDialog<bool>(
+    final createSection = await showStudioDialog<bool>(
       context: context,
       builder: (dialogContext) => MuzicianDialog(
         title: 'Start a Writer section?',
@@ -214,9 +213,8 @@ Future<void> startWriterHandoff({
   }
 
   while (context.mounted) {
-    final target = await showModalBottomSheet<WriterBarTarget>(
+    final target = await showStudioModalBottomSheet<WriterBarTarget>(
       context: context,
-      backgroundColor: MuzicianTheme.surface,
       isScrollControlled: true,
       builder: (_) => _WriterDestinationPicker(
         laneKind: payload.laneKind,
@@ -507,7 +505,7 @@ Future<_OccupiedBarAction?> _showOccupiedBarDialog(
   required SongBlock block,
   required bool isRepeatedPlacement,
   required NoteSpelling spelling,
-}) => showDialog<_OccupiedBarAction>(
+}) => showStudioDialog<_OccupiedBarAction>(
   context: context,
   builder: (dialogContext) => MuzicianDialog(
     title: 'Bar $barNumber is occupied',
@@ -547,7 +545,7 @@ Future<bool> _confirmReplaceOccupiedBar(
   required int sourceStartBar,
   required bool isRepeatedPlacement,
 }) async =>
-    await showDialog<bool>(
+    await showStudioDialog<bool>(
       context: context,
       builder: (dialogContext) => MuzicianDialog(
         title: 'Replace the whole block?',
@@ -572,7 +570,7 @@ Future<bool> _confirmReplaceOccupiedBar(
     false;
 
 Future<void> _showDestinationChanged(BuildContext context) async {
-  await showDialog<void>(
+  await showStudioDialog<void>(
     context: context,
     builder: (dialogContext) => MuzicianDialog(
       title: 'Destination changed',
@@ -697,7 +695,7 @@ class _WriterTransferPayload {
 Future<String?> _showImportNameDialog(
   BuildContext context, {
   required String? initialName,
-}) => showDialog<String>(
+}) => showStudioDialog<String>(
   context: context,
   builder: (_) => _WriterImportNameDialog(initialName: initialName),
 );
@@ -794,25 +792,28 @@ class _WriterTransferChoices extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Add to Writer',
               style: TextStyle(
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             if (chordResults.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Detected harmony',
-                style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+                style: TextStyle(
+                  color: StudioPalette.of(context).textMuted,
+                  fontSize: 12,
+                ),
               ),
               for (final chord in chordResults)
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.music_note,
-                    color: MuzicianTheme.violet,
+                    color: StudioPalette.of(context).violet,
                   ),
                   title: Text(
                     'Add ${formatChordSymbol(chord, spelling: spelling)} as harmony',
@@ -822,7 +823,10 @@ class _WriterTransferChoices extends ConsumerWidget {
             ],
             if (canAddExactHarmony)
               ListTile(
-                leading: const Icon(Icons.music_note, color: MuzicianTheme.sky),
+                leading: Icon(
+                  Icons.music_note,
+                  color: StudioPalette.of(context).sky,
+                ),
                 title: const Text('Add exact notes as Harmony'),
                 subtitle: const Text(
                   'Keep the selected notes and instrument shape',
@@ -831,9 +835,12 @@ class _WriterTransferChoices extends ConsumerWidget {
                     onChoose(_WriterTransferChoice.exactHarmony(exactSnapshot)),
               ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Choose a Writer section and bar next.',
-              style: TextStyle(color: MuzicianTheme.textMuted, fontSize: 12),
+              style: TextStyle(
+                color: StudioPalette.of(context).textMuted,
+                fontSize: 12,
+              ),
             ),
           ],
         ),
@@ -896,7 +903,7 @@ class _WriterDestinationPicker extends ConsumerWidget {
               child: Text(
                 'Choose a Writer section and bar',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: MuzicianTheme.textPrimary,
+                  color: StudioPalette.of(context).textPrimary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -907,8 +914,8 @@ class _WriterDestinationPicker extends ConsumerWidget {
                 'This selection will become a $laneLabel block. '
                 'Choose the section, Harmony Lane and bar. Occupied bars '
                 'already contain a block in that lane.',
-                style: const TextStyle(
-                  color: MuzicianTheme.textSecondary,
+                style: TextStyle(
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 13,
                 ),
               ),
@@ -921,10 +928,10 @@ class _WriterDestinationPicker extends ConsumerWidget {
                         ExpansionTile(
                           key: const Key('writerHandoffNewSection'),
                           initiallyExpanded: true,
-                          title: const Text(
+                          title: Text(
                             'New eight-bar section',
                             style: TextStyle(
-                              color: MuzicianTheme.textPrimary,
+                              color: StudioPalette.of(context).textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -932,8 +939,8 @@ class _WriterDestinationPicker extends ConsumerWidget {
                             instrumentLabel == null
                                 ? 'A section will be created with this block.'
                                 : 'Starts with the project default Harmony Lane; a matching $instrumentLabel lane will be added if needed.',
-                            style: const TextStyle(
-                              color: MuzicianTheme.textMuted,
+                            style: TextStyle(
+                              color: StudioPalette.of(context).textMuted,
                             ),
                           ),
                           children: [
@@ -1062,15 +1069,15 @@ class _WriterDestinationPicker extends ConsumerWidget {
                               sections.length == 1,
                           title: Text(
                             sectionLabel,
-                            style: const TextStyle(
-                              color: MuzicianTheme.textPrimary,
+                            style: TextStyle(
+                              color: StudioPalette.of(context).textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           subtitle: Text(
                             '${section.lengthBars} bars',
-                            style: const TextStyle(
-                              color: MuzicianTheme.textMuted,
+                            style: TextStyle(
+                              color: StudioPalette.of(context).textMuted,
                             ),
                           ),
                           children: [...laneChoices],
@@ -1107,7 +1114,7 @@ class _WriterDestinationPicker extends ConsumerWidget {
       key: Key('writerHandoffLane_${section.id}_${lane.id}'),
       title: Text(
         laneLabel,
-        style: const TextStyle(color: MuzicianTheme.textPrimary),
+        style: TextStyle(color: StudioPalette.of(context).textPrimary),
       ),
       children: [
         _laneBars(
@@ -1151,11 +1158,11 @@ class _WriterDestinationPicker extends ConsumerWidget {
     key: Key('writerHandoffNewHarmonyLane_${section.id}'),
     title: Text(
       'Create ${_instrumentLabel(harmonyInstrument)} Harmony Lane',
-      style: const TextStyle(color: MuzicianTheme.textPrimary),
+      style: TextStyle(color: StudioPalette.of(context).textPrimary),
     ),
-    subtitle: const Text(
+    subtitle: Text(
       'This section has no Harmony Lane for this instrument.',
-      style: TextStyle(color: MuzicianTheme.textMuted),
+      style: TextStyle(color: StudioPalette.of(context).textMuted),
     ),
     children: [
       _barChoices(
@@ -1179,11 +1186,11 @@ class _WriterDestinationPicker extends ConsumerWidget {
     key: Key('writerHandoffNewSaveLane_${section.id}'),
     title: Text(
       'Create ${_instrumentLabel(harmonyInstrument)} Voicing lane',
-      style: const TextStyle(color: MuzicianTheme.textPrimary),
+      style: TextStyle(color: StudioPalette.of(context).textPrimary),
     ),
-    subtitle: const Text(
+    subtitle: Text(
       'This section has no compatible Voicing lane.',
-      style: TextStyle(color: MuzicianTheme.textMuted),
+      style: TextStyle(color: StudioPalette.of(context).textMuted),
     ),
     children: [
       _barChoices(
@@ -1287,12 +1294,12 @@ class _WriterBarButton extends StatelessWidget {
         style: TextButton.styleFrom(
           minimumSize: const Size(104, 48),
           backgroundColor: occupied
-              ? MuzicianTheme.orange.withValues(alpha: 0.12)
+              ? StudioPalette.of(context).orange.withValues(alpha: 0.12)
               : Colors.white.withValues(alpha: 0.04),
-          foregroundColor: MuzicianTheme.textPrimary,
+          foregroundColor: StudioPalette.of(context).textPrimary,
           side: BorderSide(
             color: occupied
-                ? MuzicianTheme.orange.withValues(alpha: 0.6)
+                ? StudioPalette.of(context).orange.withValues(alpha: 0.6)
                 : Colors.white.withValues(alpha: 0.12),
           ),
         ),

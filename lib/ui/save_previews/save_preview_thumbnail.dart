@@ -8,7 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import '../../models/save_system.dart';
 import '../../models/song_project.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 const double kSavePreviewWidth = 64;
 const double kSavePreviewHeight = 56;
@@ -29,7 +29,7 @@ class SavePreviewThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final painter = _painterFor(snapshot);
+    final painter = _painterFor(snapshot, StudioPalette.of(context));
     return Container(
       width: width,
       height: height,
@@ -47,11 +47,14 @@ class SavePreviewThumbnail extends StatelessWidget {
     );
   }
 
-  static CustomPainter? _painterFor(InstrumentSnapshot snap) {
-    if (snap is PianoSnapshot) return _PianoMiniPainter(snap);
-    if (snap is FretboardSnapshot) return _FretboardMiniPainter(snap);
-    if (snap is PianoRollSnapshot) return _PianoRollMiniPainter(snap);
-    if (snap is SongProjectSnapshot) return _SongMiniPainter(snap);
+  static CustomPainter? _painterFor(
+    InstrumentSnapshot snap,
+    StudioPalette palette,
+  ) {
+    if (snap is PianoSnapshot) return _PianoMiniPainter(snap, palette);
+    if (snap is FretboardSnapshot) return _FretboardMiniPainter(snap, palette);
+    if (snap is PianoRollSnapshot) return _PianoRollMiniPainter(snap, palette);
+    if (snap is SongProjectSnapshot) return _SongMiniPainter(snap, palette);
     return null;
   }
 }
@@ -60,8 +63,12 @@ class _FallbackPreview extends StatelessWidget {
   const _FallbackPreview();
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Icon(Icons.music_note, color: MuzicianTheme.textMuted, size: 20),
+    return Center(
+      child: Icon(
+        Icons.music_note,
+        color: StudioPalette.of(context).textMuted,
+        size: 20,
+      ),
     );
   }
 }
@@ -70,7 +77,8 @@ class _FallbackPreview extends StatelessWidget {
 
 class _PianoMiniPainter extends CustomPainter {
   final PianoSnapshot snapshot;
-  _PianoMiniPainter(this.snapshot);
+  _PianoMiniPainter(this.snapshot, this.palette);
+  final StudioPalette palette;
 
   static const _whiteKeyCount = 8; // C..C across one octave + 1
   static const _blackKeysAt = {
@@ -104,8 +112,9 @@ class _PianoMiniPainter extends CustomPainter {
       final pc = whitePcs[i];
       if (selectedPCs.contains(pc)) {
         final highlight = Paint()
-          ..color = (pc == rootPc ? MuzicianTheme.emerald : MuzicianTheme.sky)
-              .withValues(alpha: 0.55);
+          ..color = (pc == rootPc ? palette.emerald : palette.sky).withValues(
+            alpha: 0.55,
+          );
         canvas.drawRect(rect, highlight);
       }
     }
@@ -122,8 +131,9 @@ class _PianoMiniPainter extends CustomPainter {
       final pc = blackPcs[blackIndex];
       if (selectedPCs.contains(pc)) {
         final highlight = Paint()
-          ..color = (pc == rootPc ? MuzicianTheme.emerald : MuzicianTheme.sky)
-              .withValues(alpha: 0.85);
+          ..color = (pc == rootPc ? palette.emerald : palette.sky).withValues(
+            alpha: 0.85,
+          );
         canvas.drawRect(rect, highlight);
       }
       blackIndex++;
@@ -132,14 +142,15 @@ class _PianoMiniPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PianoMiniPainter oldDelegate) =>
-      oldDelegate.snapshot != snapshot;
+      oldDelegate.palette != palette || oldDelegate.snapshot != snapshot;
 }
 
 // ─── Fretboard mini ─────────────────────────────────────────────────────────
 
 class _FretboardMiniPainter extends CustomPainter {
   final FretboardSnapshot snapshot;
-  _FretboardMiniPainter(this.snapshot);
+  _FretboardMiniPainter(this.snapshot, this.palette);
+  final StudioPalette palette;
 
   static const _strings = 6;
   static const _fretsShown = 5;
@@ -198,13 +209,13 @@ class _FretboardMiniPainter extends CustomPainter {
         Offset(cx, padTop - 1),
         Offset(cx, size.height - padBottom + 1),
         Paint()
-          ..color = MuzicianTheme.violet.withValues(alpha: 0.9)
+          ..color = palette.violet.withValues(alpha: 0.9)
           ..strokeWidth = 2.5,
       );
     }
 
     // Selected cells
-    final selectedFill = Paint()..color = MuzicianTheme.teal;
+    final selectedFill = Paint()..color = palette.teal;
     final radius = (stringSpacing * 0.35).clamp(2.0, 5.0);
     for (final cell in snapshot.selectedCells) {
       if (cell.stringIndex < 0 || cell.stringIndex >= _strings) continue;
@@ -219,14 +230,15 @@ class _FretboardMiniPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FretboardMiniPainter oldDelegate) =>
-      oldDelegate.snapshot != snapshot;
+      oldDelegate.palette != palette || oldDelegate.snapshot != snapshot;
 }
 
 // ─── Piano Roll mini ────────────────────────────────────────────────────────
 
 class _PianoRollMiniPainter extends CustomPainter {
   final PianoRollSnapshot snapshot;
-  _PianoRollMiniPainter(this.snapshot);
+  _PianoRollMiniPainter(this.snapshot, this.palette);
+  final StudioPalette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -255,8 +267,7 @@ class _PianoRollMiniPainter extends CustomPainter {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), measurePaint);
     }
 
-    final notePaint = Paint()
-      ..color = MuzicianTheme.sky.withValues(alpha: 0.95);
+    final notePaint = Paint()..color = palette.sky.withValues(alpha: 0.95);
     final noteHeight = (size.height / pitchSpan).clamp(1.5, 4.0);
     for (final note in notes) {
       final start = (note['startTick'] as int?) ?? 0;
@@ -305,14 +316,15 @@ class _PianoRollMiniPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PianoRollMiniPainter oldDelegate) =>
-      oldDelegate.snapshot != snapshot;
+      oldDelegate.palette != palette || oldDelegate.snapshot != snapshot;
 }
 
 // ─── Song project mini ──────────────────────────────────────────────────────
 
 class _SongMiniPainter extends CustomPainter {
   final SongProjectSnapshot snapshot;
-  _SongMiniPainter(this.snapshot);
+  _SongMiniPainter(this.snapshot, this.palette);
+  final StudioPalette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -351,8 +363,8 @@ class _SongMiniPainter extends CustomPainter {
       );
 
       final color = track.type == SongTrackType.note
-          ? MuzicianTheme.sky
-          : MuzicianTheme.orange;
+          ? palette.sky
+          : palette.orange;
       final clips = project.clips.where((c) => c.trackId == track.id);
       for (final clip in clips) {
         final length = patternLengths[clip.patternId] ?? measureTicks;
@@ -384,5 +396,5 @@ class _SongMiniPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SongMiniPainter oldDelegate) =>
-      oldDelegate.snapshot != snapshot;
+      oldDelegate.palette != palette || oldDelegate.snapshot != snapshot;
 }

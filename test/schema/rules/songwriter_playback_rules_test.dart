@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muzician/models/guitar_sound.dart' show GuitarTone;
 import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
@@ -91,6 +92,57 @@ void main() {
   });
 
   group('Harmony playback resolution', () {
+    test('recognized Piano Harmony follows saved register and inversion', () {
+      const content = WriterBlockSnapshot(
+        laneKind: SongLaneKind.harmony,
+        chordSymbol: 'C',
+        chordRootPc: 0,
+        chordQuality: '',
+        chordNotes: ['C', 'E', 'G'],
+      );
+      for (final pitches in [
+        [48, 52, 55],
+        [64, 67, 72],
+      ]) {
+        final snapshot = HarmonyChordSnapshot(
+          harmonyInstrument: HarmonyLaneInstrument.piano,
+          writerBlock: content,
+          instrumentState: PianoSnapshot(
+            currentRange: PianoRangeName.key88,
+            selectedKeys: [
+              for (final midi in pitches)
+                PianoCoordinate(
+                  keyIndex: midi - 21,
+                  midiNote: midi,
+                  noteName: const {0: 'C', 4: 'E', 7: 'G'}[midi % 12]!,
+                ),
+            ],
+            selectedNotes: const ['C', 'E', 'G'],
+            viewMode: PianoViewMode.exact,
+          ),
+        );
+        final block = SongBlock(
+          id: 'native',
+          startBar: 0,
+          spanBars: 1,
+          chordSymbol: 'C',
+          chordRootPc: 0,
+          chordQuality: '',
+          chordNotes: const ['C', 'E', 'G'],
+          embedded: snapshot,
+        );
+        expect(
+          harmonyBlockMidiNotes(
+            block,
+            const [],
+            projectId: null,
+            folders: const [],
+          ),
+          pitches,
+        );
+      }
+    });
+
     test('exact Harmony plays the captured native MIDI pitches', () {
       final snapshot = HarmonyChordSnapshot(
         harmonyInstrument: HarmonyLaneInstrument.piano,
@@ -182,6 +234,197 @@ void main() {
       melodyPatterns: melodyPatterns,
       guitarStrumPatterns: guitarStrumPatterns,
     );
+
+    test(
+      'simultaneous melody lanes keep their independent sounds and notes',
+      () {
+        const pattern = NotePattern(
+          id: 'p',
+          name: 'Lead',
+          lengthTicks: 16,
+          notes: [
+            NotePatternNote(
+              id: 'n',
+              midiNote: 67,
+              startTick: 2,
+              durationTicks: 3,
+              onsetOffsetMs: 12,
+            ),
+          ],
+          pitchRangeStart: 48,
+          pitchRangeEnd: 84,
+          snapTicks: 1,
+          highlightedNotes: [],
+        );
+        const block = SongBlock(
+          id: 'b',
+          startBar: 0,
+          spanBars: 1,
+          patternId: 'p',
+        );
+        const project = SongwriterProjectSnapshot(
+          config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+          sections: [
+            SongSection(
+              id: 's',
+              lengthBars: 1,
+              order: 0,
+              lanes: [
+                SongLane(
+                  id: 'piano',
+                  kind: SongLaneKind.melody,
+                  order: 0,
+                  volume: 0.6,
+                  pan: -0.25,
+                  melodySound: MelodyLaneSound.piano,
+                  blocks: [block],
+                ),
+                SongLane(
+                  id: 'clean',
+                  kind: SongLaneKind.melody,
+                  order: 1,
+                  volume: 0.6,
+                  pan: -0.25,
+                  melodySound: MelodyLaneSound.cleanGuitar,
+                  blocks: [block],
+                ),
+                SongLane(
+                  id: 'distorted',
+                  kind: SongLaneKind.melody,
+                  order: 2,
+                  volume: 0.6,
+                  pan: -0.25,
+                  melodySound: MelodyLaneSound.distortedGuitar,
+                  blocks: [block],
+                ),
+              ],
+            ),
+          ],
+          melodyPatterns: [pattern],
+          melodyPerformancesByPatternId: {
+            'p': WriterMelodyPerformance(
+              instrument: HarmonyLaneInstrument.fretboard,
+            ),
+          },
+        );
+
+        final event = flattenPlaybackEvents(project, const []).single;
+        expect(event.tick, 2);
+        expect(event.sequencedNoteGroups, hasLength(3));
+        expect(
+          event.sequencedNoteGroups.where((g) => g.isGuitar),
+          hasLength(2),
+        );
+        expect(
+          event.sequencedNoteGroups.map((g) => (g.isGuitar, g.guitarTone)),
+          [
+            (false, null),
+            (true, GuitarTone.clean),
+            (true, GuitarTone.distorted),
+          ],
+        );
+        for (final group in event.sequencedNoteGroups) {
+          expect(group.volume, 0.6);
+          expect(group.pan, -0.25);
+          final note = group.notes.single;
+          expect(
+            (
+              note.midiNote,
+              note.startTick,
+              note.durationTicks,
+              note.onsetOffsetMs,
+              note.durationOffsetMs,
+            ),
+            (67, 2, 3, 12, 0),
+          );
+        }
+        expect(
+          project.melodyPerformancesByPatternId['p']!.instrument,
+          HarmonyLaneInstrument.fretboard,
+        );
+        final pianoMapping = project.copyWith(
+          melodyPerformancesByPatternId: const {
+            'p': WriterMelodyPerformance(
+              instrument: HarmonyLaneInstrument.piano,
+            ),
+          },
+        );
+        expect(
+          flattenPlaybackEvents(
+            pianoMapping,
+            const [],
+          ).single.sequencedNoteGroups.map((g) => (g.isGuitar, g.guitarTone)),
+          [
+            (false, null),
+            (true, GuitarTone.clean),
+            (true, GuitarTone.distorted),
+          ],
+        );
+        expect(
+          pianoMapping.melodyPerformancesByPatternId['p']!.instrument,
+          HarmonyLaneInstrument.piano,
+        );
+      },
+    );
+
+    test('legacy melody uses each pattern performance target', () {
+      const notes = [
+        NotePatternNote(id: 'n', midiNote: 60, startTick: 0, durationTicks: 2),
+      ];
+      NotePattern pattern(String id) => NotePattern(
+        id: id,
+        name: id,
+        lengthTicks: 16,
+        notes: notes,
+        pitchRangeStart: 48,
+        pitchRangeEnd: 84,
+        snapTicks: 1,
+        highlightedNotes: const [],
+      );
+      final project = SongwriterProjectSnapshot(
+        config: const SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+        sections: [
+          SongSection(
+            id: 's',
+            lengthBars: 1,
+            order: 0,
+            lanes: [
+              for (final (index, id) in ['piano', 'guitar', 'missing'].indexed)
+                SongLane(
+                  id: id,
+                  kind: SongLaneKind.melody,
+                  order: index,
+                  blocks: [
+                    SongBlock(id: id, startBar: 0, spanBars: 1, patternId: id),
+                  ],
+                ),
+            ],
+          ),
+        ],
+        melodyPatterns: [
+          pattern('piano'),
+          pattern('guitar'),
+          pattern('missing'),
+        ],
+        melodyPerformancesByPatternId: const {
+          'piano': WriterMelodyPerformance(
+            instrument: HarmonyLaneInstrument.piano,
+          ),
+          'guitar': WriterMelodyPerformance(
+            instrument: HarmonyLaneInstrument.fretboard,
+          ),
+        },
+      );
+      final groups = flattenPlaybackEvents(
+        project,
+        const [],
+      ).single.sequencedNoteGroups;
+      expect(groups, hasLength(2));
+      expect(groups.singleWhere((g) => !g.isGuitar).notes, hasLength(2));
+      final guitar = groups.singleWhere((g) => g.isGuitar);
+      expect(guitar.notes, hasLength(1));
+      expect(guitar.guitarTone, isNull);
+    });
 
     test('harmony block fires a chord stab at every bar it spans', () {
       const block = SongBlock(
@@ -312,33 +555,195 @@ void main() {
       },
     );
 
+    const threeBarMelody = NotePattern(
+      id: 'melody',
+      name: 'Lead',
+      lengthTicks: 48,
+      notes: [
+        NotePatternNote(id: 'a', midiNote: 60, startTick: 0, durationTicks: 4),
+        NotePatternNote(
+          id: 'b',
+          midiNote: 64,
+          startTick: 20,
+          durationTicks: 20,
+          onsetOffsetMs: 12,
+        ),
+        NotePatternNote(id: 'c', midiNote: 67, startTick: 44, durationTicks: 8),
+      ],
+      pitchRangeStart: 48,
+      pitchRangeEnd: 84,
+      snapTicks: 1,
+      highlightedNotes: [],
+    );
+
+    test('a melody plays once from its placement start, not timeline zero', () {
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 2,
+            spanBars: 3,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 8,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
+        const [],
+      );
+
+      expect(events.map((event) => event.tick), [32, 52, 76]);
+      expect(
+        events.first.tick,
+        32,
+        reason: 'the melody starts at the placement bar, not timeline zero',
+      );
+      final clipped = events.last.sequencedNoteGroups.single.notes.single;
+      expect(clipped.id, 'c');
+      expect(clipped.durationTicks, 4);
+      expect(clipped.startTick, 76);
+    });
+
+    test('a shorter placement clips later melody notes', () {
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 2,
+            spanBars: 1,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 8,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
+        const [],
+      );
+
+      expect(events.map((event) => event.tick), [32]);
+      expect(events.single.sequencedNoteGroups.single.notes.single.id, 'a');
+    });
+
+    test('a longer placement plays once then stays silent, never loops', () {
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 2,
+            spanBars: 5,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 8,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
+        const [],
+      );
+
+      expect(events.map((event) => event.tick), [32, 52, 76]);
+      expect(
+        events.where((event) => event.tick >= 80),
+        isEmpty,
+        reason: 'no note repeats after the three-bar melody ends',
+      );
+    });
+
+    test('legacy melody longer than 32 bars stays silent after bar 32', () {
+      const legacy = NotePattern(
+        id: 'melody',
+        name: 'Long legacy',
+        lengthTicks: 33 * 16,
+        notes: [
+          NotePatternNote(
+            id: 'first',
+            midiNote: 60,
+            startTick: 0,
+            durationTicks: 4,
+          ),
+          NotePatternNote(
+            id: 'last-visible',
+            midiNote: 64,
+            startTick: 31 * 16,
+            durationTicks: 4,
+          ),
+          NotePatternNote(
+            id: 'hatched',
+            midiNote: 67,
+            startTick: 32 * 16,
+            durationTicks: 4,
+          ),
+        ],
+        pitchRangeStart: 48,
+        pitchRangeEnd: 84,
+        snapTicks: 1,
+        highlightedNotes: [],
+      );
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 0,
+            spanBars: 33,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 40,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [legacy]),
+        const [],
+      );
+
+      expect(
+        events.map((event) => event.tick),
+        [0, 31 * 16],
+        reason: 'notes in the hatched bars after 32 never sound',
+      );
+      expect(events.expand((event) => event.midiNotes), isNot(contains(67)));
+    });
+
     test(
-      'melody loops from block origin and clips at each pattern boundary',
+      'automatic lane repeats remain arrangement-level placement repeats',
       () {
-        const pattern = NotePattern(
-          id: 'melody',
-          name: 'Lead',
-          lengthTicks: 8,
-          notes: [
-            NotePatternNote(
-              id: 'a',
-              midiNote: 60,
-              startTick: 2,
-              durationTicks: 7,
-            ),
-            NotePatternNote(
-              id: 'b',
-              midiNote: 64,
-              startTick: 7,
-              durationTicks: 4,
-              onsetOffsetMs: 12,
-            ),
-          ],
-          pitchRangeStart: 48,
-          pitchRangeEnd: 84,
-          snapTicks: 1,
-          highlightedNotes: [],
-        );
         const lane = SongLane(
           id: 'melody-lane',
           kind: SongLaneKind.melody,
@@ -362,47 +767,11 @@ void main() {
         );
 
         final events = flattenPlaybackEvents(
-          projectWith(sections: [section], melodyPatterns: [pattern]),
+          projectWith(sections: [section], melodyPatterns: [threeBarMelody]),
           const [],
         );
 
-        expect(events.map((event) => event.tick), [
-          2,
-          7,
-          10,
-          15,
-          18,
-          23,
-          26,
-          31,
-          34,
-          39,
-          42,
-          47,
-          50,
-          55,
-          58,
-          63,
-        ]);
-        final clipped = events.firstWhere((event) => event.tick == 7);
-        expect(
-          clipped.sequencedNoteGroups.single.notes.single.durationTicks,
-          1,
-        );
-        expect(
-          clipped.sequencedNoteGroups.single.notes.single.onsetOffsetMs,
-          12,
-        );
-        expect(
-          events.first.tick,
-          2,
-          reason: 'pattern origin is the block start, not timeline zero',
-        );
-        expect(
-          events.last.tick,
-          63,
-          reason: 'the final repeat is clipped to the section boundary',
-        );
+        expect(events.map((event) => event.tick), [0, 16, 32, 48]);
       },
     );
 
@@ -482,6 +851,16 @@ void main() {
         expect(strumNotes.map((note) => note.midiNote), [67, 71, 74]);
         expect(strumNotes.map((note) => note.onsetOffsetMs), [0, 12, 24]);
         expect(strumNotes.map((note) => note.durationTicks), [2, 2, 2]);
+        expect(
+          events.single.noteGroups.every((group) => !group.isGuitar),
+          isTrue,
+        );
+        expect(
+          events.single.sequencedNoteGroups.every(
+            (group) => group.isGuitar && group.guitarTone == null,
+          ),
+          isTrue,
+        );
       },
     );
 

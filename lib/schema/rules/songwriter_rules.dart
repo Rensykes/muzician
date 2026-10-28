@@ -14,6 +14,13 @@ import 'save_system_rules.dart' show generateId, getProjectIdForFolder;
 
 const _romanByDegree = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
+/// A linked placement must refer to the melody contained in its canonical Save.
+bool isCanonicalMelodyForBlock(InstrumentSnapshot? snapshot, SongBlock block) =>
+    snapshot is WriterBlockSnapshot &&
+    snapshot.laneKind == SongLaneKind.melody &&
+    block.patternId != null &&
+    snapshot.melodyPattern?.id == block.patternId;
+
 /// Classifies a chord quality string into how its Roman numeral is cased.
 String _caseNumeral(String degreeUpper, String quality) {
   final q = quality.toLowerCase();
@@ -134,11 +141,141 @@ bool isValidBlockPlacement({
   required SongSection section,
   required SongLane lane,
   required SongBlock candidate,
-}) =>
-    candidate.startBar >= 0 &&
-    candidate.spanBars > 0 &&
-    candidate.endBar <= section.lengthBars &&
-    !blocksOverlap(lane.blocks, candidate);
+  int? melodyBars,
+}) => lane.kind == SongLaneKind.melody
+    ? isValidMelodyPlacement(
+        section: section,
+        lane: lane,
+        candidate: candidate,
+        melodyBars: melodyBars,
+      )
+    : candidate.startBar >= 0 &&
+          candidate.spanBars > 0 &&
+          candidate.endBar <= section.lengthBars &&
+          !blocksOverlap(lane.blocks, candidate);
+
+/// A displayed instance of an authored Melody block in a lane tile.
+class MelodyOccurrence {
+  const MelodyOccurrence({
+    required this.source,
+    required this.startBar,
+    required this.endBar,
+    required this.repeatIndex,
+  });
+
+  final SongBlock source;
+  final int startBar;
+  final int endBar;
+  final int repeatIndex;
+}
+
+List<MelodyOccurrence> melodyOccurrences({
+  required SongLane lane,
+  required int sectionLengthBars,
+}) {
+  final pattern = laneNaturalLength(lane);
+  if (pattern <= 0) return const [];
+  final result = <MelodyOccurrence>[];
+  for (var repeat = 0; repeat < lane.repeat; repeat++) {
+    final origin = repeat * pattern;
+    if (origin >= sectionLengthBars) break;
+    for (final block in lane.blocks) {
+      final start = origin + block.startBar;
+      if (start >= sectionLengthBars) continue;
+      final end = origin + block.endBar;
+      result.add(
+        MelodyOccurrence(
+          source: block,
+          startBar: start,
+          endBar: end < sectionLengthBars ? end : sectionLengthBars,
+          repeatIndex: repeat,
+        ),
+      );
+    }
+  }
+  return result;
+}
+
+bool isValidMelodyPlacement({
+  required SongSection section,
+  required SongLane lane,
+  required SongBlock candidate,
+  int? melodyBars,
+}) {
+  if (candidate.startBar < 0 ||
+      candidate.spanBars <= 0 ||
+      candidate.endBar > section.lengthBars) {
+    return false;
+  }
+  final existing = lane.blocks
+      .where((block) => block.id == candidate.id)
+      .firstOrNull;
+  if (existing != null &&
+      existing.startBar == candidate.startBar &&
+      existing.spanBars == candidate.spanBars) {
+    return true;
+  }
+  // A legacy placement may already be longer than its melody. Moving it
+  // without changing its span keeps the occupied bars and silent tail; any
+  // resize has to end within the melody's last-note bar.
+  if (melodyBars != null &&
+      melodyBars > 0 &&
+      candidate.spanBars > melodyBars &&
+      existing?.spanBars != candidate.spanBars) {
+    return false;
+  }
+  if (blocksOverlap(lane.blocks, candidate)) return false;
+  final original = melodyOccurrences(
+    lane: lane,
+    sectionLengthBars: section.lengthBars,
+  );
+  for (final occurrence in original) {
+    if (occurrence.source.id == candidate.id && occurrence.repeatIndex == 0) {
+      continue;
+    }
+    if (candidate.startBar < occurrence.endBar &&
+        occurrence.startBar < candidate.endBar) {
+      return false;
+    }
+  }
+  final proposed = melodyOccurrences(
+    lane: lane.copyWith(
+      blocks: [
+        for (final block in lane.blocks)
+          if (block.id != candidate.id) block,
+        candidate,
+      ],
+    ),
+    sectionLengthBars: section.lengthBars,
+  );
+  final byKey = {
+    for (final occurrence in proposed)
+      (occurrence.source.id, occurrence.repeatIndex): occurrence,
+  };
+  for (final occurrence in original) {
+    if (occurrence.repeatIndex == 0) continue;
+    if (byKey[(occurrence.source.id, occurrence.repeatIndex)]?.startBar !=
+        occurrence.startBar) {
+      return false;
+    }
+  }
+  final originalByKey = {
+    for (final occurrence in original)
+      (occurrence.source.id, occurrence.repeatIndex): occurrence,
+  };
+  bool overlaps(MelodyOccurrence a, MelodyOccurrence b) =>
+      a.startBar < b.endBar && b.startBar < a.endBar;
+  for (var i = 0; i < proposed.length; i++) {
+    for (var j = i + 1; j < proposed.length; j++) {
+      final a = proposed[i], b = proposed[j];
+      if (!overlaps(a, b)) continue;
+      final oldA = originalByKey[(a.source.id, a.repeatIndex)];
+      final oldB = originalByKey[(b.source.id, b.repeatIndex)];
+      if (oldA == null || oldB == null || !overlaps(oldA, oldB)) return false;
+    }
+  }
+  return true;
+}
 
 // ─── Factory Helpers ─────────────────────────────────────────────────────────
 
@@ -392,6 +529,58 @@ NotePattern makeMelodyPattern({
   snapTicks: 1,
   highlightedNotes: const [],
 );
+
+/// Largest bar count the Writer melody editor exposes.
+const int melodyMaxBars = 32;
+
+/// Whole bars needed to contain [pattern]'s last note, from 1 to 32.
+///
+/// Empty melodies occupy one bar. A note ending exactly on a barline keeps that
+/// bar; one ending past it extends the melody to the next whole bar.
+int melodyBarCount(NotePattern pattern, int measureTicks) {
+  if (measureTicks <= 0) return 1;
+  var furthestEndTick = 0;
+  for (final note in pattern.notes) {
+    final endTick = note.startTick + note.durationTicks;
+    if (endTick > furthestEndTick) furthestEndTick = endTick;
+  }
+  if (furthestEndTick <= 0) return 1;
+  final bars = (furthestEndTick + measureTicks - 1) ~/ measureTicks;
+  return bars.clamp(1, melodyMaxBars);
+}
+
+/// Returns [pattern] with its length set to whole bars containing the last note.
+NotePattern quantizeMelodyPatternLength(NotePattern pattern, int measureTicks) {
+  final safeMeasureTicks = measureTicks < 1 ? 1 : measureTicks;
+  return pattern.copyWith(
+    lengthTicks: melodyBarCount(pattern, safeMeasureTicks) * safeMeasureTicks,
+  );
+}
+
+/// Whole-bar placement limit for [pattern].
+///
+/// Newer melodies store a whole-bar length matching their last note. Legacy
+/// patterns may keep a non-bar-aligned stored length (for example 25 ticks);
+/// that length is rounded up for placement limits until the next save
+/// normalizes it.
+int melodyPlacementBarLimit(NotePattern pattern, int measureTicks) {
+  final noteBars = melodyBarCount(pattern, measureTicks);
+  if (measureTicks <= 0) return noteBars;
+  final lengthBars = (pattern.lengthTicks + measureTicks - 1) ~/ measureTicks;
+  if (pattern.lengthTicks % measureTicks != 0 && lengthBars > noteBars) {
+    return lengthBars.clamp(1, melodyMaxBars);
+  }
+  return noteBars;
+}
+
+/// Whole bars occupied by a placement's silent tail.
+int melodySilentTailBars({
+  required int melodyBars,
+  required int placementSpanBars,
+}) {
+  final tail = placementSpanBars - melodyBars;
+  return tail < 0 ? 0 : tail;
+}
 
 GuitarStrumPattern makeGuitarStrumPattern({
   String name = 'Strum',

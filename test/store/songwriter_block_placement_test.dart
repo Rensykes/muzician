@@ -10,6 +10,129 @@ import 'package:muzician/store/songwriter_store.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test('deleting a melody cannot move another block automatic repeats', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(lengthBars: 12);
+    final s = n.state.sections.single.id;
+    final l = n.addLane(sectionId: s, kind: SongLaneKind.melody);
+    final p = n.addMelodyPattern();
+    n.addMelodyBlock(
+      sectionId: s,
+      laneId: l,
+      patternId: p,
+      startBar: 0,
+      spanBars: 1,
+    );
+    n.addMelodyBlock(
+      sectionId: s,
+      laneId: l,
+      patternId: p,
+      startBar: 2,
+      spanBars: 1,
+    );
+    n.setLaneRepeat(sectionId: s, laneId: l, repeat: 2);
+    final before = n.state;
+    final last = before.sections.single.lanes
+        .singleWhere((x) => x.id == l)
+        .blocks
+        .last;
+    n.removeBlock(sectionId: s, laneId: l, blockId: last.id);
+    expect(n.state, same(before));
+    n.setLaneRepeat(sectionId: s, laneId: l, repeat: 1);
+    n.removeBlock(sectionId: s, laneId: l, blockId: last.id);
+    expect(
+      n.state.sections.single.lanes.singleWhere((x) => x.id == l).blocks,
+      hasLength(1),
+    );
+  });
+
+  test('melody edits cannot occupy or shift existing lane repeats', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(lengthBars: 6);
+    final sectionId = c.read(songwriterProvider).sections.single.id;
+    final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+    final patternId = n.addMelodyPattern();
+    n.updateMelodyPattern(
+      n.state.melodyPatterns.single.copyWith(
+        lengthTicks: 48,
+        notes: const [
+          NotePatternNote(
+            id: 'melody-note',
+            midiNote: 72,
+            startTick: 0,
+            durationTicks: 48,
+          ),
+        ],
+      ),
+    );
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 2,
+    );
+    n.setLaneRepeat(sectionId: sectionId, laneId: laneId, repeat: 3);
+    final before = c.read(songwriterProvider);
+    final blockId = before.sections.single.lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single
+        .id;
+    n.setBlockPlacement(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: blockId,
+      startBar: 0,
+      spanBars: 3,
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 4,
+      spanBars: 1,
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.insertBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: const SongBlock(id: 'inserted', startBar: 2, spanBars: 1),
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.insertBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      block: before.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single,
+    );
+    expect(c.read(songwriterProvider), same(before));
+    n.saveMelodyPattern(
+      before.melodyPatterns.single.copyWith(lengthTicks: 48),
+      initialPlacement: (
+        sectionId: sectionId,
+        laneId: laneId,
+        blockId: blockId,
+      ),
+    );
+    final afterSave = c.read(songwriterProvider);
+    expect(
+      afterSave.sections.single.lanes
+          .singleWhere((lane) => lane.id == laneId)
+          .blocks
+          .single
+          .spanBars,
+      2,
+    );
+  });
+
   test('setBlockPlacement moves/resizes; overlap is rejected', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);
@@ -146,7 +269,7 @@ void main() {
             NotePatternNote(
               id: 'melody-note',
               midiNote: 72,
-              startTick: 0,
+              startTick: 46,
               durationTicks: 2,
             ),
           ],
@@ -183,6 +306,105 @@ void main() {
     expect(block.spanBars, 1);
     expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 16);
     expect(c.read(songwriterProvider).name, before.name);
+  });
+
+  test('first authored save expands one-bar placements without an initial '
+      'placement and later saves do not resize', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 8);
+    final sectionId = c.read(songwriterProvider).sections.single.id;
+    final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+    final patternId = n.addMelodyPattern(lengthTicks: 16);
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    SongBlock block() => c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+
+    final pattern = c.read(songwriterProvider).melodyPatterns.single;
+    n.saveMelodyPattern(
+      pattern.copyWith(
+        lengthTicks: 17,
+        notes: const [
+          NotePatternNote(
+            id: 'melody-note',
+            midiNote: 72,
+            startTick: 46,
+            durationTicks: 2,
+          ),
+        ],
+      ),
+    );
+
+    expect(block().spanBars, 3);
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 48);
+
+    n.saveMelodyPattern(
+      c
+          .read(songwriterProvider)
+          .melodyPatterns
+          .single
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'melody-note',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+              NotePatternNote(
+                id: 'later-note',
+                midiNote: 67,
+                startTick: 78,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+
+    expect(block().spanBars, 3, reason: 'later saves keep the placement span');
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 80);
+  });
+
+  test('melody saves normalize stored length to whole bars everywhere', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    final patternId = n.addMelodyPattern(lengthTicks: 25);
+    final pattern = c.read(songwriterProvider).melodyPatterns.single;
+
+    n.updateMelodyPattern(pattern.copyWith(lengthTicks: 25));
+
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 16);
+    expect(n.state.melodyPatterns.single.id, patternId);
+
+    n.updateMelodyPattern(
+      n.state.melodyPatterns.single.copyWith(
+        lengthTicks: 25,
+        notes: const [
+          NotePatternNote(
+            id: 'late-note',
+            midiNote: 72,
+            startTick: 21,
+            durationTicks: 4,
+          ),
+        ],
+      ),
+    );
+
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 32);
   });
 
   test(
@@ -229,6 +451,12 @@ void main() {
                 id: 'melody-note',
                 midiNote: 72,
                 startTick: 0,
+                durationTicks: 2,
+              ),
+              NotePatternNote(
+                id: 'length-note',
+                midiNote: 67,
+                startTick: 46,
                 durationTicks: 2,
               ),
             ],
@@ -296,7 +524,17 @@ void main() {
           .read(songwriterProvider)
           .melodyPatterns
           .single
-          .copyWith(lengthTicks: 32),
+          .copyWith(
+            lengthTicks: 32,
+            notes: const [
+              NotePatternNote(
+                id: 'melody-note',
+                midiNote: 72,
+                startTick: 30,
+                durationTicks: 2,
+              ),
+            ],
+          ),
       initialPlacement: (
         sectionId: sectionId,
         laneId: laneId,
@@ -315,6 +553,133 @@ void main() {
     expect((block.startBar, block.spanBars), (3, 1));
   });
 
+  test('melody placements stop at the last-note bar and legacy moves keep '
+      'their span while resizing must fit', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 8);
+    final sectionId = c.read(songwriterProvider).sections.single.id;
+    final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+    final patternId = n.addMelodyPattern(lengthTicks: 48);
+    n.updateMelodyPattern(
+      n.state.melodyPatterns.single.copyWith(
+        notes: const [
+          NotePatternNote(
+            id: 'last',
+            midiNote: 72,
+            startTick: 46,
+            durationTicks: 2,
+          ),
+        ],
+      ),
+    );
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    SongBlock block() => c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .firstWhere((block) => block.patternId == patternId);
+    final blockId = block().id;
+
+    n.setBlockPlacement(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: blockId,
+      startBar: 0,
+      spanBars: 4,
+    );
+    expect(block().spanBars, 1, reason: 'a new placement cannot exceed 3 bars');
+
+    n.setBlockPlacement(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: blockId,
+      startBar: 0,
+      spanBars: 3,
+    );
+    expect(block().spanBars, 3);
+
+    final section = c.read(songwriterProvider).sections.single;
+    final loadedLane = section.lanes.singleWhere((lane) => lane.id == laneId);
+    n.state = n.state.copyWith(
+      sections: [
+        section.copyWith(
+          lanes: [
+            for (final item in section.lanes)
+              if (item.id == laneId)
+                loadedLane.copyWith(
+                  blocks: [
+                    ...loadedLane.blocks,
+                    SongBlock(
+                      id: 'legacy',
+                      startBar: 4,
+                      spanBars: 4,
+                      patternId: patternId,
+                    ),
+                  ],
+                )
+              else
+                item,
+          ],
+        ),
+      ],
+    );
+    SongBlock legacy() => c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .firstWhere((block) => block.id == 'legacy');
+    expect(legacy().spanBars, 4);
+
+    n.setBlockPlacement(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: 'legacy',
+      startBar: 3,
+      spanBars: 4,
+    );
+    expect(
+      (legacy().startBar, legacy().spanBars),
+      (3, 4),
+      reason: 'a move-only edit keeps a legacy over-long span',
+    );
+
+    n.setBlockPlacement(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: 'legacy',
+      startBar: 3,
+      spanBars: 2,
+    );
+    expect((legacy().startBar, legacy().spanBars), (3, 2));
+
+    n.setBlockPlacement(
+      sectionId: sectionId,
+      laneId: laneId,
+      blockId: 'legacy',
+      startBar: 3,
+      spanBars: 4,
+    );
+    expect(
+      legacy().spanBars,
+      2,
+      reason: 'any resize must end within the three-bar melody',
+    );
+  });
+
   test(
     'moving and resizing a melody block preserves and retimes its pattern',
     () {
@@ -324,11 +689,11 @@ void main() {
       n.addSection(label: 'Verse', lengthBars: 4);
       final sectionId = c.read(songwriterProvider).sections.single.id;
       final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
-      final patternId = n.addMelodyPattern(lengthTicks: 4);
+      final patternId = n.addMelodyPattern(lengthTicks: 32);
       const source = NotePattern(
         id: 'melody-pattern',
         name: 'Lead',
-        lengthTicks: 4,
+        lengthTicks: 32,
         notes: [
           NotePatternNote(
             id: 'first',
@@ -340,7 +705,7 @@ void main() {
           NotePatternNote(
             id: 'second',
             midiNote: 74,
-            startTick: 3,
+            startTick: 19,
             durationTicks: 2,
             onsetOffsetMs: 11,
           ),
@@ -384,7 +749,9 @@ void main() {
       ];
 
       final before = noteTimeline();
-      expect(before.map((note) => note.$1), [0, 3, 4, 7, 8, 11, 12, 15]);
+      expect(before, [
+        (0, 72, 2, 7),
+      ], reason: 'the shorter placement clips the later melody note');
 
       n.setBlockPlacement(
         sectionId: sectionId,
@@ -393,10 +760,7 @@ void main() {
         startBar: 1,
         spanBars: 1,
       );
-      final moved = noteTimeline();
-      expect(moved, [
-        for (final note in before) (note.$1 + 16, note.$2, note.$3, note.$4),
-      ]);
+      expect(noteTimeline(), [(16, 72, 2, 7)]);
 
       n.setBlockPlacement(
         sectionId: sectionId,
@@ -405,25 +769,7 @@ void main() {
         startBar: 1,
         spanBars: 2,
       );
-      final resized = noteTimeline();
-      expect(resized.map((note) => note.$1), [
-        16,
-        19,
-        20,
-        23,
-        24,
-        27,
-        28,
-        31,
-        32,
-        35,
-        36,
-        39,
-        40,
-        43,
-        44,
-        47,
-      ]);
+      expect(noteTimeline(), [(16, 72, 2, 7), (35, 74, 2, 11)]);
       final savedPattern = c.read(songwriterProvider).melodyPatterns.single;
       expect(
         savedPattern.notes.map(
@@ -435,7 +781,7 @@ void main() {
             note.onsetOffsetMs,
           ),
         ),
-        [('first', 72, 0, 2, 7), ('second', 74, 3, 2, 11)],
+        [('first', 72, 0, 2, 7), ('second', 74, 19, 2, 11)],
       );
     },
   );

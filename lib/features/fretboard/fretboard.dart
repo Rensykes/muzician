@@ -1,5 +1,5 @@
 /// GuitarFretboard – CustomPainter-driven fretboard rendering all note names
-/// across 6 strings and up to 12 frets. Dimensions calculated mathematically.
+/// across 6 strings and up to 24 frets. Dimensions calculated mathematically.
 library;
 
 import 'dart:math' as math;
@@ -13,7 +13,7 @@ import '../../models/save_system.dart';
 import '../../store/fretboard_store.dart';
 import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/out_of_key_dialog.dart';
 import '../../ui/core/project_off_scale_dialog.dart';
 import '../../utils/note_player.dart';
@@ -145,6 +145,12 @@ class GuitarFretboard extends ConsumerStatefulWidget {
 }
 
 class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
+  bool get _compact =>
+      StudioPalette.of(context).isStudio &&
+      widget.hideToolbar &&
+      !widget.controlledMode;
+  double _rowY(int index) => _compact ? 22 + index * 28 + 14 : _stringY(index);
+
   // Track pointer movement to distinguish tap from scroll-drag.
   Offset? _pointerDownLocal;
   static const _scrollThreshold = 6.0;
@@ -193,7 +199,9 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
     }
 
     final svgWidth = _labelW + _openColW + _nutW + numFrets * _fretW + 12;
-    final svgHeight = _headerH + _numStrings * _stringH + _vPad;
+    final svgHeight = _compact
+        ? 196.0
+        : _headerH + _numStrings * _stringH + _vPad;
 
     return Column(
       children: [
@@ -210,7 +218,10 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
           child: SingleChildScrollView(
             controller: _scrollController,
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: _compact ? 4 : 16,
+              vertical: _compact ? 2 : 8,
+            ),
             child: Listener(
               onPointerDown: (e) => _pointerDownLocal = e.localPosition,
               onPointerUp: (e) {
@@ -237,6 +248,8 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
               child: CustomPaint(
                 size: Size(svgWidth, svgHeight),
                 painter: _FretboardPainter(
+                  colors: StudioPalette.of(context),
+                  compact: _compact,
                   tuning: tuning,
                   cells: cells,
                   numFrets: numFrets,
@@ -281,8 +294,10 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
       for (final cell in stringCells) {
         if (cell.fret < capo || cell.midiNote != selectableMidiNote) continue;
         final dx = pos.dx - _noteX(cell.fret);
-        final dy = pos.dy - _stringY(cell.stringIndex);
-        if (math.sqrt(dx * dx + dy * dy) <= hitRadius) {
+        final dy = pos.dy - _rowY(cell.stringIndex);
+        if (_compact
+            ? dx.abs() <= hitRadius && dy.abs() <= 14
+            : math.sqrt(dx * dx + dy * dy) <= hitRadius) {
           onSelected(
             FretCoordinate(
               stringIndex: cell.stringIndex,
@@ -308,13 +323,17 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
       for (final cell in stringCells) {
         if (capo > 0 && cell.fret < capo) continue;
         final cx = _noteX(cell.fret);
-        final cy = _stringY(cell.stringIndex);
+        final cy = _rowY(cell.stringIndex);
         final dx = pos.dx - cx;
         final dy = pos.dy - cy;
-        if (math.sqrt(dx * dx + dy * dy) <= hitRadius) {
-          NotePlayer.instance.previewNote(
+        if (_compact
+            ? dx.abs() <= hitRadius && dy.abs() <= 14
+            : math.sqrt(dx * dx + dy * dy) <= hitRadius) {
+          final settings = ref.read(settingsProvider);
+          NotePlayer.instance.previewGuitarNote(
             cell.midiNote,
-            volume: ref.read(settingsProvider).noteVolume,
+            tone: settings.guitarTone,
+            volume: settings.noteVolume,
           );
           _guardOutOfKey(
             noteName: cell.noteName,
@@ -342,7 +361,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
     final project = ref.read(selectedProjectProvider);
     if (project != null && project.kind == SaveFolderKind.project) {
       if (!mounted) return;
-      final decision = await showDialog<ProjectOffScaleDecision>(
+      final decision = await showStudioDialog<ProjectOffScaleDecision>(
         context: context,
         builder: (ctx) => ProjectOffScaleDialog(
           projectName: project.name,
@@ -372,7 +391,7 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
     }
 
     if (!mounted) return;
-    final result = await showDialog<OutOfKeyResult>(
+    final result = await showStudioDialog<OutOfKeyResult>(
       context: context,
       builder: (ctx) => const OutOfKeyDialog(),
     );
@@ -427,11 +446,11 @@ class _InputModeBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color: active
-                      ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                      ? StudioPalette.of(context).sky.withValues(alpha: 0.12)
                       : Colors.white.withValues(alpha: 0.03),
                   border: Border.all(
                     color: active
-                        ? MuzicianTheme.sky.withValues(alpha: 0.4)
+                        ? StudioPalette.of(context).sky.withValues(alpha: 0.4)
                         : Colors.white.withValues(alpha: 0.08),
                     width: 0.5,
                   ),
@@ -443,8 +462,8 @@ class _InputModeBar extends StatelessWidget {
                       m.$2,
                       style: TextStyle(
                         color: active
-                            ? MuzicianTheme.sky
-                            : MuzicianTheme.textSecondary,
+                            ? StudioPalette.of(context).sky
+                            : StudioPalette.of(context).textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -455,8 +474,10 @@ class _InputModeBar extends StatelessWidget {
                       m.$3,
                       style: TextStyle(
                         color: active
-                            ? MuzicianTheme.sky.withValues(alpha: 0.6)
-                            : MuzicianTheme.textMuted,
+                            ? StudioPalette.of(
+                                context,
+                              ).sky.withValues(alpha: 0.6)
+                            : StudioPalette.of(context).textMuted,
                         fontSize: 8,
                       ),
                       textAlign: TextAlign.center,
@@ -481,8 +502,8 @@ class _ViewModeBar extends StatelessWidget {
   const _ViewModeBar({required this.current, required this.onSelect});
 
   static const _modes = [
-    (FretboardViewMode.exact, 'Exact', 'Tapped positions only'),
-    (FretboardViewMode.exactFocus, 'Solo', 'Exact positions only'),
+    (FretboardViewMode.exact, 'Full', 'All note labels'),
+    (FretboardViewMode.exactFocus, 'Solo', 'Selected note labels'),
   ];
 
   @override
@@ -503,11 +524,11 @@ class _ViewModeBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color: active
-                      ? MuzicianTheme.sky.withValues(alpha: 0.12)
+                      ? StudioPalette.of(context).sky.withValues(alpha: 0.12)
                       : Colors.white.withValues(alpha: 0.03),
                   border: Border.all(
                     color: active
-                        ? MuzicianTheme.sky.withValues(alpha: 0.4)
+                        ? StudioPalette.of(context).sky.withValues(alpha: 0.4)
                         : Colors.white.withValues(alpha: 0.08),
                     width: 0.5,
                   ),
@@ -519,8 +540,8 @@ class _ViewModeBar extends StatelessWidget {
                       m.$2,
                       style: TextStyle(
                         color: active
-                            ? MuzicianTheme.sky
-                            : MuzicianTheme.textSecondary,
+                            ? StudioPalette.of(context).sky
+                            : StudioPalette.of(context).textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -531,8 +552,10 @@ class _ViewModeBar extends StatelessWidget {
                       m.$3,
                       style: TextStyle(
                         color: active
-                            ? MuzicianTheme.sky.withValues(alpha: 0.6)
-                            : MuzicianTheme.textMuted,
+                            ? StudioPalette.of(
+                                context,
+                              ).sky.withValues(alpha: 0.6)
+                            : StudioPalette.of(context).textMuted,
                         fontSize: 8,
                       ),
                       textAlign: TextAlign.center,
@@ -551,6 +574,12 @@ class _ViewModeBar extends StatelessWidget {
 // ─── Painter ───────────────────────────────────────────────────────────────────
 
 class _FretboardPainter extends CustomPainter {
+  final StudioPalette colors;
+  final bool compact;
+  double get stringHeight => compact ? 28 : _stringH;
+  double get headerHeight => compact ? 22 : _headerH;
+  double _stringY(int index) =>
+      headerHeight + index * stringHeight + stringHeight / 2;
   final Tuning tuning;
   final List<List<FretCell>> cells;
   final int numFrets;
@@ -568,6 +597,8 @@ class _FretboardPainter extends CustomPainter {
   final FretboardPalette palette;
 
   _FretboardPainter({
+    required this.colors,
+    this.compact = false,
     required this.tuning,
     required this.cells,
     required this.numFrets,
@@ -584,16 +615,21 @@ class _FretboardPainter extends CustomPainter {
     this.spelling = note_utils.NoteSpelling.sharps,
   });
 
-  static const _naturalColor = Color(0xFF38BDF8);
-  static const _accidentalColor = Color(0xFFC084FC);
-  Color get _boardDark => _PaletteSpec.of(palette).boardDark;
-  Color get _boardMid => _PaletteSpec.of(palette).boardMid;
+  Color get _naturalColor => colors.isStudio ? colors.teal : colors.sky;
+  Color get _accidentalColor => colors.purple;
+  Color get _boardDark =>
+      colors.isStudio && palette == FretboardPalette.graphite
+      ? colors.surface
+      : _PaletteSpec.of(palette).boardDark;
+  Color get _boardMid => colors.isStudio && palette == FretboardPalette.graphite
+      ? colors.dialogBg
+      : _PaletteSpec.of(palette).boardMid;
   Color get _stringBase => _PaletteSpec.of(palette).stringBase;
   static const _fretWireColor = Color(0xFF9AA5AE);
   static const _nutColor = Color(0xFFE8E4D8);
   static const _markerFill = Color(0x1AFFFFFF);
-  static const _stringLabel = Color(0xFF94A3B8);
-  static const _fretNumber = Color(0xFF64748B);
+  Color get _stringLabel => colors.textSecondary;
+  Color get _fretNumber => colors.textMuted;
   static const _stringWidths = [0.8, 1.0, 1.3, 1.7, 2.1, 2.6];
 
   @override
@@ -635,9 +671,9 @@ class _FretboardPainter extends CustomPainter {
   void _drawBoard(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(
       _labelW,
-      _headerH,
+      headerHeight,
       size.width - _labelW,
-      _numStrings * _stringH,
+      _numStrings * stringHeight,
     );
     final gradient = LinearGradient(
       begin: Alignment.topCenter,
@@ -659,7 +695,12 @@ class _FretboardPainter extends CustomPainter {
         ..color = isNut ? _nutColor : _fretWireColor
         ..style = PaintingStyle.fill;
       canvas.drawRect(
-        Rect.fromLTWH(x, _headerH, isNut ? _nutW : 1.5, _numStrings * _stringH),
+        Rect.fromLTWH(
+          x,
+          headerHeight,
+          isNut ? _nutW : 1.5,
+          _numStrings * stringHeight,
+        ),
         paint,
       );
     }
@@ -671,25 +712,35 @@ class _FretboardPainter extends CustomPainter {
     // Glow
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(x - 3, _headerH - 2, 14, _numStrings * _stringH + 4),
+        Rect.fromLTWH(
+          x - 3,
+          headerHeight - 2,
+          14,
+          _numStrings * stringHeight + 4,
+        ),
         const Radius.circular(4),
       ),
-      Paint()..color = const Color(0x2EFB923C),
+      Paint()..color = colors.orange.withValues(alpha: 0.18),
     );
     // Bar
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(x - 1, _headerH, 10, _numStrings * _stringH.toDouble()),
+        Rect.fromLTWH(
+          x - 1,
+          headerHeight,
+          10,
+          _numStrings * stringHeight.toDouble(),
+        ),
         const Radius.circular(3),
       ),
-      Paint()..color = const Color(0xEBFB923C),
+      Paint()..color = colors.orange.withValues(alpha: 0.92),
     );
     // Label
     final tp = TextPainter(
       text: TextSpan(
         text: 'CAPO $capo',
-        style: const TextStyle(
-          color: Color(0xFFFB923C),
+        style: TextStyle(
+          color: colors.orange,
           fontSize: 8,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
@@ -697,18 +748,21 @@ class _FretboardPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp.paint(canvas, Offset(x + 4 - tp.width / 2, _headerH - 9 - tp.height));
+    tp.paint(
+      canvas,
+      Offset(x + 4 - tp.width / 2, headerHeight - 9 - tp.height),
+    );
   }
 
   void _drawPositionMarkers(Canvas canvas) {
-    final midY = _headerH + (_numStrings * _stringH) / 2;
+    final midY = headerHeight + (_numStrings * stringHeight) / 2;
     final paint = Paint()..color = _markerFill;
     for (final fret in positionMarkerFrets) {
       if (fret > numFrets) continue;
       final x = _noteX(fret);
-      if (fret == 12) {
-        canvas.drawCircle(Offset(x, midY - _stringH * 1.5), 5, paint);
-        canvas.drawCircle(Offset(x, midY + _stringH * 1.5), 5, paint);
+      if (fret % doubleMarkerFret == 0) {
+        canvas.drawCircle(Offset(x, midY - stringHeight * 1.5), 5, paint);
+        canvas.drawCircle(Offset(x, midY + stringHeight * 1.5), 5, paint);
       } else {
         canvas.drawCircle(Offset(x, midY), 5, paint);
       }
@@ -738,7 +792,7 @@ class _FretboardPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: label,
-          style: const TextStyle(
+          style: TextStyle(
             color: _stringLabel,
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -761,13 +815,13 @@ class _FretboardPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: text,
-          style: const TextStyle(color: _fretNumber, fontSize: 10),
+          style: TextStyle(color: _fretNumber, fontSize: 10),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(
         canvas,
-        Offset(_noteX(fret) - tp.width / 2, _headerH - 8 - tp.height),
+        Offset(_noteX(fret) - tp.width / 2, headerHeight - 8 - tp.height),
       );
     }
   }
@@ -777,7 +831,11 @@ class _FretboardPainter extends CustomPainter {
       for (final cell in stringCells) {
         final cx = _noteX(cell.fret);
         final cy = _stringY(cell.stringIndex);
-        final r = cell.fret == 0 ? 13.0 : 15.0;
+        final r = compact
+            ? 10.5
+            : cell.fret == 0
+            ? 13.0
+            : 15.0;
         final fs = cell.fret == 0 ? 8.0 : 9.0;
         final behindCapo = capo > 0 && cell.fret < capo;
 
@@ -797,15 +855,11 @@ class _FretboardPainter extends CustomPainter {
         // focusedNotes: pitch classes tapped in the detection panel.
         final isFocusedPitchClass = focusedNotes.contains(cell.noteName);
 
-        // In Solo mode, hide notes that are neither selected nor focused.
-        final inExactFocusMode =
-            !controlledMode &&
+        // View alone controls label visibility, independently of input mode
+        // and pitch-class focus. The board itself remains playable in Solo.
+        if (!controlledMode &&
             viewMode == FretboardViewMode.exactFocus &&
-            selectedCells.isNotEmpty;
-        if (inExactFocusMode &&
-            !isSelectedExact &&
-            !isFocusedPitchClass &&
-            !behindCapo) {
+            !isSelectedExact) {
           continue;
         }
 
@@ -814,7 +868,7 @@ class _FretboardPainter extends CustomPainter {
             highlightedNotes.contains(cell.noteName);
 
         final baseColor = behindCapo
-            ? const Color(0xFF334155)
+            ? colors.textMuted
             : (cell.isNatural ? _naturalColor : _accidentalColor);
 
         // Selected (exact tap): white fill, coloured stroke.
@@ -824,32 +878,34 @@ class _FretboardPainter extends CustomPainter {
         final double strokeWidth;
         final Color textColor;
         if (isPatternPosition) {
-          bubbleFill = MuzicianTheme.emerald;
+          bubbleFill = colors.emerald;
           bubbleStroke = Colors.white;
           strokeWidth = 2.5;
-          textColor = const Color(0xFF052E2B);
+          textColor = colors.isStudio
+              ? colors.onAccent
+              : const Color(0xFF052E2B);
         } else if (isSelected) {
-          bubbleFill = Colors.white;
-          bubbleStroke = baseColor;
+          bubbleFill = colors.isStudio ? colors.sky : Colors.white;
+          bubbleStroke = colors.isStudio ? colors.textPrimary : baseColor;
           strokeWidth = 2.5;
-          textColor = baseColor;
+          textColor = colors.isStudio ? colors.onAccent : baseColor;
         } else if (isSelectablePosition) {
           bubbleFill = baseColor;
-          bubbleStroke = MuzicianTheme.sky;
+          bubbleStroke = colors.sky;
           strokeWidth = 3;
-          textColor = Colors.white;
+          textColor = colors.isStudio ? colors.onAccent : Colors.white;
         } else if (isFocusedPitchClass) {
           bubbleFill = baseColor;
           bubbleStroke = Colors.white;
           strokeWidth = 2.0;
-          textColor = Colors.white;
+          textColor = colors.isStudio ? colors.onAccent : Colors.white;
         } else {
           bubbleFill = baseColor;
           bubbleStroke = cell.fret == 0
               ? const Color(0x40FFFFFF)
               : Colors.transparent;
           strokeWidth = cell.fret == 0 ? 1.0 : 0.0;
-          textColor = Colors.white;
+          textColor = colors.isStudio ? colors.onAccent : Colors.white;
         }
 
         final opacity = behindCapo
@@ -899,6 +955,8 @@ class _FretboardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FretboardPainter old) =>
+      old.colors != colors ||
+      old.compact != compact ||
       old.numFrets != numFrets ||
       old.capo != capo ||
       old.tuning.name != tuning.name ||

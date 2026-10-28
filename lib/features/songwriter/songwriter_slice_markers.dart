@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 /// Draggable cut markers over the clip waveform. [markers] are fractions in
 /// [0,1] across the width. Tapping empty space calls [onAdd] with the tapped
@@ -32,7 +32,10 @@ class SongwriterSliceMarkers extends StatelessWidget {
               Positioned.fill(
                 child: IgnorePointer(
                   child: CustomPaint(
-                    painter: _MarkerPainter(markers, MuzicianTheme.sky),
+                    painter: _MarkerPainter(
+                      markers,
+                      StudioPalette.of(context).sky,
+                    ),
                   ),
                 ),
               ),
@@ -50,12 +53,14 @@ class SongwriterSliceMarkers extends StatelessWidget {
                       ((markers[i] * w) + d.delta.dx).clamp(0.0, w) / w,
                     ),
                     onLongPress: () => onDelete(i),
-                    child: const SizedBox(
+                    child: SizedBox(
                       width: 22,
                       child: Center(
                         child: SizedBox(
                           width: 2,
-                          child: ColoredBox(color: MuzicianTheme.sky),
+                          child: ColoredBox(
+                            color: StudioPalette.of(context).sky,
+                          ),
                         ),
                       ),
                     ),

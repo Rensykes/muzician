@@ -15,7 +15,7 @@ import '../../store/piano_roll_playback_store.dart';
 import '../../store/piano_roll_store.dart';
 import '../../schema/rules/piano_roll_rules.dart' as rules;
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../utils/note_player.dart';
 import '../../utils/note_utils.dart';
 
@@ -37,23 +37,23 @@ Color _noteColor(
   PianoRollNote note,
   Set<String> selectedNoteIds,
   int? selectedColumnTick,
+  StudioPalette palette,
 ) {
   if (selectedNoteIds.contains(note.id)) {
-    return selectedNoteIds.length > 1
-        ? MuzicianTheme.violet
-        : MuzicianTheme.sky;
+    return selectedNoteIds.length > 1 ? palette.violet : palette.sky;
   }
   if (selectedColumnTick != null &&
       note.startTick <= selectedColumnTick &&
       selectedColumnTick < note.startTick + note.durationTicks) {
-    return MuzicianTheme.emerald;
+    return palette.isStudio ? palette.sky : palette.emerald;
   }
-  return MuzicianTheme.teal;
+  return palette.teal;
 }
 
 // ── Grid Painter ────────────────────────────────────────────────────────────
 
 class _GridPainter extends CustomPainter {
+  final StudioPalette palette;
   final PianoRollState state;
   final int totalTicks;
   final TimeSignature timeSig;
@@ -65,6 +65,7 @@ class _GridPainter extends CustomPainter {
   final NoteSpelling spelling;
 
   _GridPainter({
+    required this.palette,
     required this.state,
     required this.totalTicks,
     required this.timeSig,
@@ -93,16 +94,21 @@ class _GridPainter extends CustomPainter {
         Rect.fromLTWH(0, y, totalTicks * cellW, rowH),
         Paint()
           ..color = isHighlighted
-              ? MuzicianTheme.emerald.withValues(alpha: 0.09)
+              ? (palette.isStudio ? palette.teal : palette.emerald).withValues(
+                  alpha: palette.isStudio ? 0.065 : 0.09,
+                )
               : isBlack
-              ? Colors.white.withValues(alpha: 0.03)
-              : Colors.white.withValues(alpha: 0.015),
+              ? (palette.isStudio ? palette.textPrimary : Colors.white)
+                    .withValues(alpha: palette.isStudio ? 0.075 : 0.03)
+              : (palette.isStudio ? palette.textPrimary : Colors.white)
+                    .withValues(alpha: palette.isStudio ? 0.025 : 0.015),
       );
     }
 
     // Horizontal grid lines
     final hLinePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
+      ..color = (palette.isStudio ? palette.textPrimary : Colors.white)
+          .withValues(alpha: 0.05)
       ..strokeWidth = 0.5;
     for (int i = 0; i <= rangeSize; i++) {
       final y = i * rowH;
@@ -118,10 +124,13 @@ class _GridPainter extends CustomPainter {
       final isBeat = tick % beatTicks == 0;
       final paint = Paint()
         ..color = isMeasure
-            ? Colors.white.withValues(alpha: 0.18)
+            ? (palette.isStudio ? palette.textPrimary : Colors.white)
+                  .withValues(alpha: palette.isStudio ? 0.38 : 0.18)
             : isBeat
-            ? Colors.white.withValues(alpha: 0.09)
-            : Colors.white.withValues(alpha: 0.035)
+            ? (palette.isStudio ? palette.textPrimary : Colors.white)
+                  .withValues(alpha: palette.isStudio ? 0.22 : 0.09)
+            : (palette.isStudio ? palette.textPrimary : Colors.white)
+                  .withValues(alpha: palette.isStudio ? 0.07 : 0.035)
         ..strokeWidth = isMeasure ? 1.0 : 0.5;
       canvas.drawLine(Offset(x, 0), Offset(x, rangeSize * rowH), paint);
     }
@@ -131,7 +140,7 @@ class _GridPainter extends CustomPainter {
       final x = state.selectedColumnTick! * cellW;
       canvas.drawRect(
         Rect.fromLTWH(x, 0, cellW, rangeSize * rowH),
-        Paint()..color = MuzicianTheme.sky.withValues(alpha: 0.08),
+        Paint()..color = palette.sky.withValues(alpha: 0.08),
       );
     }
 
@@ -140,7 +149,7 @@ class _GridPainter extends CustomPainter {
       final x = playbackTick! * cellW;
       canvas.drawRect(
         Rect.fromLTWH(x, 0, cellW, rangeSize * rowH),
-        Paint()..color = MuzicianTheme.orange.withValues(alpha: 0.12),
+        Paint()..color = palette.orange.withValues(alpha: 0.12),
       );
     }
 
@@ -162,6 +171,7 @@ class _GridPainter extends CustomPainter {
         note,
         effectiveSelectedIds,
         state.selectedColumnTick,
+        palette,
       );
       final rrect = RRect.fromRectAndRadius(
         Rect.fromLTWH(x + 1, y + 1, w - 2, rowH - 2),
@@ -184,23 +194,30 @@ class _GridPainter extends CustomPainter {
 
       canvas.drawRRect(
         rrect,
-        Paint()..color = color.withValues(alpha: isSelected ? 0.5 : 0.35),
+        Paint()
+          ..color = color.withValues(
+            alpha: palette.isStudio ? .9 : (isSelected ? 0.5 : 0.35),
+          ),
       );
       canvas.drawRRect(
         rrect,
         Paint()
           ..color = color.withValues(alpha: isSelected ? 0.9 : 0.7)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = isMulti ? 1.5 : 1,
+          ..strokeWidth = palette.isStudio && isSelected
+              ? 2
+              : (isMulti ? 1.5 : 1),
       );
 
       // Note label
       final tp = TextPainter(
         text: TextSpan(
-          text: formatRootChoiceLabel(note.pitchClass, spelling: spelling),
+          text: palette.isStudio && w >= 36
+              ? formatMidiNoteLabel(note.midiNote, spelling: spelling)
+              : formatRootChoiceLabel(note.pitchClass, spelling: spelling),
           style: TextStyle(
-            color: color,
-            fontSize: 9,
+            color: palette.isStudio ? palette.onAccent : color,
+            fontSize: palette.isStudio ? 10 : 9,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -226,7 +243,7 @@ class _GridPainter extends CustomPainter {
         Offset(x, 0),
         Offset(x, rangeSize * rowH),
         Paint()
-          ..color = MuzicianTheme.orange
+          ..color = palette.orange
           ..strokeWidth = 2,
       );
     }
@@ -237,7 +254,7 @@ class _GridPainter extends CustomPainter {
         Offset(scissorsCursorX!, 0),
         Offset(scissorsCursorX!, rangeSize * rowH),
         Paint()
-          ..color = MuzicianTheme.orange.withValues(alpha: 0.8)
+          ..color = palette.orange.withValues(alpha: 0.8)
           ..strokeWidth = 1.5,
       );
     }
@@ -268,6 +285,7 @@ class _GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _GridPainter old) =>
+      old.palette != palette ||
       old.state != state ||
       old.totalTicks != totalTicks ||
       old.timeSig != timeSig ||
@@ -282,6 +300,7 @@ class _GridPainter extends CustomPainter {
 // ── Ruler Painter ───────────────────────────────────────────────────────────
 
 class _RulerPainter extends CustomPainter {
+  final StudioPalette palette;
   final TimeSignature timeSig;
   final int totalTicks;
   final int? selectedColumnTick;
@@ -289,6 +308,7 @@ class _RulerPainter extends CustomPainter {
   final double cellW;
 
   _RulerPainter({
+    required this.palette,
     required this.timeSig,
     required this.totalTicks,
     required this.cellW,
@@ -310,21 +330,32 @@ class _RulerPainter extends CustomPainter {
         final measure = tick ~/ measureTicks + 1;
         final tp = TextPainter(
           text: TextSpan(
-            text: '$measure',
-            style: const TextStyle(
-              color: MuzicianTheme.textSecondary,
-              fontSize: 10,
+            text: palette.isStudio ? '$measure:1' : '$measure',
+            style: TextStyle(
+              color: palette.textSecondary,
+              fontSize: palette.isStudio ? 11 : 10,
               fontWeight: FontWeight.w700,
             ),
           ),
           textDirection: TextDirection.ltr,
         )..layout();
         tp.paint(canvas, Offset(x + 3, (_rulerHeight - tp.height) / 2));
+      } else if (isBeat && palette.isStudio && cellW * beatTicks >= 30) {
+        final beat = (tick % measureTicks) ~/ beatTicks + 1;
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '$beat',
+            style: TextStyle(color: palette.textSecondary, fontSize: 11),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x + 3, (_rulerHeight - tp.height) / 2));
+        tp.dispose();
       } else if (isBeat) {
         canvas.drawCircle(
           Offset(x + cellW / 2, _rulerHeight / 2),
           1.5,
-          Paint()..color = MuzicianTheme.textMuted,
+          Paint()..color = palette.textMuted,
         );
       }
 
@@ -338,8 +369,10 @@ class _RulerPainter extends CustomPainter {
           Offset(x, _rulerHeight),
           Paint()
             ..color = isMeasure
-                ? Colors.white.withValues(alpha: 0.3)
-                : Colors.white.withValues(alpha: 0.12)
+                ? (palette.isStudio ? palette.textPrimary : Colors.white)
+                      .withValues(alpha: 0.3)
+                : (palette.isStudio ? palette.textPrimary : Colors.white)
+                      .withValues(alpha: 0.12)
             ..strokeWidth = 0.5,
         );
       }
@@ -351,7 +384,7 @@ class _RulerPainter extends CustomPainter {
       canvas.drawCircle(
         Offset(x, _rulerHeight - 4),
         3,
-        Paint()..color = MuzicianTheme.sky,
+        Paint()..color = palette.sky,
       );
     }
 
@@ -361,19 +394,20 @@ class _RulerPainter extends CustomPainter {
         Offset(x, 0),
         Offset(x, _rulerHeight),
         Paint()
-          ..color = MuzicianTheme.orange
+          ..color = palette.orange
           ..strokeWidth = 2,
       );
       canvas.drawCircle(
         Offset(x, _rulerHeight - 4),
         3,
-        Paint()..color = MuzicianTheme.orange,
+        Paint()..color = palette.orange,
       );
     }
   }
 
   @override
   bool shouldRepaint(covariant _RulerPainter old) =>
+      old.palette != palette ||
       old.timeSig != timeSig ||
       old.totalTicks != totalTicks ||
       old.cellW != cellW ||
@@ -384,12 +418,14 @@ class _RulerPainter extends CustomPainter {
 // ── Pitch Sidebar Painter ───────────────────────────────────────────────────
 
 class _PitchSidebarPainter extends CustomPainter {
+  final StudioPalette palette;
   final int rangeStart;
   final int rangeEnd;
   final double rowH;
   final NoteSpelling spelling;
 
   _PitchSidebarPainter({
+    required this.palette,
     required this.rangeStart,
     required this.rangeEnd,
     required this.rowH,
@@ -407,17 +443,33 @@ class _PitchSidebarPainter extends CustomPainter {
       if (isBlack) {
         canvas.drawRect(
           Rect.fromLTWH(0, y, _pitchLabelWidth, rowH),
-          Paint()..color = Colors.white.withValues(alpha: 0.03),
+          Paint()
+            ..color = (palette.isStudio ? palette.textPrimary : Colors.white)
+                .withValues(alpha: 0.03),
         );
       }
 
+      if (palette.isStudio) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(1, y + 1, _pitchLabelWidth - 3, rowH - 2),
+            const Radius.circular(2),
+          ),
+          Paint()
+            ..color = isBlack
+                ? palette.surface
+                : palette.textPrimary.withValues(alpha: .88),
+        );
+      }
       final label = formatMidiNoteLabel(midi, spelling: spelling);
       final tp = TextPainter(
         text: TextSpan(
           text: label,
-          style: const TextStyle(
-            color: MuzicianTheme.textSecondary,
-            fontSize: 9,
+          style: TextStyle(
+            color: palette.isStudio && !isBlack
+                ? palette.onAccent
+                : palette.textSecondary,
+            fontSize: palette.isStudio ? 10 : 9,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -445,6 +497,7 @@ class _PitchSidebarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PitchSidebarPainter old) =>
+      old.palette != palette ||
       rangeStart != old.rangeStart ||
       rangeEnd != old.rangeEnd ||
       rowH != old.rowH ||
@@ -1184,9 +1237,37 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     return Offset(local.dx + _hScroll.offset, local.dy + _vScroll.offset);
   }
 
+  void _revealAddedNotes(List<PianoRollNote> previous, PianoRollState state) {
+    if (_pointers.isNotEmpty) return;
+    final oldIds = previous.map((note) => note.id).toSet();
+    final added = state.notes
+        .where((note) => !oldIds.contains(note.id))
+        .toList();
+    if (added.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _pointers.isNotEmpty || !_vScroll.hasClients) return;
+      final highest = added.map((note) => note.midiNote).reduce(max);
+      final lowest = added.map((note) => note.midiNote).reduce(min);
+      final top = (state.pitchRangeEnd - highest) * _rowH;
+      final bottom = (state.pitchRangeEnd - lowest + 1) * _rowH;
+      final viewport = _vScroll.position.viewportDimension;
+      var offset = _vScroll.offset;
+      final margin = max(0.0, min(_rowH, (viewport - (bottom - top)) / 2));
+      if (bottom > offset + viewport) offset = bottom - viewport + margin;
+      if (top < offset + margin) offset = max(0, top - margin);
+      _vScroll.jumpTo(offset.clamp(0.0, _vScroll.position.maxScrollExtent));
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = StudioPalette.of(context);
     final state = ref.watch(pianoRollProvider);
+    ref.listen(pianoRollProvider.select((state) => state.notes), (previous, _) {
+      if (palette.isStudio && previous != null) {
+        _revealAddedNotes(previous, ref.read(pianoRollProvider));
+      }
+    });
     final spelling = ref.watch(
       settingsProvider.select((settings) => settings.noteSpelling),
     );
@@ -1254,9 +1335,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
         focusNode: _focusNode,
         child: Container(
           decoration: BoxDecoration(
-            color: MuzicianTheme.glassBg,
-            border: Border.all(color: MuzicianTheme.glassBorder, width: 0.5),
-            borderRadius: BorderRadius.circular(16),
+            color: palette.glassBg,
+            border: Border.all(color: palette.glassBorder, width: 0.5),
+            borderRadius: BorderRadius.circular(palette.isStudio ? 8 : 16),
           ),
           clipBehavior: Clip.hardEdge,
           child: Column(
@@ -1267,10 +1348,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                 child: Row(
                   children: [
                     // Corner
-                    Container(
-                      width: _pitchLabelWidth,
-                      color: MuzicianTheme.surface,
-                    ),
+                    Container(width: _pitchLabelWidth, color: palette.surface),
                     // Ruler (synced horizontally) — tap/drag to select column
                     Expanded(
                       child: GestureDetector(
@@ -1289,6 +1367,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                             key: const ValueKey('piano-roll-ruler-paint'),
                             size: Size(gridW, _rulerHeight),
                             painter: _RulerPainter(
+                              palette: palette,
                               timeSig: state.config.timeSignature,
                               totalTicks: totalTicks,
                               cellW: _cellW,
@@ -1306,6 +1385,9 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
               // ── Main area: sidebar + grid ──
               Expanded(
                 child: Row(
+                  crossAxisAlignment: palette.isStudio
+                      ? CrossAxisAlignment.stretch
+                      : CrossAxisAlignment.center,
                   children: [
                     // Pitch sidebar (synced vertically)
                     SizedBox(
@@ -1316,6 +1398,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                         child: CustomPaint(
                           size: Size(_pitchLabelWidth, gridH),
                           painter: _PitchSidebarPainter(
+                            palette: palette,
                             rangeStart: state.pitchRangeStart,
                             rangeEnd: state.pitchRangeEnd,
                             rowH: _rowH,
@@ -1359,6 +1442,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                                       ),
                                       size: Size(gridW, gridH),
                                       painter: _GridPainter(
+                                        palette: palette,
                                         state: state,
                                         totalTicks: totalTicks,
                                         timeSig: state.config.timeSignature,
@@ -1390,11 +1474,11 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                                         '${_marqueePreviewIds.length} ${_marqueePreviewIds.length == 1 ? "note" : "notes"} selected',
                                     child: DecoratedBox(
                                       decoration: BoxDecoration(
-                                        color: MuzicianTheme.sky.withValues(
+                                        color: palette.sky.withValues(
                                           alpha: 0.12,
                                         ),
                                         border: Border.all(
-                                          color: MuzicianTheme.sky.withValues(
+                                          color: palette.sky.withValues(
                                             alpha: 0.85,
                                           ),
                                           width: 1.5,
@@ -1415,11 +1499,11 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                                     vertical: 8,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: MuzicianTheme.violet.withValues(
+                                    color: palette.violet.withValues(
                                       alpha: 0.2,
                                     ),
                                     border: Border.all(
-                                      color: MuzicianTheme.violet.withValues(
+                                      color: palette.violet.withValues(
                                         alpha: 0.6,
                                       ),
                                       width: 1,
@@ -1431,8 +1515,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                                     children: [
                                       Text(
                                         '${state.selectedNoteIds.length} selected',
-                                        style: const TextStyle(
-                                          color: MuzicianTheme.violet,
+                                        style: TextStyle(
+                                          color: palette.violet,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w700,
                                         ),

@@ -9,6 +9,7 @@ library;
 import 'dart:math' as math;
 
 import '../../models/save_system.dart';
+import '../../models/guitar_sound.dart' show GuitarTone;
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
@@ -27,10 +28,11 @@ typedef SongwriterAuditionBed = ({
   Map<int, List<DrumLaneId>> drumByTick,
 });
 
-/// Same-tick notes bucketed by their lane's (volume, pan) mix settings.
+/// Same-tick notes bucketed by instrument and lane (volume, pan) settings.
 typedef SongwriterNoteGroup = ({
   double volume,
   double pan,
+  bool isGuitar,
   List<int> midiNotes,
 });
 
@@ -42,9 +44,12 @@ typedef SongwriterDrumGroup = ({
 });
 
 /// Sequenced notes that need a duration-aware voice instead of a one-shot stab.
+/// A guitar group with no explicit tone follows the shared guitar preference.
 typedef SongwriterSequencedNoteGroup = ({
   double volume,
   double pan,
+  bool isGuitar,
+  GuitarTone? guitarTone,
   List<NotePatternNote> notes,
 });
 
@@ -137,9 +142,8 @@ List<int> snapshotMidiNotes(InstrumentSnapshot? snapshot) {
 }
 
 /// Resolves MIDI pitches for a Writer Harmony placement. Recognized chords
-/// retain their symbolic octave-four voicing; exact-note Harmony uses the
-/// composite's native MIDI positions and rejects invalid or Free Fretboard
-/// selections.
+/// and exact Harmony use the saved native MIDI voicing, including Piano
+/// octaves and inversions. Invalid or Free Fretboard selections remain silent.
 List<int> harmonyBlockMidiNotes(
   SongBlock block,
   List<SaveEntry> saves, {
@@ -155,22 +159,6 @@ List<int> harmonyBlockMidiNotes(
   );
   if (snapshot is HarmonyChordSnapshot) {
     if (!isWriterEligibleHarmonySnapshot(snapshot)) return const [];
-    final content = snapshot.writerBlock;
-    if (content.chordRootPc != null && content.chordQuality != null) {
-      return chordMidiNotes(
-        SongBlock(
-          id: block.id,
-          startBar: block.startBar,
-          spanBars: block.spanBars,
-          chordSymbol: content.chordSymbol,
-          chordQuality: content.chordQuality,
-          chordRootPc: content.chordRootPc,
-          chordNotes: content.chordNotes,
-          romanNumeral: content.romanNumeral,
-          isSilent: content.isSilent,
-        ),
-      );
-    }
     return snapshotMidiNotes(snapshot.instrumentState);
   }
   if (block.chordRootPc != null && block.chordQuality != null) {
@@ -254,6 +242,28 @@ List<int> _blockPitches(
         folders: folders,
       );
 
+bool _blockUsesGuitar(
+  SongLane lane,
+  SongBlock block,
+  List<SaveEntry> saves,
+  String? projectId,
+  List<SaveFolder> folders,
+) {
+  final snapshot = resolveBlockSnapshot(
+    block,
+    saves,
+    projectId: projectId,
+    folders: folders,
+  );
+  final native = snapshot is HarmonyChordSnapshot
+      ? snapshot.instrumentState
+      : snapshot;
+  if (native is FretboardSnapshot) return true;
+  if (native is PianoSnapshot) return false;
+  return lane.kind == SongLaneKind.harmony &&
+      lane.harmonyInstrument == HarmonyLaneInstrument.fretboard;
+}
+
 List<int> _harmonyAtTick(
   SongLane? harmonyLane,
   SongSection section,
@@ -271,6 +281,24 @@ List<int> _harmonyAtTick(
   )) {
     if (bar >= block.startBar &&
         bar < math.min(block.endBar, section.lengthBars)) {
+      final snapshot = resolveBlockSnapshot(
+        block,
+        saves,
+        projectId: projectId,
+        folders: folders,
+      );
+      if (snapshot is HarmonyChordSnapshot &&
+          snapshot.instrumentState is FretboardSnapshot &&
+          isWriterEligibleHarmonySnapshot(snapshot)) {
+        final native = snapshot.instrumentState as FretboardSnapshot;
+        final strings = tunings[native.tuning]!.strings;
+        final cells = [...native.selectedCells]
+          ..sort((a, b) => b.stringIndex.compareTo(a.stringIndex));
+        return [
+          for (final cell in cells)
+            strings[cell.stringIndex].midiNote + cell.fret,
+        ];
+      }
       return harmonyBlockMidiNotes(
         block,
         saves,
@@ -312,6 +340,8 @@ void _tileDrumHits(
 /// pitches at the block's start bar and every later bar boundary inside the
 /// block (clipped to the section); drum blocks fire their referenced
 /// [DrumPattern] hits at native tick resolution, tiled across the block span.
+/// Melody blocks play their pattern once from the block start and stay silent
+/// after the pattern or placement end; lane repeats still tile placements.
 /// Events sharing a tick are merged. Save references resolve only inside the
 /// supplied [projectId] folder tree; without project scope, fallbacks still work.
 List<SongwriterPlaybackEvent> flattenPlaybackEvents(
@@ -329,11 +359,17 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
   final patterns = {for (final p in project.drumPatterns) p.id: p};
   final melodyPatterns = {for (final p in project.melodyPatterns) p.id: p};
   final strumPatterns = {for (final p in project.guitarStrumPatterns) p.id: p};
-  // tick → (volume, pan) → accumulated notes / drum hits.
-  final notesAt = <int, Map<(double, double), List<int>>>{};
+  // Keep guitar and piano voices separate even when their lane mix matches.
+  final notesAt = <int, Map<(double, double, bool), List<int>>>{};
   final drumsAt = <int, Map<(double, double), Set<DrumLaneId>>>{};
   final sequencedAt =
-      <int, Map<(double, double, int, int, int), List<NotePatternNote>>>{};
+      <
+        int,
+        Map<
+          (double, double, int, int, int, bool, GuitarTone?),
+          List<NotePatternNote>
+        >
+      >{};
 
   void addSequencedNote({
     required int tick,
@@ -343,10 +379,20 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
     required int durationOffsetMs,
     required double volume,
     required double pan,
+    required bool isGuitar,
+    GuitarTone? guitarTone,
     required String id,
   }) {
     if (durationTicks <= 0) return;
-    final key = (volume, pan, durationTicks, onsetOffsetMs, durationOffsetMs);
+    final key = (
+      volume,
+      pan,
+      durationTicks,
+      onsetOffsetMs,
+      durationOffsetMs,
+      isGuitar,
+      guitarTone,
+    );
     ((sequencedAt[tick] ??= {})[key] ??= []).add(
       NotePatternNote(
         id: id,
@@ -398,9 +444,14 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
               folders,
             );
             if (pitches.isEmpty) break;
+            final noteKey = (
+              mix.volume,
+              mix.pan,
+              _blockUsesGuitar(lane, block, saves, projectId, folders),
+            );
             for (var bar = block.startBar; bar < clippedEnd; bar++) {
               final tick = (exp.globalStartBar + bar) * measureTicks;
-              ((notesAt[tick] ??= {})[mixKey] ??= []).addAll(pitches);
+              ((notesAt[tick] ??= {})[noteKey] ??= []).addAll(pitches);
             }
           case SongLaneKind.drum:
             final pattern = patterns[block.patternId];
@@ -421,43 +472,58 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             final startTick =
                 (exp.globalStartBar + block.startBar) * measureTicks;
             final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
-            for (
-              var loopOffset = 0;
-              startTick + loopOffset < endTick;
-              loopOffset += pattern.lengthTicks
-            ) {
-              final loopStart = startTick + loopOffset;
-              final loopEnd = math.min(
-                endTick,
-                loopStart + pattern.lengthTicks,
+            // A Writer placement is a one-pass window over the melody. It never
+            // loops the pattern inside the block; automatic lane repeats are
+            // arrangement-level placements that each start the melody again.
+            // The audible window follows the effective last-note bar, capped at
+            // [melodyMaxBars]. Legacy data can store a longer length or notes
+            // past bar 32; those bars keep their notes but stay inside the
+            // hatched silent tail and never sound.
+            final effectiveLengthTicks =
+                melodyBarCount(pattern, measureTicks) * measureTicks;
+            final melodyEndTick = startTick + effectiveLengthTicks;
+            final playEndTick = math.min(endTick, melodyEndTick);
+            for (final note in pattern.notes) {
+              if (note.startTick < 0 ||
+                  note.startTick >= effectiveLengthTicks) {
+                continue;
+              }
+              final tick = startTick + note.startTick;
+              if (tick >= playEndTick) continue;
+              final duration = math.min(
+                math.max(1, note.durationTicks),
+                playEndTick - tick,
               );
-              for (final note in pattern.notes) {
-                if (note.startTick < 0 ||
-                    note.startTick >= pattern.lengthTicks) {
-                  continue;
-                }
-                final tick = loopStart + note.startTick;
-                if (tick >= loopEnd) continue;
-                final duration = math.min(
-                  math.max(1, note.durationTicks),
-                  loopEnd - tick,
-                );
-                final onsetOffsetMs = math.max(0, note.onsetOffsetMs);
-                addSequencedNote(
-                  tick: tick,
-                  midiNote: note.midiNote,
+              final onsetOffsetMs = math.max(0, note.onsetOffsetMs);
+              addSequencedNote(
+                tick: tick,
+                midiNote: note.midiNote,
+                durationTicks: duration,
+                onsetOffsetMs: onsetOffsetMs,
+                durationOffsetMs: clippedDurationOffsetMs(
                   durationTicks: duration,
                   onsetOffsetMs: onsetOffsetMs,
-                  durationOffsetMs: clippedDurationOffsetMs(
-                    durationTicks: duration,
-                    onsetOffsetMs: onsetOffsetMs,
-                    availableTicks: loopEnd - tick,
-                  ),
-                  volume: mix.volume,
-                  pan: mix.pan,
-                  id: note.id,
-                );
-              }
+                  availableTicks: playEndTick - tick,
+                ),
+                volume: mix.volume,
+                pan: mix.pan,
+                isGuitar: switch (lane.melodySound) {
+                  MelodyLaneSound.piano => false,
+                  MelodyLaneSound.cleanGuitar ||
+                  MelodyLaneSound.distortedGuitar => true,
+                  null =>
+                    project
+                            .melodyPerformancesByPatternId[pattern.id]
+                            ?.instrument ==
+                        HarmonyLaneInstrument.fretboard,
+                },
+                guitarTone: switch (lane.melodySound) {
+                  MelodyLaneSound.cleanGuitar => GuitarTone.clean,
+                  MelodyLaneSound.distortedGuitar => GuitarTone.distorted,
+                  _ => null,
+                },
+                id: note.id,
+              );
             }
           case SongLaneKind.guitarStrum:
             final pattern = strumPatterns[block.patternId];
@@ -481,7 +547,14 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                 endTick,
                 loopStart + pattern.lengthTicks,
               );
-              for (final strumEvent in pattern.events) {
+              final strokes = [...pattern.events]
+                ..sort((a, b) => a.tick.compareTo(b.tick));
+              for (
+                var strokeIndex = 0;
+                strokeIndex < strokes.length;
+                strokeIndex++
+              ) {
+                final strumEvent = strokes[strokeIndex];
                 if (strumEvent.tick < 0 ||
                     strumEvent.tick >= pattern.lengthTicks) {
                   continue;
@@ -510,7 +583,15 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                   gateTicks,
                   math.min(loopEnd - tick, endTick - tick),
                 );
-                final availableTicks = math.min(loopEnd - tick, endTick - tick);
+                final nextStrokeTick = strokes
+                    .skip(strokeIndex + 1)
+                    .where((stroke) => stroke.tick > strumEvent.tick)
+                    .map((stroke) => loopStart + stroke.tick)
+                    .firstOrNull;
+                final availableTicks = math.min(
+                  math.min(loopEnd - tick, endTick - tick),
+                  nextStrokeTick == null ? gateTicks : nextStrokeTick - tick,
+                );
                 for (var i = 0; i < orderedPitches.length; i++) {
                   final onsetOffsetMs = i * 12;
                   addSequencedNote(
@@ -525,6 +606,7 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                     ),
                     volume: mix.volume,
                     pan: mix.pan,
+                    isGuitar: true,
                     id: 'strum_${block.id}_${tick}_$i',
                   );
                 }
@@ -547,7 +629,12 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
         tick: tick,
         noteGroups: [
           for (final e in (notesAt[tick] ?? const {}).entries)
-            (volume: e.key.$1, pan: e.key.$2, midiNotes: e.value),
+            (
+              volume: e.key.$1,
+              pan: e.key.$2,
+              isGuitar: e.key.$3,
+              midiNotes: e.value,
+            ),
         ],
         drumGroups: [
           for (final e in (drumsAt[tick] ?? const {}).entries)
@@ -555,7 +642,13 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
         ],
         sequencedNoteGroups: [
           for (final e in (sequencedAt[tick] ?? const {}).entries)
-            (volume: e.key.$1, pan: e.key.$2, notes: e.value),
+            (
+              volume: e.key.$1,
+              pan: e.key.$2,
+              isGuitar: e.key.$6,
+              guitarTone: e.key.$7,
+              notes: e.value,
+            ),
         ],
       ),
   ];

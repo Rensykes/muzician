@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -11,10 +11,9 @@ import '../../theme/muzician_theme.dart';
 ///
 /// [initialTab] selects the default tab: 0 = Fretboard, 1 = Piano, 2 = Piano Roll.
 void showAppInfoPanel(BuildContext context, {int initialTab = 0}) {
-  showModalBottomSheet<void>(
+  showStudioModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
     builder: (_) => _AppInfoSheet(initialTab: initialTab),
   );
 }
@@ -56,7 +55,7 @@ class _AppInfoSheetState extends State<_AppInfoSheet>
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: MuzicianTheme.surface,
+        color: StudioPalette.of(context).surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.1),
@@ -115,17 +114,17 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.help_outline_rounded,
-            color: MuzicianTheme.sky,
+            color: StudioPalette.of(context).sky,
             size: 20,
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
               'Gestures & Features',
               style: TextStyle(
-                color: MuzicianTheme.textPrimary,
+                color: StudioPalette.of(context).textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -134,15 +133,17 @@ class _Header extends StatelessWidget {
           GestureDetector(
             onTap: onClose,
             child: Container(
-              width: 30,
-              height: 30,
+              width: StudioPalette.of(context).isStudio ? 44 : 30,
+              height: StudioPalette.of(context).isStudio ? 44 : 30,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
+                color: (StudioPalette.of(context).isStudio
+                    ? StudioPalette.of(context).glassBg
+                    : Colors.white.withValues(alpha: 0.08)),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.close_rounded,
-                color: MuzicianTheme.textMuted,
+                color: StudioPalette.of(context).textMuted,
                 size: 16,
               ),
             ),
@@ -162,16 +163,18 @@ class _TabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return TabBar(
       controller: controller,
-      indicatorColor: MuzicianTheme.sky,
+      indicatorColor: StudioPalette.of(context).sky,
       indicatorWeight: 2,
-      labelColor: MuzicianTheme.sky,
-      unselectedLabelColor: MuzicianTheme.textMuted,
+      labelColor: StudioPalette.of(context).sky,
+      unselectedLabelColor: StudioPalette.of(context).textMuted,
       labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
       unselectedLabelStyle: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w500,
       ),
-      dividerColor: Colors.white.withValues(alpha: 0.08),
+      dividerColor: (StudioPalette.of(context).isStudio
+          ? StudioPalette.of(context).glassBg
+          : Colors.white.withValues(alpha: 0.08)),
       tabs: const [
         Tab(text: 'Fretboard'),
         Tab(text: 'Piano'),
@@ -190,11 +193,50 @@ class _FretboardInfoTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      children: const [
+      children: [
+        _Section(
+          icon: Icons.dashboard_outlined,
+          title: 'Studio workspace',
+          color: StudioPalette.of(context).emerald,
+          entries: [
+            _Entry(
+              icon: Icons.tune_rounded,
+              label: 'Notes, Voicings & Setup',
+              desc:
+                  'The inspector keeps note detection under Notes, chord shapes '
+                  'under Voicings, and guitar tuning, capo, and display controls '
+                  'under Setup. Tools scroll independently while the instrument stays visible; '
+                  'tabs and collapse preserve picker state.',
+              color: StudioPalette.of(context).emerald,
+            ),
+            _Entry(
+              icon: Icons.music_note_rounded,
+              label: 'Guitar sound & strum',
+              desc:
+                  'Choose Clean or Distorted electric sound below the fretboard. '
+                  'Down/up strum buttons play the selected strings in order. '
+                  'Select one position per string to strum; unselected strings '
+                  'stay silent. Sound is remembered on this device and shared '
+                  'with guitar parts in Writer playback.',
+              color: StudioPalette.of(context).emerald,
+            ),
+            _Entry(
+              icon: Icons.bookmarks_outlined,
+              label: 'Save idea, Idea library & Add to Writer',
+              desc:
+                  'Save idea opens the save flow for the current selection. '
+                  'Idea library browses saved ideas. Add to Writer accepts a valid '
+                  'Chord-mode selection with one note per string; Free-mode ideas '
+                  'remain available for saving and exploration.',
+              color: StudioPalette.of(context).emerald,
+            ),
+          ],
+        ),
+        SizedBox(height: 16),
         _Section(
           icon: Icons.touch_app_outlined,
           title: 'Gestures',
-          color: MuzicianTheme.sky,
+          color: StudioPalette.of(context).sky,
           entries: [
             _Entry(
               icon: Icons.touch_app,
@@ -202,7 +244,7 @@ class _FretboardInfoTab extends StatelessWidget {
               desc:
                   'Selects or deselects the note at that string and fret. In Chord '
                   'mode, only one note per string is allowed at a time.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
           ],
         ),
@@ -210,13 +252,13 @@ class _FretboardInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.layers_outlined,
           title: 'Input & View Modes',
-          color: MuzicianTheme.violet,
+          color: StudioPalette.of(context).violet,
           entries: [
             _Entry(
               icon: Icons.toggle_on_outlined,
               label: 'Free mode',
               desc: 'Select any note on any string, no restrictions.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.music_note,
@@ -224,31 +266,20 @@ class _FretboardInfoTab extends StatelessWidget {
               desc:
                   'Enforces one note per string, matching standard guitar voicing '
                   'rules.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.grid_on,
-              label: 'All view',
-              desc: 'Shows pitch classes (e.g. C#) across the whole fretboard.',
-              color: MuzicianTheme.violet,
-            ),
-            _Entry(
-              icon: Icons.text_fields,
-              label: 'Exact view',
-              desc: 'Shows note names with octave (e.g. C#4).',
-              color: MuzicianTheme.violet,
-            ),
-            _Entry(
-              icon: Icons.center_focus_strong_outlined,
-              label: 'Focus view',
-              desc: 'Selected notes are vivid; unselected notes are dimmed.',
-              color: MuzicianTheme.violet,
+              label: 'Full view',
+              desc: 'Shows all note labels in both Free and Chord input modes.',
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.visibility_outlined,
               label: 'Solo view',
-              desc: 'Only selected notes are shown; all others are hidden.',
-              color: MuzicianTheme.violet,
+              desc:
+                  'Shows only selected note labels; the instrument stays playable.',
+              color: StudioPalette.of(context).violet,
             ),
           ],
         ),
@@ -256,7 +287,7 @@ class _FretboardInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.build_outlined,
           title: 'Panels & Tools',
-          color: MuzicianTheme.orange,
+          color: StudioPalette.of(context).orange,
           entries: [
             _Entry(
               icon: Icons.tune,
@@ -264,7 +295,7 @@ class _FretboardInfoTab extends StatelessWidget {
               desc:
                   'Choose from 10 presets: Standard, Drop D, Open G, Open D, Open '
                   'E, DADGAD, Half-step Down, Full-step Down, Open A, Open C.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.compress,
@@ -272,39 +303,40 @@ class _FretboardInfoTab extends StatelessWidget {
               desc:
                   'Set capo position from fret 0 (no capo) to fret 11. All '
                   'open-string pitches are shifted up accordingly.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.library_music_outlined,
-              label: 'Chord voicing',
+              label: 'Voicings',
               desc:
-                  'Pick a root note and quality (major, minor, 7, maj7, m7, dim, '
-                  'aug, sus2, sus4) and tap "Load" to place the shape on the '
-                  'fretboard.',
-              color: MuzicianTheme.orange,
+                  'From notes finds shapes containing all selected pitch classes. '
+                  'By chord browses an independent root and quality. Swipe diagrams '
+                  'horizontally and tap to apply without changing the query. '
+                  'Use current notes refreshes the filter; manual edits refresh it automatically.',
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.stacked_line_chart,
               label: 'Scale',
               desc:
-                  'Highlights scale tones across every string. The root note is '
-                  'shown in the accent colour (sky blue).',
-              color: MuzicianTheme.orange,
+                  'Highlights scale tones across every string. The root has a '
+                  'distinct semantic accent; its hue follows the selected theme.',
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.search,
               label: 'Detection',
               desc:
                   'Detection now uses the exact selected notes, so inversions such as C/E and friendlier spellings such as Bb or Eb can appear on the result chips.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.save_outlined,
-              label: 'Saves',
+              label: 'Idea library',
               desc:
-                  'Save the current voicing to a named folder and reload it at any '
-                  'time.',
-              color: MuzicianTheme.orange,
+                  'Browse and load saved ideas. Use Save idea beside the selection '
+                  'summary to add the current voicing to a named project folder.',
+              color: StudioPalette.of(context).orange,
             ),
           ],
         ),
@@ -320,17 +352,45 @@ class _PianoInfoTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      children: const [
+      children: [
+        _Section(
+          icon: Icons.dashboard_outlined,
+          title: 'Studio workspace',
+          color: StudioPalette.of(context).emerald,
+          entries: [
+            _Entry(
+              icon: Icons.tune_rounded,
+              label: 'Notes, Voicings & Setup',
+              desc:
+                  'The inspector keeps selected-note detection under Notes, '
+                  'horizontal voicing search under Voicings, and keyboard range '
+                  'and display controls under Setup. Tools scroll independently '
+                  'while the keyboard stays visible.',
+              color: StudioPalette.of(context).emerald,
+            ),
+            _Entry(
+              icon: Icons.bookmarks_outlined,
+              label: 'Save idea, Idea library & Add to Writer',
+              desc:
+                  'Save idea opens the save flow for the current selection. '
+                  'Idea library browses saved ideas. Add to Writer carries valid '
+                  'selected MIDI notes into Harmony, whether or not they form a '
+                  'recognized chord.',
+              color: StudioPalette.of(context).emerald,
+            ),
+          ],
+        ),
+        SizedBox(height: 16),
         _Section(
           icon: Icons.touch_app_outlined,
           title: 'Gestures',
-          color: MuzicianTheme.sky,
+          color: StudioPalette.of(context).sky,
           entries: [
             _Entry(
               icon: Icons.touch_app,
               label: 'Tap a key',
               desc: 'Selects or deselects that piano key.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.swipe_outlined,
@@ -338,7 +398,7 @@ class _PianoInfoTab extends StatelessWidget {
               desc:
                   'Scrolls the keyboard horizontally. Most useful on 61-key and '
                   '88-key layouts where the keyboard exceeds the screen width.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
           ],
         ),
@@ -346,7 +406,7 @@ class _PianoInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.build_outlined,
           title: 'Panels & Tools',
-          color: MuzicianTheme.violet,
+          color: StudioPalette.of(context).violet,
           entries: [
             _Entry(
               icon: Icons.piano_outlined,
@@ -354,38 +414,40 @@ class _PianoInfoTab extends StatelessWidget {
               desc:
                   'Switch between 49-key (C3–C7), 61-key (C2–C7), and 88-key '
                   '(A0–C8) keyboard layouts.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.library_music_outlined,
-              label: 'Chord picker',
+              label: 'Voicings',
               desc:
-                  'Highlights all tones of a chosen root + quality (major, minor, '
-                  '7, maj7, m7, dim, aug, sus2, sus4).',
-              color: MuzicianTheme.violet,
+                  'From notes requires all selected pitch classes. By chord browses '
+                  'a root and quality across available registers and inversions. '
+                  'Swipe horizontally and tap to apply exact MIDI keys without '
+                  'changing the query. Use current notes refreshes it explicitly.',
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.stacked_line_chart,
               label: 'Scale picker',
               desc:
-                  'Highlights scale tones across the keyboard. The root note is '
-                  'shown in emerald green.',
-              color: MuzicianTheme.violet,
+                  'Highlights scale tones across the keyboard. The root has a '
+                  'distinct semantic accent; its hue follows the selected theme.',
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.search,
               label: 'Detection',
               desc:
                   'Detection now uses the exact selected notes, so inversions such as C/E and friendlier spellings such as Bb or Eb can appear on the result chips.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.save_outlined,
-              label: 'Saves',
+              label: 'Idea library',
               desc:
-                  'Save the current note selection as a named progression and '
-                  'reload it later.',
-              color: MuzicianTheme.violet,
+                  'Browse and load saved ideas. Use Save idea beside the selection '
+                  'summary to add the current notes to a named project folder.',
+              color: StudioPalette.of(context).violet,
             ),
           ],
         ),
@@ -393,7 +455,7 @@ class _PianoInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.info_outline_rounded,
           title: 'Behaviour Notes',
-          color: MuzicianTheme.teal,
+          color: StudioPalette.of(context).teal,
           entries: [
             _Entry(
               icon: Icons.warning_amber_outlined,
@@ -401,15 +463,16 @@ class _PianoInfoTab extends StatelessWidget {
               desc:
                   'Adding a note outside the highlighted scale shows a confirmation '
                   'dialog. You can permanently disable it in Settings.',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
             ),
             _Entry(
               icon: Icons.palette_outlined,
               label: 'Colour coding',
               desc:
-                  'Selected = sky blue · Scale highlight = teal · Chord highlight '
-                  '= violet · Root note = emerald.',
-              color: MuzicianTheme.teal,
+                  'Selection, scale, chord, and root notes use distinct semantic '
+                  'colors. Their hues follow the selected theme; piano keys keep '
+                  'their white/black identity.',
+              color: StudioPalette.of(context).teal,
             ),
           ],
         ),
@@ -425,40 +488,41 @@ class _PianoRollInfoTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      children: const [
-        // ── V2 Layout ───────────────────────────────────────────────────
+      children: [
+        // ── Studio Layout ───────────────────────────────────────────────
         _Section(
           icon: Icons.dashboard_outlined,
-          title: 'V2 Layout',
-          color: MuzicianTheme.emerald,
+          title: 'Studio layout',
+          color: StudioPalette.of(context).emerald,
           entries: [
             _Entry(
               icon: Icons.smartphone_outlined,
-              label: 'Portrait (phone)',
+              label: 'Compact and short screens',
               desc:
-                  'Transport strip at top, grid as the primary surface, '
-                  'collapsible quick-action dock at bottom. Expand panels '
-                  'one at a time: Scale, Hum, Save, Import, Compose, Detection.',
-              color: MuzicianTheme.emerald,
+                  'The timeline stays primary beneath the project context, '
+                  'transport, and five editing tools. The Stack Builder, '
+                  'Selection, and Tools inspector sits below the grid; short '
+                  'screens keep its contents and utility actions reachable by scrolling.',
+              color: StudioPalette.of(context).emerald,
             ),
             _Entry(
               icon: Icons.tablet_android_outlined,
-              label: 'Landscape (width > 600 px)',
+              label: 'Wide screens',
               desc:
-                  'Grid on the left (3× width), persistent inspector rail on '
-                  'the right (1× width). The rail holds Stack Builder, Selection, '
-                  'Edit & Pitch, Scale, Detection, Hum Recorder, '
-                  'Save/Load, and Import — all scrollable.',
-              color: MuzicianTheme.emerald,
+                  'The grid remains the main surface beside a contextual '
+                  'inspector for Stack Builder, Selection, and Tools. Transport '
+                  'and utility actions remain available alongside the editor.',
+              color: StudioPalette.of(context).emerald,
             ),
             _Entry(
               icon: Icons.compare_arrows_outlined,
-              label: 'V1 & V2 share the same logic',
+              label: 'Song-embedded Roll',
               desc:
-                  'Both shells read from the same Riverpod providers. V1 composes '
-                  'widgets inline; V2 arranges them adaptively. V2 is the default '
-                  'product surface; V1 remains as a compatibility shell.',
-              color: MuzicianTheme.emerald,
+                  'Song is temporarily unavailable in V2. Its retained Roll layout '
+                  'and host settings stay compatible. Embedded '
+                  'editors can hide background, scale, or save/import actions when '
+                  'those controls belong to the host workspace.',
+              color: StudioPalette.of(context).emerald,
             ),
           ],
         ),
@@ -467,7 +531,7 @@ class _PianoRollInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.web_outlined,
           title: 'Web Support',
-          color: MuzicianTheme.orange,
+          color: StudioPalette.of(context).orange,
           entries: [
             _Entry(
               icon: Icons.check_circle_outline,
@@ -476,7 +540,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'Editor grid, playback, stack composer, save/load, import, '
                   'detection, scale highlighting, keyboard shortcuts, and '
                   'Ctrl/Alt + wheel zoom all work in the browser.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.mic_off_outlined,
@@ -485,7 +549,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'Microphone recording is not available on web. The Hum '
                   'Recorder card shows "Hum to MIDI not supported on web" '
                   'instead of record controls.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
           ],
         ),
@@ -494,7 +558,7 @@ class _PianoRollInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.touch_app_outlined,
           title: 'Gestures',
-          color: MuzicianTheme.sky,
+          color: StudioPalette.of(context).sky,
           entries: [
             _Entry(
               icon: Icons.select_all_rounded,
@@ -502,7 +566,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Switch to Select, then drag a box across the grid to select any notes '
                   'the box touches. Use Draw afterward to move or resize the selected group.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.touch_app,
@@ -510,7 +574,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Adds a new note of 1 tick (1/16th note) at that pitch and '
                   'beat position.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.touch_app_outlined,
@@ -518,7 +582,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Inserts a note at the current snap duration (e.g. 1/4 note). '
                   'Uses the active snap value from the toolbar.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.view_column_outlined,
@@ -527,7 +591,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'The selected column is a timeline position used for detection '
                   'and playback start. Selected notes are the notes you are '
                   'actively editing. They are related, but separate.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.mouse_outlined,
@@ -536,16 +600,15 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'Solo-selects that note (replaces the current note selection). '
                   'Also previews that pitch. Use double-tap to add or remove '
                   'that note from a multi-selection.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.playlist_add_check_circle_outlined,
               label: 'Select notes at current column',
               desc:
-                  'Use the Select column button in the Selection area, or the '
-                  'selection icon at the top-left of the portrait action bar, '
-                  'to select all notes active at the current column tick.',
-              color: MuzicianTheme.sky,
+                  'Use Select column in the Selection area or its compact action '
+                  'icon to select all notes active at the current column tick.',
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.open_with_outlined,
@@ -555,7 +618,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'to the nearest beat '
                   '(quarter note in 4/4, eighth note in 4/8). Vertical drag '
                   'shifts pitch one semitone per row.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.swap_horiz_outlined,
@@ -565,13 +628,13 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'multi-selection resizes together. Minimum duration is one '
                   '1/16th note (1 tick). The resize handle is the rightmost 16 px '
                   'of the note.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.timer_outlined,
               label: 'Long press a note (500 ms)',
               desc: 'Deletes the note immediately.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.straighten_outlined,
@@ -579,7 +642,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Sets the detection column. The detection panel then shows all '
                   'active notes, chords, and scales at that beat.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.drag_handle_outlined,
@@ -588,7 +651,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'Drag horizontally across the ruler to scrub the selected '
                   'column continuously. The detection panel updates in real '
                   'time as you drag. Ideal for scanning a timeline.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.pinch_outlined,
@@ -596,23 +659,23 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Zoom: horizontal spread scales cell width (10–80 px); vertical '
                   'spread scales row height (10–40 px).',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.pan_tool_alt_outlined,
               label: 'Single-finger drag on empty area',
               desc: 'Scrolls the grid both horizontally and vertically.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.content_cut_outlined,
-              label: 'Scissors tool',
+              label: 'Split tool',
               desc:
                   'Tap a note to split at the tapped position. If that note is '
                   'selected, the current multi-selection splits at the same tick. '
-                  'Long‑press still deletes in scissors mode. Switch between Draw '
-                  'and Scissors in the toolbar.',
-              color: MuzicianTheme.sky,
+                  'Long‑press still deletes in Split mode. Choose Split from the '
+                  'five editing tools.',
+              color: StudioPalette.of(context).sky,
             ),
             _Entry(
               icon: Icons.view_column_outlined,
@@ -620,7 +683,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Secondary shortcut: tap or drag the ruler to select all notes active '
                   'at the current column tick. Use Select tool for area‑based multi‑selection.',
-              color: MuzicianTheme.sky,
+              color: StudioPalette.of(context).sky,
             ),
           ],
         ),
@@ -629,13 +692,13 @@ class _PianoRollInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.keyboard_outlined,
           title: 'Keyboard Shortcuts (desktop/web)',
-          color: MuzicianTheme.teal,
+          color: StudioPalette.of(context).teal,
           entries: [
             _Entry(
               icon: Icons.space_bar_outlined,
               label: 'Space',
               desc: 'Start or stop playback.',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
             ),
             _Entry(
               icon: Icons.backspace_outlined,
@@ -643,19 +706,19 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Delete all currently selected notes (same as the UI delete '
                   'selection action).',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
             ),
             _Entry(
               icon: Icons.zoom_in_outlined,
               label: 'Ctrl / Cmd + scroll wheel',
               desc: 'Horizontal zoom — scales cell width (10–80 px range).',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
             ),
             _Entry(
               icon: Icons.zoom_out_map_outlined,
               label: 'Alt / Option + scroll wheel',
               desc: 'Vertical zoom — scales row height (10–40 px range).',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
             ),
           ],
         ),
@@ -664,22 +727,23 @@ class _PianoRollInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.settings_outlined,
           title: 'Toolbar Controls',
-          color: MuzicianTheme.orange,
+          color: StudioPalette.of(context).orange,
           entries: [
             _Entry(
               icon: Icons.speed_outlined,
               label: 'Tempo',
               desc: 'Set BPM with − and + steppers. Range: 20–300 BPM.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.edit_outlined,
-              label: 'Tool & Snap',
+              label: 'Five tools & Snap',
               desc:
-                  'Draw: add, move, and resize notes. Select: drag a marquee to select '
-                  'note groups. Scissors: split notes with a tap. Snap presets: 1t '
-                  '(1/16) through 32t (2 bars).',
-              color: MuzicianTheme.orange,
+                  'Draw adds, moves, and resizes notes; Select makes a note-group '
+                  'marquee; Split cuts notes; Paint adds notes while brushing; '
+                  'Delete removes notes while brushing. The Tools inspector exposes '
+                  'snap presets from 1 to 32 ticks.',
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.calendar_view_week_outlined,
@@ -687,7 +751,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Expand or shrink the timeline. Notes beyond the new end tick '
                   'are automatically removed.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.access_time_outlined,
@@ -695,7 +759,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Choose 4/4, 3/4, 6/8, and more. Affects beat snapping granularity '
                   'and ruler markers.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.key_outlined,
@@ -703,7 +767,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Sets the reference key for the detection panel (optional). '
                   'Accepts major or minor keys.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.keyboard_arrow_up_rounded,
@@ -711,7 +775,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   'Shifts the visible MIDI range up or down by 12 semitones '
                   '(one octave) per tap. Also shows current C3–C6 range.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.play_arrow_rounded,
@@ -720,13 +784,13 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'Tap Play to hear the roll from the selected column through '
                   'the end of the timeline. Tap Stop to cancel. Playback is '
                   'disabled while humming is active. Also triggered by Space key.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
             _Entry(
               icon: Icons.delete_sweep_outlined,
               label: 'Clear',
               desc: 'Removes all notes from the entire timeline.',
-              color: MuzicianTheme.orange,
+              color: StudioPalette.of(context).orange,
             ),
           ],
         ),
@@ -735,31 +799,36 @@ class _PianoRollInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.layers_outlined,
           title: 'Panels',
-          color: MuzicianTheme.violet,
+          color: StudioPalette.of(context).violet,
           entries: [
+            _Entry(
+              icon: Icons.content_paste_rounded,
+              label: 'Quick',
+              desc:
+                  'Copies selected notes to the selected column. With no notes '
+                  'selected, it repeats the last added stack at the selected column.',
+              color: StudioPalette.of(context).violet,
+            ),
             _Entry(
               icon: Icons.library_music_outlined,
               label: 'Stack Builder',
               desc:
-                  'Unified chord stack editor with two views on the same final '
-                  'note list. Canonico: pick root + quality + inversion + duration '
-                  'for quick entry. Avanzato: add, edit, remove, or reorder '
-                  'individual notes; insert by note + octave picker or chord '
-                  'degree shortcut (1–9). Supports custom voicings up to 10 '
-                  'notes, rejects exact duplicate notes, and closes the drawer '
-                  'after a successful "Add Stack" in portrait.',
-              color: MuzicianTheme.violet,
+                  'Build a chord stack from root, quality, inversion, and duration, '
+                  'or edit individual notes with the advanced controls. Custom '
+                  'voicings can contain up to 10 notes; exact duplicate notes are '
+                  'rejected. Add Stack places the result at the current column.',
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.stacked_line_chart_outlined,
               label: 'Scale picker',
               desc:
                   'Highlight scale tones (major, minor, pentatonic, blues, '
-                  'chromatic) across the grid in teal. Applying a scale checks '
+                  'chromatic) across the grid. Applying a scale checks '
                   'existing notes first, then blocks new notes, stack inserts, '
                   'and pitch moves that would fall outside the active scale. '
                   'Clear the scale pill with × to return to chromatic entry.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.folder_open_outlined,
@@ -769,7 +838,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'their notes at the current column. Toggle "Exact MIDI" vs '
                   '"Pitch Class" placement mode. Piano Roll session snapshots '
                   'are excluded — use the dedicated save panel to restore full rolls.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.save_outlined,
@@ -779,17 +848,18 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'pitch range, selection, snap value, scale highlights) and '
                   'restore it later. Piano roll saves are separate from the '
                   'cross‑instrument stack import loader.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.mic_outlined,
-              label: 'Hum to MIDI (mobile only)',
+              label: 'Hum Recorder (mobile only)',
               desc:
-                  'Record yourself humming and have it converted to MIDI notes '
-                  'on the timeline. Not available on web. Includes pitch '
+                  'Capture humming and convert its pitches into notes on the '
+                  'timeline. This is not an audio-track or MIDI-file recorder. '
+                  'Microphone capture is unavailable on web. Includes pitch '
                   'sensitivity setting (Strict / Balanced / Forgiving) and a '
                   '"Jump to latest" button for navigation.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
             _Entry(
               icon: Icons.search,
@@ -799,7 +869,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'scales (up to 8) for all notes active at the selected column. '
                   'Uses shared exact‑note detection APIs from note_utils.dart. '
                   'Tap × on a chip to delete that note.',
-              color: MuzicianTheme.violet,
+              color: StudioPalette.of(context).violet,
             ),
           ],
         ),
@@ -808,7 +878,7 @@ class _PianoRollInfoTab extends StatelessWidget {
         _Section(
           icon: Icons.calculate_outlined,
           title: 'Timeline Math',
-          color: MuzicianTheme.teal,
+          color: StudioPalette.of(context).teal,
           entries: [
             _Entry(
               icon: Icons.calculate_outlined,
@@ -816,7 +886,7 @@ class _PianoRollInfoTab extends StatelessWidget {
               desc:
                   '4 ticks = 1 quarter note · 1 measure (4/4) = 16 ticks · total '
                   'ticks = ticksPerMeasure × totalMeasures.',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
             ),
             _Entry(
               icon: Icons.music_note,
@@ -825,7 +895,7 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'Dragged notes snap to the nearest quarter-note tick in 4/4 time '
                   'and to the nearest eighth-note tick in 4/8 time. Active snap '
                   'preset (1t–32t) also controls double‑tap insertion length.',
-              color: MuzicianTheme.teal,
+              color: StudioPalette.of(context).teal,
             ),
           ],
         ),
@@ -873,10 +943,14 @@ class _Section extends StatelessWidget {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.03),
+            color: (StudioPalette.of(context).isStudio
+                ? StudioPalette.of(context).glassBg
+                : Colors.white.withValues(alpha: 0.03)),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.07),
+              color: (StudioPalette.of(context).isStudio
+                  ? StudioPalette.of(context).glassBg
+                  : Colors.white.withValues(alpha: 0.07)),
               width: 0.5,
             ),
           ),
@@ -888,7 +962,9 @@ class _Section extends StatelessWidget {
                   Divider(
                     height: 1,
                     thickness: 0.5,
-                    color: Colors.white.withValues(alpha: 0.05),
+                    color: (StudioPalette.of(context).isStudio
+                        ? StudioPalette.of(context).glassBg
+                        : Colors.white.withValues(alpha: 0.05)),
                     indent: 56,
                     endIndent: 14,
                   ),
@@ -937,8 +1013,8 @@ class _Entry extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textSecondary,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textSecondary,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -946,8 +1022,8 @@ class _Entry extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   desc,
-                  style: const TextStyle(
-                    color: MuzicianTheme.textMuted,
+                  style: TextStyle(
+                    color: StudioPalette.of(context).textMuted,
                     fontSize: 12,
                     height: 1.45,
                   ),

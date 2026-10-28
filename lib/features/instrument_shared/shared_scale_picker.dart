@@ -12,17 +12,18 @@ import '../../models/save_system.dart';
 import '../../store/project_config_sync.dart';
 import '../../store/save_system_store.dart';
 import '../../store/settings_store.dart';
-import '../../theme/muzician_theme.dart';
+import '../../theme/studio_theme.dart';
 import '../../ui/core/scale_conflict_dialog.dart';
 import '../../ui/core/update_project_key_dialog.dart';
 import '../../utils/note_utils.dart';
 import 'instrument_binding.dart';
 
-const _catColor = {
-  ScaleCategory.common: MuzicianTheme.sky,
-  ScaleCategory.modes: MuzicianTheme.violet,
-  ScaleCategory.extended: MuzicianTheme.emerald,
-};
+Color _categoryColor(BuildContext context, ScaleCategory category) =>
+    switch (category) {
+      ScaleCategory.common => StudioPalette.of(context).sky,
+      ScaleCategory.modes => StudioPalette.of(context).violet,
+      ScaleCategory.extended => StudioPalette.of(context).emerald,
+    };
 
 class SharedScalePicker extends ConsumerStatefulWidget {
   final ScalePickerBinding binding;
@@ -75,8 +76,8 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
         ? ref.watch(binding.chordOffKey)
         : false;
     final chipColor = chordOffKey && isProjectLocked
-        ? MuzicianTheme.orange
-        : MuzicianTheme.emerald;
+        ? StudioPalette.of(context).orange
+        : StudioPalette.of(context).emerald;
 
     // Re-run initial sync when the selected project changes, including when
     // both the old and new projects have no key.
@@ -203,10 +204,10 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
           child: Row(
             children: [
-              const Text(
+              Text(
                 'SCALE',
                 style: TextStyle(
-                  color: Color(0xFF94A3B8),
+                  color: StudioPalette.of(context).textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.8,
@@ -320,8 +321,8 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF334155),
+                      style: TextStyle(
+                        color: StudioPalette.of(context).textMuted,
                         fontSize: 11,
                       ),
                     ),
@@ -374,11 +375,13 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(20),
                         color: active
-                            ? MuzicianTheme.emerald.withValues(alpha: 0.14)
+                            ? StudioPalette.of(
+                                context,
+                              ).emerald.withValues(alpha: 0.14)
                             : Colors.white.withValues(alpha: 0.04),
                         border: Border.all(
                           color: active
-                              ? MuzicianTheme.emerald
+                              ? StudioPalette.of(context).emerald
                               : Colors.white.withValues(alpha: 0.08),
                           width: 0.5,
                         ),
@@ -387,8 +390,8 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                         formatRootChoiceLabel(note, spelling: spelling),
                         style: TextStyle(
                           color: active
-                              ? MuzicianTheme.emerald
-                              : const Color(0xFF64748B),
+                              ? StudioPalette.of(context).emerald
+                              : StudioPalette.of(context).textMuted,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -414,7 +417,7 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
           child: Row(
             children: ScaleCategory.values.map((cat) {
               final isTab = cat == _activeCategory;
-              final c = _catColor[cat]!;
+              final c = _categoryColor(context, cat);
               void selectCategory() => setState(() => _activeCategory = cat);
 
               return Expanded(
@@ -443,7 +446,9 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                             child: Text(
                               scaleCategoryLabels[cat]!,
                               style: TextStyle(
-                                color: isTab ? c : const Color(0xFF475569),
+                                color: isTab
+                                    ? c
+                                    : StudioPalette.of(context).textMuted,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -502,11 +507,13 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(20),
                         color: active
-                            ? MuzicianTheme.emerald.withValues(alpha: 0.12)
+                            ? StudioPalette.of(
+                                context,
+                              ).emerald.withValues(alpha: 0.12)
                             : Colors.white.withValues(alpha: 0.04),
                         border: Border.all(
                           color: active
-                              ? MuzicianTheme.emerald
+                              ? StudioPalette.of(context).emerald
                               : Colors.white.withValues(alpha: 0.08),
                           width: 0.5,
                         ),
@@ -515,8 +522,8 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
                         label,
                         style: TextStyle(
                           color: active
-                              ? MuzicianTheme.emerald
-                              : const Color(0xFF64748B),
+                              ? StudioPalette.of(context).emerald
+                              : StudioPalette.of(context).textMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -596,7 +603,7 @@ class _SharedScalePickerState extends ConsumerState<SharedScalePicker> {
       return;
     }
     if (!mounted) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showStudioDialog<bool>(
       context: context,
       builder: (ctx) => ScaleConflictDialog(
         conflictingNotes: conflicts
