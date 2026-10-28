@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/rendering.dart';
 
 import 'package:muzician/features/songwriter/songwriter_screen_sheet.dart';
+import 'package:muzician/features/songwriter/songwriter_melody_preview.dart';
 import 'package:muzician/features/songwriter/guitar_strum_pattern_sheet.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/app_theme_variant.dart';
@@ -82,6 +83,56 @@ _timelineFixture(
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets('automatic repeat and wrapped rows use occurrence-local ticks', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 12,
+      span: 5,
+      size: const Size(1024, 1400),
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final sectionId = writer.state.sections.single.id;
+    writer.setLaneRepeat(sectionId: sectionId, laneId: f.laneId, repeat: 2);
+    await tester.pumpAndSettle();
+    final ticks = writer.state.config.measureTicks;
+    SongwriterMelodyPreview preview(int repeat, int start) =>
+        tester.widget<SongwriterMelodyPreview>(
+          find.descendant(
+            of: find.byKey(
+              Key('melodySegment_${f.blockId}_0_${repeat}_$start'),
+            ),
+            matching: find.byType(SongwriterMelodyPreview),
+          ),
+        );
+    expect(
+      (preview(0, 0).segmentStartTick, preview(0, 0).segmentEndTick),
+      (0, 4 * ticks),
+    );
+    expect(
+      (preview(0, 4).segmentStartTick, preview(0, 4).segmentEndTick),
+      (4 * ticks, 5 * ticks),
+    );
+    expect(
+      (preview(1, 5).segmentStartTick, preview(1, 5).segmentEndTick),
+      (0, 3 * ticks),
+    );
+    expect(
+      (preview(1, 8).segmentStartTick, preview(1, 8).segmentEndTick),
+      (3 * ticks, 5 * ticks),
+    );
+    final segment = find.byKey(Key('melodySegment_${f.blockId}_0_0_4'));
+    final previewFinder = find.descendant(
+      of: segment,
+      matching: find.byType(SongwriterMelodyPreview),
+    );
+    expect(
+      tester.getSize(previewFinder).width,
+      closeTo(tester.getSize(segment).width - 4, 0.01),
+    );
+  });
 
   testWidgets('melody lane exposes repeat control and placement deletion', (
     tester,
@@ -170,6 +221,20 @@ void main() {
         kind: SongLaneKind.melody,
       );
       final patternId = writer.addMelodyPattern();
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((p) => p.id == patternId)
+            .copyWith(
+              notes: [
+                const NotePatternNote(
+                  id: 'cached',
+                  midiNote: 60,
+                  startTick: 0,
+                  durationTicks: 4,
+                ),
+              ],
+            ),
+      );
       writer.addMelodyBlock(
         sectionId: sectionId,
         laneId: laneId,
@@ -210,6 +275,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.byType(SongwriterMelodyPreview), findsNothing);
       final menu = find.byKey(Key('melodyBlockActions_${blockId}_0'));
       await tester.ensureVisible(menu);
       await tester.tap(menu);
@@ -431,6 +497,14 @@ void main() {
         (3, 2, source.patternId, saveId),
       );
       final tile = find.byKey(Key('sheetMelodyTile_${copy.patternId}_0_3'));
+      List<SongwriterMelodyPreview> previews() => tester
+          .widgetList<SongwriterMelodyPreview>(
+            find.byType(SongwriterMelodyPreview),
+          )
+          .where((p) => p.pattern.id == source.patternId)
+          .toList();
+      expect(previews(), hasLength(3)); // source, copy, wrapped continuation
+      expect(previews().every((p) => p.pattern.notes.isEmpty), isTrue);
       await tester.ensureVisible(tile);
       await tester.tap(tile);
       await tester.pumpAndSettle();
@@ -444,6 +518,39 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
       await tester.pumpAndSettle();
+      expect(previews(), hasLength(3));
+      expect(
+        previews().every((p) => p.pattern.notes.single.midiNote == 72),
+        isTrue,
+      );
+      SongwriterMelodyPreview segment(String blockId, int start) =>
+          tester.widget<SongwriterMelodyPreview>(
+            find.descendant(
+              of: find.byKey(Key('melodySegment_${blockId}_0_0_$start')),
+              matching: find.byType(SongwriterMelodyPreview),
+            ),
+          );
+      final first = segment(source.id, 0);
+      final repeat = segment(copy.id, 3);
+      final continuation = segment(copy.id, 4);
+      final barTicks = writer.state.config.measureTicks;
+      expect((repeat.segmentStartTick, repeat.segmentEndTick), (0, barTicks));
+      expect(
+        (continuation.segmentStartTick, continuation.segmentEndTick),
+        (barTicks, 2 * barTicks),
+      );
+      expect(
+        melodyPreviewNotes(
+          pattern: repeat.pattern,
+          segmentStartTick: 0,
+          segmentEndTick: barTicks,
+        ),
+        melodyPreviewNotes(
+          pattern: first.pattern,
+          segmentStartTick: 0,
+          segmentEndTick: barTicks,
+        ),
+      );
       expect(
         container
             .read(songwriterProvider)
@@ -463,6 +570,34 @@ void main() {
       final unique = currentLane().blocks.singleWhere((b) => b.id == copy.id);
       expect(unique.patternId, isNot(source.patternId));
       expect(unique.saveId, isNot(saveId));
+      writer.updateMelodyPattern(
+        container
+            .read(songwriterProvider)
+            .melodyPatterns
+            .singleWhere((p) => p.id == unique.patternId)
+            .copyWith(
+              notes: [
+                const NotePatternNote(
+                  id: 'unique-note',
+                  midiNote: 80,
+                  startTick: 0,
+                  durationTicks: 4,
+                ),
+              ],
+            ),
+      );
+      await tester.pumpAndSettle();
+      expect(previews().single.pattern.notes.single.midiNote, 72);
+      final uniquePreviews = tester
+          .widgetList<SongwriterMelodyPreview>(
+            find.byType(SongwriterMelodyPreview),
+          )
+          .where((p) => p.pattern.id == unique.patternId);
+      expect(uniquePreviews, hasLength(2));
+      expect(
+        uniquePreviews.every((p) => p.pattern.notes.single.midiNote == 80),
+        isTrue,
+      );
       expect(
         container
             .read(songwriterProvider)
@@ -1258,6 +1393,20 @@ void main() {
           kind: SongLaneKind.melody,
         );
         final patternId = writer.addMelodyPattern(name: 'Lead');
+        writer.updateMelodyPattern(
+          writer.state.melodyPatterns
+              .singleWhere((p) => p.id == patternId)
+              .copyWith(
+                notes: [
+                  const NotePatternNote(
+                    id: 'preview',
+                    midiNote: 64,
+                    startTick: 0,
+                    durationTicks: 4,
+                  ),
+                ],
+              ),
+        );
         writer.addMelodyBlock(
           sectionId: section.id,
           laneId: laneId,

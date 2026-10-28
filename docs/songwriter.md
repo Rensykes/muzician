@@ -247,8 +247,12 @@ notes clip at the block edge when it is shorter. A
 later duration edit to a reused pattern does not resize its existing blocks.
 
 The Melody timeline wraps every four bars with numbered rows and continuation
-segments. Drag the final edge in whole bars to resize; releasing creates one
-undo step, while cancelling leaves the placement unchanged. Hold the drag near
+segments. Blocks show a non-interactive miniature piano roll: horizontal notes
+follow the placement's loops and clipped edges, with consistent pitch height
+across rows. Linked previews refresh together; missing or incompatible content
+shows no cached notes. Edit notes in Piano Roll, not in the preview. Drag the
+final edge in whole bars to resize; releasing creates one undo step, while
+cancelling leaves the placement unchanged. Hold the drag near
 the top or bottom of the Writer sheet to scroll to additional rows. The block's action
 menu also offers **Adjust placement** to move or resize without a gesture.
 Automatic lane repeats are marked as repeats and reserve their occupied bars;
