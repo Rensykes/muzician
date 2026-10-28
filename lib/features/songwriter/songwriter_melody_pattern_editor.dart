@@ -191,44 +191,72 @@ class _SongwriterMelodyPatternEditorState
       fontSize: 15,
       fontWeight: FontWeight.w700,
     );
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.surface,
-        border: Border(bottom: BorderSide(color: palette.glassBorder)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 2,
-        runSpacing: 2,
-        children: [
-          Text(
-            'Bars',
-            key: const Key('melodyBarsLabel'),
-            style: TextStyle(
-              color: palette.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+    final canDecrease = bars > minimumBars;
+    final canIncrease = bars < melodyMaxBars;
+    final hint = !canDecrease
+        ? 'Minimum $minimumBars, maximum $melodyMaxBars. '
+              'Cannot decrease because the melody reaches bar $minimumBars.'
+        : !canIncrease
+        ? 'Minimum $minimumBars, maximum $melodyMaxBars. '
+              'Cannot increase beyond $melodyMaxBars.'
+        : 'Minimum $minimumBars, maximum $melodyMaxBars.';
+    return Semantics(
+      key: const Key('melodyBarsSemantics'),
+      container: true,
+      label: 'Bars',
+      value: '$bars of $melodyMaxBars',
+      hint: hint,
+      increasedValue: canIncrease ? '${bars + 1}' : null,
+      decreasedValue: canDecrease ? '${bars - 1}' : null,
+      onIncrease: canIncrease ? () => _setBars(bars + 1) : null,
+      onDecrease: canDecrease ? () => _setBars(bars - 1) : null,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.surface,
+          border: Border(bottom: BorderSide(color: palette.glassBorder)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 2,
+          runSpacing: 2,
+          children: [
+            ExcludeSemantics(
+              child: Text(
+                'Bars',
+                key: const Key('melodyBarsLabel'),
+                style: TextStyle(
+                  color: palette.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-          ),
-          IconButton(
-            key: const Key('melodyBarsDecrease'),
-            onPressed: bars > minimumBars ? () => _setBars(bars - 1) : null,
-            tooltip: 'Fewer bars',
-            icon: const Icon(Icons.remove_rounded, size: 20),
-            color: palette.textPrimary,
-            disabledColor: palette.textDim,
-          ),
-          Text('$bars', key: const Key('melodyBarsValue'), style: valueStyle),
-          IconButton(
-            key: const Key('melodyBarsIncrease'),
-            onPressed: bars < melodyMaxBars ? () => _setBars(bars + 1) : null,
-            tooltip: 'More bars',
-            icon: const Icon(Icons.add_rounded, size: 20),
-            color: palette.textPrimary,
-            disabledColor: palette.textDim,
-          ),
-        ],
+            IconButton(
+              key: const Key('melodyBarsDecrease'),
+              onPressed: canDecrease ? () => _setBars(bars - 1) : null,
+              tooltip: 'Fewer bars',
+              icon: const Icon(Icons.remove_rounded, size: 20),
+              color: palette.textPrimary,
+              disabledColor: palette.textDim,
+            ),
+            ExcludeSemantics(
+              child: Text(
+                '$bars',
+                key: const Key('melodyBarsValue'),
+                style: valueStyle,
+              ),
+            ),
+            IconButton(
+              key: const Key('melodyBarsIncrease'),
+              onPressed: canIncrease ? () => _setBars(bars + 1) : null,
+              tooltip: 'More bars',
+              icon: const Icon(Icons.add_rounded, size: 20),
+              color: palette.textPrimary,
+              disabledColor: palette.textDim,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -290,6 +318,7 @@ class _SongwriterMelodyPatternEditorState
                 showScale: false,
                 showSavePanels: false,
                 showBackground: false,
+                lockTiming: true,
               ),
             ),
           ],
@@ -310,6 +339,7 @@ class _MelodyNameDialog extends StatefulWidget {
 
 class _MelodyNameDialogState extends State<_MelodyNameDialog> {
   late final TextEditingController _controller;
+  String? _error;
 
   @override
   void initState() {
@@ -327,7 +357,14 @@ class _MelodyNameDialogState extends State<_MelodyNameDialog> {
     super.dispose();
   }
 
-  void _submit() => Navigator.pop(context, _controller.text.trim());
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Enter a melody name.');
+      return;
+    }
+    Navigator.pop(context, name);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +381,11 @@ class _MelodyNameDialogState extends State<_MelodyNameDialog> {
         decoration: InputDecoration(
           hintText: 'Melody name',
           hintStyle: TextStyle(color: palette.textMuted),
+          errorText: _error,
         ),
+        onChanged: (_) {
+          if (_error != null) setState(() => _error = null);
+        },
         onSubmitted: (_) => _submit(),
       ),
       actions: [

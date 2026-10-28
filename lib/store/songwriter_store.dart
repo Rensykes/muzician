@@ -3707,84 +3707,121 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
     saveMelodyPattern(updated);
   }
 
-  /// Saves a Piano Roll melody edit and, for a newly-created pattern only,
-  /// expands the explicitly supplied first block to the pattern's full bar
-  /// duration when that complete placement fits the section and lane.
+  /// Saves a Piano Roll melody edit, normalizing its stored length to whole
+  /// bars and, for a pattern's first authored save, expanding its eligible
+  /// one-bar placements to the melody's full bar duration when that complete
+  /// placement fits the section and lane.
+  ///
+  /// A first authored save is an empty pattern that gains its first notes. The
+  /// expansion rule belongs here rather than in one editor route so authoring
+  /// from a tile, Edit performance, or the initial creation editor behaves the
+  /// same. Later saves never resize existing placements.
   void saveMelodyPattern(
     NotePattern updated, {
     ({String sectionId, String laneId, String blockId})? initialPlacement,
   }) {
-    final existing = state.melodyPerformancesByPatternId[updated.id];
+    final measureTicks = state.config.measureTicks;
+    final normalized = quantizeMelodyPatternLength(updated, measureTicks);
+    final previous = state.melodyPatterns
+        .where((pattern) => pattern.id == normalized.id)
+        .firstOrNull;
+    final firstAuthoredSave =
+        (previous?.notes.isEmpty ?? true) && normalized.notes.isNotEmpty;
+    final existing = state.melodyPerformancesByPatternId[normalized.id];
     final performances = {...state.melodyPerformancesByPatternId};
     if (existing != null) {
-      performances[updated.id] = existing.copyWith(
+      performances[normalized.id] = existing.copyWith(
         fretboardPositionsByNoteId: reconcileFretboardPositions(
-          pattern: updated,
+          pattern: normalized,
           positions: existing.fretboardPositionsByNoteId,
           state: ref.read(fretboardProvider),
         ),
       );
     }
     var sections = state.sections;
-    if (initialPlacement != null && updated.lengthTicks > 0) {
-      final sectionIndex = sections.indexWhere(
-        (section) => section.id == initialPlacement.sectionId,
-      );
-      if (sectionIndex >= 0) {
-        final section = sections[sectionIndex];
-        final lane = section.lanes
+    if (firstAuthoredSave) {
+      List<SongSection> expand({
+        required String sectionId,
+        required String laneId,
+        required String blockId,
+      }) {
+        final section = sections
+            .where((candidate) => candidate.id == sectionId)
+            .firstOrNull;
+        final lane = section?.lanes
             .where(
               (candidate) =>
-                  candidate.id == initialPlacement.laneId &&
+                  candidate.id == laneId &&
                   candidate.kind == SongLaneKind.melody,
             )
             .firstOrNull;
         final block = lane?.blocks
             .where(
               (candidate) =>
-                  candidate.id == initialPlacement.blockId &&
-                  candidate.patternId == updated.id,
+                  candidate.id == blockId &&
+                  candidate.patternId == normalized.id,
             )
             .firstOrNull;
-        if (lane != null && block != null) {
-          final desiredSpan =
-              (updated.lengthTicks + state.config.measureTicks - 1) ~/
-              state.config.measureTicks;
-          final expanded = block.copyWith(spanBars: desiredSpan);
-          if (desiredSpan > block.spanBars &&
-              isValidBlockPlacement(
-                section: section,
-                lane: lane,
-                candidate: expanded,
-                melodyBars: melodyPlacementBarLimit(
-                  updated,
-                  state.config.measureTicks,
-                ),
-              )) {
-            sections = [
-              for (var i = 0; i < sections.length; i++)
-                if (i == sectionIndex)
-                  section.copyWith(
-                    lanes: [
-                      for (final currentLane in section.lanes)
-                        if (currentLane.id != lane.id)
-                          currentLane
-                        else
-                          currentLane.copyWith(
-                            blocks: [
-                              for (final currentBlock in currentLane.blocks)
-                                if (currentBlock.id == block.id)
-                                  expanded
-                                else
-                                  currentBlock,
-                            ],
-                          ),
-                    ],
-                  )
-                else
-                  sections[i],
-            ];
-          }
+        if (section == null || lane == null || block == null) return sections;
+        final desiredSpan = melodyBarCount(normalized, measureTicks);
+        if (block.spanBars != 1 || desiredSpan <= block.spanBars) {
+          return sections;
+        }
+        final expanded = block.copyWith(spanBars: desiredSpan);
+        if (!isValidBlockPlacement(
+          section: section,
+          lane: lane,
+          candidate: expanded,
+          melodyBars: desiredSpan,
+        )) {
+          return sections;
+        }
+        return [
+          for (final currentSection in sections)
+            if (currentSection.id != section.id)
+              currentSection
+            else
+              currentSection.copyWith(
+                lanes: [
+                  for (final currentLane in currentSection.lanes)
+                    if (currentLane.id != lane.id)
+                      currentLane
+                    else
+                      currentLane.copyWith(
+                        blocks: [
+                          for (final currentBlock in currentLane.blocks)
+                            if (currentBlock.id == block.id)
+                              expanded
+                            else
+                              currentBlock,
+                        ],
+                      ),
+                ],
+              ),
+        ];
+      }
+
+      if (initialPlacement != null) {
+        sections = expand(
+          sectionId: initialPlacement.sectionId,
+          laneId: initialPlacement.laneId,
+          blockId: initialPlacement.blockId,
+        );
+      } else {
+        final targets = [
+          for (final section in sections)
+            for (final lane in section.lanes)
+              if (lane.kind == SongLaneKind.melody)
+                for (final block in lane.blocks)
+                  if (block.patternId == normalized.id && block.spanBars == 1)
+                    (sectionId: section.id, laneId: lane.id, blockId: block.id),
+        ];
+        for (final target in targets) {
+          sections = expand(
+            sectionId: target.sectionId,
+            laneId: target.laneId,
+            blockId: target.blockId,
+          );
         }
       }
     }
@@ -3792,7 +3829,9 @@ class SongwriterNotifier extends Notifier<SongwriterProjectSnapshot> {
       state.copyWith(
         sections: sections,
         melodyPatterns: state.melodyPatterns
-            .map((pattern) => pattern.id == updated.id ? updated : pattern)
+            .map(
+              (pattern) => pattern.id == normalized.id ? normalized : pattern,
+            )
             .toList(),
         melodyPerformancesByPatternId: performances,
       ),

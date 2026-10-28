@@ -138,20 +138,27 @@ void main() {
         startBar: 3,
         spanBars: 3,
       );
-      writer.updateMelodyPattern(
-        writer.state.melodyPatterns
-            .singleWhere((pattern) => pattern.id == patternId)
-            .copyWith(
-              lengthTicks: 25,
-              notes: const [
-                NotePatternNote(
-                  id: 'last',
-                  midiNote: 72,
-                  startTick: 21,
-                  durationTicks: 4,
-                ),
-              ],
-            ),
+      // Seed a legacy non-bar-aligned stored length directly; a save path now
+      // normalizes it to whole bars.
+      final legacyProject = writer.state;
+      writer.state = legacyProject.copyWith(
+        melodyPatterns: [
+          for (final pattern in legacyProject.melodyPatterns)
+            if (pattern.id == patternId)
+              pattern.copyWith(
+                lengthTicks: 25,
+                notes: const [
+                  NotePatternNote(
+                    id: 'last',
+                    midiNote: 72,
+                    startTick: 21,
+                    durationTicks: 4,
+                  ),
+                ],
+              )
+            else
+              pattern,
+        ],
       );
       final block = container
           .read(songwriterProvider)

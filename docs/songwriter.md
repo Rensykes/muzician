@@ -243,7 +243,9 @@ canvas from 1 to 32 bars and cannot shrink below the bar containing the last
 note; the rename action changes the pattern name. **Save** applies both the name
 and notes and quantizes the stored length to the last-note bar. A note ending
 inside a bar still occupies that whole bar, with silence after it. Changing
-Bars or shortening a placement never deletes notes.
+Bars or shortening a placement never deletes notes. The melody Piano Roll locks
+its tempo and time signature to the project, so Bars and the saved project bars
+cannot diverge.
 
 The block's `spanBars` is shown separately against the section's total bars. A
 placement is a bar-aligned window over the melody: a new block uses the
@@ -258,11 +260,17 @@ Shortening clips playback at the placement edge while every note remains
 stored. Adding a Melody lane creates a one-bar pattern and a one-bar placement;
 on the first save after notes are added to that empty pattern, the placement
 expands to the melody's full bar count when the whole span fits the section and
-lane. Later saves never resize placements. A placement longer than the melody
+lane. This first-save rule runs in the Writer store and applies whether notes
+were authored from the placement tile or through **Edit performance**. Every
+save also normalizes the stored length to whole bars. Later saves never resize
+placements. A placement longer than the melody
 (typically retained from an older project) keeps its occupied bars, plays the
 melody once, and then shows a silent tail instead of looping. It may move only
 with its unchanged span; any resize must end within the placement limit. A
 later length edit to a reused pattern does not resize its existing blocks.
+Legacy melodies stored longer than 32 bars keep their notes, but playback and
+the silent-tail cue stop at bar 32; notes in the hatched bars after that are
+inaudible until the melody is saved again within the 32-bar editor cap.
 
 The Melody timeline wraps every four bars with numbered rows and continuation
 segments. Blocks show a non-interactive miniature piano roll: horizontal notes
@@ -288,8 +296,10 @@ their visible occupancy is clipped at the section edge. Placement changes also
 cannot shift or remove existing automatic repeat origins by changing the lane's
 natural period; the placement dialog explains repeat conflicts. Adjust the lane
 repeat first with the Melody lane's **Repeat** control if needed. **Repeat / reuse** selects an
-available starting bar in the same lane and creates a linked placement, shortened
-as needed to satisfy placement rules; a free start can still be rejected if no
+available starting bar in the same lane and creates a linked placement. Reuse
+copies the source placement's span, capped by the melody's placement limit and
+the free space at the chosen start; it does not force the full melody length, so
+a short window can be repeated as-is. A free start can still be rejected if no
 span preserves existing repeats. Missing patterns and missing
 or unresolved canonical Saves cannot be repeated. Reuse shares the pattern and
 canonical Save, so shared edits affect both placements; **Make Unique** detaches
@@ -300,6 +310,10 @@ removes an authored placement and its own automatic repeats, but refuses to move
 another block's repeat origins. A clipped block can be dragged back inside a
 shortened section. Incompatible canonical Saves remain unchanged and cannot be
 edited or made unique through the incompatible placement.
+
+Song's **Import from Writer** remains a legacy looping conversion: it repeats
+melody content across each converted note clip's block span and does not inherit
+Writer's one-pass or silent-tail rule.
 
 Each melody pattern has one Piano or Fretboard performance target. Piano
 positions use the note's MIDI key. Fretboard positions store a playable string

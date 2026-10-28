@@ -678,6 +678,69 @@ void main() {
       );
     });
 
+    test('legacy melody longer than 32 bars stays silent after bar 32', () {
+      const legacy = NotePattern(
+        id: 'melody',
+        name: 'Long legacy',
+        lengthTicks: 33 * 16,
+        notes: [
+          NotePatternNote(
+            id: 'first',
+            midiNote: 60,
+            startTick: 0,
+            durationTicks: 4,
+          ),
+          NotePatternNote(
+            id: 'last-visible',
+            midiNote: 64,
+            startTick: 31 * 16,
+            durationTicks: 4,
+          ),
+          NotePatternNote(
+            id: 'hatched',
+            midiNote: 67,
+            startTick: 32 * 16,
+            durationTicks: 4,
+          ),
+        ],
+        pitchRangeStart: 48,
+        pitchRangeEnd: 84,
+        snapTicks: 1,
+        highlightedNotes: [],
+      );
+      const lane = SongLane(
+        id: 'melody-lane',
+        kind: SongLaneKind.melody,
+        order: 0,
+        blocks: [
+          SongBlock(
+            id: 'melody-block',
+            startBar: 0,
+            spanBars: 33,
+            patternId: 'melody',
+          ),
+        ],
+      );
+      const section = SongSection(
+        id: 'section',
+        lengthBars: 40,
+        order: 0,
+        lanes: [lane],
+      );
+
+      final events = flattenPlaybackEvents(
+        projectWith(sections: [section], melodyPatterns: [legacy]),
+        const [],
+      );
+
+      expect(
+        events.map((event) => event.tick),
+        [0, 31 * 16],
+        reason: 'notes in the hatched bars after 32 never sound',
+      );
+      expect(events.expand((event) => event.midiNotes), isNot(contains(67)));
+    });
+
     test(
       'automatic lane repeats remain arrangement-level placement repeats',
       () {

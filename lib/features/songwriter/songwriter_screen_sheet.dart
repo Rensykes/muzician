@@ -3478,24 +3478,12 @@ class _PatternLaneRow extends ConsumerWidget {
             )) {
           return;
         }
-        final pattern = project.melodyPatterns
-            .where((candidate) => candidate.id == patternId)
-            .firstOrNull;
-        // A newly created melody has no notes yet. Let its one-bar placement
-        // participate in the first authored save's expansion; later saves open
-        // without it and therefore never resize placements.
-        final expandsInitialPlacement =
-            pattern != null && pattern.notes.isEmpty && block.spanBars == 1;
+        // The store owns the first-authored-save rule: an empty melody that
+        // gains notes expands its eligible one-bar placements, whichever route
+        // opened this editor (tile or Edit performance).
         showSongwriterMelodyPatternEditor(
           context: context,
           patternId: patternId,
-          initialPlacement: expandsInitialPlacement
-              ? SongwriterMelodyInitialPlacement(
-                  sectionId: section.id,
-                  laneId: lane.id,
-                  blockId: block.id,
-                )
-              : null,
         );
       } else {
         showGuitarStrumPatternSheet(context: context, patternId: patternId);
