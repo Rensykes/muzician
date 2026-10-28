@@ -46,8 +46,12 @@ class TransportStrip extends StatelessWidget {
   final VoidCallback onRewind;
   final VoidCallback onStop;
   final VoidCallback onPlayPause;
-  final VoidCallback onBpmTap;
-  final VoidCallback onSigTap;
+  final VoidCallback? onBpmTap;
+  final VoidCallback? onSigTap;
+
+  /// Whether to show the tappable time-signature readout. Hosts that must keep
+  /// one fixed measure (Writer's melody Piano Roll) hide it.
+  final bool showTimeSignature;
 
   /// Called when the user fine-tunes BPM via a vertical drag on the BPM
   /// readout. Receives `+1` for up-drag, `-1` for down-drag.
@@ -75,6 +79,7 @@ class TransportStrip extends StatelessWidget {
     required this.onPlayPause,
     required this.onBpmTap,
     required this.onSigTap,
+    this.showTimeSignature = true,
     this.onBpmDelta,
     this.extras = const [],
     this.trailing,
@@ -132,12 +137,14 @@ class TransportStrip extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     _Readout(label: 'BAR', value: barBeat),
-                    const SizedBox(width: 8),
-                    _Readout(
-                      label: 'SIG',
-                      value: timeSigLabel,
-                      onTap: onSigTap,
-                    ),
+                    if (showTimeSignature) ...[
+                      const SizedBox(width: 8),
+                      _Readout(
+                        label: 'SIG',
+                        value: timeSigLabel,
+                        onTap: onSigTap,
+                      ),
+                    ],
                     for (final extra in extras) ...[
                       const SizedBox(width: 8),
                       extra,

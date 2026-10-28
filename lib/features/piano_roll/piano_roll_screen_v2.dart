@@ -68,11 +68,16 @@ class PianoRollScreenV2 extends ConsumerStatefulWidget {
   /// the shell is mounted inside another scaffold that already provides one.
   final bool showBackground;
 
+  /// Locks tempo and time-signature editing. Writer's melody host uses this so
+  /// its Bars canvas and the stored project bars always share one measure.
+  final bool lockTiming;
+
   const PianoRollScreenV2({
     super.key,
     this.showScale = true,
     this.showSavePanels = true,
     this.showBackground = true,
+    this.lockTiming = false,
   });
 
   @override
@@ -223,6 +228,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           ),
           timeSig: state.config.timeSignature,
           framed: false,
+          lockTiming: widget.lockTiming,
         ),
         _StudioToolRow(trailing: short ? _studioUtilityActions() : const []),
         Expanded(
@@ -418,6 +424,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           bpm: state.config.tempo,
           barBeat: barBeat,
           timeSig: state.config.timeSignature,
+          lockTiming: widget.lockTiming,
         ),
         Expanded(
           child: Row(
@@ -523,6 +530,7 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
           bpm: state.config.tempo,
           barBeat: barBeat,
           timeSig: state.config.timeSignature,
+          lockTiming: widget.lockTiming,
         ),
         Expanded(child: GlassFrame(child: const PianoRollGrid())),
         _PortraitActionBar(
@@ -699,12 +707,14 @@ class _TransportStrip extends ConsumerWidget {
   final String barBeat;
   final TimeSignature timeSig;
   final bool framed;
+  final bool lockTiming;
 
   const _TransportStrip({
     required this.bpm,
     required this.barBeat,
     required this.timeSig,
     this.framed = true,
+    this.lockTiming = false,
   });
 
   @override
@@ -787,9 +797,12 @@ class _TransportStrip extends ConsumerWidget {
       onRewind: onRewind,
       onStop: onStop,
       onPlayPause: onPlayPause,
-      onBpmTap: onBpmTap,
+      onBpmTap: lockTiming ? null : onBpmTap,
       onSigTap: onSigTap,
-      onBpmDelta: (delta) => prNotifier.setTempo(bpm + delta),
+      showTimeSignature: !lockTiming,
+      onBpmDelta: lockTiming
+          ? null
+          : (delta) => prNotifier.setTempo(bpm + delta),
     );
   }
 }

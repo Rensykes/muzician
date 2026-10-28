@@ -308,6 +308,105 @@ void main() {
     expect(c.read(songwriterProvider).name, before.name);
   });
 
+  test('first authored save expands one-bar placements without an initial '
+      'placement and later saves do not resize', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    n.addSection(label: 'Verse', lengthBars: 8);
+    final sectionId = c.read(songwriterProvider).sections.single.id;
+    final laneId = n.addLane(sectionId: sectionId, kind: SongLaneKind.melody);
+    final patternId = n.addMelodyPattern(lengthTicks: 16);
+    n.addMelodyBlock(
+      sectionId: sectionId,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 1,
+    );
+    SongBlock block() => c
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single;
+
+    final pattern = c.read(songwriterProvider).melodyPatterns.single;
+    n.saveMelodyPattern(
+      pattern.copyWith(
+        lengthTicks: 17,
+        notes: const [
+          NotePatternNote(
+            id: 'melody-note',
+            midiNote: 72,
+            startTick: 46,
+            durationTicks: 2,
+          ),
+        ],
+      ),
+    );
+
+    expect(block().spanBars, 3);
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 48);
+
+    n.saveMelodyPattern(
+      c
+          .read(songwriterProvider)
+          .melodyPatterns
+          .single
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'melody-note',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+              NotePatternNote(
+                id: 'later-note',
+                midiNote: 67,
+                startTick: 78,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+
+    expect(block().spanBars, 3, reason: 'later saves keep the placement span');
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 80);
+  });
+
+  test('melody saves normalize stored length to whole bars everywhere', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(songwriterProvider.notifier);
+    final patternId = n.addMelodyPattern(lengthTicks: 25);
+    final pattern = c.read(songwriterProvider).melodyPatterns.single;
+
+    n.updateMelodyPattern(pattern.copyWith(lengthTicks: 25));
+
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 16);
+    expect(n.state.melodyPatterns.single.id, patternId);
+
+    n.updateMelodyPattern(
+      n.state.melodyPatterns.single.copyWith(
+        lengthTicks: 25,
+        notes: const [
+          NotePatternNote(
+            id: 'late-note',
+            midiNote: 72,
+            startTick: 21,
+            durationTicks: 4,
+          ),
+        ],
+      ),
+    );
+
+    expect(c.read(songwriterProvider).melodyPatterns.single.lengthTicks, 32);
+  });
+
   test(
     'initial melody expansion rejects overlap and later edits do not resize reuse',
     () {

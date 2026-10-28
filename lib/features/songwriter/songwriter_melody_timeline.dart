@@ -356,14 +356,10 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
         final hasSilentTail = silentTailStart != null && cueBar < end;
         final silentTailBars = silentTailStart == null
             ? 0
-            : math.max(
-                0,
-                occurrence.endBar -
-                    math.max(silentTailStart, occurrence.startBar),
-              );
+            : math.max(0, end - cueBar);
         final tailSemantics = silentTailBars > 0
             ? ', silent tail ${silentTailBars == 1 ? 'bar' : 'bars'} '
-                  '${cueBar + 1} through ${occurrence.endBar}'
+                  '${cueBar + 1} through $end'
             : '';
         final highlighted =
             active != null &&

@@ -150,12 +150,13 @@ to that pattern, or **Create new pattern** to start one in Piano Roll. Reuse
 keeps the same notes and Piano/Fretboard mapping, so arrangements such as
 A–B–A–B can share pattern A. A melody is named in its Piano Roll editor. Its
 **Bars** stepper extends the canvas from 1 to 32 bars and cannot shrink below
-the bar containing the last note. Saving applies the edited name and notes and
-stores the length as the whole bars containing the last note, with a one-bar
-minimum; a note ending inside a bar still occupies that whole bar, with
-silence after it. Changing Bars or shortening a placement never deletes notes.
-Renaming a shared melody updates every linked block label; cancelling leaves
-the previous name and content.
+the bar containing the last note. The melody Piano Roll locks tempo and time
+signature to the project, so its bars always match the saved project. Saving
+applies the edited name and notes and stores the length as the whole bars
+containing the last note, with a one-bar minimum; a note ending inside a bar
+still occupies that whole bar, with silence after it. Changing Bars or
+shortening a placement never deletes notes. Renaming a shared melody updates
+every linked block label; cancelling leaves the previous name and content.
 
 A new block uses the melody's full bar count when that placement is valid. It
 may instead be shortened or rejected if no valid placement is available, even
@@ -174,8 +175,13 @@ occupied bars, plays the melody once, and shows a silent tail; it never loops
 the melody. Adding a Melody lane creates a one-bar pattern and a one-bar
 placement. On the first save after notes are added to that empty pattern, the
 placement expands to the melody's full bar count when the whole span fits the
-section and lane. Later saves never resize placements, so editing a reused
-pattern's length does not change existing blocks.
+section and lane. This happens whether you first add notes from the block tile
+or from **Edit performance**. Every save also normalizes the stored length to
+whole bars. Later saves never resize placements, so editing a reused
+pattern's length does not change existing blocks. Legacy melodies stored longer
+than 32 bars keep their notes, but playback and the hatched silent tail stop at
+bar 32, so later notes stay inaudible until the melody is saved within the
+editor cap.
 
 The Melody timeline wraps in numbered four-bar rows. Each block's miniature,
 non-interactive piano roll shows its notes across the single-pass window and
@@ -199,8 +205,10 @@ repeats are marked and reserve their visible bars, including repeats clipped at
 the section edge. Changes that overlap them or shift their existing origins by
 changing the lane's natural period are rejected; use the Melody lane's **Repeat** control first
 when necessary. **Repeat / reuse** picks a free start in the same lane and makes
-a new placement sharing the pattern and canonical Save, shortened as needed to
-meet placement rules; a free start can still be rejected if no span preserves
+a new placement sharing the pattern and canonical Save. It copies the source
+placement's span, capped by the melody's placement limit and the free space at
+that start; it does not force the full melody length, so a short window can be
+repeated as-is. A free start can still be rejected if no span preserves
 existing repeats. Missing or unresolved content cannot be repeated. Shared edits
 affect all linked placements; **Make Unique** detaches only the selected
 placement, and resizing never changes the shared pattern. **Delete placement** removes
@@ -332,7 +340,9 @@ Writer*. The conversion rebuilds the song from the current Writer arrangement:
 - **drum lanes** → drum tracks carrying the same patterns;
 - **save lanes** → note tracks of stacked-chord voicings from the resolved saves;
 - **melody and guitar-strum lanes** → duration-aware Song note tracks, including
-  the strum's 12 ms tone offsets;
+  the strum's 12 ms tone offsets. Song clips keep their legacy looping behavior:
+  converted melody content repeats across each clip's block span, unlike
+  Writer's one-pass playback and silent tails;
 - tempo, time signature, and key are copied over.
 
 It asks for confirmation before replacing meaningful Song state, including

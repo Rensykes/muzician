@@ -475,10 +475,17 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             // A Writer placement is a one-pass window over the melody. It never
             // loops the pattern inside the block; automatic lane repeats are
             // arrangement-level placements that each start the melody again.
-            final melodyEndTick = startTick + pattern.lengthTicks;
+            // The audible window follows the effective last-note bar, capped at
+            // [melodyMaxBars]. Legacy data can store a longer length or notes
+            // past bar 32; those bars keep their notes but stay inside the
+            // hatched silent tail and never sound.
+            final effectiveLengthTicks =
+                melodyBarCount(pattern, measureTicks) * measureTicks;
+            final melodyEndTick = startTick + effectiveLengthTicks;
             final playEndTick = math.min(endTick, melodyEndTick);
             for (final note in pattern.notes) {
-              if (note.startTick < 0 || note.startTick >= pattern.lengthTicks) {
+              if (note.startTick < 0 ||
+                  note.startTick >= effectiveLengthTicks) {
                 continue;
               }
               final tick = startTick + note.startTick;
