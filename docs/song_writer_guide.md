@@ -155,8 +155,12 @@ total length. A longer placement repeats the pattern; a shorter placement
 clips notes at the block edge. Editing a reused pattern's duration does not
 resize existing blocks, so their repeat or clip behavior remains visible.
 
-The Melody timeline wraps in numbered four-bar rows. A block crossing rows has
-continuation segments and one final-edge handle; drag to resize in whole bars,
+The Melody timeline wraps in numbered four-bar rows. Each block's miniature,
+non-interactive piano roll shows its notes across loops and clipped edges, with
+pitch aligned across continuation rows. Linked previews update together; missing
+or incompatible content shows no cached notes. Use Piano Roll to edit notes.
+A block crossing rows has continuation segments and one final-edge handle;
+drag to resize in whole bars,
 or use **Adjust placement** to move or resize without dragging. A completed drag
 is one undo step; cancelling leaves the placement unchanged. Automatic lane
 repeats are marked and reserve their visible bars, including repeats clipped at

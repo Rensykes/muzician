@@ -4004,6 +4004,10 @@ class _PatternLaneRow extends ConsumerWidget {
             lane: lane,
             instanceIndex: instanceIndex,
             patternNames: patternNames,
+            patterns: {
+              for (final pattern in project.melodyPatterns) pattern.id: pattern,
+            },
+            measureTicks: project.config.measureTicks,
             onEdit: openPattern,
             onCreate: createPatternAt,
             canEdit: (block) =>

@@ -4,10 +4,12 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/songwriter.dart';
+import '../../models/song_project.dart';
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/studio_theme.dart';
+import 'songwriter_melody_preview.dart';
 
 /// Bar-aligned Melody placements; repeated occurrences retain their source.
 class SongwriterMelodyTimeline extends ConsumerStatefulWidget {
@@ -17,6 +19,8 @@ class SongwriterMelodyTimeline extends ConsumerStatefulWidget {
     required this.lane,
     required this.instanceIndex,
     required this.patternNames,
+    required this.patterns,
+    required this.measureTicks,
     required this.onEdit,
     required this.onCreate,
     required this.canEdit,
@@ -26,6 +30,8 @@ class SongwriterMelodyTimeline extends ConsumerStatefulWidget {
   final SongLane lane;
   final int instanceIndex;
   final Map<String, String> patternNames;
+  final Map<String, NotePattern> patterns;
+  final int measureTicks;
   final ValueChanged<SongBlock> onEdit;
   final ValueChanged<int> onCreate;
   final bool Function(SongBlock) canEdit;
@@ -299,6 +305,9 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
         );
         bar = end;
         final block = occurrence.source;
+        final pattern = widget.canEdit(block)
+            ? widget.patterns[block.patternId]
+            : null;
         final automatic = occurrence.repeatIndex > 0;
         final finalEdge = !automatic && end == occurrence.endBar;
         final highlighted =
@@ -323,87 +332,114 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                 ),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Expanded(
-                    child: Semantics(
-                      label: automatic
-                          ? 'Automatic repeat of ${widget.patternNames[block.patternId] ?? 'Missing pattern'}, bars ${occurrence.startBar + 1} through ${occurrence.endBar}'
-                          : null,
-                      child: InkWell(
-                        key: Key(
-                          'sheetMelodyTile_${block.patternId ?? block.id}_${widget.instanceIndex}_$segmentStart',
-                        ),
-                        onTap: widget.canEdit(block)
-                            ? () => widget.onEdit(block)
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            key: Key(
-                              'writerBlockName_${block.id}_${widget.instanceIndex}_$segmentStart',
-                            ),
-                            '${widget.patternNames[block.patternId] ?? 'Missing pattern'}${automatic
-                                ? ' · repeat'
-                                : segmentStart > occurrence.startBar
-                                ? ' · continued'
-                                : ''}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: palette.textPrimary,
-                              fontSize: 11,
-                            ),
-                          ),
+                  if (pattern != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(5),
+                      child: IgnorePointer(
+                        child: SongwriterMelodyPreview(
+                          pattern: pattern,
+                          segmentStartTick:
+                              (segmentStart - occurrence.startBar) *
+                              widget.measureTicks,
+                          segmentEndTick:
+                              (end - occurrence.startBar) * widget.measureTicks,
                         ),
                       ),
                     ),
-                  ),
-                  if (finalEdge)
-                    RawGestureDetector(
-                      key: Key(
-                        'melodyResize_${block.id}_${widget.instanceIndex}',
-                      ),
-                      gestures: {
-                        EagerGestureRecognizer:
-                            GestureRecognizerFactoryWithHandlers<
-                              EagerGestureRecognizer
-                            >(EagerGestureRecognizer.new, (_) {}),
-                      },
-                      child: Listener(
-                        behavior: HitTestBehavior.opaque,
-                        onPointerDown: (event) => _start(block, event, start),
-                        onPointerMove: _move,
-                        onPointerUp: _end,
-                        onPointerCancel: (event) {
-                          if (!mounted || event.pointer != _dragPointer) return;
-                          _stopScrolling();
-                          _pointerPosition = null;
-                          _scrollable = null;
-                          _dragRowRects.clear();
-                          setState(() {
-                            _dragPointer = null;
-                            _dragBlock = null;
-                            _previewSpan = null;
-                          });
-                          updateKeepAlive();
-                        },
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
                         child: Semantics(
-                          label:
-                              'Resize melody, ${block.spanBars} bars. Use Adjust placement for precise changes.',
-                          child: SizedBox(
-                            width: 44,
-                            height: 46,
-                            child: Icon(
-                              Icons.drag_handle,
-                              size: 18,
-                              color: palette.textSecondary,
+                          label: automatic
+                              ? 'Automatic repeat of ${widget.patternNames[block.patternId] ?? 'Missing pattern'}, bars ${occurrence.startBar + 1} through ${occurrence.endBar}'
+                              : null,
+                          child: InkWell(
+                            key: Key(
+                              'sheetMelodyTile_${block.patternId ?? block.id}_${widget.instanceIndex}_$segmentStart',
+                            ),
+                            onTap: widget.canEdit(block)
+                                ? () => widget.onEdit(block)
+                                : null,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: Text(
+                                key: Key(
+                                  'writerBlockName_${block.id}_${widget.instanceIndex}_$segmentStart',
+                                ),
+                                '${widget.patternNames[block.patternId] ?? 'Missing pattern'}${automatic
+                                    ? ' · repeat'
+                                    : segmentStart > occurrence.startBar
+                                    ? ' · continued'
+                                    : ''}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: palette.textPrimary,
+                                  fontSize: 11,
+                                  backgroundColor: palette.surface.withValues(
+                                    alpha: .9,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                      if (finalEdge)
+                        RawGestureDetector(
+                          key: Key(
+                            'melodyResize_${block.id}_${widget.instanceIndex}',
+                          ),
+                          gestures: {
+                            EagerGestureRecognizer:
+                                GestureRecognizerFactoryWithHandlers<
+                                  EagerGestureRecognizer
+                                >(EagerGestureRecognizer.new, (_) {}),
+                          },
+                          child: Listener(
+                            behavior: HitTestBehavior.opaque,
+                            onPointerDown: (event) =>
+                                _start(block, event, start),
+                            onPointerMove: _move,
+                            onPointerUp: _end,
+                            onPointerCancel: (event) {
+                              if (!mounted || event.pointer != _dragPointer) {
+                                return;
+                              }
+                              _stopScrolling();
+                              _pointerPosition = null;
+                              _scrollable = null;
+                              _dragRowRects.clear();
+                              setState(() {
+                                _dragPointer = null;
+                                _dragBlock = null;
+                                _previewSpan = null;
+                              });
+                              updateKeepAlive();
+                            },
+                            child: Semantics(
+                              label:
+                                  'Resize melody, ${block.spanBars} bars. Use Adjust placement for precise changes.',
+                              child: SizedBox(
+                                width: 44,
+                                height: 46,
+                                child: Icon(
+                                  Icons.drag_handle,
+                                  size: 18,
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
