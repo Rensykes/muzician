@@ -98,16 +98,20 @@ Retain visible musical cell boundaries and 44px control targets.
 
 Section: name, bars, repeats and Mixer; Harmony lane source label, four-cell rows with chord/degree/lyrics and Save identity; other lane types retain editors. Expose frequent chord actions contextually while keeping every existing advanced menu action. No Add to Writer inside Writer. Keep exact labels literal and theory absent when unknown.
 
-Melody uses numbered, four-bar wrapped timeline rows with related continuation
-segments, a final-edge resize handle and visible edit and block actions. Keep an
-accessible **Adjust placement** alternative, clear automatic-repeat markers and
-conflict feedback. Repeat / reuse selects a free start and preserves shared
-pattern and Save linkage; Make Unique detaches the selected placement. The lane
-header exposes its own Sound: Piano by default for new lanes, with Clean guitar
-and Distorted guitar choices; unset legacy lanes show Pattern sounds. Explicit
-lane sound is independent of the pattern's instrument mapping and the shared
-Harmony guitar preference. Preserve these controls and the wrapped layout in
-both themes and at compact and wide sizes.
+Melody uses named patterns whose length is derived from the last note in whole
+bars, with a 1–32 bar **Bars** stepper and rename action in the Piano Roll
+editor. The timeline uses numbered, four-bar wrapped rows with related
+continuation segments, a final-edge resize handle and visible edit and block
+actions. Keep an accessible **Adjust placement** alternative, clear
+automatic-repeat markers and conflict feedback, and the last-note bar limit
+with a silent-tail hatch for longer retained placements. Melody playback and
+previews never loop past the melody end. Repeat / reuse selects a free start and
+preserves shared pattern and Save linkage; Make Unique detaches the selected
+placement. The lane header exposes its own Sound: Piano by default for new
+lanes, with Clean guitar and Distorted guitar choices; unset legacy lanes show
+Pattern sounds. Explicit lane sound is independent of the pattern's instrument
+mapping and the shared Harmony guitar preference. Preserve these controls and
+the wrapped layout in both themes and at compact and wide sizes.
 
 Wide layout: avoid a single half-width section with an empty column. Use full-width bounded section content or a real contextual inspector; do not invent an inspector with fake actions. Pattern editor groups steps using the canonical project beat grid (four per quarter beat, two per eighth beat), with 44px steps and wrapping within a labelled beat when needed. Groups never cross a bar boundary; existing timing rules remain authoritative. Guitar Strum source stays explicit, Unassigned remains visible and silent. Audio/melody/drum/lyrics must stay reachable even when not illustrated in the concept.
 
