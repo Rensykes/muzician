@@ -3478,9 +3478,24 @@ class _PatternLaneRow extends ConsumerWidget {
             )) {
           return;
         }
+        final pattern = project.melodyPatterns
+            .where((candidate) => candidate.id == patternId)
+            .firstOrNull;
+        // A newly created melody has no notes yet. Let its one-bar placement
+        // participate in the first authored save's expansion; later saves open
+        // without it and therefore never resize placements.
+        final expandsInitialPlacement =
+            pattern != null && pattern.notes.isEmpty && block.spanBars == 1;
         showSongwriterMelodyPatternEditor(
           context: context,
           patternId: patternId,
+          initialPlacement: expandsInitialPlacement
+              ? SongwriterMelodyInitialPlacement(
+                  sectionId: section.id,
+                  laneId: lane.id,
+                  blockId: block.id,
+                )
+              : null,
         );
       } else {
         showGuitarStrumPatternSheet(context: context, patternId: patternId);
@@ -4043,10 +4058,7 @@ class _PatternLaneRow extends ConsumerWidget {
                 final summary = pattern == null || !safeContent
                     ? null
                     : _melodyPlacementPlaybackSummary(
-                        melodyPlacementBarLimit(
-                          pattern,
-                          project.config.measureTicks,
-                        ),
+                        melodyBarCount(pattern, project.config.measureTicks),
                         block.spanBars,
                         project.config,
                       );
@@ -4312,7 +4324,7 @@ class _PatternLaneRow extends ConsumerWidget {
                     final playbackSummary = melodyPattern == null
                         ? null
                         : _melodyPlacementPlaybackSummary(
-                            melodyPlacementBarLimit(
+                            melodyBarCount(
                               melodyPattern,
                               project.config.measureTicks,
                             ),

@@ -2348,6 +2348,139 @@ void main() {
     },
   );
 
+  testWidgets('a new melody lane expands its block on the first save', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 4);
+    final section = container.read(songwriterProvider).sections.single;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byKey(Key('sheetSectionMenu_${section.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('addMelodyLaneSheetAction')));
+    await tester.pumpAndSettle();
+
+    final lane = writer.state.sections.single.lanes.singleWhere(
+      (candidate) => candidate.kind == SongLaneKind.melody,
+    );
+    final patternId = lane.blocks.single.patternId!;
+    expect((lane.blocks.single.startBar, lane.blocks.single.spanBars), (0, 1));
+
+    final editor = await _openMelodyEditor(tester, patternId);
+    editor.read(pianoRollProvider.notifier)
+      ..setTotalMeasures(4)
+      ..addNote(72, 0, 4)
+      ..addNote(76, 48, 4);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveWriterMelodyPattern')));
+    await tester.pumpAndSettle();
+
+    final project = writer.state;
+    final savedPattern = project.melodyPatterns.singleWhere(
+      (pattern) => pattern.id == patternId,
+    );
+    final savedBlock = project.sections.single.lanes
+        .singleWhere((candidate) => candidate.id == lane.id)
+        .blocks
+        .single;
+    expect(savedPattern.lengthTicks, 64);
+    expect((savedBlock.startBar, savedBlock.spanBars), (0, 4));
+  });
+
+  testWidgets('a silent tail follows the last-note bar, not the legacy limit', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(name: 'Legacy', lengthTicks: 25);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 12,
+                durationTicks: 4,
+              ),
+            ],
+          ),
+    );
+    writer.addMelodyBlock(
+      sectionId: section.id,
+      laneId: laneId,
+      patternId: patternId,
+      startBar: 0,
+      spanBars: 2,
+    );
+    final blockId = writer.state.sections.single.lanes
+        .singleWhere((lane) => lane.id == laneId)
+        .blocks
+        .single
+        .id;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(
+      find.textContaining('plays once, then 1 silent tail bar'),
+      findsOneWidget,
+    );
+    expect(find.byKey(Key('melodySilentTail_${blockId}_0_1')), findsOneWidget);
+
+    final sectionState = writer.state.sections.single;
+    final laneState = sectionState.lanes.singleWhere(
+      (lane) => lane.id == laneId,
+    );
+    writer.state = writer.state.copyWith(
+      sections: [
+        sectionState.copyWith(
+          lanes: [
+            for (final item in sectionState.lanes)
+              if (item.id == laneId)
+                laneState.copyWith(
+                  blocks: [laneState.blocks.single.copyWith(spanBars: 3)],
+                )
+              else
+                item,
+          ],
+        ),
+      ],
+    );
+    await tester.pump();
+
+    expect(
+      find.textContaining('plays once, then 2 silent tail bars'),
+      findsOneWidget,
+    );
+    expect(find.byKey(Key('melodySilentTail_${blockId}_0_1')), findsOneWidget);
+  });
+
   testWidgets('new and reused melody blocks default to melody or free bars', (
     tester,
   ) async {
