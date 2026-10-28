@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
@@ -264,9 +266,11 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
     );
     final active = ref.watch(songwriterActivePositionProvider);
     final bars = widget.section.lengthBars.clamp(1, 64);
-    final labelHeight = MediaQuery.textScalerOf(
-      context,
-    ).scale(13).clamp(16.0, 23.0);
+    final labelHeight = math.max(
+      16.0,
+      MediaQuery.textScalerOf(context).scale(14),
+    );
+    final rowHeight = math.max(48.0, labelHeight + 24);
     List<Widget> cellsForRow(int start) {
       final cells = <Widget>[];
       var bar = start;
@@ -284,7 +288,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                 ),
                 onTap: () => widget.onCreate(emptyBar),
                 child: Container(
-                  height: 48,
+                  height: rowHeight,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
                     border: Border.all(color: palette.glassBorder),
@@ -505,7 +509,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                 ),
                 SizedBox(
                   key: _rowKeys.putIfAbsent(start, GlobalKey.new),
-                  height: 48,
+                  height: rowHeight,
                   child: Row(children: cellsForRow(start)),
                 ),
               ],
