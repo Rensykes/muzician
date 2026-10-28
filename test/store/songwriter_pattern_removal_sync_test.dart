@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/project_config.dart';
+import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
@@ -38,7 +39,24 @@ void main() {
         kind: SongLaneKind.guitarStrum,
       );
       final drumPatternId = writer.addDrumPattern(name: 'Beat');
-      final melodyPatternId = writer.addMelodyPattern(name: 'Lead');
+      final melodyPatternId = writer.addMelodyPattern(
+        name: 'Lead',
+        lengthTicks: 32,
+      );
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((pattern) => pattern.id == melodyPatternId)
+            .copyWith(
+              notes: const [
+                NotePatternNote(
+                  id: 'lead-last',
+                  midiNote: 72,
+                  startTick: 30,
+                  durationTicks: 2,
+                ),
+              ],
+            ),
+      );
       final guitarPatternId = writer.addGuitarStrumPattern(name: 'Strum');
 
       for (final startBar in [0, 4]) {

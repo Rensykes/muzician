@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,13 +58,26 @@ _timelineFixture(
     name: 'Lead',
     lengthTicks: patternLengthTicks,
   );
-  if (notes.isNotEmpty) {
-    writer.updateMelodyPattern(
-      writer.state.melodyPatterns
-          .singleWhere((pattern) => pattern.id == patternId)
-          .copyWith(notes: notes),
-    );
-  }
+  final measureTicks = container.read(songwriterProvider).config.measureTicks;
+  final minimumBars = math.max(1, span);
+  final fixtureLength = notes.isEmpty
+      ? math.max(patternLengthTicks ?? 0, minimumBars * measureTicks)
+      : patternLengthTicks ?? minimumBars * measureTicks;
+  final fixtureNotes = notes.isNotEmpty
+      ? notes
+      : [
+          NotePatternNote(
+            id: 'fixture-length',
+            midiNote: 60,
+            startTick: fixtureLength - 1,
+            durationTicks: 1,
+          ),
+        ];
+  writer.updateMelodyPattern(
+    writer.state.melodyPatterns
+        .singleWhere((pattern) => pattern.id == patternId)
+        .copyWith(lengthTicks: fixtureLength, notes: fixtureNotes),
+  );
   writer.addMelodyBlock(
     sectionId: section.id,
     laneId: laneId,
@@ -436,8 +451,15 @@ void main() {
           melodyPattern: NotePattern(
             id: 'lead',
             name: 'Lead',
-            lengthTicks: 16,
-            notes: [],
+            lengthTicks: 48,
+            notes: [
+              NotePatternNote(
+                id: 'length-note',
+                midiNote: 67,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
             pitchRangeStart: 48,
             pitchRangeEnd: 84,
             snapTicks: 1,
@@ -532,7 +554,7 @@ void main() {
           .where((p) => p.pattern.id == source.patternId)
           .toList();
       expect(previews(), hasLength(3)); // source, copy, wrapped continuation
-      expect(previews().every((p) => p.pattern.notes.isEmpty), isTrue);
+      expect(previews().every((p) => p.pattern.notes.length == 1), isTrue);
       await tester.ensureVisible(tile);
       await tester.tap(tile);
       await tester.pumpAndSettle();
@@ -548,7 +570,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(previews(), hasLength(3));
       expect(
-        previews().every((p) => p.pattern.notes.single.midiNote == 72),
+        previews().every(
+          (p) => p.pattern.notes.any((note) => note.midiNote == 72),
+        ),
         isTrue,
       );
       SongwriterMelodyPreview segment(String blockId, int start) =>
@@ -585,7 +609,7 @@ void main() {
             .melodyPatterns
             .singleWhere((p) => p.id == source.patternId)
             .notes,
-        hasLength(1),
+        hasLength(2),
       );
       final copyMenu = find.byKey(Key('melodyBlockActions_${copy.id}_0'));
       await tester.ensureVisible(copyMenu);
@@ -615,7 +639,10 @@ void main() {
             ),
       );
       await tester.pumpAndSettle();
-      expect(previews().single.pattern.notes.single.midiNote, 72);
+      expect(
+        previews().single.pattern.notes.any((note) => note.midiNote == 72),
+        isTrue,
+      );
       final uniquePreviews = tester
           .widgetList<SongwriterMelodyPreview>(
             find.byType(SongwriterMelodyPreview),
@@ -795,6 +822,7 @@ void main() {
       final f = await _timelineFixture(
         tester,
         bars: 8,
+        patternLengthTicks: 128,
         size: const Size(390, 650),
       );
       final writer = f.container.read(songwriterProvider.notifier);
@@ -840,6 +868,7 @@ void main() {
     final f = await _timelineFixture(
       tester,
       bars: 24,
+      patternLengthTicks: 128,
       size: const Size(390, 650),
     );
     final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
@@ -885,6 +914,7 @@ void main() {
     final f = await _timelineFixture(
       tester,
       bars: 24,
+      patternLengthTicks: 384,
       size: const Size(390, 650),
     );
     final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
@@ -1021,7 +1051,12 @@ void main() {
   testWidgets('secondary pointer cannot replace or finish a resize', (
     tester,
   ) async {
-    final f = await _timelineFixture(tester, bars: 8, span: 2);
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 2,
+      patternLengthTicks: 48,
+    );
     SongBlock current() => f.container
         .read(songwriterProvider)
         .sections
@@ -1055,6 +1090,7 @@ void main() {
       final f = await _timelineFixture(
         tester,
         bars: 24,
+        patternLengthTicks: 384,
         size: const Size(390, 650),
       );
       final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
@@ -1105,7 +1141,12 @@ void main() {
   testWidgets('secondary cancellation does not cancel the initiating resize', (
     tester,
   ) async {
-    final f = await _timelineFixture(tester, bars: 8, span: 2);
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      span: 2,
+      patternLengthTicks: 48,
+    );
     final writer = f.container.read(songwriterProvider.notifier);
     final before = writer.undoCount;
     final point = tester.getCenter(
@@ -1248,6 +1289,20 @@ void main() {
       kind: SongLaneKind.melody,
     );
     final patternId = writer.addMelodyPattern();
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 30,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     writer.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -1311,7 +1366,21 @@ void main() {
       sectionId: section.id,
       kind: SongLaneKind.melody,
     );
-    final patternId = writer.addMelodyPattern();
+    final patternId = writer.addMelodyPattern(lengthTicks: 48);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'lead-last',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     writer.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -1362,7 +1431,21 @@ void main() {
       sectionId: section.id,
       kind: SongLaneKind.melody,
     );
-    final patternId = writer.addMelodyPattern();
+    final patternId = writer.addMelodyPattern(lengthTicks: 32);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'lead-last',
+                midiNote: 72,
+                startTick: 30,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     writer.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -1444,7 +1527,10 @@ void main() {
           sectionId: section.id,
           kind: SongLaneKind.melody,
         );
-        final patternId = writer.addMelodyPattern(name: 'Lead');
+        final patternId = writer.addMelodyPattern(
+          name: 'Lead',
+          lengthTicks: 96,
+        );
         writer.updateMelodyPattern(
           writer.state.melodyPatterns
               .singleWhere((p) => p.id == patternId)
@@ -1455,6 +1541,12 @@ void main() {
                     midiNote: 64,
                     startTick: 0,
                     durationTicks: 4,
+                  ),
+                  const NotePatternNote(
+                    id: 'length',
+                    midiNote: 67,
+                    startTick: 94,
+                    durationTicks: 2,
                   ),
                 ],
               ),
@@ -1582,7 +1674,21 @@ void main() {
       sectionId: section.id,
       kind: SongLaneKind.melody,
     );
-    final patternId = writer.addMelodyPattern(name: 'Lead');
+    final patternId = writer.addMelodyPattern(name: 'Lead', lengthTicks: 64);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 62,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     writer.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -1663,8 +1769,36 @@ void main() {
       sectionId: section.id,
       kind: SongLaneKind.melody,
     );
-    final a = writer.addMelodyPattern(name: 'A');
-    final b = writer.addMelodyPattern(name: 'B');
+    final a = writer.addMelodyPattern(name: 'A', lengthTicks: 48);
+    final b = writer.addMelodyPattern(name: 'B', lengthTicks: 128);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == a)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'a-last',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == b)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'b-last',
+                midiNote: 72,
+                startTick: 126,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     writer.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -1729,7 +1863,21 @@ void main() {
         sectionId: section.id,
         kind: SongLaneKind.melody,
       );
-      final patternId = writer.addMelodyPattern(name: 'Lead');
+      final patternId = writer.addMelodyPattern(name: 'Lead', lengthTicks: 48);
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((pattern) => pattern.id == patternId)
+            .copyWith(
+              notes: const [
+                NotePatternNote(
+                  id: 'lead-last',
+                  midiNote: 72,
+                  startTick: 46,
+                  durationTicks: 2,
+                ),
+              ],
+            ),
+      );
       writer.addMelodyBlock(
         sectionId: section.id,
         laneId: laneId,
@@ -1826,7 +1974,21 @@ void main() {
         sectionId: section.id,
         kind: SongLaneKind.melody,
       );
-      final patternId = writer.addMelodyPattern();
+      final patternId = writer.addMelodyPattern(lengthTicks: 96);
+      writer.updateMelodyPattern(
+        writer.state.melodyPatterns
+            .singleWhere((pattern) => pattern.id == patternId)
+            .copyWith(
+              notes: const [
+                NotePatternNote(
+                  id: 'last',
+                  midiNote: 72,
+                  startTick: 94,
+                  durationTicks: 2,
+                ),
+              ],
+            ),
+      );
       writer.addMelodyBlock(
         sectionId: section.id,
         laneId: laneId,
@@ -1889,7 +2051,21 @@ void main() {
       sectionId: section.id,
       kind: SongLaneKind.melody,
     );
-    final patternId = writer.addMelodyPattern(name: 'Lead');
+    final patternId = writer.addMelodyPattern(name: 'Lead', lengthTicks: 96);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'lead-last',
+                midiNote: 72,
+                startTick: 94,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
     writer.addMelodyBlock(
       sectionId: section.id,
       laneId: laneId,
@@ -1946,6 +2122,291 @@ void main() {
     );
   });
 
+  testWidgets('resize stops at the melody bar limit', (tester) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      patternLengthTicks: 48,
+      notes: const [
+        NotePatternNote(
+          id: 'last',
+          midiNote: 72,
+          startTick: 46,
+          durationTicks: 2,
+        ),
+      ],
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.drag(handle, const Offset(500, 0));
+    await tester.pump();
+    final block = f.container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .firstWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, 3);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an over-long block can shrink directly to a valid span', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      patternLengthTicks: 32,
+      notes: const [
+        NotePatternNote(
+          id: 'last',
+          midiNote: 72,
+          startTick: 30,
+          durationTicks: 2,
+        ),
+      ],
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final section = writer.state.sections.single;
+    final lane = section.lanes.firstWhere((lane) => lane.id == f.laneId);
+    writer.state = writer.state.copyWith(
+      sections: [
+        section.copyWith(
+          lanes: [
+            for (final item in section.lanes)
+              if (item.id == f.laneId)
+                lane.copyWith(
+                  blocks: [lane.blocks.single.copyWith(spanBars: 4)],
+                )
+              else
+                item,
+          ],
+        ),
+      ],
+    );
+    await tester.pump();
+    final segment = tester.getRect(
+      find.byKey(Key('melodySegment_${f.blockId}_0_0_0')),
+    );
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.drag(handle, Offset(-segment.width / 2, 0));
+    await tester.pump();
+    final block = writer.state.sections.single.lanes
+        .firstWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(block.spanBars, 2);
+  });
+
+  testWidgets('a silent tail stays occupied and cannot host another block', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(
+      tester,
+      bars: 8,
+      patternLengthTicks: 32,
+      notes: const [
+        NotePatternNote(
+          id: 'last',
+          midiNote: 72,
+          startTick: 30,
+          durationTicks: 2,
+        ),
+      ],
+    );
+    final writer = f.container.read(songwriterProvider.notifier);
+    final section = writer.state.sections.single;
+    final lane = section.lanes.firstWhere((lane) => lane.id == f.laneId);
+    writer.state = writer.state.copyWith(
+      sections: [
+        section.copyWith(
+          lanes: [
+            for (final item in section.lanes)
+              if (item.id == f.laneId)
+                lane.copyWith(
+                  blocks: [lane.blocks.single.copyWith(spanBars: 4)],
+                )
+              else
+                item,
+          ],
+        ),
+      ],
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(Key('emptyMelodyBar_${f.laneId}_0_2')),
+      findsNothing,
+      reason: 'the silent tail remains part of the placed block',
+    );
+    expect(find.byKey(Key('emptyMelodyBar_${f.laneId}_0_3')), findsNothing);
+    expect(
+      find.byKey(Key('melodySilentTail_${f.blockId}_0_2')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp('silent tail', caseSensitive: false)),
+      findsWidgets,
+    );
+    expect(
+      find.textContaining('silent tail', findRichText: true),
+      findsWidgets,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Adjust placement allows a move-only over-long block but requires a valid '
+    'resize',
+    (tester) async {
+      final f = await _timelineFixture(
+        tester,
+        bars: 8,
+        patternLengthTicks: 32,
+        notes: const [
+          NotePatternNote(
+            id: 'last',
+            midiNote: 72,
+            startTick: 30,
+            durationTicks: 2,
+          ),
+        ],
+      );
+      final writer = f.container.read(songwriterProvider.notifier);
+      final section = writer.state.sections.single;
+      final lane = section.lanes.firstWhere((lane) => lane.id == f.laneId);
+      writer.state = writer.state.copyWith(
+        sections: [
+          section.copyWith(
+            lanes: [
+              for (final item in section.lanes)
+                if (item.id == f.laneId)
+                  lane.copyWith(
+                    blocks: [lane.blocks.single.copyWith(spanBars: 4)],
+                  )
+                else
+                  item,
+            ],
+          ),
+        ],
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(Key('melodyBlockActions_${f.blockId}_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Adjust placement'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('applyMelodyPlacement')))
+            .onPressed,
+        isNotNull,
+        reason: 'an unchanged over-long span is a valid move-only placement',
+      );
+      await tester.enterText(
+        find.byKey(const Key('melodyPlacementStartBar')),
+        '3',
+      );
+      await tester.tap(find.byKey(const Key('applyMelodyPlacement')));
+      await tester.pumpAndSettle();
+      var block = writer.state.sections.single.lanes
+          .firstWhere((lane) => lane.id == f.laneId)
+          .blocks
+          .single;
+      expect((block.startBar, block.spanBars), (2, 4));
+
+      await tester.tap(find.byKey(Key('melodyBlockActions_${f.blockId}_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Adjust placement'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('melodyPlacementSpanBars')),
+        '5',
+      );
+      await tester.pump();
+      expect(find.textContaining('Resize the placement'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('applyMelodyPlacement')))
+            .onPressed,
+        isNull,
+      );
+      await tester.enterText(
+        find.byKey(const Key('melodyPlacementSpanBars')),
+        '2',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('applyMelodyPlacement')));
+      await tester.pumpAndSettle();
+      block = writer.state.sections.single.lanes
+          .firstWhere((lane) => lane.id == f.laneId)
+          .blocks
+          .single;
+      expect((block.startBar, block.spanBars), (2, 2));
+    },
+  );
+
+  testWidgets('new and reused melody blocks default to melody or free bars', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final writer = container.read(songwriterProvider.notifier);
+    writer.addSection(lengthBars: 8);
+    final section = container.read(songwriterProvider).sections.single;
+    final laneId = writer.addLane(
+      sectionId: section.id,
+      kind: SongLaneKind.melody,
+    );
+    final patternId = writer.addMelodyPattern(lengthTicks: 48);
+    writer.updateMelodyPattern(
+      writer.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 46,
+                durationTicks: 2,
+              ),
+            ],
+          ),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SongwriterScreenSheet())),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byKey(Key('emptyMelodyBar_${laneId}_0_0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('reuseWriterPattern_$patternId')));
+    await tester.pumpAndSettle();
+    var blocks = writer.state.sections.single.lanes
+        .firstWhere((lane) => lane.id == laneId)
+        .blocks;
+    expect((blocks.single.startBar, blocks.single.spanBars), (0, 3));
+
+    await tester.tap(find.byKey(Key('emptyMelodyBar_${laneId}_0_6')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('reuseWriterPattern_$patternId')));
+    await tester.pumpAndSettle();
+    blocks = writer.state.sections.single.lanes
+        .firstWhere((lane) => lane.id == laneId)
+        .blocks;
+    expect((blocks.last.startBar, blocks.last.spanBars), (6, 2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('section menu creates an editable melody pattern lane', (
     tester,
   ) async {
@@ -1971,7 +2432,7 @@ void main() {
     final lane = project.sections.single.lanes.singleWhere(
       (candidate) => candidate.kind == SongLaneKind.melody,
     );
-    expect(lane.blocks.single.spanBars, 4);
+    expect(lane.blocks.single.spanBars, 1);
     expect(find.byKey(Key('sheetMelodyLane_${lane.id}_0')), findsOneWidget);
     expect(
       find.byWidgetPredicate(
@@ -1979,7 +2440,7 @@ void main() {
             widget is Semantics &&
             widget.properties.label ==
                 'Edit melody pattern Melody. Pattern duration 1 bar. '
-                    'Placed bars 1 through 4. repeats ×4 to fill.',
+                    'Placed bars 1 through 1. plays once.',
       ),
       findsOneWidget,
     );
@@ -2215,6 +2676,20 @@ void main() {
     final patternId = notifier.addMelodyPattern(
       name: 'Lead',
       lengthTicks: container.read(songwriterProvider).config.measureTicks * 2,
+    );
+    notifier.updateMelodyPattern(
+      notifier.state.melodyPatterns
+          .singleWhere((pattern) => pattern.id == patternId)
+          .copyWith(
+            notes: const [
+              NotePatternNote(
+                id: 'last',
+                midiNote: 72,
+                startTick: 30,
+                durationTicks: 2,
+              ),
+            ],
+          ),
     );
     notifier.addMelodyBlock(
       sectionId: section.id,
@@ -2689,7 +3164,7 @@ void main() {
     final f = await _timelineFixture(
       tester,
       bars: 8,
-      span: 4,
+      span: 2,
       patternLengthTicks: 64,
       notes: const [
         NotePatternNote(

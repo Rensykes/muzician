@@ -105,25 +105,23 @@ List<MelodyPreviewNote> melodyPreviewNotes({
       segmentEndTick <= 0) {
     return [];
   }
+  final windowStart = segmentStartTick < 0 ? 0 : segmentStartTick;
+  final windowEnd = segmentEndTick < length ? segmentEndTick : length;
+  if (windowStart >= windowEnd) return [];
   final result = <MelodyPreviewNote>[];
-  final int firstLoop = math.max(0, segmentStartTick) ~/ length * length;
-  for (var loop = firstLoop; loop < segmentEndTick; loop += length) {
-    for (final note in pattern.notes) {
-      if (note.startTick < 0 || note.startTick >= length) continue;
-      final start = loop + note.startTick;
-      final int end = math.min(
-        loop + length,
-        start + math.max(1, note.durationTicks),
-      );
-      final visibleStart = math.max(start, segmentStartTick);
-      final visibleEnd = math.min(end, segmentEndTick);
-      if (visibleStart < visibleEnd) {
-        result.add((
-          startTick: visibleStart,
-          endTick: visibleEnd,
-          midiNote: note.midiNote,
-        ));
-      }
+  for (final note in pattern.notes) {
+    if (note.startTick < 0 || note.startTick >= length) continue;
+    final start = note.startTick;
+    final noteEnd = start + (note.durationTicks < 1 ? 1 : note.durationTicks);
+    final end = noteEnd < length ? noteEnd : length;
+    final visibleStart = start < windowStart ? windowStart : start;
+    final visibleEnd = end < windowEnd ? end : windowEnd;
+    if (visibleStart < visibleEnd) {
+      result.add((
+        startTick: visibleStart,
+        endTick: visibleEnd,
+        midiNote: note.midiNote,
+      ));
     }
   }
   return result;

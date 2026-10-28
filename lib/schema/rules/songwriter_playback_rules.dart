@@ -340,6 +340,8 @@ void _tileDrumHits(
 /// pitches at the block's start bar and every later bar boundary inside the
 /// block (clipped to the section); drum blocks fire their referenced
 /// [DrumPattern] hits at native tick resolution, tiled across the block span.
+/// Melody blocks play their pattern once from the block start and stay silent
+/// after the pattern or placement end; lane repeats still tile placements.
 /// Events sharing a tick are merged. Save references resolve only inside the
 /// supplied [projectId] folder tree; without project scope, fallbacks still work.
 List<SongwriterPlaybackEvent> flattenPlaybackEvents(
@@ -470,58 +472,51 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
             final startTick =
                 (exp.globalStartBar + block.startBar) * measureTicks;
             final endTick = (exp.globalStartBar + clippedEnd) * measureTicks;
-            for (
-              var loopOffset = 0;
-              startTick + loopOffset < endTick;
-              loopOffset += pattern.lengthTicks
-            ) {
-              final loopStart = startTick + loopOffset;
-              final loopEnd = math.min(
-                endTick,
-                loopStart + pattern.lengthTicks,
+            // A Writer placement is a one-pass window over the melody. It never
+            // loops the pattern inside the block; automatic lane repeats are
+            // arrangement-level placements that each start the melody again.
+            final melodyEndTick = startTick + pattern.lengthTicks;
+            final playEndTick = math.min(endTick, melodyEndTick);
+            for (final note in pattern.notes) {
+              if (note.startTick < 0 || note.startTick >= pattern.lengthTicks) {
+                continue;
+              }
+              final tick = startTick + note.startTick;
+              if (tick >= playEndTick) continue;
+              final duration = math.min(
+                math.max(1, note.durationTicks),
+                playEndTick - tick,
               );
-              for (final note in pattern.notes) {
-                if (note.startTick < 0 ||
-                    note.startTick >= pattern.lengthTicks) {
-                  continue;
-                }
-                final tick = loopStart + note.startTick;
-                if (tick >= loopEnd) continue;
-                final duration = math.min(
-                  math.max(1, note.durationTicks),
-                  loopEnd - tick,
-                );
-                final onsetOffsetMs = math.max(0, note.onsetOffsetMs);
-                addSequencedNote(
-                  tick: tick,
-                  midiNote: note.midiNote,
+              final onsetOffsetMs = math.max(0, note.onsetOffsetMs);
+              addSequencedNote(
+                tick: tick,
+                midiNote: note.midiNote,
+                durationTicks: duration,
+                onsetOffsetMs: onsetOffsetMs,
+                durationOffsetMs: clippedDurationOffsetMs(
                   durationTicks: duration,
                   onsetOffsetMs: onsetOffsetMs,
-                  durationOffsetMs: clippedDurationOffsetMs(
-                    durationTicks: duration,
-                    onsetOffsetMs: onsetOffsetMs,
-                    availableTicks: loopEnd - tick,
-                  ),
-                  volume: mix.volume,
-                  pan: mix.pan,
-                  isGuitar: switch (lane.melodySound) {
-                    MelodyLaneSound.piano => false,
-                    MelodyLaneSound.cleanGuitar ||
-                    MelodyLaneSound.distortedGuitar => true,
-                    null =>
-                      project
-                              .melodyPerformancesByPatternId[pattern.id]
-                              ?.instrument ==
-                          HarmonyLaneInstrument.fretboard,
-                  },
-                  guitarTone: switch (lane.melodySound) {
-                    MelodyLaneSound.cleanGuitar => GuitarTone.clean,
-                    MelodyLaneSound.distortedGuitar => GuitarTone.distorted,
-                    _ => null,
-                  },
-                  id: note.id,
-                );
-              }
+                  availableTicks: playEndTick - tick,
+                ),
+                volume: mix.volume,
+                pan: mix.pan,
+                isGuitar: switch (lane.melodySound) {
+                  MelodyLaneSound.piano => false,
+                  MelodyLaneSound.cleanGuitar ||
+                  MelodyLaneSound.distortedGuitar => true,
+                  null =>
+                    project
+                            .melodyPerformancesByPatternId[pattern.id]
+                            ?.instrument ==
+                        HarmonyLaneInstrument.fretboard,
+                },
+                guitarTone: switch (lane.melodySound) {
+                  MelodyLaneSound.cleanGuitar => GuitarTone.clean,
+                  MelodyLaneSound.distortedGuitar => GuitarTone.distorted,
+                  _ => null,
+                },
+                id: note.id,
+              );
             }
           case SongLaneKind.guitarStrum:
             final pattern = strumPatterns[block.patternId];

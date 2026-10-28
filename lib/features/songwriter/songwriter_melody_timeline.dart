@@ -67,6 +67,12 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
 
   int _barsInRow(int start) => (widget.section.lengthBars - start).clamp(1, 4);
 
+  int? _melodyBarsFor(SongBlock block) {
+    final pattern = widget.patterns[block.patternId];
+    if (pattern == null) return null;
+    return melodyPlacementBarLimit(pattern, widget.measureTicks);
+  }
+
   void _start(SongBlock block, PointerDownEvent event, int rowStart) {
     if (!mounted || _dragPointer != null) return;
     final box =
@@ -186,14 +192,29 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
     // Walk from the original extent toward the pointer: do not jump over an
     // invalid extent or a repeat conflict to reach a later valid one.
     var span = block.spanBars;
+    final melodyBars = _melodyBarsFor(block);
     if (block.endBar > widget.section.lengthBars) {
       if (isValidMelodyPlacement(
         section: widget.section,
         lane: widget.lane,
         candidate: block.copyWith(spanBars: desired),
+        melodyBars: melodyBars,
       )) {
         setState(() => _previewSpan = desired);
       }
+      return;
+    }
+    // Shrinking may jump straight to the pointer. This is required when a
+    // legacy placement is longer than its melody: intermediate spans can be
+    // over the limit even though a smaller valid span exists.
+    if (desired < span &&
+        isValidMelodyPlacement(
+          section: widget.section,
+          lane: widget.lane,
+          candidate: block.copyWith(spanBars: desired),
+          melodyBars: melodyBars,
+        )) {
+      setState(() => _previewSpan = desired);
       return;
     }
     final step = desired >= span ? 1 : -1;
@@ -203,6 +224,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
         section: widget.section,
         lane: widget.lane,
         candidate: block.copyWith(spanBars: next),
+        melodyBars: melodyBars,
       )) {
         break;
       }
@@ -322,6 +344,27 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
             : 'Unresolved melody';
         final automatic = occurrence.repeatIndex > 0;
         final finalEdge = !automatic && end == occurrence.endBar;
+        final melodyBars = pattern == null
+            ? null
+            : melodyPlacementBarLimit(pattern, widget.measureTicks);
+        final silentTailStart = melodyBars == null
+            ? null
+            : occurrence.startBar + melodyBars;
+        final cueBar = silentTailStart == null
+            ? segmentStart
+            : math.max(silentTailStart, segmentStart);
+        final hasSilentTail = silentTailStart != null && cueBar < end;
+        final silentTailBars = silentTailStart == null
+            ? 0
+            : math.max(
+                0,
+                occurrence.endBar -
+                    math.max(silentTailStart, occurrence.startBar),
+              );
+        final tailSemantics = silentTailBars > 0
+            ? ', silent tail ${silentTailBars == 1 ? 'bar' : 'bars'} '
+                  '${cueBar + 1} through ${occurrence.endBar}'
+            : '';
         final highlighted =
             active != null &&
             active.sectionId == widget.section.id &&
@@ -385,13 +428,32 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                         ),
                       ),
                     ),
+                  if (hasSilentTail)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: ExcludeSemantics(
+                          child: CustomPaint(
+                            key: Key(
+                              'melodySilentTail_${block.id}_${widget.instanceIndex}_$cueBar',
+                            ),
+                            painter: _SilentTailPainter(
+                              startFraction:
+                                  ((cueBar - segmentStart) /
+                                          (end - segmentStart))
+                                      .clamp(0.0, 1.0),
+                              palette: palette,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
                         child: Semantics(
                           label:
-                              '${automatic ? 'Automatic repeat of ' : ''}$displayName${name != null && !editable ? ' content' : ''}, bars ${occurrence.startBar + 1} through ${occurrence.endBar}',
+                              '${automatic ? 'Automatic repeat of ' : ''}$displayName${name != null && !editable ? ' content' : ''}, bars ${occurrence.startBar + 1} through ${occurrence.endBar}$tailSemantics',
                           child: InkWell(
                             key: Key(
                               'sheetMelodyTile_${block.patternId ?? block.id}_${widget.instanceIndex}_$segmentStart',
@@ -462,7 +524,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
                             },
                             child: Semantics(
                               label:
-                                  'Resize melody, ${block.spanBars} bars. Use Adjust placement for precise changes.',
+                                  'Resize melody, ${block.spanBars} bars${melodyBars != null && block.spanBars > melodyBars ? ', with a silent tail after $melodyBars bars' : ''}. Use Adjust placement for precise changes.',
                               child: SizedBox(
                                 width: 44,
                                 height: 46,
@@ -518,4 +580,38 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
       ],
     );
   }
+}
+
+/// Diagonal shading over the part of a placement after its melody ends.
+class _SilentTailPainter extends CustomPainter {
+  const _SilentTailPainter({
+    required this.startFraction,
+    required this.palette,
+  });
+
+  final double startFraction;
+  final StudioPalette palette;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty || startFraction >= 1) return;
+    final left = size.width * startFraction.clamp(0.0, 1.0);
+    final area = Rect.fromLTRB(left, 0, size.width, size.height);
+    if (area.isEmpty) return;
+    canvas.save();
+    canvas.clipRect(area);
+    final line = Paint()
+      ..color = palette.textMuted.withValues(alpha: .22)
+      ..strokeWidth = 1;
+    const gap = 8.0;
+    for (var x = area.left - size.height; x < area.right; x += gap) {
+      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), line);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _SilentTailPainter oldDelegate) =>
+      oldDelegate.startFraction != startFraction ||
+      oldDelegate.palette != palette;
 }
