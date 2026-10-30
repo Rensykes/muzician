@@ -15,6 +15,7 @@ import '../../models/harmonic_analysis.dart';
 import 'writer_handoff.dart';
 import '../_mockup_shell.dart';
 import 'instrument_binding.dart';
+import 'scaled_instrument_board.dart';
 import 'shared_detection_panel.dart';
 
 const _appBarHeight = 44.0;
@@ -358,6 +359,10 @@ class _StudioInstrumentWorkspaceState
   final _canvasStateKey = GlobalKey();
   final _inspectorStateKey = GlobalKey();
   final _selectionStateKey = GlobalKey();
+  final _panelKeys = List.generate(
+    3,
+    (index) => GlobalKey(debugLabel: 'instrumentPanel$index'),
+  );
 
   void _showVoicings() => setState(() {
     _tab = 1;
@@ -385,12 +390,17 @@ class _StudioInstrumentWorkspaceState
         ...s.appBarActions,
       ],
     );
-    final canvas = KeyedSubtree(
+    final baseCanvasHeight = s.modeSegment == null ? 226.0 : 212.0;
+    Widget buildCanvas(double scale) => KeyedSubtree(
       key: _canvasStateKey,
       child: SizedBox(
         key: const Key('studioInstrumentCanvas'),
-        height: s.modeSegment == null ? 226 : 212,
-        child: s.board,
+        height: baseCanvasHeight * scale,
+        child: ScaledInstrumentBoard(
+          scale: scale,
+          baseHeight: baseCanvasHeight,
+          child: s.board,
+        ),
       ),
     );
     final controls = s.studioControls ?? s.modeSegment;
@@ -398,17 +408,15 @@ class _StudioInstrumentWorkspaceState
       key: _selectionStateKey,
       child: _StudioSelectionSummary(screen: s),
     );
-    final content = Column(
+    Widget buildContent(Widget canvas) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [?controls, canvas, ?s.auditionControls, selection],
     );
 
-    Widget buildInspector({
-      required bool shortLandscape,
-      required bool tightHeight,
-    }) {
-      Widget buildPanel(int index, Widget child) => SingleChildScrollView(
+    Widget buildPanel(int index, Widget child) => KeyedSubtree(
+      key: _panelKeys[index],
+      child: SingleChildScrollView(
         key: ValueKey(
           'instrumentInspector${const ['Notes', 'Voicings', 'Setup'][index]}Scroll',
         ),
@@ -423,8 +431,67 @@ class _StudioInstrumentWorkspaceState
             ),
           ],
         ),
-      );
+      ),
+    );
 
+    Widget panelBody(int index) => switch (index) {
+      0 =>
+        notes.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Select notes on the instrument to inspect chords and compatible scales.',
+                  style: TextStyle(color: p.textSecondary, height: 1.4),
+                ),
+              )
+            : SharedDetectionPanel(
+                key: s.detectionKey,
+                binding: s.binding,
+                onChordPanelRequested: _showVoicings,
+                embedded: true,
+              ),
+      1 =>
+        s.voicingsBuilder == null
+            ? TextButton(
+                onPressed: s.onChordPanelRequested,
+                child: const Text('Open chord voicings'),
+              )
+            : Builder(builder: s.voicingsBuilder!),
+      _ =>
+        s.setupBuilder == null
+            ? const SizedBox.shrink()
+            : Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Builder(builder: s.setupBuilder!),
+              ),
+    };
+
+    Widget scaleButton() => TextButton.icon(
+      key: const Key('instrumentScale'),
+      onPressed: s.onScalePanelRequested,
+      icon: Icon(
+        s.scaleOffKey ? Icons.warning_amber_rounded : Icons.stacked_line_chart,
+        size: 18,
+        color: s.scaleOffKey ? p.orange : p.emerald,
+      ),
+      label: Text(s.scaleLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
+
+    Widget libraryButton() => TextButton.icon(
+      key: const Key('instrumentLibrary'),
+      onPressed: s.onSaveRequested,
+      icon: const Icon(Icons.bookmarks_outlined, size: 18),
+      label: const Text(
+        'Library',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+
+    Widget buildInspector({
+      required bool shortLandscape,
+      required bool tightHeight,
+    }) {
       return Container(
         key: const Key('instrumentInspector'),
         margin: tightHeight
@@ -500,44 +567,7 @@ class _StudioInstrumentWorkspaceState
                 child: IndexedStack(
                   index: _tab,
                   children: [
-                    buildPanel(
-                      0,
-                      notes.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text(
-                                'Select notes on the instrument to inspect chords and compatible scales.',
-                                style: TextStyle(
-                                  color: p.textSecondary,
-                                  height: 1.4,
-                                ),
-                              ),
-                            )
-                          : SharedDetectionPanel(
-                              key: s.detectionKey,
-                              binding: s.binding,
-                              onChordPanelRequested: _showVoicings,
-                              embedded: true,
-                            ),
-                    ),
-                    buildPanel(
-                      1,
-                      s.voicingsBuilder == null
-                          ? TextButton(
-                              onPressed: s.onChordPanelRequested,
-                              child: const Text('Open chord voicings'),
-                            )
-                          : Builder(builder: s.voicingsBuilder!),
-                    ),
-                    buildPanel(
-                      2,
-                      s.setupBuilder == null
-                          ? const SizedBox.shrink()
-                          : Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Builder(builder: s.setupBuilder!),
-                            ),
-                    ),
+                    for (var i = 0; i < 3; i++) buildPanel(i, panelBody(i)),
                   ],
                 ),
               ),
@@ -546,36 +576,8 @@ class _StudioInstrumentWorkspaceState
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Row(
                 children: [
-                  Expanded(
-                    child: TextButton.icon(
-                      key: const Key('instrumentScale'),
-                      onPressed: s.onScalePanelRequested,
-                      icon: Icon(
-                        s.scaleOffKey
-                            ? Icons.warning_amber_rounded
-                            : Icons.stacked_line_chart,
-                        size: 18,
-                        color: s.scaleOffKey ? p.orange : p.emerald,
-                      ),
-                      label: Text(
-                        s.scaleLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: TextButton.icon(
-                      key: const Key('instrumentLibrary'),
-                      onPressed: s.onSaveRequested,
-                      icon: const Icon(Icons.bookmarks_outlined, size: 18),
-                      label: const Text(
-                        'Library',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
+                  Expanded(child: scaleButton()),
+                  Expanded(child: libraryButton()),
                   IconButton(
                     key: const Key('instrumentSetupShortcut'),
                     tooltip: s.instrumentContext ?? 'Instrument setup',
@@ -588,6 +590,80 @@ class _StudioInstrumentWorkspaceState
                 ],
               ),
             ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildDock() {
+      Widget column(int index, String title) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              title,
+              style: TextStyle(
+                color: p.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(child: buildPanel(index, panelBody(index))),
+        ],
+      );
+      final divider = VerticalDivider(width: 1, color: p.glassBorder);
+      final columns = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 3, child: column(0, 'Notes')),
+          divider,
+          Expanded(flex: 4, child: column(1, 'Voicings')),
+          divider,
+          Expanded(flex: 3, child: column(2, 'Setup')),
+        ],
+      );
+      return Container(
+        key: const Key('instrumentDock'),
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        decoration: BoxDecoration(
+          color: p.dialogBg,
+          border: Border.all(color: p.glassBorder),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisSize: _expanded ? MainAxisSize.max : MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  Flexible(child: scaleButton()),
+                  const SizedBox(width: 8),
+                  Flexible(child: libraryButton()),
+                  const Spacer(),
+                  IconButton(
+                    key: const Key('instrumentInspectorToggle'),
+                    tooltip: _expanded
+                        ? 'Collapse inspector'
+                        : 'Expand inspector',
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    icon: Icon(
+                      _expanded ? Icons.expand_more : Icons.expand_less,
+                      size: 18,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: p.glassBorder),
+            // Collapsed panels stay mounted but take no space.
+            if (_expanded)
+              Expanded(child: columns)
+            else
+              SizedBox(height: 0, child: Offstage(child: columns)),
           ],
         ),
       );
@@ -638,6 +714,33 @@ class _StudioInstrumentWorkspaceState
                 },
               ),
             );
+            final dock =
+                wide && !shortLandscape && constraints.maxHeight >= 640;
+            if (dock) {
+              final scale = dockCanvasScale(constraints.maxHeight);
+              final threeColumns = constraints.maxWidth >= 1100;
+              return Column(
+                key: const Key('studioInstrumentDockLayout'),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header,
+                  ?controls,
+                  buildCanvas(scale),
+                  ?s.auditionControls,
+                  selection,
+                  Expanded(
+                    child: !threeColumns
+                        ? inspector
+                        : _expanded
+                        ? buildDock()
+                        : Align(
+                            alignment: Alignment.topCenter,
+                            child: buildDock(),
+                          ),
+                  ),
+                ],
+              );
+            }
             if (wide) {
               return Column(
                 children: [
@@ -656,12 +759,12 @@ class _StudioInstrumentWorkspaceState
                                         CrossAxisAlignment.stretch,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      canvas,
+                                      buildCanvas(1),
                                       ?s.auditionControls,
                                       selection,
                                     ],
                                   )
-                                : content,
+                                : buildContent(buildCanvas(1)),
                           ),
                         ),
                         SizedBox(
@@ -682,7 +785,7 @@ class _StudioInstrumentWorkspaceState
               children: [
                 constraints.maxHeight < 600 ? compactHeader : header,
                 ?controls,
-                canvas,
+                buildCanvas(1),
                 if (shortAuditionLayout)
                   Expanded(
                     child: SingleChildScrollView(
