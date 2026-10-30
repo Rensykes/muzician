@@ -69,6 +69,9 @@ void main() {
       (Size(1024, 768), true),
       (Size(1440, 900), true),
       (Size(599, 400), false),
+      (Size(667, 375), false),
+      (Size(680, 400), true),
+      (Size(679, 400), false),
       (Size(700, 800), false),
     ]) {
       test('$size -> $expected', () {

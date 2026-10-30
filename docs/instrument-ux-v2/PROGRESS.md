@@ -179,5 +179,5 @@ canvas, mounted panel, captured query and temporary Song contracts.
 
 ## 2026-10-30 — Landscape rail and instrument dock
 
-- Shell: landscape ≥600px uses an 80px left navigation rail (Settings pinned at the bottom, Song disabled); portrait keeps the bottom bar. Workspaces are never recreated when switching.
+- Shell: landscape viewports at least 680px wide (keeping ≥600px for the workspace beside the 80px rail) use an 80px left navigation rail (Settings pinned at the bottom, Song disabled); portrait keeps the bottom bar. Workspaces are never recreated when switching.
 - Fretboard/Piano: wide layouts with ≥640px body height get a full-width scaled canvas (≤1.25×) and an inspector dock (three columns at ≥1100px). Short landscape and shorter wide layouts keep the side inspector.

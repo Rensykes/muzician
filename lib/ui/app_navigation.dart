@@ -5,9 +5,10 @@ import '../theme/studio_theme.dart';
 /// Logical width of the landscape navigation rail, excluding safe-area inset.
 const double kStudioRailWidth = 80;
 
-/// Landscape viewports at least 600 wide use the rail; others use the bar.
+/// Landscape viewports keeping at least 600 for the workspace beside the rail
+/// use the rail; others use the bar.
 bool useNavigationRail(Size size) =>
-    size.width >= 600 && size.width > size.height;
+    size.width - kStudioRailWidth >= 600 && size.width > size.height;
 
 @immutable
 class AppNavDestination {

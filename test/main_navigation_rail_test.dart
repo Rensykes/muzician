@@ -85,4 +85,53 @@ void main() {
     final stackContext = tester.element(find.byType(IndexedStack).first);
     expect(MediaQuery.paddingOf(stackContext).left, 0);
   });
+
+  testWidgets(
+    'small landscape phones keep the bar and the side instrument tier',
+    (tester) async {
+      tester.view.physicalSize = const Size(667, 375);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+
+      await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
+      await _pumpUntil(tester, find.byType(IndexedStack));
+
+      await tester.tap(find.byKey(const ValueKey('nav_Fretboard')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byKey(const Key('studioBottomNavBar')), findsOneWidget);
+      expect(find.byKey(const Key('studioNavigationRail')), findsNothing);
+      expect(
+        find.byKey(const Key('studioInstrumentCompactLayout')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('studioInstrumentContentScroll')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('rail mode keeps workspaces out of the bottom safe-area inset', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: 21);
+    tester.view.viewPadding = const FakeViewPadding(bottom: 21);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
+    await _pumpUntil(tester, find.byType(IndexedStack));
+
+    expect(find.byKey(const Key('studioNavigationRail')), findsOneWidget);
+    final bottom = tester.getRect(find.byType(IndexedStack).first).bottom;
+    expect(bottom, lessThanOrEqualTo(900 - 21));
+  });
 }
