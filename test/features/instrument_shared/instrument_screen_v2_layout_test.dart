@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/_mockup_shell.dart';
 import 'package:muzician/features/fretboard/fretboard.dart';
 import 'package:muzician/features/instrument_shared/instrument_screen.dart';
+import 'package:muzician/features/instrument_shared/scaled_instrument_board.dart';
 import 'package:muzician/features/piano/piano_keyboard.dart';
 import 'package:muzician/models/app_theme_variant.dart';
 import 'package:muzician/models/fretboard.dart';
@@ -135,6 +136,8 @@ void main() {
       const Size(390, 844),
       const Size(1024, 768),
       const Size(844, 390),
+      const Size(1024, 600),
+      const Size(1440, 900),
     ]) {
       testWidgets(
         '${guitar ? 'Fretboard' : 'Piano'} canvas stays fixed while the inspector scrolls at $size',
@@ -153,13 +156,26 @@ void main() {
 
           final canvas = find.byKey(const Key('studioInstrumentCanvas'));
           final before = tester.getRect(canvas);
-          expect(before.height, guitar ? 212 : 226);
+          final base = guitar ? 212.0 : 226.0;
+          final bodyHeight = size.height - 80;
+          // Mirrors the production tier: wide && !shortLandscape && body >= 640.
+          final dock = size.width >= 700 && bodyHeight >= 640;
+          expect(
+            before.height,
+            closeTo(dock ? base * dockCanvasScale(bodyHeight) : base, 0.01),
+          );
           if (size == const Size(844, 390)) {
             expect(before.bottom, lessThanOrEqualTo(size.height - 56));
             expect(
               find.byKey(const Key('studioInstrumentContentScroll')),
               findsOneWidget,
             );
+          } else if (dock) {
+            expect(
+              find.byKey(const Key('studioInstrumentDockLayout')),
+              findsOneWidget,
+            );
+            expect(before.width, greaterThan(size.width - 64));
           } else if (size.width >= 700) {
             expect(
               find.byKey(const Key('studioInstrumentContentScroll')),
@@ -178,6 +194,112 @@ void main() {
             greaterThan(0),
           );
           expect(tester.getRect(canvas), before);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('wide tall layout shows three dock columns without tabs', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final theme = ValueNotifier(AppThemeVariant.studio);
+    addTearDown(theme.dispose);
+    await _pumpScreen(
+      tester,
+      container,
+      size: const Size(1440, 900),
+      guitar: true,
+      theme: theme,
+    );
+
+    expect(find.byKey(const Key('instrumentDock')), findsOneWidget);
+    for (final label in ['Notes', 'Voicings', 'Setup']) {
+      expect(
+        find.byKey(Key('instrumentInspector${label}Scroll')),
+        findsOneWidget,
+      );
+      expect(find.byKey(Key('instrumentInspector$label')), findsNothing);
+    }
+    expect(find.byKey(const Key('instrumentScale')), findsOneWidget);
+    expect(find.byKey(const Key('instrumentLibrary')), findsOneWidget);
+    expect(find.text('Setup item 0'), findsOneWidget);
+    expect(find.text('Voicing item 0'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('instrumentInspectorToggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('Voicing item 0'), findsNothing);
+    expect(find.byKey(const Key('instrumentLibrary')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('panel state survives dock, side and compact tier changes', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final theme = ValueNotifier(AppThemeVariant.studio);
+    addTearDown(theme.dispose);
+    final voicingsKey = GlobalKey<_PanelProbeState>();
+    final setupKey = GlobalKey<_PanelProbeState>();
+
+    Future<void> pumpAt(Size size) => _pumpScreen(
+      tester,
+      container,
+      size: size,
+      guitar: true,
+      theme: theme,
+      voicingsKey: voicingsKey,
+      setupKey: setupKey,
+    );
+
+    await pumpAt(const Size(1440, 900));
+    final voicingsState = voicingsKey.currentState;
+    final setupState = setupKey.currentState;
+    await _scrollPanel(tester, 'instrumentInspectorVoicingsScroll');
+    final offset = _scrollOffset(tester, 'instrumentInspectorVoicingsScroll');
+    expect(offset, greaterThan(0));
+
+    await pumpAt(const Size(1024, 600)); // side tier, Voicings tab default
+    expect(identical(voicingsKey.currentState, voicingsState), isTrue);
+    expect(_scrollOffset(tester, 'instrumentInspectorVoicingsScroll'), offset);
+
+    await pumpAt(const Size(1024, 768)); // tabbed dock
+    expect(identical(voicingsKey.currentState, voicingsState), isTrue);
+
+    await pumpAt(const Size(1440, 900)); // back to three columns
+    expect(identical(voicingsKey.currentState, voicingsState), isTrue);
+    expect(identical(setupKey.currentState, setupState), isTrue);
+    expect(_scrollOffset(tester, 'instrumentInspectorVoicingsScroll'), offset);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final guitar in [true, false]) {
+    for (final size in [const Size(1440, 900), const Size(1024, 768)]) {
+      testWidgets(
+        '${guitar ? 'Fretboard' : 'Piano'} dock has no overflow at 2x text and $size',
+        (tester) async {
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          final theme = ValueNotifier(AppThemeVariant.studio);
+          addTearDown(theme.dispose);
+          await _pumpScreen(
+            tester,
+            container,
+            size: size,
+            guitar: guitar,
+            theme: theme,
+            textScale: 2,
+          );
+          expect(tester.takeException(), isNull);
+
+          await tester.tap(find.byKey(const Key('instrumentInspectorToggle')));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.byKey(const Key('instrumentInspectorToggle')));
+          await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
         },
       );

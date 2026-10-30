@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/_mockup_shell.dart';
 import 'package:muzician/features/fretboard/fretboard_feature.dart';
 import 'package:muzician/features/instrument_shared/instrument_screen.dart';
+import 'package:muzician/features/instrument_shared/scaled_instrument_board.dart';
 import 'package:muzician/features/instrument_shared/shared_detection_panel.dart';
 import 'package:muzician/features/instrument_shared/chord_picker_parts.dart';
 import 'package:muzician/features/piano/piano_chord_diagram.dart';
@@ -145,17 +146,32 @@ void main() {
           addTearDown(container.dispose);
           await _pump(tester, container, size: size, guitar: guitar);
           expect(find.text(guitar ? 'Fretboard' : 'Piano'), findsOneWidget);
+          // Mirrors the production tier: wide && !shortLandscape && body >= 640.
+          final dock = size.width >= 700 && size.height >= 640;
+          final baseHeight = guitar ? 212.0 : 226.0;
           expect(
             tester
                 .getSize(find.byKey(const Key('studioInstrumentCanvas')))
                 .height,
-            guitar ? 212 : 226,
+            closeTo(
+              dock ? baseHeight * dockCanvasScale(size.height) : baseHeight,
+              0.01,
+            ),
           );
           expect(
             find.byType(guitar ? ChordVoicingPicker : PianoChordPicker),
             findsOneWidget,
           );
-          if (size.width >= 700 ||
+          if (dock) {
+            expect(
+              find.byKey(const Key('studioInstrumentDockLayout')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const Key('studioInstrumentContentScroll')),
+              findsNothing,
+            );
+          } else if (size.width >= 700 ||
               (size.width > size.height && size.height < 500)) {
             expect(
               find.byKey(const Key('studioInstrumentContentScroll')),
