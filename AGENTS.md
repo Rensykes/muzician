@@ -48,7 +48,7 @@ Studio UI resolves `StudioPalette.of(context)`; pass immutable palettes into pai
 Instrument UX V2 keeps Studio Fretboard/Piano canvases visible while bounded
 inspector panels scroll. On short portrait screens, scroll the lower controls
 instead of shrinking or clipping native string/key geometry. Keep panels mounted across collapse, tab, theme and
-layout changes. Selection actions have one disclosure outside inspector tabs;
+layout changes. Wide tall layouts use a full-width scaled canvas (`ScaledInstrumentBoard`) and an inspector dock; panels keep per-panel GlobalKeys across tiers. The shell uses a left rail on landscape ≥600px (`lib/ui/app_navigation.dart`); keep `nav_<Label>` keys on both rail and bar. Selection actions have one disclosure outside inspector tabs;
 keep Input/View menus compact with accessible labels and 44px targets.
 Voicings remain horizontal; captured note queries are separate
 from applied selections, including deferred provider notifications. Song is

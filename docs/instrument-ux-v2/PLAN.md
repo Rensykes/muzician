@@ -14,7 +14,8 @@ authoritative.
 - Pin the header and playable surface in compact portrait. Allocate remaining
   height to an inspector with persistent tabs and independently scrollable
   content. Keep Scale and Library reachable outside that content scroll.
-- Use a side inspector for wide and short landscape layouts. Adapt header and
+- Use a side inspector for short landscape and shorter wide layouts; taller wide
+  layouts use a full-width scaled canvas with an inspector dock. Adapt header and
   auxiliary controls to the available constraints; preserve native key/fret
   geometry instead of shrinking touch regions.
 - Keep each tab mounted and preserve tab, collapse, instrument scroll, and

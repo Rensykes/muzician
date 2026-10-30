@@ -35,7 +35,7 @@ A quantized, timeline-based note editor rendered with `CustomPainter`. Supports 
 `PianoRollScreenV2` is the only piano-roll shell. The previous V1 composition
 inline in `lib/main.dart` (with `PianoRollPlaybackConfig` / `PianoRollEditConfig`
 / `PianoRollPitchConfig` panel cards) and the unused `piano_roll_screen_v2_mockup.dart`
-have been removed. The Roll tab in the bottom navigation mounts
+have been removed. The Roll tab in the app navigation mounts
 `PianoRollScreenV2` directly.
 
 ```

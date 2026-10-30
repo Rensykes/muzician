@@ -25,8 +25,10 @@ when a committed chord contains notes outside the project key.
 The inline inspector defaults to **Voicings**. Notes / Voicings / Setup tabs
 and the Scale / Library footer remain reachable while its content scrolls.
 Collapsing and reopening preserves the selection and each mounted panel's state.
-Compact portrait keeps the playable surface above a bounded inspector; wide
-and short landscape layouts put the inspector beside the instrument. Scrolling
+Compact portrait keeps the playable surface above a bounded inspector; short
+landscape and shorter wide layouts put the inspector beside the instrument, while
+wide layouts with at least 640px body height dock it below a full-width scaled
+canvas (three columns at 1100px or wider). Scrolling
 the inspector does not scroll the instrument out of view. Very short portrait layouts use a single-row header and tighter inspector margins to retain usable controls at enlarged text sizes.
 
 | Tab | Controls |
