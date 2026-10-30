@@ -95,9 +95,7 @@ class StudioNavigationRail extends StatelessWidget {
     );
 
     return Container(
-      decoration: BoxDecoration(
-        color: StudioPalette.of(context).surface.withValues(alpha: 0.96),
-      ),
+      decoration: BoxDecoration(color: StudioPalette.of(context).surface),
       // Painted over the content so the divider does not widen the rail.
       foregroundDecoration: const BoxDecoration(
         border: Border(right: BorderSide(color: Color(0x4094A3B8), width: 0.5)),

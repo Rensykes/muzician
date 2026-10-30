@@ -60,4 +60,29 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('rail consumes the left safe-area inset in rail mode', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(left: 40);
+    tester.view.viewPadding = const FakeViewPadding(left: 40);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(const ProviderScope(child: MuzicianApp()));
+    await _pumpUntil(tester, find.byType(IndexedStack));
+
+    final rail = find.byKey(const Key('studioNavigationRail'));
+    expect(rail, findsOneWidget);
+    expect(tester.getTopLeft(rail).dx, 0);
+    expect(tester.getSize(rail).width, 80 + 40);
+
+    final stackContext = tester.element(find.byType(IndexedStack).first);
+    expect(MediaQuery.paddingOf(stackContext).left, 0);
+  });
 }
