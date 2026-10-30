@@ -32,6 +32,7 @@ import 'schema/rules/save_system_rules.dart'
     show getWriterLinksForSave, resolveSaveInProject;
 import 'store/settings_store.dart';
 import 'ui/project_chip.dart';
+import 'ui/app_navigation.dart';
 import 'store/record_audio_session.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
@@ -100,6 +101,7 @@ class _AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<_AppShell> {
   int _tabIndex = 4;
+  final _workspaceStackKey = GlobalKey(debugLabel: 'workspaceStack');
   String? _linkedEditSaveId;
   String? _linkedEditProjectId;
   bool _hydrating = true;
@@ -230,94 +232,106 @@ class _AppShellState extends ConsumerState<_AppShell> {
         },
       );
     }
+    final showNavigation =
+        !(_hydrating || _recoveryRequired != null || _startupFailure != null);
+    final railMode =
+        showNavigation && useNavigationRail(MediaQuery.sizeOf(context));
+    final destinations = _navDestinations();
+    final workspaces = KeyedSubtree(
+      key: _workspaceStackKey,
+      child: IndexedStack(
+        index: _tabIndex,
+        children: [
+          _FretboardScreen(
+            onHandoffCompleted: () => _setTab(4),
+            linkedEditSaveId: _linkedEditProjectId == selectedProjectId
+                ? _linkedEditSaveId
+                : null,
+            onDifferentSaveLoaded: _onInstrumentSaveLoaded,
+          ),
+          _PianoScreen(
+            onHandoffCompleted: () => _setTab(4),
+            linkedEditSaveId: _linkedEditProjectId == selectedProjectId
+                ? _linkedEditSaveId
+                : null,
+            onDifferentSaveLoaded: _onInstrumentSaveLoaded,
+          ),
+          const PianoRollScreenV2(),
+          const _UnavailableSongWorkspace(),
+          SongwriterScreen(onEditInstrumentSave: _openLinkedSaveInInstrument),
+          const _SettingsScreen(key: ValueKey('settings_screen')),
+        ],
+      ),
+    );
     return Scaffold(
-      body: _hydrating || _recoveryRequired != null || _startupFailure != null
+      body: !showNavigation
           ? _buildStartupView()
-          : IndexedStack(
-              index: _tabIndex,
+          : railMode
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _FretboardScreen(
-                  onHandoffCompleted: () => _setTab(4),
-                  linkedEditSaveId: _linkedEditProjectId == selectedProjectId
-                      ? _linkedEditSaveId
-                      : null,
-                  onDifferentSaveLoaded: _onInstrumentSaveLoaded,
+                StudioNavigationRail(
+                  destinations: destinations,
+                  selectedIndex: _tabIndex,
                 ),
-                _PianoScreen(
-                  onHandoffCompleted: () => _setTab(4),
-                  linkedEditSaveId: _linkedEditProjectId == selectedProjectId
-                      ? _linkedEditSaveId
-                      : null,
-                  onDifferentSaveLoaded: _onInstrumentSaveLoaded,
-                ),
-                const PianoRollScreenV2(),
-                const _UnavailableSongWorkspace(),
-                SongwriterScreen(
-                  onEditInstrumentSave: _openLinkedSaveInInstrument,
-                ),
-                const _SettingsScreen(key: ValueKey('settings_screen')),
-              ],
-            ),
-      bottomNavigationBar:
-          _hydrating || _recoveryRequired != null || _startupFailure != null
-          ? null
-          : Container(
-              decoration: BoxDecoration(
-                color: StudioPalette.of(
-                  context,
-                ).surface.withValues(alpha: 0.96),
-                border: const Border(
-                  top: BorderSide(color: Color(0x4094A3B8), width: 0.5),
-                ),
-              ),
-              child: SafeArea(
-                child: SizedBox(
-                  height: 56,
-                  child: Row(
-                    children: [
-                      _NavTab(
-                        icon: Icons.music_note,
-                        label: 'Fretboard',
-                        active: _tabIndex == 0,
-                        onTap: () => _setTab(0),
-                      ),
-                      _NavTab(
-                        icon: Icons.piano,
-                        label: 'Piano',
-                        active: _tabIndex == 1,
-                        onTap: () => _setTab(1),
-                      ),
-                      _NavTab(
-                        icon: Icons.bar_chart_rounded,
-                        label: 'Roll',
-                        active: _tabIndex == 2,
-                        onTap: () => _setTab(2),
-                      ),
-                      _NavTab(
-                        icon: Icons.article_outlined,
-                        label: 'Song',
-                        active: _tabIndex == 3,
-                        semanticHint: 'Temporarily unavailable',
-                      ),
-                      _NavTab(
-                        icon: Icons.edit_outlined,
-                        label: 'Writer',
-                        active: _tabIndex == 4,
-                        onTap: () => _setTab(4),
-                      ),
-                      _NavTab(
-                        icon: Icons.settings_outlined,
-                        label: 'Settings',
-                        active: _tabIndex == 5,
-                        onTap: () => _setTab(5),
-                      ),
-                    ],
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeLeft: true,
+                    child: workspaces,
                   ),
                 ),
-              ),
-            ),
+              ],
+            )
+          : workspaces,
+      bottomNavigationBar: showNavigation && !railMode
+          ? StudioBottomNavBar(
+              destinations: destinations,
+              selectedIndex: _tabIndex,
+            )
+          : null,
     );
   }
+
+  List<AppNavDestination> _navDestinations() => [
+    AppNavDestination(
+      tabIndex: 0,
+      icon: Icons.music_note,
+      label: 'Fretboard',
+      onTap: () => _setTab(0),
+    ),
+    AppNavDestination(
+      tabIndex: 1,
+      icon: Icons.piano,
+      label: 'Piano',
+      onTap: () => _setTab(1),
+    ),
+    AppNavDestination(
+      tabIndex: 2,
+      icon: Icons.bar_chart_rounded,
+      label: 'Roll',
+      onTap: () => _setTab(2),
+    ),
+    const AppNavDestination(
+      tabIndex: songWorkspaceTabIndex,
+      icon: Icons.article_outlined,
+      label: 'Song',
+      semanticHint: 'Temporarily unavailable',
+    ),
+    AppNavDestination(
+      tabIndex: 4,
+      icon: Icons.edit_outlined,
+      label: 'Writer',
+      onTap: () => _setTab(4),
+    ),
+    AppNavDestination(
+      tabIndex: 5,
+      icon: Icons.settings_outlined,
+      label: 'Settings',
+      onTap: () => _setTab(5),
+      pinnedToBottom: true,
+    ),
+  ];
 
   Widget _buildStartupView() {
     final recovery = _recoveryRequired;
@@ -567,90 +581,6 @@ class _StartupRecoveryPrompt extends StatelessWidget {
       ),
     ],
   );
-}
-
-// ── Nav Tab ─────────────────────────────────────────────────────────────────
-
-class _NavTab extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-  final String? semanticHint;
-
-  const _NavTab({
-    required this.icon,
-    required this.label,
-    required this.active,
-    this.onTap,
-    this.semanticHint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = StudioPalette.of(context);
-    final tab = Semantics(
-      key: ValueKey('nav_$label'),
-      button: true,
-      enabled: onTap != null,
-      label: label,
-      hint: semanticHint,
-      onTap: onTap,
-      child: ExcludeSemantics(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (onTap == null)
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(icon, size: 24, color: palette.textMuted),
-                    Positioned(
-                      right: -2,
-                      bottom: -1,
-                      child: Icon(
-                        Icons.lock_outline,
-                        size: 12,
-                        color: palette.textMuted,
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Icon(
-                  icon,
-                  size: 24,
-                  color: active ? palette.sky : palette.textMuted,
-                ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: active ? palette.sky : palette.textMuted,
-                  fontSize: 11,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    return Expanded(
-      child: semanticHint == null
-          ? tab
-          : Tooltip(
-              message: semanticHint!,
-              excludeFromSemantics: true,
-              child: tab,
-            ),
-    );
-  }
 }
 
 class _UnavailableSongWorkspace extends StatelessWidget {
