@@ -640,10 +640,15 @@ class _StudioInstrumentWorkspaceState
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Row(
                 children: [
-                  Flexible(child: scaleButton()),
-                  const SizedBox(width: 8),
-                  Flexible(child: libraryButton()),
-                  const Spacer(),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(child: scaleButton()),
+                        const SizedBox(width: 8),
+                        Flexible(child: libraryButton()),
+                      ],
+                    ),
+                  ),
                   IconButton(
                     key: const Key('instrumentInspectorToggle'),
                     tooltip: _expanded
