@@ -80,7 +80,8 @@ records the single selection disclosure and compact accessible mode controls.
 
 The [implementation plan](PLAN.md) replaces whole-page instrument scrolling
 with a fixed playable surface and a bounded inspector. Compact portrait keeps
-it below the instrument; wide and short landscape put it alongside. Inspector
+it below the instrument; short landscape and shorter wide layouts put it
+alongside, and taller wide layouts dock it below a full-width canvas. Inspector
 tabs, collapse, theme changes and layout changes preserve mounted state.
 
 Voicings remain horizontal. **From notes** requires every captured pitch class,
@@ -175,3 +176,8 @@ closed and no new actionable issue was found.
 PRODUCT, DESIGN, README, Fretboard/Piano guides and Song/Writer guides describe
 the shipped behavior. AGENTS was reviewed and records the persistent fixed
 canvas, mounted panel, captured query and temporary Song contracts.
+
+## 2026-10-30 — Landscape rail and instrument dock
+
+- Shell: landscape ≥600px uses an 80px left navigation rail (Settings pinned at the bottom, Song disabled); portrait keeps the bottom bar. Workspaces are never recreated when switching.
+- Fretboard/Piano: wide layouts with ≥640px body height get a full-width scaled canvas (≤1.25×) and an inspector dock (three columns at ≥1100px). Short landscape and shorter wide layouts keep the side inspector.

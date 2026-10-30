@@ -20,7 +20,7 @@ Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESI
 
 ## Features
 
-The bottom navigation is labeled **Fretboard**, **Piano**, **Roll**, **Song**, **Writer**, and **Settings**. **Song is temporarily unavailable in V2**: its entry stays visible and disabled, while saved arrangements remain intact. Save System is a shared project feature rather than a bottom-navigation destination.
+The navigation (a bottom bar in portrait, a left rail in landscape) is labeled **Fretboard**, **Piano**, **Roll**, **Song**, **Writer**, and **Settings**. **Song is temporarily unavailable in V2**: its entry stays visible and disabled, while saved arrangements remain intact. Save System is a shared project feature rather than a navigation destination.
 
 Fretboard and Piano keep the instrument visible while a bounded Notes / Voicings / Setup inspector scrolls independently. Compact Input/View menus replace full-width mode bars. A single selection **Actions** sheet holds note details, Save idea and Add to Writer across all inspector tabs. Voicings use a horizontal carousel with **From notes** suggestions filtered by selected pitch classes and the active scale, when set, plus independent **By chord** browsing. See the [V2 implementation plan](docs/instrument-ux-v2/PLAN.md) and [verification evidence](docs/instrument-ux-v2/PROGRESS.md).
 
