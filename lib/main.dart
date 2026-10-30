@@ -278,7 +278,12 @@ class _AppShellState extends ConsumerState<_AppShell> {
                   child: MediaQuery.removePadding(
                     context: context,
                     removeLeft: true,
-                    child: workspaces,
+                    child: SafeArea(
+                      top: false,
+                      left: false,
+                      right: false,
+                      child: workspaces,
+                    ),
                   ),
                 ),
               ],

@@ -37,8 +37,10 @@ https://muzician.bytebakehouseinc.xyz/):
 
 ### 1. Adaptive navigation
 
-- `useNavigationRail(Size size)` returns `size.width >= 600 && size.width > size.height`.
-  This includes phone landscape (e.g. 844×390).
+- `useNavigationRail(Size size)` returns `size.width - kStudioRailWidth >= 600 && size.width > size.height`,
+  i.e. landscape viewports at least 680px wide (keeping ≥600px for the workspace
+  beside the 80px rail). This includes phone landscape (e.g. 844×390) but not
+  667×375 or 640×360, which keep the bottom bar so the workspaces stay wide.
 - `StudioNavigationRail`: ~80px wide, left edge, opaque `StudioPalette.surface`
   with a 0.5px right border matching the bar's top border. Workspace
   destinations (Fretboard, Piano, Roll, Song, Writer) are stacked from the top;
@@ -114,7 +116,7 @@ to describe the rail and the dock tier.
 ## Testing
 
 - Unit: `useNavigationRail` for 390×844 (false), 844×390 (true), 1024×768
-  (true), 1440×900 (true), 599×400 (false) and 700×800 (false); `dockCanvasScale`
+  (true), 1440×900 (true), 599×400 (false), 667×375 (false), 680×400 (true), 679×400 (false) and 700×800 (false); `dockCanvasScale`
   at 600, 640, 840, 1040 and 1400.
 - Widget: rail renders all destinations with `nav_*` keys, Song disabled with
   hint, Settings below the workspaces, tap callbacks; and the rail does not
