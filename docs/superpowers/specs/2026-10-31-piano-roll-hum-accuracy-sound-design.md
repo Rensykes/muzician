@@ -2,17 +2,17 @@
 
 ## Goals
 1. Improve Hum-to-MIDI accuracy: fewer spurious/split notes, fewer missed or merged notes, lower onset latency, fewer false notes in noisy rooms.
-2. Enable Hum-to-MIDI on web and desktop (macOS, Linux; no Windows runner exists today).
+2. Enable Hum-to-MIDI on web and desktop (macOS, Linux, Windows).
 3. Let the user swap the sound used by Piano Roll playback; the choice is saved with each roll.
 
 ## 1. Hum accuracy (pure Dart, `lib/schema/rules/mono_pitch_rules.dart` + `lib/utils/mic_pitch_session.dart`)
 - **Adaptive noise gate:** estimate the noise floor from the first ~300 ms of a recording; gate = max(`minHumAmplitude`, floor × margin). Replaces the fixed amplitude gate.
-- **Octave guard:** choose the lowest-lag CMNDF candidate below threshold; reject jumps of ±12 semitones between adjacent frames unless sustained.
+- **Octave guard:** 5-frame median over voiced frame frequencies removes isolated octave errors without delaying real changes.
 - **Pitch smoothing:** median-of-3 filter over frame pitch before segmentation.
 - **Segmentation:** bridge short unvoiced gaps, merge flicker, split only on a sustained pitch change (existing `switchFrames`/`deadbandCents` presets) or an energy re-attack; back-date note start to the first voiced frame.
 - **Latency:** hop 512 → 256 samples (~16 ms frames). Window stays ≥ 2× the max period of the lowest pitch.
 - Sensitivity presets (Strict/Balanced/Forgiving) are kept and retuned.
-- `RecordMicPitchSession` uses the stream's real sample rate (browsers may ignore the requested 16 kHz) and passes it to the estimator.
+- The `record` web worklet resamples to the requested 16 kHz, so the session keeps requesting 16 kHz.
 
 ## 2. Platform enablement
 - Remove the `isWeb` gate in `piano_roll_hum_recorder.dart`; keep the permission-denied and unsupported-platform messages (the latter only for platforms where `record` reports no support).
