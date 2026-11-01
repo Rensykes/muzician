@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -3757,6 +3758,37 @@ void main() {
     );
     expect(find.bySemanticsLabel(RegExp('silent tail bar 2')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('secondary mouse button does not resize a melody block', (
+    tester,
+  ) async {
+    final f = await _timelineFixture(tester, bars: 8, span: 2);
+    final handle = find.byKey(Key('melodyResize_${f.blockId}_0'));
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(handle),
+      buttons: kSecondaryButton,
+    );
+    await gesture.moveBy(const Offset(-140, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final block = f.container
+        .read(songwriterProvider)
+        .sections
+        .single
+        .lanes
+        .singleWhere((lane) => lane.id == f.laneId)
+        .blocks
+        .single;
+    expect(
+      block.spanBars,
+      2,
+      reason: 'A right-button drag must not resize the block',
+    );
   });
 }
 

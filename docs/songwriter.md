@@ -33,6 +33,9 @@ all transport and history controls retain 44-pixel touch targets. The Writer
 menu keeps these commands available as well. Project-key changes still require
 confirmation.
 
+Only the primary mouse button drags or resizes a melody block. Right-click and
+middle-click are ignored on web and desktop.
+
 Sections keep their name, bars, repeat count, Mixer icon, and **Section actions**
 menu in a compact row, reflowing when space is limited. **Remove section** lives
 in that menu and remains recoverable with Undo. Harmony lane headers identify
