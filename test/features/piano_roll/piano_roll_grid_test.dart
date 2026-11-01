@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -975,6 +976,130 @@ void main() {
       expect(container.read(pianoRollProvider).selectedNoteIds, isEmpty);
     },
   );
+
+  testWidgets('secondary mouse button does not paint a note', (tester) async {
+    final initial = _defaultPRState.copyWith(
+      activeTool: PianoRollTool.paint,
+      snapTicks: 4,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gesture = await tester.startGesture(
+      tester.getCenter(gridFinder),
+      buttons: kSecondaryButton,
+    );
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).notes,
+      isEmpty,
+      reason: 'A right-click must not paint a note',
+    );
+  });
+
+  testWidgets('secondary mouse button marquee selects nothing', (tester) async {
+    const note = PianoRollNote(
+      id: 'marquee-note',
+      midiNote: 60,
+      pitchClass: 'C',
+      noteWithOctave: 'C4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      notes: const [note],
+      activeTool: PianoRollTool.select,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gridRect = tester.getRect(gridFinder);
+    final gesture = await tester.startGesture(
+      gridRect.topLeft + const Offset(8, 8),
+      pointer: 7,
+      buttons: kSecondaryButton,
+    );
+    await gesture.moveTo(gridRect.topLeft + const Offset(1000, 1000));
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).selectedNoteIds,
+      isEmpty,
+      reason: 'A right-button marquee must not commit a selection',
+    );
+  });
+
+  testWidgets('secondary button move does not extend a paint drag', (
+    tester,
+  ) async {
+    final initial = _defaultPRState.copyWith(
+      activeTool: PianoRollTool.paint,
+      snapTicks: 4,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gridRect = tester.getRect(gridFinder);
+    final start = gridRect.topLeft + const Offset(20, 20);
+    final end = gridRect.topLeft + const Offset(200, 200);
+
+    final gesture = await tester.startGesture(start, pointer: 8);
+    await gesture.updateWithCustomEvent(
+      PointerMoveEvent(
+        pointer: 8,
+        position: end,
+        delta: end - start,
+        buttons: kSecondaryButton,
+      ),
+    );
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).notes,
+      hasLength(1),
+      reason: 'A secondary-button move must not paint another cell',
+    );
+  });
 }
 
 // Keep the old fake notifier for the playback playhead test.

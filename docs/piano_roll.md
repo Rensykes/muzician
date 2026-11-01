@@ -11,6 +11,13 @@ A quantized, timeline-based note editor rendered with `CustomPainter`. Supports 
 
 ## Selection Model
 
+### Mouse buttons
+
+Only the primary mouse button drives the roll. Right-click and middle-click are
+ignored on web and desktop, so they never start a marquee, brush, move or
+resize; the browser's own context menu is unaffected. Keyboard copy and paste
+still work in text fields.
+
 ### Selected column vs selected notes
 
 - **Selected column** (`selectedColumnTick`) is a timeline anchor used for detection and playback start.

@@ -18,6 +18,7 @@ import '../../store/settings_store.dart';
 import '../../theme/studio_theme.dart';
 import '../../utils/note_player.dart';
 import '../../utils/note_utils.dart';
+import '../../utils/pointer_buttons.dart';
 
 // ── Layout constants ────────────────────────────────────────────────────────
 
@@ -808,6 +809,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   // ── Raw pointer handlers (bypasses gesture arena — reliable on iOS) ──────
 
   void _onPointerDown(PointerDownEvent event, PianoRollState state) {
+    if (!isPrimaryPointerButton(event)) return;
     _pointers[event.pointer] = event.localPosition;
 
     if (state.activeTool == PianoRollTool.select && _pointers.length < 2) {
@@ -928,6 +930,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   }
 
   void _onPointerMove(PointerMoveEvent event, PianoRollState state) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    if (!isPrimaryPointerButton(event)) return;
     _pointers[event.pointer] = event.localPosition;
 
     if (_pinching && _pointers.length >= 2) {
@@ -1030,6 +1034,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
   }
 
   void _onPointerUp(PointerUpEvent event, PianoRollState state) {
+    if (!_pointers.containsKey(event.pointer)) return;
     final wasPinching = _pinching;
     _pointers.remove(event.pointer);
     _longPressTimer?.cancel();
