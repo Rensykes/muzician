@@ -50,7 +50,11 @@ class HumPcmFramer {
     final frame = rules.analyzeHumWindow(
       _ring,
       sampleRate: sampleRate,
-      timestampMs: (_processedSamples * 1000) ~/ sampleRate,
+      // Stamp the window centre (not its start): a window only needs to
+      // contain the tail of a new note to score high confidence, so a
+      // start-of-window timestamp detects onsets too early.
+      timestampMs:
+          ((_processedSamples + windowSamples ~/ 2) * 1000) ~/ sampleRate,
       gate: _noiseFloor.gate,
     );
     _noiseFloor.update(
