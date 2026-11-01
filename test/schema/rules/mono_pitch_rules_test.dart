@@ -335,5 +335,48 @@ void main() {
         expect(tracker.gate, rules.minHumAmplitude);
       });
     });
+
+    group('smoothPitchFrames', () {
+      PitchFrame voiced(int ts, double hz) => PitchFrame(
+        timestampMs: ts,
+        frequencyHz: hz,
+        midiNote: rules.frequencyToMidi(hz),
+        centsOffset: 0,
+        amplitude: 0.5,
+        confidence: 0.9,
+        isSilence: false,
+      );
+
+      test(
+        'replaces an isolated octave error with the neighbourhood median',
+        () {
+          final frames = [
+            voiced(0, 440),
+            voiced(16, 440),
+            voiced(32, 880),
+            voiced(48, 440),
+            voiced(64, 440),
+          ];
+          final smoothed = rules.smoothPitchFrames(frames);
+          expect(smoothed.map((f) => f.midiNote), everyElement(69));
+        },
+      );
+
+      test('keeps a real, sustained pitch change', () {
+        final frames = [
+          for (var i = 0; i < 5; i++) voiced(i * 16, 440),
+          for (var i = 5; i < 10; i++) voiced(i * 16, 523.25),
+        ];
+        final smoothed = rules.smoothPitchFrames(frames);
+        expect(smoothed[0].midiNote, 69);
+        expect(smoothed[9].midiNote, 72);
+      });
+
+      test('leaves frames with fewer than three voiced neighbours alone', () {
+        final frames = [voiced(0, 440), voiced(16, 880)];
+        final smoothed = rules.smoothPitchFrames(frames);
+        expect(smoothed[1].midiNote, 81);
+      });
+    });
   });
 }

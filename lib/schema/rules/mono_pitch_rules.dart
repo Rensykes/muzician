@@ -230,6 +230,38 @@ PitchFrame analyzeHumWindow(
   );
 }
 
+/// 5-frame median over the frequency of voiced frames. Removes isolated octave
+/// errors and one-frame glitches without delaying real pitch changes.
+List<PitchFrame> smoothPitchFrames(List<PitchFrame> frames) {
+  bool isVoiced(PitchFrame f) =>
+      !f.isSilence && f.midiNote != null && f.frequencyHz > 0;
+  final out = List<PitchFrame>.of(frames);
+  for (var i = 0; i < frames.length; i++) {
+    if (!isVoiced(frames[i])) continue;
+    final neighbourhood = <double>[];
+    for (var j = i - 2; j <= i + 2; j++) {
+      if (j < 0 || j >= frames.length) continue;
+      if (isVoiced(frames[j])) neighbourhood.add(frames[j].frequencyHz);
+    }
+    if (neighbourhood.length < 3) continue;
+    neighbourhood.sort();
+    final median = neighbourhood[neighbourhood.length ~/ 2];
+    final midi = frequencyToMidi(median);
+    if (midi == null) continue;
+    final f = frames[i];
+    out[i] = PitchFrame(
+      timestampMs: f.timestampMs,
+      frequencyHz: median,
+      midiNote: midi,
+      centsOffset: f.centsOffset,
+      amplitude: f.amplitude,
+      confidence: f.confidence,
+      isSilence: false,
+    );
+  }
+  return out;
+}
+
 List<DetectedMonoNote> segmentStableNotes(
   List<PitchFrame> frames, {
   HumSensitivity sensitivity = HumSensitivity.strict,
