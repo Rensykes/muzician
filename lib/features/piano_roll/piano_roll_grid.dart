@@ -1186,6 +1186,29 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     _totalPointerDelta = Offset.zero;
   }
 
+  void _onPointerCancel(PointerCancelEvent event) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    _pointers.remove(event.pointer);
+    _longPressTimer?.cancel();
+    _dragMode = _DragMode.none;
+    _dragNoteId = null;
+    _multiDragOriginals = {};
+    _multiResizeOriginalDurations = {};
+    _pinching = false;
+    _movedBeyondSlop = false;
+    _longPressConsumed = false;
+    _totalPointerDelta = Offset.zero;
+    if (!mounted) return;
+    setState(() {
+      _marqueeStart = null;
+      _marqueeCurrent = null;
+      _marqueeRect = null;
+      _marqueePreviewIds = const <String>{};
+      _paintBrushedCells = null;
+      _deleteBrushedNoteIds = null;
+    });
+  }
+
   void _manualScroll(Offset delta) {
     if (_hScroll.hasClients) {
       final newH = (_hScroll.offset - delta.dx).clamp(
@@ -1434,6 +1457,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
                               onPointerDown: (e) => _onPointerDown(e, state),
                               onPointerMove: (e) => _onPointerMove(e, state),
                               onPointerUp: (e) => _onPointerUp(e, state),
+                              onPointerCancel: _onPointerCancel,
                               onPointerSignal: (e) =>
                                   _onPointerSignal(e, state),
                               child: SingleChildScrollView(
