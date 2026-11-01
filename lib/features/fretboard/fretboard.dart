@@ -18,6 +18,7 @@ import '../../ui/core/out_of_key_dialog.dart';
 import '../../ui/core/project_off_scale_dialog.dart';
 import '../../utils/note_player.dart';
 import '../../utils/note_utils.dart' as note_utils;
+import '../../utils/pointer_buttons.dart';
 
 // ─── Layout Constants ──────────────────────────────────────────────────────────
 
@@ -223,7 +224,10 @@ class _GuitarFretboardState extends ConsumerState<GuitarFretboard> {
               vertical: _compact ? 2 : 8,
             ),
             child: Listener(
-              onPointerDown: (e) => _pointerDownLocal = e.localPosition,
+              onPointerDown: (e) {
+                if (!isPrimaryPointerButton(e)) return;
+                _pointerDownLocal = e.localPosition;
+              },
               onPointerUp: (e) {
                 final down = _pointerDownLocal;
                 if (down == null) return;
