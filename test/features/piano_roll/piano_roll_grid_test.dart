@@ -1212,8 +1212,8 @@ void main() {
     const note = PianoRollNote(
       id: 'scissors-note',
       midiNote: 66,
-      pitchClass: 'C',
-      noteWithOctave: 'C4',
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
       startTick: 0,
       durationTicks: 4,
     );
