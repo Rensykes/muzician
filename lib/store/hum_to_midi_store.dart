@@ -36,14 +36,23 @@ class HumToMidiNotifier extends Notifier<HumToMidiState> {
       liveMidiNote: () => null,
       startedAtMs: () => null,
     );
-    if (!await session.hasPermission()) {
+    final Stream<PitchFrame> stream;
+    try {
+      if (!await session.hasPermission()) {
+        state = state.copyWith(
+          status: HumToMidiStatus.error,
+          errorMessage: () => 'Microphone permission denied',
+        );
+        return;
+      }
+      stream = await session.start();
+    } on Object {
       state = state.copyWith(
         status: HumToMidiStatus.error,
-        errorMessage: () => 'Microphone permission denied',
+        errorMessage: () => 'Microphone unavailable',
       );
       return;
     }
-    final stream = await session.start();
     final startedAtMs = DateTime.now().millisecondsSinceEpoch;
     _framesSub = stream.listen((frame) {
       state = state.copyWith(
