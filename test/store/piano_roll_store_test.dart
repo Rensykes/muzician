@@ -570,4 +570,32 @@ void main() {
       expect(state.highlightedNotes, isEmpty);
     });
   });
+
+  test('setSound updates state and loadSnapshot restores it', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(pianoRollProvider.notifier);
+
+    notifier.setSound(PianoRollSound.bell);
+    expect(container.read(pianoRollProvider).sound, PianoRollSound.bell);
+
+    notifier.loadSnapshot(
+      PianoRollSnapshot(
+        tempo: 120,
+        numerator: 4,
+        denominator: 4,
+        totalMeasures: 4,
+        notes: const [],
+        pitchRangeStart: 48,
+        pitchRangeEnd: 84,
+        snapTicks: 1,
+        highlightedNotes: const [],
+        sound: PianoRollSound.synthLead,
+      ),
+    );
+    expect(container.read(pianoRollProvider).sound, PianoRollSound.synthLead);
+
+    notifier.reset();
+    expect(container.read(pianoRollProvider).sound, PianoRollSound.piano);
+  });
 }
