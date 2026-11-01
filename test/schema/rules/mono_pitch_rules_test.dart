@@ -3,6 +3,8 @@ import 'package:muzician/models/hum_to_midi.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/schema/rules/mono_pitch_rules.dart' as rules;
 
+import '../../support/hum_signal.dart';
+
 void main() {
   group('mono pitch rules', () {
     test('maps 440 Hz to MIDI 69', () {
@@ -10,6 +12,32 @@ void main() {
       expect(rules.frequencyToMidi(40.0), isNull);
       expect(rules.midiToNoteLabel(69), 'A4');
     });
+
+    test(
+      'analyzeHumWindow reports pitch for a tone and silence below the gate',
+      () {
+        final tone = renderHum([HumNote(midiToHz(60), 0, 100)], totalMs: 100);
+        final voiced = rules.analyzeHumWindow(
+          tone.sublist(0, 1024),
+          sampleRate: 16000,
+          timestampMs: 0,
+          gate: 0.02,
+        );
+        expect(voiced.midiNote, 60);
+        expect(voiced.isSilence, isFalse);
+        expect(voiced.confidence, greaterThan(0.6));
+
+        final quiet = rules.analyzeHumWindow(
+          tone.sublist(0, 1024).map((s) => s * 0.01).toList(),
+          sampleRate: 16000,
+          timestampMs: 32,
+          gate: 0.02,
+        );
+        expect(quiet.isSilence, isTrue);
+        expect(quiet.midiNote, isNull);
+        expect(quiet.timestampMs, 32);
+      },
+    );
 
     test('segments one stable note and ignores a short silence gap', () {
       const frames = <PitchFrame>[
