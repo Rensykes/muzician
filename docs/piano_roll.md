@@ -393,7 +393,7 @@ Each piano roll has one playback timbre, `PianoRollState.sound` (a `PianoRollSou
 - **Persistence:** saved as `PianoRollSnapshot.sound` (the enum's `name`, see [PianoRollSnapshot](#pianorollsnapshot-libmodelssave_systemdart)); `lib/store/save_system_store.dart`'s project-config rewrite carries `snap.sound` forward when it rebuilds a `PianoRollSnapshot`'s tempo/key/signature fields.
 - **Playback:** the default `pianoRollPlaybackSinkProvider` reads `pianoRollProvider`'s `sound` at the moment each note plays (via `pianoRollTimbrePlayerProvider` → `NotePlayer.previewTimbre`), so changing the sound mid-edit applies to the next playback without restarting.
 - **Grid auditions:** tapping/dragging a note in `PianoRollGrid` previews it with the same roll sound.
-- **Out of scope:** the Song workspace and Writer's embedded note editors are unaffected — they keep their existing legacy sound handling.
+- **Out of scope:** the Song workspace and Writer's embedded note editors are unaffected — they keep their existing legacy sound handling. `PianoRollScreenV2(showSound: false)` hides the Sound section of Roll Settings in both embedded hosts, since their `NotePattern`s have no field to persist a picked sound.
 
 ---
 

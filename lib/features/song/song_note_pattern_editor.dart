@@ -134,6 +134,13 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
         pianoRollPlaybackProvider.overrideWith(
           () => PianoRollPlaybackNotifier(),
         ),
+        // Re-apply the default sink so it reads this container's own
+        // pianoRollProvider (the editor's roll) rather than inheriting the
+        // parent/root container's sink, which would read the root roll's
+        // sound instead.
+        pianoRollPlaybackSinkProvider.overrideWith(
+          defaultPianoRollPlaybackSink,
+        ),
       ],
     );
   }
@@ -309,6 +316,7 @@ class _SongNotePatternEditorState extends ConsumerState<SongNotePatternEditor> {
           showScale: false,
           showSavePanels: false,
           showBackground: false,
+          showSound: false,
         ),
       ),
     );
