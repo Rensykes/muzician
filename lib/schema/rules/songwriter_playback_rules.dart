@@ -13,7 +13,9 @@ import '../../models/guitar_sound.dart' show GuitarTone;
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/song_project.dart';
 import '../../models/songwriter.dart';
+import '../../utils/guitar_synth.dart' show GuitarStrokeString, GuitarSynth;
 import '../../utils/note_utils.dart';
+import '../../utils/playback_voice_spec.dart';
 import 'fretboard_rules.dart';
 import 'piano_roll_playback_rules.dart' as timing;
 import 'songwriter_rules.dart';
@@ -53,6 +55,15 @@ typedef SongwriterSequencedNoteGroup = ({
   List<NotePatternNote> notes,
 });
 
+/// One guitar strum stroke: its [notes] are in stroke order, each carrying its
+/// own onset offset and clipped duration. It sounds as a single voice at the
+/// shared guitar tone, so there is no per-group sound.
+typedef SongwriterStrokeGroup = ({
+  double volume,
+  double pan,
+  List<NotePatternNote> notes,
+});
+
 /// One audible moment on the flattened songwriter timeline.
 class SongwriterPlaybackEvent {
   const SongwriterPlaybackEvent({
@@ -60,23 +71,43 @@ class SongwriterPlaybackEvent {
     this.noteGroups = const [],
     this.drumGroups = const [],
     this.sequencedNoteGroups = const [],
+    this.strokeGroups = const [],
   });
 
   final int tick;
   final List<SongwriterNoteGroup> noteGroups;
   final List<SongwriterDrumGroup> drumGroups;
   final List<SongwriterSequencedNoteGroup> sequencedNoteGroups;
+  final List<SongwriterStrokeGroup> strokeGroups;
 
   /// Flat views across all mix groups, for callers that ignore mixing.
   List<int> get midiNotes => [
     for (final g in noteGroups) ...g.midiNotes,
     for (final g in sequencedNoteGroups)
       for (final note in g.notes) note.midiNote,
+    for (final g in strokeGroups)
+      for (final note in g.notes) note.midiNote,
   ];
   List<DrumLaneId> get drumLanes => [
     for (final g in drumGroups) ...g.drumLanes,
   ];
 }
+
+/// The strings [group] renders: stroke order, onsets as flattened, and each
+/// string's audible duration after any boundary or next-stroke trim.
+List<GuitarStrokeString> strokeStrings(
+  SongwriterStrokeGroup group,
+  Duration tickDuration,
+) => [
+  for (final note in group.notes)
+    (
+      midi: note.midiNote,
+      onsetMs: note.onsetOffsetMs,
+      durationMs: GuitarSynth.durationMilliseconds(
+        timing.effectiveSequencedNoteDuration(tickDuration, note),
+      ),
+    ),
+];
 
 /// Midi pitches for a harmony block as an ascending stack from octave 4.
 ///
@@ -370,6 +401,8 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
           List<NotePatternNote>
         >
       >{};
+  // A strum stroke stays one group: it renders and plays as a single voice.
+  final strokesAt = <int, List<SongwriterStrokeGroup>>{};
 
   void addSequencedNote({
     required int tick,
@@ -592,24 +625,30 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
                   math.min(loopEnd - tick, endTick - tick),
                   nextStrokeTick == null ? gateTicks : nextStrokeTick - tick,
                 );
+                if (duration <= 0) continue;
+                final stroke = <NotePatternNote>[];
                 for (var i = 0; i < orderedPitches.length; i++) {
                   final onsetOffsetMs = i * 12;
-                  addSequencedNote(
-                    tick: tick,
-                    midiNote: orderedPitches[i],
-                    durationTicks: duration,
-                    onsetOffsetMs: onsetOffsetMs,
-                    durationOffsetMs: clippedDurationOffsetMs(
+                  stroke.add(
+                    NotePatternNote(
+                      id: 'strum_${block.id}_${tick}_$i',
+                      midiNote: orderedPitches[i],
+                      startTick: tick,
                       durationTicks: duration,
                       onsetOffsetMs: onsetOffsetMs,
-                      availableTicks: availableTicks,
+                      durationOffsetMs: clippedDurationOffsetMs(
+                        durationTicks: duration,
+                        onsetOffsetMs: onsetOffsetMs,
+                        availableTicks: availableTicks,
+                      ),
                     ),
-                    volume: mix.volume,
-                    pan: mix.pan,
-                    isGuitar: true,
-                    id: 'strum_${block.id}_${tick}_$i',
                   );
                 }
+                (strokesAt[tick] ??= []).add((
+                  volume: mix.volume,
+                  pan: mix.pan,
+                  notes: stroke,
+                ));
               }
             }
           case SongLaneKind.audio:
@@ -621,8 +660,12 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
     }
   }
 
-  final ticks = {...notesAt.keys, ...drumsAt.keys, ...sequencedAt.keys}.toList()
-    ..sort();
+  final ticks = {
+    ...notesAt.keys,
+    ...drumsAt.keys,
+    ...sequencedAt.keys,
+    ...strokesAt.keys,
+  }.toList()..sort();
   return [
     for (final tick in ticks)
       SongwriterPlaybackEvent(
@@ -650,8 +693,109 @@ List<SongwriterPlaybackEvent> flattenPlaybackEvents(
               notes: e.value,
             ),
         ],
+        strokeGroups: strokesAt[tick] ?? const [],
       ),
   ];
+}
+
+/// Hold time of one harmony/save-block stab: a measure, capped at 700 ms.
+Duration songwriterChordGate(Duration tickDuration, int measureTicks) =>
+    Duration(
+      microseconds: (tickDuration.inMicroseconds * measureTicks).clamp(
+        1,
+        700000,
+      ),
+    );
+
+/// Everything a transport run will synthesise, for ahead-of-time preparation.
+typedef SongwriterVoicePlan = ({
+  Set<PlaybackVoiceSpec> voices,
+  int peakSequencedVoices,
+});
+
+/// Derives the unique synthesised voices of the run over `[startTick, endTick)`
+/// plus the peak number of simultaneously held sequenced voices (stabs and
+/// duration-aware notes). Mirrors the transport's dispatch: stabs use the
+/// chord gate, guitar groups without an explicit tone follow
+/// [defaultGuitarTone], and a [metronome] contributes both click flavors.
+SongwriterVoicePlan playbackVoicePlan(
+  List<SongwriterPlaybackEvent> events, {
+  required Duration tickDuration,
+  required int measureTicks,
+  required int startTick,
+  required int endTick,
+  required bool metronome,
+  required GuitarTone defaultGuitarTone,
+}) {
+  final voices = <PlaybackVoiceSpec>{};
+  if (metronome) {
+    voices
+      ..add(const PlaybackVoiceSpec.click(accent: true))
+      ..add(const PlaybackVoiceSpec.click(accent: false));
+  }
+  final gate = songwriterChordGate(tickDuration, measureTicks);
+  // (microseconds, +1 start / -1 end)
+  final edges = <(int, int)>[];
+  void hold(int startUs, Duration duration) {
+    edges
+      ..add((startUs, 1))
+      ..add((startUs + duration.inMicroseconds, -1));
+  }
+
+  for (final event in events) {
+    if (event.tick < startTick || event.tick >= endTick) continue;
+    final tickUs = event.tick * tickDuration.inMicroseconds;
+    for (final group in event.noteGroups) {
+      voices.add(
+        PlaybackVoiceSpec.sequencedChord(
+          group.midiNotes,
+          duration: gate,
+          guitarTone: group.isGuitar ? defaultGuitarTone : null,
+        ),
+      );
+      hold(tickUs, gate);
+    }
+    for (final group in event.sequencedNoteGroups) {
+      final tone = group.isGuitar
+          ? group.guitarTone ?? defaultGuitarTone
+          : null;
+      for (final note in group.notes) {
+        final duration = timing.effectiveSequencedNoteDuration(
+          tickDuration,
+          note,
+        );
+        voices.add(
+          PlaybackVoiceSpec.sequencedNote(
+            note.midiNote,
+            duration: duration,
+            guitarTone: tone,
+          ),
+        );
+        hold(tickUs + note.onsetOffsetMs * 1000, duration);
+      }
+    }
+    for (final group in event.strokeGroups) {
+      final stroke = PlaybackVoiceSpec.guitarStroke(
+        strokeStrings(group, tickDuration),
+        guitarTone: defaultGuitarTone,
+      );
+      voices.add(stroke);
+      hold(tickUs, Duration(milliseconds: stroke.durationMs));
+    }
+    for (final group in event.drumGroups) {
+      for (final lane in group.drumLanes) {
+        voices.add(PlaybackVoiceSpec.drum(lane));
+      }
+    }
+  }
+  edges.sort((a, b) => a.$1 != b.$1 ? a.$1.compareTo(b.$1) : a.$2 - b.$2);
+  var held = 0;
+  var peak = 0;
+  for (final edge in edges) {
+    held += edge.$2;
+    if (held > peak) peak = held;
+  }
+  return (voices: voices, peakSequencedVoices: peak);
 }
 
 /// Per-tick harmony + save voicing stabs for one section, indexed from tick 0.

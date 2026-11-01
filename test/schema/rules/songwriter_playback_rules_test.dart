@@ -842,25 +842,15 @@ void main() {
           projectWith(sections: [section], guitarStrumPatterns: [pattern]),
           const [],
         );
-        final strumNotes =
-            events.single.sequencedNoteGroups
-                .expand((group) => group.notes)
-                .where((note) => note.midiNote >= 67)
-                .toList()
-              ..sort((a, b) => a.onsetOffsetMs.compareTo(b.onsetOffsetMs));
-        expect(strumNotes.map((note) => note.midiNote), [67, 71, 74]);
-        expect(strumNotes.map((note) => note.onsetOffsetMs), [0, 12, 24]);
-        expect(strumNotes.map((note) => note.durationTicks), [2, 2, 2]);
+        final stroke = events.single.strokeGroups.single;
+        expect(stroke.notes.map((note) => note.midiNote), [67, 71, 74]);
+        expect(stroke.notes.map((note) => note.onsetOffsetMs), [0, 12, 24]);
+        expect(stroke.notes.map((note) => note.durationTicks), [2, 2, 2]);
         expect(
           events.single.noteGroups.every((group) => !group.isGuitar),
           isTrue,
         );
-        expect(
-          events.single.sequencedNoteGroups.every(
-            (group) => group.isGuitar && group.guitarTone == null,
-          ),
-          isTrue,
-        );
+        expect(events.single.sequencedNoteGroups, isEmpty);
       },
     );
 
@@ -923,7 +913,7 @@ void main() {
         expect(events.map((event) => event.tick), [
           0,
         ]); // Primary chord still plays.
-        expect(events.single.sequencedNoteGroups, isEmpty);
+        expect(events.single.strokeGroups, isEmpty);
       },
     );
 
@@ -984,11 +974,9 @@ void main() {
           projectWith(sections: [section], guitarStrumPatterns: [pattern]),
           const [],
         );
-        final sequencedNotes = [
-          for (final event in events)
-            for (final group in event.sequencedNoteGroups) ...group.notes,
-        ];
-        expect(sequencedNotes, shouldStrum ? hasLength(3) : isEmpty);
+        final strokes = [for (final event in events) ...event.strokeGroups];
+        expect(strokes, shouldStrum ? hasLength(1) : isEmpty);
+        if (shouldStrum) expect(strokes.single.notes, hasLength(3));
       }
     });
 
@@ -1070,23 +1058,28 @@ void main() {
         ],
       );
 
-      final notes =
-          flattenPlaybackEvents(
-                projectWith(
-                  sections: [section],
-                  melodyPatterns: [melody],
-                  guitarStrumPatterns: [strum],
-                ),
-                const [],
-              )
-              .singleWhere((event) => event.tick == 15)
-              .sequencedNoteGroups
-              .expand((group) => group.notes)
-              .toList();
+      final event = flattenPlaybackEvents(
+        projectWith(
+          sections: [section],
+          melodyPatterns: [melody],
+          guitarStrumPatterns: [strum],
+        ),
+        const [],
+      ).singleWhere((event) => event.tick == 15);
+      final melodyNotes = event.sequencedNoteGroups
+          .expand((group) => group.notes)
+          .toList();
+      final strumNotes = event.strokeGroups.single.notes;
 
-      expect(notes.where((note) => note.id == 'boundary-melody'), hasLength(1));
-      expect(notes.where((note) => note.id.startsWith('strum_')), hasLength(3));
-      for (final note in notes) {
+      expect(
+        melodyNotes.where((note) => note.id == 'boundary-melody'),
+        hasLength(1),
+      );
+      expect(
+        strumNotes.where((note) => note.id.startsWith('strum_')),
+        hasLength(3),
+      );
+      for (final note in [...melodyNotes, ...strumNotes]) {
         final availableWindowMs = (16 - note.startTick) * 125;
         final effectiveDurationMs =
             note.durationTicks * 125 + note.durationOffsetMs;
@@ -1098,6 +1091,135 @@ void main() {
         );
         expect(effectiveDurationMs, greaterThan(0));
       }
+    });
+
+    group('strum strokes', () {
+      List<SongwriterPlaybackEvent> strokesOf(
+        List<GuitarStrumEvent> strokes, {
+        int patternLengthTicks = 16,
+        int lengthBars = 1,
+      }) {
+        final pattern = GuitarStrumPattern(
+          id: 'pattern',
+          name: 'Pattern',
+          lengthTicks: patternLengthTicks,
+          events: strokes,
+        );
+        final section = SongSection(
+          id: 'section',
+          lengthBars: lengthBars,
+          order: 0,
+          lanes: [
+            SongLane(
+              id: 'primary',
+              kind: SongLaneKind.harmony,
+              order: 0,
+              blocks: [
+                SongBlock(
+                  id: 'chord',
+                  startBar: 0,
+                  spanBars: lengthBars,
+                  chordSymbol: 'C',
+                  chordQuality: '',
+                  chordRootPc: 0,
+                  chordNotes: const ['C', 'E', 'G'],
+                ),
+              ],
+            ),
+            SongLane(
+              id: 'strum',
+              kind: SongLaneKind.guitarStrum,
+              order: 1,
+              anchorLaneId: 'primary',
+              blocks: [
+                SongBlock(
+                  id: 'block',
+                  startBar: 0,
+                  spanBars: lengthBars,
+                  patternId: 'pattern',
+                ),
+              ],
+            ),
+          ],
+        );
+        return flattenPlaybackEvents(
+          projectWith(sections: [section], guitarStrumPatterns: [pattern]),
+          const [],
+        );
+      }
+
+      int effectiveMs(NotePatternNote note) =>
+          note.durationTicks * 125 + note.durationOffsetMs;
+
+      test('up strokes sound the chord from the highest string down', () {
+        final events = strokesOf(const [
+          GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down),
+          GuitarStrumEvent(tick: 4, direction: GuitarStrumDirection.up),
+        ]);
+        final down = events.firstWhere((e) => e.tick == 0).strokeGroups.single;
+        final up = events.firstWhere((e) => e.tick == 4).strokeGroups.single;
+        expect(down.notes.map((n) => n.midiNote), [60, 64, 67]);
+        expect(up.notes.map((n) => n.midiNote), [67, 64, 60]);
+        expect(up.notes.map((n) => n.onsetOffsetMs), [0, 12, 24]);
+      });
+
+      test('each stroke is one group carrying its mix and string ids', () {
+        final events = strokesOf(const [
+          GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down),
+          GuitarStrumEvent(tick: 8, direction: GuitarStrumDirection.up),
+        ]);
+        final strokes = [for (final e in events) ...e.strokeGroups];
+        expect(strokes, hasLength(2));
+        expect(events.expand((e) => e.sequencedNoteGroups), isEmpty);
+        expect(strokes.first.notes.map((n) => n.id).toList(), [
+          'strum_block_0_0',
+          'strum_block_0_1',
+          'strum_block_0_2',
+        ]);
+        expect(strokes.every((s) => s.volume == 1.0 && s.pan == 0.0), isTrue);
+      });
+
+      test('the next stroke clips every string of the earlier stroke', () {
+        final events = strokesOf(const [
+          GuitarStrumEvent(tick: 0, direction: GuitarStrumDirection.down),
+          GuitarStrumEvent(tick: 1, direction: GuitarStrumDirection.up),
+        ]);
+        final first = events.firstWhere((e) => e.tick == 0).strokeGroups.single;
+        for (final note in first.notes) {
+          expect(
+            note.onsetOffsetMs + effectiveMs(note),
+            lessThanOrEqualTo(125),
+          );
+          expect(effectiveMs(note), greaterThan(0));
+        }
+        final second = events
+            .firstWhere((e) => e.tick == 1)
+            .strokeGroups
+            .single;
+        expect(effectiveMs(second.notes.first), greaterThan(125));
+      });
+
+      test('the pattern loop edge clips the last stroke before repeating', () {
+        final events = strokesOf(
+          const [
+            GuitarStrumEvent(tick: 3, direction: GuitarStrumDirection.down),
+          ],
+          patternLengthTicks: 4,
+          lengthBars: 1,
+        );
+        final struck = events.where((e) => e.strokeGroups.isNotEmpty).toList();
+        expect(struck.map((e) => e.tick), [3, 7, 11, 15]);
+        for (final event in struck) {
+          final stroke = event.strokeGroups.single;
+          for (final note in stroke.notes) {
+            expect(note.durationTicks, 1);
+            expect(
+              note.onsetOffsetMs + effectiveMs(note),
+              lessThanOrEqualTo(125),
+            );
+          }
+        }
+      });
     });
 
     test('save block resolves embedded snapshot to per-bar stabs', () {

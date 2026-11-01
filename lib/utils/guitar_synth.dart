@@ -3,6 +3,10 @@ import 'dart:typed_data';
 
 import '../models/guitar_sound.dart';
 
+/// One string of a stroke: [onsetMs] from the stroke start and the string's
+/// own [durationMs] from that onset.
+typedef GuitarStrokeString = ({int midi, int onsetMs, int durationMs});
+
 /// Offline plucked-string synthesis. No samples or network access are needed.
 ///
 /// A damped delay loop models the string, an allpass tunes fractional periods,
@@ -91,23 +95,78 @@ abstract final class GuitarSynth {
     final notes = spacing == Duration.zero
         ? midiNotes.map(safeMidi).toList(growable: false)
         : strokeNotes(midiNotes);
-    if (notes.isEmpty) return _wav(Float64List(0));
     final durationMs = durationMilliseconds(duration);
-    final length = sampleRate * durationMs ~/ 1000;
-    int onset(int index) =>
-        sampleRate * spacing.inMicroseconds * index ~/ 1000000;
-    final lastOnset = onset(notes.length - 1);
-    final mixed = Float64List(length + lastOnset);
+    return _mixPlucks([
+      for (var string = 0; string < notes.length; string++)
+        (
+          midi: notes[string],
+          onsetSample: sampleRate * spacing.inMicroseconds * string ~/ 1000000,
+          durationMs: durationMs,
+        ),
+    ], tone);
+  }
+
+  /// One cache key per distinct stroke; [strings] is in stroke order.
+  static String strokeCacheKey(
+    List<GuitarStrokeString> strings, {
+    GuitarTone tone = GuitarTone.clean,
+  }) =>
+      'guitar_stroke_v${cacheVersion}_${tone.name}_'
+      '${normalizeStroke(strings).map((s) => '${s.midi}.${s.onsetMs}.${s.durationMs}').join('_')}';
+
+  /// Renders one whole stroke: every string keeps its own onset and its own
+  /// (possibly clipped) duration inside a single PCM buffer, so the audible
+  /// stagger does not depend on the platform launching several voices.
+  /// [strings] are in stroke order; unisons are kept and no string limit is
+  /// applied, matching simultaneous Writer chords.
+  static Uint8List renderStroke(
+    List<GuitarStrokeString> strings, {
+    GuitarTone tone = GuitarTone.clean,
+  }) => _mixPlucks([
+    for (final s in normalizeStroke(strings))
+      (
+        midi: s.midi,
+        onsetSample: sampleRate * s.onsetMs ~/ 1000,
+        durationMs: s.durationMs,
+      ),
+  ], tone);
+
+  /// Clamps pitch, onset and duration the way rendering does, so equal
+  /// normalized strokes are the same cache entry.
+  static List<GuitarStrokeString> normalizeStroke(
+    List<GuitarStrokeString> strings,
+  ) => [
+    for (final s in strings)
+      (
+        midi: safeMidi(s.midi),
+        onsetMs: s.onsetMs < 0 ? 0 : s.onsetMs,
+        durationMs: durationMilliseconds(Duration(milliseconds: s.durationMs)),
+      ),
+  ];
+
+  static Uint8List _mixPlucks(
+    List<({int midi, int onsetSample, int durationMs})> plucks,
+    GuitarTone tone,
+  ) {
+    if (plucks.isEmpty) return _wav(Float64List(0));
+    var length = 0;
+    for (final pluck in plucks) {
+      length = math.max(
+        length,
+        pluck.onsetSample + sampleRate * pluck.durationMs ~/ 1000,
+      );
+    }
+    final mixed = Float64List(length);
     // Correlated unisons and dense chords must retain safe headroom.
-    final gain = 1.0 / math.sqrt(notes.length);
-    for (var string = 0; string < notes.length; string++) {
-      final pluck = _string(notes[string], durationMs, string);
-      final offset = onset(string);
+    final gain = 1.0 / math.sqrt(plucks.length);
+    for (var string = 0; string < plucks.length; string++) {
+      final pluck = plucks[string];
+      final samples = _string(pluck.midi, pluck.durationMs, string);
       // A small, deterministic pick-strength variation avoids machine-like
       // repeated string attacks without detuning the requested notes.
       final strength = gain * (1.0 - 0.025 * (string % 3));
-      for (var i = 0; i < pluck.length; i++) {
-        mixed[offset + i] += pluck[i] * strength;
+      for (var i = 0; i < samples.length; i++) {
+        mixed[pluck.onsetSample + i] += samples[i] * strength;
       }
     }
     // Distort the combined pickup signal, as a single guitar amplifier does.

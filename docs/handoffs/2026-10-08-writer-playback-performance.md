@@ -252,3 +252,60 @@ stop/progetto/dispose, e impedire che completamenti/cleanup vecchi modifichino
 player o clip del run nuovo. Conservare volume, pan, durata, overlap, offset,
 cache limitate e audition concorrente. Nessuna modifica a dipendenze/signing è
 stata necessaria per questo checkpoint.
+
+## Addendum: step 1 (prepare before the clock), macOS profile
+
+Implemented: ahead-of-clock voice preparation (`PlaybackVoiceSpec`,
+`playbackVoicePlan`, `NotePlayer.prepareForPlayback`,
+`playbackVoicePrepareSinkProvider`); see `docs/songwriter.md`. Measured on macOS
+profile (8 bars, `lib/profile_writer_playback.dart`, harness scripts in
+`build/profile_baseline`, untracked), no phone:
+
+- Drums + click: the 130-140 ms first-use spike in bar 0 is gone (max 4 ms at
+  120 BPM). Steady-state p50 rose from ~1.6 to ~3-4 ms (p95 unchanged); the cause
+  is not the render isolates (a synchronous-render A/B shows the same).
+- Any scenario with the Guitar Strum lane is **unchanged**: tick/event lateness
+  p50 ~34-48 ms, p95 ~210-300 ms, max ~310-475 ms, 18-38% voices cancelled,
+  23-39 players still created lazily. Synthesis and player construction were
+  not the dominant cost; the per-string sequenced voices (776 voices / 8 bars)
+  are. A prior diagnostic that skipped voice playback entirely showed strum
+  p95 ~15-50 ms, so the remaining stall is voice launch (plus ~13 ms p50 of UI
+  work in the strum scenario). Next step: consolidate per-string strum voices.
+- Not validated on iPhone; physical listening is still required.
+
+## Addendum: step 3 (one voice per strum stroke), macOS profile
+
+Implemented: a guitar strum stroke is one `SongwriterStrokeGroup`
+(`strokeGroups`) rendered as a single WAV (`GuitarSynth.renderStroke`, 12 ms
+stagger and per-string clipped durations inside the buffer), prepared as a
+`PlaybackVoiceKind.guitarStroke` spec and sounded through one sequenced voice
+(`NotePlayer.playSequencedStroke`). Sequenced pool capped at 32, unchanged
+sequenced volume/balance not re-sent, stroke WAV cache LRU-bounded at 256.
+Counters: `expected_voice_count` now counts a stroke once and
+`expected_stroke_count` / `expected_string_note_count` give the per-string
+count (776 string voices of earlier runs = 128 strokes + 8 stabs).
+
+Measured (`build/profile_baseline`, 8 bars, run-stats dispatch error =
+clock-anchored). Consolidation alone fixed strum + click (p95 ~210-300 -> 2-7
+ms) but not strum + drums (27-100 ms). Experiments, one change at a time:
+
+- Drum `play` disabled: strum + drums p95 35 -> 12 ms, so drum launches were the
+  remaining cost; the cost scaled with ringing voices (~15-25 launches/s).
+- Skipping redundant drum `setVolume`: no effect (reverted).
+- Drum/click source affinity (same sample on the same idle pool player;
+  audioplayers_darwin rebuilds its `AVPlayerItem` only when the URL changes):
+  drums + click at 160 BPM p95 36 -> 2.8 ms.
+- Sequenced-player affinity: no measurable effect (reverted).
+- Removing audioplayers' per-frame `FramePositionUpdater` (one platform
+  `getCurrentPosition` per ringing player per frame): strum + drums at 160 BPM
+  p95 47-72 -> 3 ms.
+
+Final (macOS profile): every strum/drums/click scenario at 120 and 160 BPM has
+tick/event dispatch p95 2.3-2.7 ms, 0 cancelled voices outside the intentional
+end-of-score stop, 0 lazily created players. Isolated spikes of 14-60 ms remain
+in about a third of the 160 BPM strum + drums runs (1-4 ticks of 128).
+The harness probe's tick origin was the claim published before preparation; it
+now re-anchors at the clock start, so earlier step1b/step3 probe p50 values
+include the prepare duration (run-stats values are unaffected).
+Not validated on iPhone; physical listening is still required (the stroke is a
+shared-amplifier mix, so level/distortion differ slightly from six voices).

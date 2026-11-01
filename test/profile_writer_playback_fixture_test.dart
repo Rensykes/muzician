@@ -11,6 +11,7 @@ import 'package:muzician/profile_writer_playback.dart'
         buildSongPlaybackProfileManifest,
         buildWriterPlaybackProfileManifest,
         buildWriterPlaybackProfileProviderOverrides,
+        verifyWriterPlaybackProfileFixtureVoices,
         verifyWriterPlaybackProfileFixtures;
 import 'package:muzician/models/song_project.dart' show SongPatternType;
 import 'package:muzician/store/save_system_store.dart';
@@ -37,14 +38,66 @@ void main() {
           .setMockMethodCallHandler(channel, null);
     }
   });
-  test('isolated Writer fixtures flatten to their expected voice counts', () {
+  test('isolated Writer fixtures flatten to their expected note counts', () {
     expect(verifyWriterPlaybackProfileFixtures(), {
       'plain_harmony': 32,
       'piano_harmony': 32,
       'six_note_strum': 144,
+      'strum_metronome': 816,
+      'drums_metronome': 160,
+      'strum_drums': 976,
+      'strum_drums_metronome': 976,
       'melody': 64,
       'recorded_clip': 4,
     });
+  });
+
+  test('a strum stroke is one voice however many strings it carries', () {
+    expect(verifyWriterPlaybackProfileFixtureVoices(), {
+      'plain_harmony': 32,
+      'piano_harmony': 32,
+      // 8 bars: 16 strokes replace 96 string notes.
+      'six_note_strum': 64,
+      // 8 bars x 16 strokes replace 768 string notes.
+      'strum_metronome': 176,
+      'drums_metronome': 160,
+      'strum_drums': 336,
+      'strum_drums_metronome': 336,
+      'melody': 64,
+      'recorded_clip': 4,
+    });
+  });
+
+  test('load scenarios schedule dense strum, drum, and metronome settings', () {
+    final strumDrums = buildWriterPlaybackProfileManifest(
+      scenario: 'strum_drums_metronome',
+      tempo: 160,
+    );
+    expect(strumDrums['bars'], 8);
+    expect(strumDrums['metronome_enabled'], isTrue);
+    expect(strumDrums['expected_drum_hit_count'], 160);
+    // Per bar: one harmony stab + 16 strokes + 16 hats + 2 kicks + 2 snares.
+    expect(strumDrums['expected_event_count'], 8 * 16);
+    expect(strumDrums['expected_note_count'], 8 * (6 + 96));
+    expect(strumDrums['expected_stroke_count'], 8 * 16);
+    expect(strumDrums['expected_string_note_count'], 8 * 96);
+    expect(strumDrums['expected_voice_count'], 8 * (6 + 16));
+
+    final drums = buildWriterPlaybackProfileManifest(
+      scenario: 'drums_metronome',
+    );
+    expect(drums['metronome_enabled'], isTrue);
+    expect(drums['expected_voice_count'], 0);
+    expect(drums['expected_drum_hit_count'], 160);
+
+    final strum = buildWriterPlaybackProfileManifest(
+      scenario: 'strum_metronome',
+    );
+    expect(strum['metronome_enabled'], isTrue);
+    expect(strum['expected_drum_hit_count'], 0);
+
+    final noClick = buildWriterPlaybackProfileManifest(scenario: 'strum_drums');
+    expect(noClick['metronome_enabled'], isFalse);
   });
 
   test('60-second schedule manifest records exact score and voice counts', () {
@@ -83,6 +136,11 @@ void main() {
     expect(offsets.length, greaterThan(1));
     expect(offsets.values.fold<int>(0, (sum, count) => sum + count), 540);
     expect(manifest['expected_max_note_overlap'], greaterThanOrEqualTo(6));
+    // 30 bars x 2 six-string strokes: 360 strings sound as 60 voices.
+    expect(manifest['expected_note_count'], 540);
+    expect(manifest['expected_stroke_count'], 60);
+    expect(manifest['expected_string_note_count'], 360);
+    expect(manifest['expected_voice_count'], 540 - 360 + 60);
   });
 
   test(

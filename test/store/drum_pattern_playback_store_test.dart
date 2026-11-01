@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/drum_pattern_playback_store.dart';
+import 'package:muzician/store/playback_voice_prepare_sink.dart';
+import 'package:muzician/utils/playback_voice_spec.dart';
 
 void main() {
   group('DrumPatternPlaybackNotifier', () {
@@ -67,6 +69,58 @@ void main() {
       expect(state.currentTick, isNull);
     });
 
+    test(
+      'prepares the pattern lanes before the first hit; Stop aborts',
+      () async {
+        final prepare = Completer<void>();
+        final prepared = <Set<PlaybackVoiceSpec>>[];
+        events = [];
+        final c = ProviderContainer(
+          overrides: [
+            playbackVoicePrepareSinkProvider.overrideWithValue((
+              voices, {
+              sequencedPlayers = 0,
+            }) {
+              prepared.add(voices.toSet());
+              return prepare.future;
+            }),
+            drumPatternPlaybackSinkProvider.overrideWithValue((
+              lanes,
+              volume,
+              pan,
+            ) async {
+              events.add((lanes: lanes, volume: volume));
+            }),
+          ],
+        );
+        addTearDown(c.dispose);
+        final notifier = c.read(drumPatternPlaybackProvider.notifier);
+
+        final run = notifier.start(pattern: pattern(), tempo: 6000);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(prepared, [
+          {
+            const PlaybackVoiceSpec.drum(DrumLaneId.kick),
+            const PlaybackVoiceSpec.drum(DrumLaneId.snare),
+          },
+        ]);
+        expect(events, isEmpty);
+        expect(
+          c.read(drumPatternPlaybackProvider).status,
+          DrumPatternPlaybackStatus.playing,
+        );
+
+        notifier.stop();
+        prepare.complete();
+        await run;
+        expect(events, isEmpty);
+        expect(
+          c.read(drumPatternPlaybackProvider).status,
+          DrumPatternPlaybackStatus.idle,
+        );
+      },
+    );
+
     test('start is a no-op while already playing', () async {
       final c = makeContainer();
       final notifier = c.read(drumPatternPlaybackProvider.notifier);
@@ -80,64 +134,63 @@ void main() {
       notifier.stop();
     });
 
-    test(
-      'loop clock is wall-anchored: per-loop body cost does not accumulate '
-      'as drift',
-      () async {
-        // One active hit per 8-tick loop carries a heavy synchronous cost.
-        // Without wall-clock anchoring this is added on top of every loop, so
-        // reaching the 5th hit takes far longer than the ideal span. Anchored,
-        // the cost is absorbed by the seven cost-free ticks that follow it.
-        final fifthHit = Completer<void>();
-        var hits = 0;
-        final c = ProviderContainer(
-          overrides: [
-            drumPatternPlaybackSinkProvider.overrideWithValue((
-              lanes,
-              volume,
-              pan,
-            ) async {
-              hits++;
-              if (hits >= 5) {
-                if (!fifthHit.isCompleted) fifthHit.complete();
-                return; // Measure time to *reach* the 5th hit, excluding cost.
-              }
-              // Synchronous busy-wait (runs inline before any await),
-              // simulating per-hit audio/UI work on the loop isolate.
-              final spin = Stopwatch()..start();
-              while (spin.elapsedMilliseconds < 12) {
-                // Busy-wait.
-              }
-            }),
-          ],
-        );
-        addTearDown(c.dispose);
+    test('loop clock is wall-anchored: per-loop body cost does not accumulate '
+        'as drift', () async {
+      // One active hit per 8-tick loop carries a heavy synchronous cost.
+      // Without wall-clock anchoring this is added on top of every loop, so
+      // reaching the 5th hit takes far longer than the ideal span. Anchored,
+      // the cost is absorbed by the seven cost-free ticks that follow it.
+      final fifthHit = Completer<void>();
+      var hits = 0;
+      final c = ProviderContainer(
+        overrides: [
+          drumPatternPlaybackSinkProvider.overrideWithValue((
+            lanes,
+            volume,
+            pan,
+          ) async {
+            hits++;
+            if (hits >= 5) {
+              if (!fifthHit.isCompleted) fifthHit.complete();
+              return; // Measure time to *reach* the 5th hit, excluding cost.
+            }
+            // Synchronous busy-wait (runs inline before any await),
+            // simulating per-hit audio/UI work on the loop isolate.
+            final spin = Stopwatch()..start();
+            while (spin.elapsedMilliseconds < 12) {
+              // Busy-wait.
+            }
+          }),
+        ],
+      );
+      addTearDown(c.dispose);
 
-        const p = DrumPattern(
-          id: 'dp',
-          name: 'Beat',
-          lengthTicks: 8,
-          lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
-        );
+      const p = DrumPattern(
+        id: 'dp',
+        name: 'Beat',
+        lengthTicks: 8,
+        lanes: [
+          DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
+        ],
+      );
 
-        final notifier = c.read(drumPatternPlaybackProvider.notifier);
-        final clock = Stopwatch()..start();
-        // tempo 7500 → tick = (60000 / 7500) / 4 = 2ms. Loop span = 8 × 2 =
-        // 16ms. The 5th hit is at the start of the 5th loop → tick 32 → 64ms
-        // ideal. Four intervening hits inject 4 × 12 = 48ms of cost; anchored
-        // that fits within the 64ms span. Unanchored total ≈ 64 + 48 = 112ms.
-        unawaited(notifier.start(pattern: p, tempo: 7500));
-        await fifthHit.future;
-        final elapsedMs = clock.elapsedMilliseconds;
-        notifier.stop();
+      final notifier = c.read(drumPatternPlaybackProvider.notifier);
+      final clock = Stopwatch()..start();
+      // tempo 7500 → tick = (60000 / 7500) / 4 = 2ms. Loop span = 8 × 2 =
+      // 16ms. The 5th hit is at the start of the 5th loop → tick 32 → 64ms
+      // ideal. Four intervening hits inject 4 × 12 = 48ms of cost; anchored
+      // that fits within the 64ms span. Unanchored total ≈ 64 + 48 = 112ms.
+      unawaited(notifier.start(pattern: p, tempo: 7500));
+      await fifthHit.future;
+      final elapsedMs = clock.elapsedMilliseconds;
+      notifier.stop();
 
-        expect(
-          elapsedMs,
-          lessThan(88),
-          reason: 'drift not absorbed; reached 5th hit in ${elapsedMs}ms',
-        );
-      },
-    );
+      expect(
+        elapsedMs,
+        lessThan(88),
+        reason: 'drift not absorbed; reached 5th hit in ${elapsedMs}ms',
+      );
+    });
 
     test('empty pattern does not enter playing state', () async {
       final c = makeContainer();
@@ -159,7 +212,9 @@ void main() {
       final backing = <List<int>>[];
       final c = ProviderContainer(
         overrides: [
-          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol, pan) async {}),
+          drumPatternPlaybackSinkProvider.overrideWithValue(
+            (lanes, vol, pan) async {},
+          ),
           drumPatternBackingSinkProvider.overrideWithValue((notes) {
             backing.add(notes);
           }),
@@ -173,7 +228,9 @@ void main() {
         id: 'p',
         name: 'b',
         lengthTicks: 4,
-        lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
+        lanes: [
+          DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
+        ],
       );
       unawaited(
         notifier.start(
@@ -197,7 +254,9 @@ void main() {
       final backing = <List<int>>[];
       final c = ProviderContainer(
         overrides: [
-          drumPatternPlaybackSinkProvider.overrideWithValue((lanes, vol, pan) async {}),
+          drumPatternPlaybackSinkProvider.overrideWithValue(
+            (lanes, vol, pan) async {},
+          ),
           drumPatternBackingSinkProvider.overrideWithValue((notes) {
             backing.add(notes);
           }),
@@ -209,7 +268,9 @@ void main() {
         id: 'p',
         name: 'b',
         lengthTicks: 4,
-        lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
+        lanes: [
+          DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
+        ],
       );
       unawaited(notifier.start(pattern: p, tempo: 6000));
       await Future<void>.delayed(const Duration(milliseconds: 40));

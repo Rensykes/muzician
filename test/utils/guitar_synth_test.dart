@@ -104,4 +104,103 @@ void main() {
     expect(pcm.length, expected);
     expect(pcm.last, 0);
   });
+
+  group('renderStroke', () {
+    int sampleAt(int ms) => GuitarSynth.sampleRate * ms ~/ 1000;
+
+    double energy(List<double> pcm, int fromMs, int toMs) {
+      var sum = 0.0;
+      for (var i = sampleAt(fromMs); i < sampleAt(toMs); i++) {
+        sum += pcm[i].abs();
+      }
+      return sum;
+    }
+
+    test('places each string at its own onset inside one buffer', () {
+      final pcm = samples(
+        GuitarSynth.renderStroke(const [
+          (midi: 40, onsetMs: 0, durationMs: 250),
+          (midi: 47, onsetMs: 12, durationMs: 238),
+          (midi: 52, onsetMs: 24, durationMs: 226),
+        ]),
+      );
+      expect(pcm.length, sampleAt(250));
+      expect(pcm.first, 0);
+      expect(pcm.last, 0);
+      expect(energy(pcm, 0, 12), greaterThan(0));
+    });
+
+    test('a lone late string is silent before its onset', () {
+      final pcm = samples(
+        GuitarSynth.renderStroke(const [
+          (midi: 52, onsetMs: 24, durationMs: 100),
+        ]),
+      );
+      expect(pcm.length, sampleAt(124));
+      expect(energy(pcm, 0, 24), 0);
+      expect(energy(pcm, 24, 124), greaterThan(0));
+    });
+
+    test('honors a shorter per-string duration by releasing that string', () {
+      final clipped = samples(
+        GuitarSynth.renderStroke(const [
+          (midi: 40, onsetMs: 0, durationMs: 60),
+          (midi: 64, onsetMs: 12, durationMs: 300),
+        ]),
+      );
+      final full = samples(
+        GuitarSynth.renderStroke(const [
+          (midi: 40, onsetMs: 0, durationMs: 300),
+          (midi: 64, onsetMs: 12, durationMs: 300),
+        ]),
+      );
+      expect(clipped.length, full.length);
+      // Identical until the clipped string's release begins.
+      for (var i = 0; i < sampleAt(10); i++) {
+        expect(clipped[i], closeTo(full[i], 1e-3));
+      }
+      expect(energy(clipped, 70, 300), lessThan(energy(full, 70, 300)));
+    });
+
+    test('is deterministic, bounded and total length is the latest end', () {
+      const strings = [
+        (midi: 40, onsetMs: 0, durationMs: 100),
+        (midi: 47, onsetMs: 12, durationMs: 150),
+        (midi: 52, onsetMs: 24, durationMs: 40),
+      ];
+      final wav = GuitarSynth.renderStroke(strings, tone: GuitarTone.distorted);
+      expect(
+        wav,
+        GuitarSynth.renderStroke(strings, tone: GuitarTone.distorted),
+      );
+      final pcm = samples(wav);
+      expect(pcm.length, sampleAt(12 + 150));
+      expect(pcm.map((v) => v.abs()).reduce(math.max), lessThan(.851));
+    });
+
+    test('an empty stroke renders an empty WAV', () {
+      expect(GuitarSynth.renderStroke(const []).length, 44);
+    });
+
+    test('cache key tracks tone, pitch order, onsets and durations', () {
+      const strings = [
+        (midi: 40, onsetMs: 0, durationMs: 100),
+        (midi: 47, onsetMs: 12, durationMs: 90),
+      ];
+      final key = GuitarSynth.strokeCacheKey(strings);
+      expect(key, contains('v3_clean'));
+      expect(
+        GuitarSynth.strokeCacheKey(strings, tone: GuitarTone.distorted),
+        isNot(key),
+      );
+      expect(GuitarSynth.strokeCacheKey(strings.reversed.toList()), isNot(key));
+      expect(
+        GuitarSynth.strokeCacheKey([
+          strings.first,
+          (midi: 47, onsetMs: 12, durationMs: 80),
+        ]),
+        isNot(key),
+      );
+    });
+  });
 }

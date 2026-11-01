@@ -377,6 +377,19 @@ tick-indexed event list the transport walks:
   selected Fretboard Harmony source and stay silent when it is unassigned or has
   no playable Harmony at that step. Named exact Harmony uses its native
   register and positions here as in ordinary Writer playback and Song import.
+  Each step is one `strokeGroups` entry on its event: the strings in stroke
+  order (down: low to high, up: reversed) with their 12 ms onsets and their own
+  clipped durations (`strokeStrings`). The transport sends it to
+  `songwriterGuitarStrokeSinkProvider` and `NotePlayer.playSequencedStroke`
+  sounds it as **one** voice: `GuitarSynth.renderStroke` mixes the strings into
+  a single WAV (shared amplifier, as for simultaneous Harmony), so the stagger
+  and per-string releases are sample-exact and independent of platform
+  scheduling. The voice releases at the stroke's latest string end and stops
+  through `stopSequencedNotes` like any sequenced voice. Melody notes keep the
+  per-note `sequencedNoteGroups` path. Because the strings share one amplifier
+  and gain, a stroke's level and distortion interaction differ slightly from
+  six independent voices; the 12 ms stagger (not
+  `GuitarSynth.strumSpacing`, which is the 25 ms Fretboard audition) is kept.
 - The metronome click is unchanged and still gated by `settingsProvider.metronomeEnabled`.
 
 Sinks are injectable providers (`songwriterNoteSinkProvider`,
@@ -384,6 +397,26 @@ Sinks are injectable providers (`songwriterNoteSinkProvider`,
 capture events. The sheet UI highlights the active bar cell via
 `songwriterActivePositionProvider` (global bar → section instance + local bar) and
 auto-scrolls the active section into view.
+
+Before the clock starts, `startPlayback` derives the run's synthesised voices
+(`playbackVoicePlan` in `songwriter_playback_rules.dart`) and readies them through
+`playbackVoicePrepareSinkProvider`: WAVs render on background isolates
+(`compute`, synchronous fallback), land in `NotePlayer`'s existing caches under
+the keys `PlaybackVoiceSpec` shares with the play paths, and sequenced players are
+pre-created. A strum stroke is prepared as one `guitarStroke` spec (its WAV is
+rendered off the UI isolate and LRU-bounded at 256 cached strokes, touched as a
+set so a run's own strokes never evict each other). The sequenced player pool is
+capped at 32 (the plan pre-creates its peak, at most 16); a voice that finds the
+pool exhausted is dropped, and unchanged volume/balance are not re-sent to a
+reused player. Pool players are created without audioplayers' per-frame
+position updater (nothing here listens to position, and the updater queries the
+platform for every ringing player each frame). Drum and click one-shots pick an
+idle pool player that already holds their sample, because the Darwin player
+rebuilds its native item whenever the source URL changes; a ringing player is
+never reused for the same sample, so retriggers are not swallowed.
+Preparation is best effort (a failure falls back to lazy synthesis)
+and Stop during it aborts through `_version`. The drum audition loop prepares its
+lanes the same way. Override the sink in tests so they need no audio.
 
 ### Drum pattern editor (`lib/features/song/drum_machine_editor.dart`)
 

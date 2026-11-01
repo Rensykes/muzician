@@ -1,6 +1,11 @@
 /// Isolated device harness for Writer playback profiling.
 ///
-/// Run with `flutter run --profile -t lib/profile_writer_playback.dart`. It
+/// Run with `flutter run --profile -t lib/profile_writer_playback.dart`. Pass
+/// `--dart-define=WRITER_PROFILE_SCENARIO=<name>`, `WRITER_PROFILE_TEMPO_BPM`,
+/// `WRITER_PROFILE_AUTOSTART=true`, and optionally
+/// `WRITER_PROFILE_EXIT_ON_COMPLETE=true` to print one `WRITER_PROFILE_RESULT`
+/// JSON line and quit. Load scenarios: `strum_metronome`, `drums_metronome`,
+/// `strum_drums`, `strum_drums_metronome`. It
 /// replaces Writer/settings providers with synthetic in-memory state and puts
 /// its controlled clip under the app's temporary directory. It never hydrates
 /// or writes a user project or saved audio file.
@@ -48,6 +53,7 @@ import 'store/song_audio_repository.dart';
 import 'store/song_audio_player_sink.dart';
 import 'store/song_playback_store.dart';
 import 'store/song_project_store.dart';
+import 'store/drum_pattern_playback_store.dart';
 import 'store/songwriter_audio_sink.dart';
 import 'store/songwriter_playback_store.dart';
 import 'store/songwriter_store.dart';
@@ -81,6 +87,7 @@ const _fixtureScenario = String.fromEnvironment(
   defaultValue: 'plain_harmony',
 );
 const _autoStart = bool.fromEnvironment('WRITER_PROFILE_AUTOSTART');
+const _exitOnComplete = bool.fromEnvironment('WRITER_PROFILE_EXIT_ON_COMPLETE');
 const _auditionDurationMs = int.fromEnvironment(
   'WRITER_PROFILE_AUDITION_DURATION_MS',
   defaultValue: 1000,
@@ -111,6 +118,42 @@ const _qaProjectId = 'writer_profile_qa_project';
 const _qaFretboardSaveId = 'writer_profile_fretboard_cmaj7';
 const _qaPianoSaveId = 'writer_profile_piano_cmaj7';
 const _qaStrumSaveId = 'writer_profile_fretboard_c13';
+const _qaAm7SaveId = 'writer_profile_fretboard_am7';
+const _qaFmaj7SaveId = 'writer_profile_fretboard_fmaj7';
+const _qaG7SaveId = 'writer_profile_fretboard_g7';
+
+/// One bar per chord, repeated across the fixture (C13 – Am7 – Fmaj7 – G7).
+const _qaProgressionSaveIds = [
+  _qaStrumSaveId,
+  _qaAm7SaveId,
+  _qaFmaj7SaveId,
+  _qaG7SaveId,
+];
+
+// Dense mixed-load scenarios for the Writer playback performance baseline.
+// `*_metronome` variants enable the click; every strum scenario assigns one
+// sixteenth-note Guitar Strum lane to the progression, every drum scenario
+// adds a kick/snare/closed-hi-hat lane with sixteenth-note hats.
+const _strumLoadScenarios = {
+  'strum_metronome',
+  'strum_drums',
+  'strum_drums_metronome',
+};
+const _drumLoadScenarios = {
+  'drums_metronome',
+  'strum_drums',
+  'strum_drums_metronome',
+};
+const _metronomeScenarios = {
+  'strum_metronome',
+  'drums_metronome',
+  'strum_drums_metronome',
+};
+const _loadStrumPatternId = 'qa_sixteenth_strum_pattern';
+const _loadDrumPatternId = 'qa_sixteenth_hat_pattern';
+const _loadDrumHitsPerBar = 20;
+const _loadStrumVoicesPerBar = 16 * 6;
+const _loadHarmonyStabVoicesPerBar = 6;
 
 const _qaAsset = AudioAsset(
   id: _qaAssetId,
@@ -247,11 +290,89 @@ SaveSystemState _saveStateFor(String scenario, {int tempo = _tempo}) {
         updatedAt: 3,
         order: 2,
       ),
+      _progressionSave(
+        id: _qaAm7SaveId,
+        name: 'Am7 • Six-note Chord-mode Fretboard',
+        order: 3,
+        symbol: 'Am7',
+        notes: const ['A', 'C', 'E', 'G'],
+        cells: const [
+          FretCoordinate(stringIndex: 0, fret: 0, noteName: 'E'),
+          FretCoordinate(stringIndex: 1, fret: 1, noteName: 'C'),
+          FretCoordinate(stringIndex: 2, fret: 0, noteName: 'G'),
+          FretCoordinate(stringIndex: 3, fret: 2, noteName: 'E'),
+          FretCoordinate(stringIndex: 4, fret: 0, noteName: 'A'),
+          FretCoordinate(stringIndex: 5, fret: 5, noteName: 'A'),
+        ],
+      ),
+      _progressionSave(
+        id: _qaFmaj7SaveId,
+        name: 'Fmaj7 • Six-note Chord-mode Fretboard',
+        order: 4,
+        symbol: 'Fmaj7',
+        notes: const ['F', 'A', 'C', 'E'],
+        cells: const [
+          FretCoordinate(stringIndex: 0, fret: 0, noteName: 'E'),
+          FretCoordinate(stringIndex: 1, fret: 1, noteName: 'C'),
+          FretCoordinate(stringIndex: 2, fret: 2, noteName: 'A'),
+          FretCoordinate(stringIndex: 3, fret: 3, noteName: 'F'),
+          FretCoordinate(stringIndex: 4, fret: 3, noteName: 'C'),
+          FretCoordinate(stringIndex: 5, fret: 1, noteName: 'F'),
+        ],
+      ),
+      _progressionSave(
+        id: _qaG7SaveId,
+        name: 'G7 • Six-note Chord-mode Fretboard',
+        order: 5,
+        symbol: 'G7',
+        notes: const ['G', 'B', 'D', 'F'],
+        cells: const [
+          FretCoordinate(stringIndex: 0, fret: 1, noteName: 'F'),
+          FretCoordinate(stringIndex: 1, fret: 0, noteName: 'B'),
+          FretCoordinate(stringIndex: 2, fret: 0, noteName: 'G'),
+          FretCoordinate(stringIndex: 3, fret: 0, noteName: 'D'),
+          FretCoordinate(stringIndex: 4, fret: 2, noteName: 'B'),
+          FretCoordinate(stringIndex: 5, fret: 3, noteName: 'G'),
+        ],
+      ),
     ],
     hydrated: true,
     selectedProjectId: _qaProjectId,
   );
 }
+
+SaveEntry _progressionSave({
+  required String id,
+  required String name,
+  required int order,
+  required String symbol,
+  required List<String> notes,
+  required List<FretCoordinate> cells,
+}) => SaveEntry(
+  id: id,
+  name: name,
+  folderId: _qaProjectId,
+  snapshot: HarmonyChordSnapshot(
+    harmonyInstrument: HarmonyLaneInstrument.fretboard,
+    writerBlock: WriterBlockSnapshot(
+      laneKind: SongLaneKind.harmony,
+      chordSymbol: symbol,
+      chordNotes: notes,
+    ),
+    instrumentState: FretboardSnapshot(
+      tuning: TuningName.standard,
+      numFrets: 12,
+      capo: 0,
+      selectedCells: cells,
+      selectedNotes: notes,
+      viewMode: FretboardViewMode.exact,
+      inputMode: FretboardInputMode.chord,
+    ),
+  ),
+  createdAt: order + 1,
+  updatedAt: order + 1,
+  order: order,
+);
 
 SongwriterProjectSnapshot _fixtureFor(
   String scenario,
@@ -264,6 +385,7 @@ SongwriterProjectSnapshot _fixtureFor(
     'six_note_strum' => _qaStrumSaveId,
     _ => _qaFretboardSaveId,
   };
+  final progression = _strumLoadScenarios.contains(scenario);
   final harmonyLane = SongLane(
     id: 'qa_harmony',
     kind: SongLaneKind.harmony,
@@ -277,12 +399,46 @@ SongwriterProjectSnapshot _fixtureFor(
           id: 'qa_chord_$bar',
           startBar: bar,
           spanBars: 1,
-          saveId: harmonySaveId,
+          saveId: progression
+              ? _qaProgressionSaveIds[bar % _qaProgressionSaveIds.length]
+              : harmonySaveId,
         ),
     ],
   );
 
+  final strumLane = SongLane(
+    id: 'qa_guitar_strum',
+    kind: SongLaneKind.guitarStrum,
+    order: 1,
+    anchorLaneId: 'qa_harmony',
+    blocks: [
+      SongBlock(
+        id: 'qa_strum_block',
+        startBar: 0,
+        spanBars: bars,
+        patternId: progression ? _loadStrumPatternId : 'qa_strum_pattern',
+      ),
+    ],
+  );
+  final drumLane = SongLane(
+    id: 'qa_drums',
+    kind: SongLaneKind.drum,
+    order: 2,
+    blocks: [
+      SongBlock(
+        id: 'qa_drum_block',
+        startBar: 0,
+        spanBars: bars,
+        patternId: _loadDrumPatternId,
+      ),
+    ],
+  );
+
   final lanes = switch (scenario) {
+    'strum_metronome' => [harmonyLane, strumLane],
+    'strum_drums' ||
+    'strum_drums_metronome' => [harmonyLane, strumLane, drumLane],
+    'drums_metronome' => [drumLane.copyWith(order: 0)],
     'six_note_strum' => [
       harmonyLane,
       SongLane(
@@ -374,6 +530,46 @@ SongwriterProjectSnapshot _fixtureFor(
               ],
             ),
           ]
+        : progression
+        ? [
+            GuitarStrumPattern(
+              id: _loadStrumPatternId,
+              name: 'Sixteenth-note strum, alternating down/up',
+              lengthTicks: 16,
+              events: [
+                for (var tick = 0; tick < 16; tick++)
+                  GuitarStrumEvent(
+                    tick: tick,
+                    direction: tick.isEven
+                        ? GuitarStrumDirection.down
+                        : GuitarStrumDirection.up,
+                  ),
+              ],
+            ),
+          ]
+        : const [],
+    drumPatterns: _drumLoadScenarios.contains(scenario)
+        ? [
+            DrumPattern(
+              id: _loadDrumPatternId,
+              name: 'Kick/snare with sixteenth closed hi-hat',
+              lengthTicks: 16,
+              lanes: [
+                const DrumLaneSequence(
+                  laneId: DrumLaneId.kick,
+                  activeTicks: [0, 8],
+                ),
+                const DrumLaneSequence(
+                  laneId: DrumLaneId.snare,
+                  activeTicks: [4, 12],
+                ),
+                DrumLaneSequence(
+                  laneId: DrumLaneId.closedHiHat,
+                  activeTicks: [for (var tick = 0; tick < 16; tick++) tick],
+                ),
+              ],
+            ),
+          ]
         : const [],
     melodyPatterns: scenario == 'melody'
         ? [
@@ -419,7 +615,11 @@ class _ProfileWriterNotifier extends SongwriterNotifier {
 
 class _ProfileSettingsNotifier extends SettingsNotifier {
   @override
-  AppSettings build() => const AppSettings(metronomeEnabled: false);
+  AppSettings build() => AppSettings(
+    metronomeEnabled: _metronomeScenarios.contains(
+      ref.watch(_profileScenarioProvider),
+    ),
+  );
 }
 
 class _ProfileSaveSystemNotifier extends SaveSystemNotifier {
@@ -545,7 +745,12 @@ List<Override> buildWriterPlaybackProfileProviderOverrides({
   ),
 ];
 
-Map<String, int> _verifyFixtures(
+/// Per fixture: [notes] counts every pitched note and drum hit with each strum
+/// stroke expanded into its strings; [voices] counts a stroke as one voice, the
+/// way the transport now requests it.
+typedef _FixtureCounts = ({Map<String, int> notes, Map<String, int> voices});
+
+_FixtureCounts _verifyFixtures(
   AudioAsset qaAsset, {
   int tempo = _tempo,
   int bars = _bars,
@@ -558,10 +763,25 @@ Map<String, int> _verifyFixtures(
     'piano_harmony': bars * 4,
     // Harmony stabs (six per bar) plus two six-note strums per bar.
     'six_note_strum': bars * 18,
+    // Harmony stabs + sixteenth-note six-string strokes (+ drum hits).
+    'strum_metronome':
+        bars * (_loadHarmonyStabVoicesPerBar + _loadStrumVoicesPerBar),
+    'drums_metronome': bars * _loadDrumHitsPerBar,
+    'strum_drums':
+        bars *
+        (_loadHarmonyStabVoicesPerBar +
+            _loadStrumVoicesPerBar +
+            _loadDrumHitsPerBar),
+    'strum_drums_metronome':
+        bars *
+        (_loadHarmonyStabVoicesPerBar +
+            _loadStrumVoicesPerBar +
+            _loadDrumHitsPerBar),
     'melody': bars * 8,
     'recorded_clip': 4,
   };
   final results = <String, int>{};
+  final voices = <String, int>{};
   for (final fixture in expectedNotes.entries) {
     final saveState = _saveStateFor(fixture.key, tempo: tempo);
     final project = _fixtureFor(fixture.key, qaAsset, tempo: tempo, bars: bars);
@@ -573,23 +793,38 @@ Map<String, int> _verifyFixtures(
       projectDefaultHarmonyInstrument:
           saveState.folders.single.projectConfig!.defaultHarmonyInstrument,
     );
-    final voiceCount = events.fold<int>(
+    final strokeCount = events.fold<int>(
+      0,
+      (total, event) => total + event.strokeGroups.length,
+    );
+    final stringNoteCount = events.fold<int>(
       0,
       (total, event) =>
           total +
-          event.noteGroups.fold<int>(
-            0,
-            (sum, group) => sum + group.midiNotes.length,
-          ) +
-          event.sequencedNoteGroups.fold<int>(
+          event.strokeGroups.fold<int>(
             0,
             (sum, group) => sum + group.notes.length,
-          ) +
-          event.drumGroups.fold<int>(
-            0,
-            (sum, group) => sum + group.drumLanes.length,
           ),
     );
+    final voiceCount =
+        events.fold<int>(
+          0,
+          (total, event) =>
+              total +
+              event.noteGroups.fold<int>(
+                0,
+                (sum, group) => sum + group.midiNotes.length,
+              ) +
+              event.sequencedNoteGroups.fold<int>(
+                0,
+                (sum, group) => sum + group.notes.length,
+              ) +
+              event.drumGroups.fold<int>(
+                0,
+                (sum, group) => sum + group.drumLanes.length,
+              ),
+        ) +
+        stringNoteCount;
     final clips = songwriterSchedulableAudioClips(project);
     if (events.isEmpty || voiceCount != fixture.value) {
       throw StateError(
@@ -603,7 +838,8 @@ Map<String, int> _verifyFixtures(
         'Recorded clip fixture must schedule one temporary clip; got ${clips.length}.',
       );
     }
-    if (fixture.key == 'six_note_strum') {
+    if (fixture.key == 'six_note_strum' ||
+        _strumLoadScenarios.contains(fixture.key)) {
       final assignedStrums = project.sections
           .expand((section) => section.lanes)
           .where(
@@ -617,6 +853,7 @@ Map<String, int> _verifyFixtures(
       }
     }
     results[fixture.key] = voiceCount;
+    voices[fixture.key] = voiceCount - stringNoteCount + strokeCount;
   }
 
   final fretboardSnapshot = _saveStateFor(
@@ -635,9 +872,10 @@ Map<String, int> _verifyFixtures(
       'Fixtures require a valid Chord-mode Fretboard and Piano Harmony selection.',
     );
   }
-  return results;
+  return (notes: results, voices: voices);
 }
 
+/// Pitched notes and drum hits per fixture, strum strokes expanded to strings.
 Map<String, int> verifyWriterPlaybackProfileFixtures({
   int tempo = _tempo,
   int durationSeconds = _durationSeconds,
@@ -645,7 +883,17 @@ Map<String, int> verifyWriterPlaybackProfileFixtures({
   _qaAsset,
   tempo: tempo,
   bars: _barsFor(tempo, durationSeconds),
-);
+).notes;
+
+/// Voices per fixture with each strum stroke counted once, as requested.
+Map<String, int> verifyWriterPlaybackProfileFixtureVoices({
+  int tempo = _tempo,
+  int durationSeconds = _durationSeconds,
+}) => _verifyFixtures(
+  _qaAsset,
+  tempo: tempo,
+  bars: _barsFor(tempo, durationSeconds),
+).voices;
 
 /// Fixed musical schedule and expected overlap for one harness run.
 /// This manifest is written beside the generated QA audio in the isolated
@@ -661,6 +909,10 @@ Map<String, Object?> buildWriterPlaybackProfileManifest({
     'plain_harmony',
     'piano_harmony',
     'six_note_strum',
+    'strum_metronome',
+    'drums_metronome',
+    'strum_drums',
+    'strum_drums_metronome',
     'melody',
     'recorded_clip',
   }.contains(scenario)) {
@@ -688,6 +940,8 @@ Map<String, Object?> buildWriterPlaybackProfileManifest({
   final schedule = <Map<String, Object?>>[];
   final overlapEdges = <(int, int)>[];
   final offsetCounts = <String, int>{};
+  var strokeCount = 0;
+  var stringNoteCount = 0;
 
   void addVoice({
     required int eventId,
@@ -743,6 +997,22 @@ Map<String, Object?> buildWriterPlaybackProfileManifest({
         );
       }
     }
+    for (final group in event.strokeGroups) {
+      strokeCount++;
+      for (final note in group.notes) {
+        stringNoteCount++;
+        addVoice(
+          eventId: eventId,
+          tick: event.tick,
+          midi: note.midiNote,
+          offsetUs: note.onsetOffsetMs * 1000,
+          durationUs: pr_rules
+              .effectiveSequencedNoteDuration(tickDuration, note)
+              .inMicroseconds,
+          kind: 'strum_string',
+        );
+      }
+    }
   }
 
   overlapEdges.sort((a, b) {
@@ -777,7 +1047,22 @@ Map<String, Object?> buildWriterPlaybackProfileManifest({
     'score_duration_us': actualDurationUs,
     'score_tick_count': scoreTickCount,
     'expected_event_count': scheduledEvents.length,
-    'expected_voice_count': schedule.length,
+    // Every scheduled note below, with each strum stroke's strings counted
+    // individually; the transport sounds a stroke as one voice.
+    'expected_note_count': schedule.length,
+    'expected_stroke_count': strokeCount,
+    'expected_string_note_count': stringNoteCount,
+    'expected_voice_count': schedule.length - stringNoteCount + strokeCount,
+    'expected_drum_hit_count': scheduledEvents.fold<int>(
+      0,
+      (total, event) =>
+          total +
+          event.drumGroups.fold<int>(
+            0,
+            (sum, group) => sum + group.drumLanes.length,
+          ),
+    ),
+    'metronome_enabled': _metronomeScenarios.contains(scenario),
     'expected_max_note_overlap': expectedMaxOverlap,
     'preview_voice_duration_us': 700000,
     'onset_offset_counts': offsetCounts,
@@ -950,6 +1235,7 @@ Future<void> main() async {
     songClipFile.writeAsBytes(qaTone),
   ]);
   final fixtureMetrics = verifyWriterPlaybackProfileFixtures();
+  final fixtureVoices = verifyWriterPlaybackProfileFixtureVoices();
   final runTag = p.basename(runDirectory.path);
   final startupManifest = <String, Object?>{
     ...buildWriterPlaybackProfileManifest(
@@ -973,7 +1259,8 @@ Future<void> main() async {
       'scenario': _fixtureScenario,
       'tempo_bpm': _tempo,
       'bars': _bars,
-      'expected_voice_count': fixtureMetrics[_fixtureScenario],
+      'expected_note_count': fixtureMetrics[_fixtureScenario],
+      'expected_voice_count': fixtureVoices[_fixtureScenario],
       'clip_bytes': await clipFile.length(),
       'build_mode': kProfileMode ? 'profile' : 'debug',
       'run_tag': runTag,
@@ -985,16 +1272,264 @@ Future<void> main() async {
 
   runApp(
     ProviderScope(
-      overrides: buildWriterPlaybackProfileProviderOverrides(
-        repository: repository,
-        songRepository: songRepository,
-      ),
+      overrides: [
+        ...buildWriterPlaybackProfileProviderOverrides(
+          repository: repository,
+          songRepository: songRepository,
+        ),
+        ...buildWriterPlaybackProfileSinkProbeOverrides(),
+      ],
       child: WriterPlaybackProfileApp(
         runDirectory: runDirectory,
         viewMode: _profileViewMode,
       ),
     ),
   );
+}
+
+/// Harness-side dispatch timing, independent of [PlaybackProfileRunStats].
+///
+/// The run stats expose only p95/worst-case dispatch errors. This probe keeps
+/// raw samples so the baseline can report p50/p95/max and first-bar versus
+/// steady-state behaviour. Ticks are observed when the transport publishes
+/// `currentTick`; events are observed when the transport calls each production
+/// sink (the wrapped sink then delegates to the real production sink). Both are
+/// measured against the first observed tick, so they are relative dispatch
+/// errors and never an audible-onset measurement.
+class _DispatchProbe {
+  final Stopwatch _clock = Stopwatch();
+  final List<({int tick, int errorUs})> _ticks = [];
+  final List<({String kind, int tick, int errorUs})> _sinkCalls = [];
+  int? _firstTick;
+  int? _lastTick;
+  int _originUs = 0;
+
+  void reset() {
+    _ticks.clear();
+    _sinkCalls.clear();
+    _firstTick = null;
+    _lastTick = null;
+    _clock
+      ..reset()
+      ..start();
+  }
+
+  void observeTransport(SongwriterPlaybackState state) {
+    final tick = state.currentTick;
+    if (state.status != SongwriterPlaybackStatus.playing || tick == null) {
+      return;
+    }
+    if (tick == _lastTick) {
+      // The run is claimed before voice preparation and republishes its start
+      // tick when the clock starts; the last republish is the true origin.
+      if (_ticks.length == 1) {
+        _originUs = _clock.elapsedMicroseconds;
+        _ticks[0] = (tick: tick, errorUs: 0);
+      }
+      return;
+    }
+    final nowUs = _clock.elapsedMicroseconds;
+    if (_firstTick == null) {
+      _firstTick = tick;
+      _originUs = nowUs;
+    }
+    _lastTick = tick;
+    _ticks.add((tick: tick, errorUs: _errorUs(tick, nowUs)));
+  }
+
+  void observeSink(String kind, int? tick) {
+    if (_firstTick == null || tick == null) return;
+    _sinkCalls.add((
+      kind: kind,
+      tick: tick,
+      errorUs: _errorUs(tick, _clock.elapsedMicroseconds),
+    ));
+  }
+
+  int _errorUs(int tick, int nowUs) =>
+      nowUs -
+      _originUs -
+      (tick - _firstTick!) * pr_rules.tickDuration(_tempo).inMicroseconds;
+
+  Map<String, Object?> summary() {
+    final firstTick = _firstTick;
+    if (firstTick == null) return {'available': false};
+    final ticksPerBar = 16;
+    bool firstBar(int tick) => tick - firstTick < ticksPerBar;
+
+    final firstCallByTick = <int, int>{};
+    final lastCallByTick = <int, int>{};
+    for (final call in _sinkCalls) {
+      firstCallByTick.putIfAbsent(call.tick, () => call.errorUs);
+      lastCallByTick[call.tick] = call.errorUs;
+    }
+    final kinds = {for (final call in _sinkCalls) call.kind};
+    return {
+      'available': true,
+      'method':
+          'Relative to the first observed tick. Tick = transport currentTick notification; '
+          'event = first production-sink call per tick; sink_spread = last minus first '
+          'sink call within one tick (time spent inside synchronous sinks).',
+      'tick_dispatch_error_us': _stats([for (final t in _ticks) t.errorUs]),
+      'tick_dispatch_error_first_bar_us': _stats([
+        for (final t in _ticks)
+          if (firstBar(t.tick)) t.errorUs,
+      ]),
+      'tick_dispatch_error_steady_us': _stats([
+        for (final t in _ticks)
+          if (!firstBar(t.tick)) t.errorUs,
+      ]),
+      'event_dispatch_error_us': _stats(firstCallByTick.values.toList()),
+      'event_dispatch_error_first_bar_us': _stats([
+        for (final e in firstCallByTick.entries)
+          if (firstBar(e.key)) e.value,
+      ]),
+      'event_dispatch_error_steady_us': _stats([
+        for (final e in firstCallByTick.entries)
+          if (!firstBar(e.key)) e.value,
+      ]),
+      'sink_spread_us': _stats([
+        for (final e in firstCallByTick.entries)
+          lastCallByTick[e.key]! - e.value,
+      ]),
+      'sink_call_error_by_kind_us': {
+        for (final kind in kinds)
+          kind: _stats([
+            for (final call in _sinkCalls)
+              if (call.kind == kind) call.errorUs,
+          ]),
+      },
+      'worst_ticks': [
+        for (final t in ([
+          ..._ticks,
+        ]..sort((a, b) => b.errorUs - a.errorUs)).take(8))
+          {'tick': t.tick, 'error_us': t.errorUs},
+      ],
+    };
+  }
+
+  static Map<String, Object?> _stats(List<int> values) {
+    if (values.isEmpty) return {'count': 0};
+    int over(int thresholdUs) => values.where((v) => v > thresholdUs).length;
+    return {
+      'count': values.length,
+      'p50': playbackProfilePercentile(values, 0.5),
+      'p95': playbackProfilePercentile(values, 0.95),
+      'max': values.reduce(math.max),
+      'over_5ms': over(5000),
+      'over_10ms': over(10000),
+      'over_20ms': over(20000),
+    };
+  }
+}
+
+final _dispatchProbe = _DispatchProbe();
+
+/// Wraps every transport sink with a timing observation that delegates to the
+/// unmodified production sink. The production sink is built by a separate
+/// container with the same settings so these wrappers never copy its logic.
+List<Override> buildWriterPlaybackProfileSinkProbeOverrides({
+  String scenario = _fixtureScenario,
+}) {
+  final production = ProviderContainer(
+    overrides: [
+      _profileScenarioProvider.overrideWith((ref) => scenario),
+      settingsProvider.overrideWith(_ProfileSettingsNotifier.new),
+    ],
+  );
+  int? currentTick(Ref ref) => ref.read(songwriterPlaybackProvider).currentTick;
+  // Riverpod forbids reading another container from inside a provider build.
+  final innerMetronome = production.read(songwriterMetronomeSinkProvider);
+  final innerChord = production.read(songwriterNoteSinkProvider);
+  final innerGuitarChord = production.read(songwriterGuitarNoteSinkProvider);
+  final innerSequenced = production.read(songwriterSequencedNoteSinkProvider);
+  final innerGuitarSequenced = production.read(
+    songwriterGuitarSequencedNoteSinkProvider,
+  );
+  final innerDrums = production.read(drumPatternPlaybackSinkProvider);
+  final innerStroke = production.read(songwriterGuitarStrokeSinkProvider);
+  return [
+    songwriterGuitarStrokeSinkProvider.overrideWith((ref) {
+      final inner = innerStroke;
+      return ({required strings, required volume, required pan, guitarTone}) {
+        _dispatchProbe.observeSink('guitar_strum_stroke', currentTick(ref));
+        inner(
+          strings: strings,
+          volume: volume,
+          pan: pan,
+          guitarTone: guitarTone,
+        );
+      };
+    }),
+    songwriterMetronomeSinkProvider.overrideWith((ref) {
+      final inner = innerMetronome;
+      return ({required accent}) {
+        _dispatchProbe.observeSink('metronome', currentTick(ref));
+        return inner(accent: accent);
+      };
+    }),
+    songwriterNoteSinkProvider.overrideWith((ref) {
+      final inner = innerChord;
+      return (midiNotes, volume, pan, {duration}) {
+        _dispatchProbe.observeSink('chord', currentTick(ref));
+        inner(midiNotes, volume, pan, duration: duration);
+      };
+    }),
+    songwriterGuitarNoteSinkProvider.overrideWith((ref) {
+      final inner = innerGuitarChord;
+      return (midiNotes, volume, pan, {duration}) {
+        _dispatchProbe.observeSink('guitar_chord', currentTick(ref));
+        inner(midiNotes, volume, pan, duration: duration);
+      };
+    }),
+    songwriterSequencedNoteSinkProvider.overrideWith((ref) {
+      final inner = innerSequenced;
+      return ({
+        required midiNote,
+        required duration,
+        required onsetDelay,
+        required volume,
+        required pan,
+      }) {
+        _dispatchProbe.observeSink('sequenced_note', currentTick(ref));
+        inner(
+          midiNote: midiNote,
+          duration: duration,
+          onsetDelay: onsetDelay,
+          volume: volume,
+          pan: pan,
+        );
+      };
+    }),
+    songwriterGuitarSequencedNoteSinkProvider.overrideWith((ref) {
+      final inner = innerGuitarSequenced;
+      return ({
+        required midiNote,
+        required duration,
+        required onsetDelay,
+        required volume,
+        required pan,
+        guitarTone,
+      }) {
+        _dispatchProbe.observeSink('guitar_strum_note', currentTick(ref));
+        inner(
+          midiNote: midiNote,
+          duration: duration,
+          onsetDelay: onsetDelay,
+          volume: volume,
+          pan: pan,
+          guitarTone: guitarTone,
+        );
+      };
+    }),
+    drumPatternPlaybackSinkProvider.overrideWith((ref) {
+      final inner = innerDrums;
+      return (lanes, volume, pan) {
+        _dispatchProbe.observeSink('drums', currentTick(ref));
+        return inner(lanes, volume, pan);
+      };
+    }),
+  ];
 }
 
 Uint8List _writeQaTone() {
@@ -1430,6 +1965,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
     Object? playbackError;
     PlaybackProfileRunStats? profileRun;
     _ProfileFrameSampleAttempt? frameAttempt;
+    _dispatchProbe.reset();
     try {
       final playbackFuture = ref
           .read(songwriterPlaybackProvider.notifier)
@@ -1495,6 +2031,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
             'AudioPlayer play and clip resume futures are platform API observations, not audible onset.',
         'playback_error_type': playbackError?.runtimeType.toString(),
         'voice_outcomes': stats?.toJson(),
+        'harness_dispatch_probe': _dispatchProbe.summary(),
         'frame_capture_status': frameCaptureStatus,
         'frame_timing': frameTiming,
         'timeline_trace_export':
@@ -1513,7 +2050,50 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
           'path': fileName,
         },
       );
+      _emitResultLine(report, runDirectory: runDirectory);
+      if (_exitOnComplete) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        exit(playbackError == null ? 0 : 1);
+      }
     }
+  }
+
+  /// One greppable console line so a headless `flutter run` can capture the
+  /// result without reading the app's sandboxed temporary directory.
+  void _emitResultLine(
+    Map<String, Object?> report, {
+    required Directory runDirectory,
+  }) {
+    final outcomes = report['voice_outcomes'] as Map<String, Object?>?;
+    final frameTiming = report['frame_timing'] as Map?;
+    const voiceKeys = [
+      'expected_voice_count',
+      'expected_stroke_count',
+      'expected_string_note_count',
+      'requested_voice_count',
+      'launched_voice_count',
+      'dropped_voice_count',
+      'cancelled_voice_count',
+      'error_voice_count',
+      'stolen_voice_count',
+      'player_created_count',
+      'player_reused_count',
+    ];
+    debugPrint(
+      'WRITER_PROFILE_RESULT ${jsonEncode({
+        'scenario': report['scenario'],
+        'tempo_bpm': _tempo,
+        'bars': _bars,
+        'build_mode': report['build_mode'],
+        'device_label': _deviceLabel,
+        'run_directory': runDirectory.path,
+        'playback_error_type': report['playback_error_type'],
+        'voices': {for (final key in voiceKeys) key: outcomes?[key]},
+        'run_stats_dispatch': outcomes?['dispatch_metrics'],
+        'probe': report['harness_dispatch_probe'],
+        'frame_timing': {'frame_count': frameTiming?['frame_count'], 'missed_budget_fraction': frameTiming?['missed_budget_fraction'], 'capture_completeness': frameTiming?['capture_completeness']},
+      })}',
+    );
   }
 
   @override
@@ -1576,6 +2156,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
           _writerProfileRunChanged(previous, next);
         });
         ref.listen(songwriterPlaybackProvider, (previous, next) {
+          _dispatchProbe.observeTransport(next);
           _transportStatusChanged(
             view: 'writer_minimal',
             previous: previous?.status.name,
@@ -1622,6 +2203,22 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
               DropdownMenuItem(
                 value: 'six_note_strum',
                 child: Text('Six-note strum • down/up each bar'),
+              ),
+              DropdownMenuItem(
+                value: 'strum_metronome',
+                child: Text('Load • 16th strum + metronome'),
+              ),
+              DropdownMenuItem(
+                value: 'drums_metronome',
+                child: Text('Load • drums (16th hats) + metronome'),
+              ),
+              DropdownMenuItem(
+                value: 'strum_drums',
+                child: Text('Load • 16th strum + drums, no metronome'),
+              ),
+              DropdownMenuItem(
+                value: 'strum_drums_metronome',
+                child: Text('Load • 16th strum + drums + metronome'),
               ),
               DropdownMenuItem(
                 value: 'melody',

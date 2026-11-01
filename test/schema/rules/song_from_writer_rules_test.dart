@@ -454,8 +454,11 @@ void main() {
           writer,
           const [],
         ))
-          for (final group in event.sequencedNoteGroups)
-            for (final note in group.notes)
+          for (final notes in [
+            ...event.sequencedNoteGroups.map((group) => group.notes),
+            ...event.strokeGroups.map((group) => group.notes),
+          ])
+            for (final note in notes)
               (
                 event.tick,
                 note.midiNote,
@@ -582,8 +585,11 @@ void main() {
             writer,
             const [],
           ))
-            for (final group in event.sequencedNoteGroups)
-              for (final note in group.notes)
+            for (final notes in [
+              ...event.sequencedNoteGroups.map((group) => group.notes),
+              ...event.strokeGroups.map((group) => group.notes),
+            ])
+              for (final note in notes)
                 (
                   event.tick,
                   note.midiNote,

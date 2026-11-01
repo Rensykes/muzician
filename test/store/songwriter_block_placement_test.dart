@@ -856,7 +856,7 @@ void main() {
           c.read(songwriterProvider),
           const [],
         ))
-          if (event.sequencedNoteGroups.any(
+          if (event.strokeGroups.any(
             (group) => group.notes.any((note) => note.id.startsWith('strum_')),
           ))
             event.tick,
