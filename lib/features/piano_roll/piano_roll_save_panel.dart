@@ -62,6 +62,7 @@ class PianoRollSavePanel extends ConsumerWidget {
       selectedColumnTick: prState.selectedColumnTick,
       snapTicks: prState.snapTicks,
       highlightedNotes: List<String>.from(prState.highlightedNotes),
+      sound: prState.sound,
       pendingScale: activeScale != null
           ? PendingScale(
               root: activeScale.root,

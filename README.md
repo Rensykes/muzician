@@ -28,7 +28,7 @@ Fretboard and Piano keep the instrument visible while a bounded Notes / Voicings
 |---|---|---|
 | **Fretboard** | Studio 24-fret guitar workspace with Full/Solo note labels, clean/distorted electric sound, down/up strum audition, a compact Notes / Voicings / Setup inspector, tuning and capo, Save idea, and Chord-only Writer Harmony handoff | [docs/fretboard.md](docs/fretboard.md) |
 | **Piano** | Studio piano workspace with Full/Solo note labels, a compact Notes / Voicings / Setup inspector, 49 / 61 / 88-key ranges, Scale and Library shortcuts, Save idea, and recognized or exact-note Writer Harmony | [docs/piano.md](docs/piano.md) |
-| **Piano Roll** | Studio timeline editor (navigation label **Roll**) with all five tools, a Stack Builder / Selection inspector, Quick, snap, pitch-range and mobile **Hum recorder** controls | [docs/piano_roll.md](docs/piano_roll.md) |
+| **Piano Roll** | Studio timeline editor (navigation label **Roll**) with all five tools, a Stack Builder / Selection inspector, Quick, snap, pitch-range, **Hum recorder** (mobile, web, desktop) and a per-roll playback sound | [docs/piano_roll.md](docs/piano_roll.md) |
 | **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; removable Drums, Sample, Guitar Strum and Melody lanes, named multi-bar melodies with a Bars stepper and whole-bar length, a wrapped Melody timeline with single-pass note previews, placement limits and silent tails, unresolved-content warnings and bar-snapped resizing, repeat-aware linked reuse, independent lane sounds (new lanes default to Piano; legacy lanes retain pattern sounds), Harmony guitar tone selection, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Song** | Temporarily disabled in V2; retained clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
 | **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
@@ -50,7 +50,9 @@ lib/
     note_player.dart          ← Synthesised audio note playback engine
     note_player_io.dart       ← IO (mobile/desktop) audio backend
     note_player_web.dart      ← Web audio backend
-    mic_pitch_session.dart    ← PCM capture + windowing for hum-to-MIDI
+    mic_pitch_session.dart    ← Thin `record` mic wrapper (mobile, web, desktop), feeds HumPcmFramer
+    hum_pcm_framer.dart       ← Pure PCM16 → PitchFrame windowing (no microphone needed to test)
+    timbre_synth.dart         ← Organ / synth lead / bell sample renderers
   ui/
     save_browser_panel.dart   ← Reusable folder-browser save/load panel
     core/                     ← Shared dialogs and info panels

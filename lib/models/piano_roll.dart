@@ -112,6 +112,23 @@ class PianoRollImportedRange {
   });
 }
 
+/// Playback timbre of a piano roll. Stored by [name]; unknown names fall back
+/// to [piano] so old or newer saves always load.
+enum PianoRollSound {
+  piano('Piano'),
+  cleanGuitar('Clean guitar'),
+  distortedGuitar('Distorted guitar'),
+  organ('Organ'),
+  synthLead('Synth lead'),
+  bell('Bell');
+
+  const PianoRollSound(this.label);
+  final String label;
+
+  static PianoRollSound fromName(String? raw) => PianoRollSound.values
+      .firstWhere((s) => s.name == raw, orElse: () => PianoRollSound.piano);
+}
+
 class PianoRollState {
   final PianoRollConfig config;
   final List<PianoRollNote> notes;
@@ -123,6 +140,7 @@ class PianoRollState {
   final int snapTicks;
   final List<String> highlightedNotes;
   final PianoRollImportedRange? latestImportedRange;
+  final PianoRollSound sound;
 
   const PianoRollState({
     required this.config,
@@ -135,6 +153,7 @@ class PianoRollState {
     this.snapTicks = 1,
     this.highlightedNotes = const <String>[],
     this.latestImportedRange,
+    this.sound = PianoRollSound.piano,
   });
 
   PianoRollState copyWith({
@@ -148,6 +167,7 @@ class PianoRollState {
     int? snapTicks,
     List<String>? highlightedNotes,
     PianoRollImportedRange? Function()? latestImportedRange,
+    PianoRollSound? sound,
   }) => PianoRollState(
     config: config ?? this.config,
     notes: notes ?? this.notes,
@@ -163,5 +183,6 @@ class PianoRollState {
     latestImportedRange: latestImportedRange != null
         ? latestImportedRange()
         : this.latestImportedRange,
+    sound: sound ?? this.sound,
   );
 }

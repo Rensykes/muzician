@@ -5,7 +5,7 @@ sidebar notes, detection, scale/root choices, hum previews, and saved-stack
 details. Sharps is the default; Flats displays Eb for D# and Gb for F# without
 changing MIDI notes, octaves, project keys, or custom names.
 
-A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, Stack Builder and Quick, live chord/scale detection per selected column, mobile-only Hum-to-MIDI recording, transport with optional metronome, and responsive Studio layout with a bounded contextual inspector. Song-hosted note editors retain the legacy layout.
+A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, Stack Builder and Quick, live chord/scale detection per selected column, Hum-to-MIDI recording on mobile, web and desktop, a selectable playback sound, transport with optional metronome, and responsive Studio layout with a bounded contextual inspector. Song-hosted note editors retain the legacy layout.
 
 ---
 
@@ -67,7 +67,7 @@ lib/
     piano_roll_save_stack_loader.dart     ← load stacks from saved progressions
     piano_roll_save_panel.dart            ← first-class piano-roll save/load
     piano_roll_detection_panel.dart       ← detect chord/scale at selected column
-    piano_roll_hum_recorder.dart          ← mobile-only hum → MIDI
+    piano_roll_hum_recorder.dart          ← hum → MIDI (mobile, web, desktop)
   features/instrument_shared/
     shared_scale_picker.dart              ← shared project-aware scale picker
   theme/
@@ -81,7 +81,7 @@ lib/
 | `pianoRollProvider` | `PianoRollState` | Canonical editor: notes, config, range, selection, tool, snap, highlights |
 | `pianoRollStackBuilderProvider` | `PianoRollStackBuilderState` | Stack Builder: MIDI notes, duration, view mode, recognition |
 | `pianoRollPlaybackProvider` | `PianoRollPlaybackState` | Playback transport: status, current tick, start point |
-| `humToMidiProvider` | `HumToMidiState` | Mobile-only recording pipeline |
+| `humToMidiProvider` | `HumToMidiState` | Hum-to-MIDI recording pipeline (mobile, web, desktop) |
 | `pianoRollPendingScaleProvider` | `({String root, String scaleName})?` | Temp scale preview (detection panel) |
 | `pianoRollActiveScaleProvider` | `({String root, String scaleName})?` | Committed scale selection (persists across drawer) |
 | `pianoRollScrollToTickProvider` | `int?` | One-shot scroll-to-tick signal |
@@ -97,7 +97,8 @@ lib/
 | `PianoRollConfig` | `tempo` (BPM), `key`, `timeSignature`, `totalMeasures` |
 | `PianoRollTool` | Enum: `draw`, `select`, `scissors`, `paint`, `delete`. `draw` = add/move/resize · `select` = marquee area selection · `scissors` = split · `paint` = brush insert · `delete` = brush remove (see [Tool Modes](#tool-modes)) |
 | `PianoRollImportedRange` | `startTick`, `endTickExclusive` — tracks latest hum import range |
-| `PianoRollState` | Full state: `config`, `notes`, `pitchRangeStart`, `pitchRangeEnd`, `selectedColumnTick`, `selectedNoteIds`, `activeTool`, `snapTicks`, `highlightedNotes`, `latestImportedRange` |
+| `PianoRollState` | Full state: `config`, `notes`, `pitchRangeStart`, `pitchRangeEnd`, `selectedColumnTick`, `selectedNoteIds`, `activeTool`, `snapTicks`, `highlightedNotes`, `latestImportedRange`, `sound` |
+| `PianoRollSound` | Playback timbre enum: `piano`, `cleanGuitar`, `distortedGuitar`, `organ`, `synthLead`, `bell`. Stored by `name`; unknown/missing names fall back to `piano` (see [Sound](#sound)) |
 
 ### Stack Builder State (`lib/models/piano_roll_stack_builder.dart`)
 
@@ -158,6 +159,7 @@ First-class piano-roll persistence. Saves the full session for later resume.
 | `selectedColumnTick` | Detection column anchor |
 | `snapTicks` | Snap granularity |
 | `highlightedNotes` | Pitch-class list for scale highlighting |
+| `sound` | Playback timbre (`PianoRollSound.name`); missing/unknown values load as `piano` (see [Sound](#sound)) |
 
 ### NOT persisted
 
@@ -220,6 +222,7 @@ Provider: `pianoRollProvider` (Riverpod `NotifierProvider<PianoRollNotifier, Pia
 | `clearHighlightedNotes()` | Remove all highlights |
 | `clearNotes()` | Remove all notes |
 | `loadSnapshot(snap)` | Restore full session from a `PianoRollSnapshot` |
+| `setSound(sound)` | Set the roll's `PianoRollSound` (persisted and read by playback/auditions) |
 | `reset()` | Revert to default state |
 
 ### Stack builder store (`lib/store/piano_roll_stack_builder_store.dart`)
@@ -245,13 +248,13 @@ Provider: `pianoRollStackBuilderProvider` — single source of truth for the uni
 
 ## Hum to MIDI & Web Support
 
-The Hum to MIDI recorder is **mobile-only**. On web the card shows a friendly "not supported" message with no record/stop controls.
+Hum-to-MIDI records on **mobile, web and desktop** through the `record` package, which streams raw PCM on every platform. Browsers require **HTTPS or `localhost`** and prompt for microphone permission; macOS requires the audio-input entitlement (already present in `macos/Runner/*.entitlements`). If permission is denied the panel shows "Microphone permission denied"; if the platform or device has no usable microphone it shows "Microphone unavailable".
 
 ### Web capability split
 
 | Supported on web | NOT supported on web |
 |---|---|
-| Editor grid (all gestures) | Hum to MIDI capture |
+| Editor grid (all gestures) | |
 | Playback transport | |
 | Stack composer | |
 | Save/load (PianoRollSnapshot) | |
@@ -260,17 +263,19 @@ The Hum to MIDI recorder is **mobile-only**. On web the card shows a friendly "n
 | Scale/highlight tools | |
 | Keyboard shortcuts | |
 | Ctrl+wheel / Alt+wheel zoom | |
+| Hum to MIDI capture | |
 
-### Recording on mobile
+### Recording pipeline
 
-The full capture pipeline runs on mobile (iOS/Android):
+The same pure-Dart pipeline runs on every platform; only the `record` plugin's microphone backend differs per OS/browser:
 
 | Stage | Code | Responsibility |
 |---|---|---|
-| 1. PCM capture & windowing | `lib/utils/mic_pitch_session.dart` | Buffer raw 16 kHz mono PCM, slide a 1024-sample window with 512-sample hop, emit ~31 `PitchFrame`/sec |
-| 2. Pitch estimation | `lib/schema/rules/mono_pitch_rules.dart` (`estimateDominantFrequencyFromSamples`) | YIN with CMNDF, local-minimum descent, parabolic interpolation → `(frequencyHz, confidence)` |
-| 3. Segmentation | `lib/schema/rules/mono_pitch_rules.dart` (`segmentStableNotes`) | Group consecutive same-MIDI frames into `DetectedMonoNote { startMs, endMs, midiNote, confidence }` with hysteresis |
-| 4. Quantization & normalization | `quantizeNotesToTicks` + `normalizeQuantizedHumNotesMonophonically` | Map ms → ticks, snap, drop overlaps |
+| 1. PCM capture & windowing | `lib/utils/hum_pcm_framer.dart` (`HumPcmFramer`, fed by `lib/utils/mic_pitch_session.dart`) | Buffer raw 16 kHz mono PCM16, slide a 1024-sample window with a **256-sample hop** (~62 `PitchFrame`/sec), gate silence with an adaptive `NoiseFloorTracker` |
+| 2. Pitch estimation | `lib/schema/rules/mono_pitch_rules.dart` (`estimateDominantFrequencyFromSamples`, called by `analyzeHumWindow`) | YIN with CMNDF, local-minimum descent, parabolic interpolation → `(frequencyHz, confidence)`; each frame is timestamped at the analysis window's **centre**, not its start, so an onset is not detected early |
+| 3. Pitch smoothing | `lib/schema/rules/mono_pitch_rules.dart` (`smoothPitchFrames`) | 5-frame median over voiced frame frequencies; removes isolated octave errors and one-frame glitches without delaying real pitch changes |
+| 4. Segmentation | `lib/schema/rules/mono_pitch_rules.dart` (`segmentStableNotes`) | Group consecutive same-MIDI frames into `DetectedMonoNote { startMs, endMs, midiNote, confidence }` with hysteresis; a pitch switch that commits after `switchFrames` frames is back-dated to the switch's first frame, and a same-pitch re-attack separated by an unvoiced gap longer than `reattackGapMs` splits into two notes instead of bridging |
+| 5. Quantization & normalization | `quantizeNotesToTicks` + `normalizeQuantizedHumNotesMonophonically` | Map ms → ticks, snap, drop overlaps |
 
 ### Tunable parameters
 
@@ -279,21 +284,26 @@ All in `lib/schema/rules/mono_pitch_rules.dart`:
 | Constant | Value | Effect of raising it |
 |---|---|---|
 | `minHumFrequencyHz` / `maxHumFrequencyHz` | 80 / 1000 | Sets the YIN lag search range and rejects out-of-range pitches |
-| `minHumAmplitude` | 0.02 | Higher → more aggressive silence gate, fewer breath/noise false positives |
+| `minHumAmplitude` | 0.02 | Floor of the adaptive gate; higher → more aggressive silence gate, fewer breath/noise false positives |
+| `maxHumGate` | 0.12 | Ceiling of the adaptive gate (`NoiseFloorTracker.gate`), so a noisy room can never raise the gate above this |
 | `_yinThreshold` | 0.15 | Higher → accept weaker pitches (more recall, less precision) |
 | `minStableConfidence` | 0.6 | Confidence = `1 − cmndf[bestLag]`. Higher → drop borderline frames |
 | `minStableNoteMs` | 80 | Floor on note duration even at the most permissive sensitivity preset |
 | `maxMergeGapMs` | 180 | Silence within a note merges if shorter than this |
 
+`NoiseFloorTracker` (in the same file) learns the ambient noise floor only from unvoiced frames: it rises toward a louder frame's amplitude at `riseRate` (0.02) and snaps down immediately to a quieter one, each multiplied by `multiplier` (2.5) and clamped to `[minHumAmplitude, maxHumGate]`.
+
 ### User-facing pitch sensitivity
 
-The Hum panel exposes a three-way `SegmentedButton` (Strict / Balanced / Forgiving). Each preset overrides three knobs:
+The Hum panel exposes a three-way `SegmentedButton` (Strict / Balanced / Forgiving). Each preset overrides four knobs:
 
-| Preset | `switchFrames` | `deadbandCents` | `minNoteMs` |
-|---|---|---|---|
-| Strict | 2 | 0 | 80 |
-| Balanced (default) | 4 | 35 | 120 |
-| Forgiving | 7 | 60 | 180 |
+| Preset | `switchFrames` | `deadbandCents` | `minNoteMs` | `reattackGapMs` |
+|---|---|---|---|---|
+| Strict | 2 | 0 | 80 | 70 |
+| Balanced (default) | 4 | 35 | 120 | 80 |
+| Forgiving | 7 | 60 | 180 | disabled (never splits on re-attack) |
+
+`reattackGapMs` is the unvoiced gap, in ms, between the last and next voiced frame at which two same-pitch notes are split instead of bridged. Balanced uses 80 rather than a rounder number because a real 1024-sample/256-sample-hop window reports a note as voiced up to ~48 ms before its true onset, so measured rests read ~40-48 ms shorter than they really are; 80 keeps the strict < balanced < forgiving ordering while still splitting a real 140 ms rest (measured gap 96 ms).
 
 The selector is disabled while recording or processing.
 
@@ -354,13 +364,36 @@ Configurable via the Roll Settings sheet ([Settings](#roll-settings)). When `App
 
 ## Roll Settings
 
-Per-page settings sheet opened via the gear action in the Piano Roll header. Currently exposes a single toggle:
+Per-page settings sheet opened via the gear action in the Piano Roll header. Exposes:
 
 | Setting | Persistence | Default | Effect |
 |---|---|---|---|
 | `metronomeEnabled` | `SharedPreferences` (via `AppSettings`) | `true` | Plays a click on every beat during playback (accent on downbeat). |
+| Sound picker | `PianoRollState.sound` → `PianoRollSnapshot.sound` | `piano` | Picks the timbre used for playback and grid note auditions (see [Sound](#sound)). |
 
-The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_SettingsSheet`); the persisted field is `AppSettings.metronomeEnabled`; the mutator is `SettingsNotifier.setMetronomeEnabled(bool)`. Test helpers should override the setting via direct state assignment to bypass `SharedPreferences` — see `test/store/piano_roll_playback_store_test.dart` for the pattern.
+The sheet lives in `lib/features/piano_roll/piano_roll_screen_v2.dart` (`_SettingsSheet`); the persisted metronome field is `AppSettings.metronomeEnabled`; the mutator is `SettingsNotifier.setMetronomeEnabled(bool)`. The sound picker renders one `_SoundPill` per `PianoRollSound` value and calls `pianoRollProvider.notifier.setSound(option)`. Test helpers should override the setting via direct state assignment to bypass `SharedPreferences` — see `test/store/piano_roll_playback_store_test.dart` for the pattern.
+
+---
+
+## Sound
+
+Each piano roll has one playback timbre, `PianoRollState.sound` (a `PianoRollSound`), picked from the Sound row of [Roll Settings](#roll-settings):
+
+| Value | Label | Renderer |
+|---|---|---|
+| `piano` (default) | Piano | `NotePlayer`'s existing sampled piano |
+| `cleanGuitar` | Clean guitar | `NotePlayer`'s existing clean electric guitar |
+| `distortedGuitar` | Distorted guitar | `NotePlayer`'s existing distorted electric guitar |
+| `organ` | Organ | `lib/utils/timbre_synth.dart` (`TimbreSynth.render`) |
+| `synthLead` | Synth lead | `lib/utils/timbre_synth.dart` (`TimbreSynth.render`) |
+| `bell` | Bell | `lib/utils/timbre_synth.dart` (`TimbreSynth.render`) |
+
+`PianoRollSound.fromName` falls back to `piano` for `null` or unrecognized names, so saves made before this feature — and saves from a newer app version with a sound this build doesn't know — always load without error.
+
+- **Persistence:** saved as `PianoRollSnapshot.sound` (the enum's `name`, see [PianoRollSnapshot](#pianorollsnapshot-libmodelssave_systemdart)); `lib/store/save_system_store.dart`'s project-config rewrite carries `snap.sound` forward when it rebuilds a `PianoRollSnapshot`'s tempo/key/signature fields.
+- **Playback:** the default `pianoRollPlaybackSinkProvider` reads `pianoRollProvider`'s `sound` at the moment each note plays (via `pianoRollTimbrePlayerProvider` → `NotePlayer.previewTimbre`), so changing the sound mid-edit applies to the next playback without restarting.
+- **Grid auditions:** tapping/dragging a note in `PianoRollGrid` previews it with the same roll sound.
+- **Out of scope:** the Song workspace and Writer's embedded note editors are unaffected — they keep their existing legacy sound handling. `PianoRollScreenV2(showSound: false)` hides the Sound section of Roll Settings in both embedded hosts, since their `NotePattern`s have no field to persist a picked sound.
 
 ---
 
@@ -450,7 +483,7 @@ immutable palette and repaint when it changes.
 
 Quick copies selected notes to the selected column, or repeats the last added
 stack when there is no note selection. It does nothing until either source is
-available. Hum recorder records humming into notes on supported mobile
+available. Hum recorder records humming into notes on mobile, web and desktop
 platforms; it does not record an audio track.
 
 Scale, Hum recorder, Save, Import and Settings open named, scrollable sheets.
@@ -606,12 +639,13 @@ Separate from the stack-import loader — this is for full piano roll sessions.
 ---
 
 ### `PianoRollHumRecorderPanel`
-Mobile-only hum-to-MIDI recording panel. On web renders a static unsupported-state card. On mobile:
+Hum-to-MIDI recording panel, available on mobile, web and desktop:
 
 - Record / Stop buttons (disabled while processing)
 - Live pitch readout during recording
 - "Jump to latest" button after successful import
 - Pitch sensitivity selector (Strict / Balanced / Forgiving)
+- Error states: "Microphone permission denied", "Microphone unavailable"
 
 ---
 

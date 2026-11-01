@@ -704,7 +704,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     ref
         .read(pianoRollProvider.notifier)
         .addNote(coord.midi, snapped, state.snapTicks);
-    NotePlayer.instance.previewNote(
+    NotePlayer.instance.previewTimbre(
+      ref.read(pianoRollProvider).sound,
       coord.midi,
       volume: ref.read(settingsProvider).noteVolume,
     );
@@ -1089,7 +1090,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
           }
           HapticFeedback.lightImpact();
         } else {
-          NotePlayer.instance.previewNote(
+          NotePlayer.instance.previewTimbre(
+            ref.read(pianoRollProvider).sound,
             hit.midiNote,
             volume: ref.read(settingsProvider).noteVolume,
           );
@@ -1132,7 +1134,8 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
               coord.tick < maxTick &&
               coord.midi >= state.pitchRangeStart &&
               coord.midi <= state.pitchRangeEnd) {
-            NotePlayer.instance.previewNote(
+            NotePlayer.instance.previewTimbre(
+              ref.read(pianoRollProvider).sound,
               coord.midi,
               volume: ref.read(settingsProvider).noteVolume,
             );

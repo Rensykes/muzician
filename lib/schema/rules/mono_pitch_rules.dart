@@ -12,6 +12,28 @@ const minStableNoteMs = 80;
 const maxMergeGapMs = 180;
 const _yinThreshold = 0.15;
 const minHumAmplitude = 0.02;
+const maxHumGate = 0.12;
+
+/// Tracks the ambient noise floor from frames that carry no stable pitch, so
+/// the silence gate rises in noisy rooms but never learns from the hum itself.
+class NoiseFloorTracker {
+  NoiseFloorTracker({this.riseRate = 0.02, this.multiplier = 2.5});
+
+  final double riseRate;
+  final double multiplier;
+  double _floor = 0;
+
+  double get gate => (_floor * multiplier).clamp(minHumAmplitude, maxHumGate);
+
+  void update(double amplitude, {required bool pitched}) {
+    if (pitched) return;
+    if (amplitude <= _floor) {
+      _floor = amplitude;
+    } else {
+      _floor += (amplitude - _floor) * riseRate;
+    }
+  }
+}
 
 enum HumSensitivity { strict, balanced, forgiving }
 
@@ -19,26 +41,41 @@ class HumSensitivityTuning {
   final int switchFrames;
   final int deadbandCents;
   final int minNoteMs;
+
+  /// Unvoiced gap (ms, between the last and next voiced frame, excluding one
+  /// frame span) at which two same-pitch notes are split instead of bridged.
+  final int reattackGapMs;
   const HumSensitivityTuning({
     required this.switchFrames,
     required this.deadbandCents,
     required this.minNoteMs,
+    required this.reattackGapMs,
   });
 
   static const _strict = HumSensitivityTuning(
     switchFrames: 2,
     deadbandCents: 0,
     minNoteMs: 80,
+    reattackGapMs: 70,
   );
   static const _balanced = HumSensitivityTuning(
     switchFrames: 4,
     deadbandCents: 35,
     minNoteMs: 120,
+    // A real 1024-sample/256-sample-hop analysis window reports a note as
+    // voiced up to ~48 ms before its true onset (a few cycles at the tail of
+    // an otherwise-silent window are enough for a confident YIN estimate),
+    // so this measures short rests ~40-48 ms shorter than they really are.
+    // 80 keeps the strict < balanced < forgiving ordering while still
+    // splitting the end-to-end repeated-note case (measured gap 96 ms for a
+    // real 140 ms rest).
+    reattackGapMs: 80,
   );
   static const _forgiving = HumSensitivityTuning(
     switchFrames: 7,
     deadbandCents: 60,
     minNoteMs: 180,
+    reattackGapMs: 1 << 30,
   );
 
   static HumSensitivityTuning of(HumSensitivity sensitivity) =>
@@ -168,6 +205,78 @@ PitchEstimate? estimateDominantFrequencyFromSamples(
   return PitchEstimate(frequencyHz: frequency, confidence: confidence);
 }
 
+/// Analyses one window into a [PitchFrame]. Peak amplitude below [gate] is
+/// silence and skips pitch estimation.
+PitchFrame analyzeHumWindow(
+  List<double> window, {
+  required int sampleRate,
+  required int timestampMs,
+  required double gate,
+}) {
+  var peak = 0.0;
+  for (final sample in window) {
+    final v = sample.abs();
+    if (v > peak) peak = v;
+  }
+  if (peak < gate) {
+    return PitchFrame(
+      timestampMs: timestampMs,
+      frequencyHz: 0,
+      midiNote: null,
+      centsOffset: 0,
+      amplitude: peak,
+      confidence: 0,
+      isSilence: true,
+    );
+  }
+  final estimate = estimateDominantFrequencyFromSamples(
+    window,
+    sampleRate: sampleRate,
+  );
+  final midi = estimate == null ? null : frequencyToMidi(estimate.frequencyHz);
+  return PitchFrame(
+    timestampMs: timestampMs,
+    frequencyHz: estimate?.frequencyHz ?? 0,
+    midiNote: midi,
+    centsOffset: 0,
+    amplitude: peak,
+    confidence: estimate?.confidence ?? 0,
+    isSilence: midi == null,
+  );
+}
+
+/// 5-frame median over the frequency of voiced frames. Removes isolated octave
+/// errors and one-frame glitches without delaying real pitch changes.
+List<PitchFrame> smoothPitchFrames(List<PitchFrame> frames) {
+  bool isVoiced(PitchFrame f) =>
+      !f.isSilence && f.midiNote != null && f.frequencyHz > 0;
+  final out = List<PitchFrame>.of(frames);
+  for (var i = 0; i < frames.length; i++) {
+    if (!isVoiced(frames[i])) continue;
+    final neighbourhood = <double>[];
+    for (var j = i - 2; j <= i + 2; j++) {
+      if (j < 0 || j >= frames.length) continue;
+      if (isVoiced(frames[j])) neighbourhood.add(frames[j].frequencyHz);
+    }
+    if (neighbourhood.length < 3) continue;
+    neighbourhood.sort();
+    final median = neighbourhood[neighbourhood.length ~/ 2];
+    final midi = frequencyToMidi(median);
+    if (midi == null) continue;
+    final f = frames[i];
+    out[i] = PitchFrame(
+      timestampMs: f.timestampMs,
+      frequencyHz: median,
+      midiNote: midi,
+      centsOffset: f.centsOffset,
+      amplitude: f.amplitude,
+      confidence: f.confidence,
+      isSilence: false,
+    );
+  }
+  return out;
+}
+
 List<DetectedMonoNote> segmentStableNotes(
   List<PitchFrame> frames, {
   HumSensitivity sensitivity = HumSensitivity.strict,
@@ -175,22 +284,27 @@ List<DetectedMonoNote> segmentStableNotes(
   if (frames.isEmpty) return const [];
 
   final tuning = HumSensitivityTuning.of(sensitivity);
-  final frameSpanMs = _estimateMedianFrameSpanMs(frames);
+  final smoothed = smoothPitchFrames(frames);
+  final frameSpanMs = _estimateMedianFrameSpanMs(smoothed);
 
   final notes = <DetectedMonoNote>[];
   int? activeMidi;
   int? startMs;
   double confidenceTotal = 0;
   int confidenceCount = 0;
-  int lastVoicedMs = frames.first.timestampMs;
+  // Last frame that matched the active pitch; ends the note.
+  int lastActiveMs = smoothed.first.timestampMs;
+  // Last voiced frame of any pitch; measures silent gaps.
+  int lastVoicedMs = smoothed.first.timestampMs;
   int? pendingMidi;
+  int? pendingStartMs;
   int pendingFrames = 0;
 
   void emit() {
     final midi = activeMidi;
     final start = startMs;
     if (midi == null || start == null) return;
-    final rawDuration = lastVoicedMs - start;
+    final rawDuration = lastActiveMs - start;
     final duration = rawDuration <= 0 ? frameSpanMs : rawDuration;
     if (duration < tuning.minNoteMs) return;
     notes.add(
@@ -205,13 +319,29 @@ List<DetectedMonoNote> segmentStableNotes(
     );
   }
 
-  for (final frame in frames) {
+  void startNote(int midi, int atMs) {
+    activeMidi = midi;
+    startMs = atMs;
+    lastActiveMs = atMs;
+    confidenceTotal = 0;
+    confidenceCount = 0;
+    pendingMidi = null;
+    pendingStartMs = null;
+    pendingFrames = 0;
+  }
+
+  for (final frame in smoothed) {
     final isVoiced =
         !frame.isSilence &&
         frame.midiNote != null &&
         frame.confidence >= minStableConfidence;
     if (isVoiced) {
       final midi = frame.midiNote!;
+      final gapMs = frame.timestampMs - lastVoicedMs - frameSpanMs;
+      if (activeMidi != null && gapMs >= tuning.reattackGapMs) {
+        emit();
+        startNote(midi, frame.timestampMs);
+      }
       final active = activeMidi;
       final withinDeadband =
           active != null &&
@@ -220,29 +350,25 @@ List<DetectedMonoNote> segmentStableNotes(
           frame.frequencyHz > 0 &&
           _absCentsFromMidi(frame.frequencyHz, active) <= tuning.deadbandCents;
       if (active == null) {
-        activeMidi = midi;
-        startMs = frame.timestampMs;
-        pendingMidi = null;
-        pendingFrames = 0;
+        startNote(midi, frame.timestampMs);
       } else if (midi != active && !withinDeadband) {
         if (pendingMidi == midi) {
           pendingFrames += 1;
         } else {
           pendingMidi = midi;
+          pendingStartMs = frame.timestampMs;
           pendingFrames = 1;
         }
         if (pendingFrames >= tuning.switchFrames) {
           emit();
-          activeMidi = midi;
-          startMs = frame.timestampMs;
-          confidenceTotal = 0;
-          confidenceCount = 0;
-          pendingMidi = null;
-          pendingFrames = 0;
+          startNote(midi, pendingStartMs ?? frame.timestampMs);
+          lastActiveMs = frame.timestampMs;
         }
       } else {
         pendingMidi = null;
+        pendingStartMs = null;
         pendingFrames = 0;
+        lastActiveMs = frame.timestampMs;
       }
       lastVoicedMs = frame.timestampMs;
       confidenceTotal += frame.confidence;
@@ -258,6 +384,7 @@ List<DetectedMonoNote> segmentStableNotes(
       confidenceTotal = 0;
       confidenceCount = 0;
       pendingMidi = null;
+      pendingStartMs = null;
       pendingFrames = 0;
     }
   }
