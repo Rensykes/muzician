@@ -62,7 +62,14 @@ class HumSensitivityTuning {
     switchFrames: 4,
     deadbandCents: 35,
     minNoteMs: 120,
-    reattackGapMs: 100,
+    // A real 1024-sample/256-sample-hop analysis window reports a note as
+    // voiced up to ~48 ms before its true onset (a few cycles at the tail of
+    // an otherwise-silent window are enough for a confident YIN estimate),
+    // so this measures short rests ~40-48 ms shorter than they really are.
+    // 80 keeps the strict < balanced < forgiving ordering while still
+    // splitting the end-to-end repeated-note case (measured gap 96 ms for a
+    // real 140 ms rest).
+    reattackGapMs: 80,
   );
   static const _forgiving = HumSensitivityTuning(
     switchFrames: 7,
