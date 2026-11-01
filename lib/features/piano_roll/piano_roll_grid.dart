@@ -953,6 +953,12 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     _totalPointerDelta += event.delta;
 
     if (_dragMode == _DragMode.marqueeSelect) {
+      // The shared slop gate below is skipped in marquee mode, so gate the
+      // drag distinction here: a tap-select on pointer-up is only valid for
+      // gestures that never left the 8 px slop radius.
+      if (!_movedBeyondSlop && _totalPointerDelta.distance > 8.0) {
+        _movedBeyondSlop = true;
+      }
       final gridPos = _localToGrid(event.localPosition);
       final rect = _marqueeFromPoints(_marqueeStart!, gridPos);
       setState(() {
@@ -1033,6 +1039,45 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     }
   }
 
+  /// Handles a stationary tap on a note for `draw` / `select`: auditions the
+  /// pitch, solo-selects or refines the selection via the 300 ms double-tap
+  /// window, and anchors the detection column to the note's start tick.
+  void _handleNoteTap(PianoRollNote hit, PianoRollState state) {
+    NotePlayer.instance.previewTimbre(
+      ref.read(pianoRollProvider).sound,
+      hit.midiNote,
+      volume: ref.read(settingsProvider).noteVolume,
+    );
+    final now = DateTime.now();
+    final isDoubleTap =
+        _lastTapNoteId == hit.id &&
+        _lastTapTime != null &&
+        now.difference(_lastTapTime!).inMilliseconds < 300;
+    final notifier = ref.read(pianoRollProvider.notifier);
+    if (isDoubleTap) {
+      // Restore the selection that existed before the first tap,
+      // then toggle this note in/out of it.
+      final toggled = _preTapSelection.contains(hit.id)
+          ? _preTapSelection.difference({hit.id})
+          : {..._preTapSelection, hit.id};
+      notifier.setSelection(toggled.isEmpty ? {hit.id} : toggled);
+      notifier.selectColumn(hit.startTick);
+      HapticFeedback.mediumImpact();
+      _lastTapTime = null;
+      _lastTapNoteId = null;
+    } else {
+      _preTapSelection = state.selectedNoteIds;
+      final isAlreadySolo =
+          state.selectedNoteIds.length == 1 &&
+          state.selectedNoteIds.contains(hit.id);
+      notifier.selectNote(isAlreadySolo ? null : hit.id);
+      notifier.selectColumn(hit.startTick);
+      HapticFeedback.selectionClick();
+      _lastTapTime = now;
+      _lastTapNoteId = hit.id;
+    }
+  }
+
   void _onPointerUp(PointerUpEvent event, PianoRollState state) {
     if (!_pointers.containsKey(event.pointer)) return;
     final wasPinching = _pinching;
@@ -1040,6 +1085,22 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
     _longPressTimer?.cancel();
 
     if (_dragMode == _DragMode.marqueeSelect) {
+      if (!_movedBeyondSlop) {
+        final hit = _hitTestNote(_localToGrid(event.localPosition), state);
+        if (hit != null) {
+          _handleNoteTap(hit, state);
+          setState(() {
+            _marqueeStart = null;
+            _marqueeCurrent = null;
+            _marqueeRect = null;
+            _marqueePreviewIds = const <String>{};
+          });
+          _dragMode = _DragMode.none;
+          _movedBeyondSlop = false;
+          _totalPointerDelta = Offset.zero;
+          return;
+        }
+      }
       ref.read(pianoRollProvider.notifier).setSelection(_marqueePreviewIds);
       HapticFeedback.selectionClick();
       setState(() {
@@ -1095,38 +1156,7 @@ class _PianoRollGridState extends ConsumerState<PianoRollGrid> {
           }
           HapticFeedback.lightImpact();
         } else {
-          NotePlayer.instance.previewTimbre(
-            ref.read(pianoRollProvider).sound,
-            hit.midiNote,
-            volume: ref.read(settingsProvider).noteVolume,
-          );
-          final now = DateTime.now();
-          final isDoubleTap =
-              _lastTapNoteId == hit.id &&
-              _lastTapTime != null &&
-              now.difference(_lastTapTime!).inMilliseconds < 300;
-          if (isDoubleTap) {
-            // Restore the selection that existed before the first tap,
-            // then toggle this note in/out of it.
-            final toggled = _preTapSelection.contains(hit.id)
-                ? _preTapSelection.difference({hit.id})
-                : {..._preTapSelection, hit.id};
-            notifier.setSelection(toggled.isEmpty ? {hit.id} : toggled);
-            notifier.selectColumn(hit.startTick);
-            HapticFeedback.mediumImpact();
-            _lastTapTime = null;
-            _lastTapNoteId = null;
-          } else {
-            _preTapSelection = state.selectedNoteIds;
-            final isAlreadySolo =
-                state.selectedNoteIds.length == 1 &&
-                state.selectedNoteIds.contains(hit.id);
-            notifier.selectNote(isAlreadySolo ? null : hit.id);
-            notifier.selectColumn(hit.startTick);
-            HapticFeedback.selectionClick();
-            _lastTapTime = now;
-            _lastTapNoteId = hit.id;
-          }
+          _handleNoteTap(hit, state);
         }
       } else {
         if (state.activeTool != PianoRollTool.scissors) {

@@ -60,6 +60,7 @@ Voicings remain horizontal; captured note queries are separate
 from applied selections, including deferred provider notifications. Song is
 temporarily unavailable through normal navigation; preserve its data and legacy
 implementation, and restore saved Song destinations to Writer.
+Raw `Listener` canvases (Piano Roll grid, Fretboard, Writer melody timeline) gate input with `isPrimaryPointerButton` (`lib/utils/pointer_buttons.dart`) so right/middle clicks are inert, and reset gesture state on `onPointerCancel`. In Piano Roll Select, a stationary tap on a note selects it; the marquee commits only after movement.
 
 ## Build, Test, and Development Commands
 Run `flutter pub get` after dependency changes. Use `flutter run` for the default attached device, or `flutter run -d <device-id>` after checking `flutter devices`. Keep code clean with `dart format lib` and `flutter analyze`. Run `flutter test` for Dart and widget tests once they exist under `test/`. CI currently builds with `flutter build web --release` for Firebase preview/production and `flutter build appbundle --release` for Play Store delivery.
