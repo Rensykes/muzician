@@ -25,10 +25,10 @@ List<PitchFrame> _frames(
 }
 
 void main() {
-  test('emits a frame every 16 ms with window-start timestamps', () {
+  test('emits a frame every 16 ms with window-centre timestamps', () {
     final frames = _frames([HumNote(midiToHz(60), 0, 500)], totalMs: 500);
-    expect(frames.first.timestampMs, 0);
-    expect(frames[1].timestampMs, 16);
+    expect(frames.first.timestampMs, 32);
+    expect(frames[1].timestampMs, 48);
   });
 
   test('C4 E4 G4 with gaps becomes three notes with accurate onsets', () {
@@ -44,7 +44,7 @@ void main() {
     );
     expect(detected.map((n) => n.midiNote), [60, 64, 67]);
     for (var i = 0; i < 3; i++) {
-      expect((detected[i].startMs - notes[i].startMs).abs(), lessThan(80));
+      expect((detected[i].startMs - notes[i].startMs).abs(), lessThan(40));
     }
   });
 
