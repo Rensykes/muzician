@@ -12,10 +12,12 @@ import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../schema/rules/songwriter_audio_rules.dart';
 import '../schema/rules/songwriter_playback_rules.dart';
 import '../schema/rules/songwriter_rules.dart';
+import '../utils/guitar_synth.dart' show GuitarStrokeString;
 import '../utils/note_player.dart';
 import '../utils/playback_profiling.dart';
 import '../utils/tick_pacer.dart';
 import 'drum_pattern_playback_store.dart';
+import 'playback_voice_prepare_sink.dart';
 import 'save_system_store.dart';
 import 'settings_store.dart';
 import 'songwriter_audio_audition_store.dart';
@@ -137,6 +139,35 @@ final songwriterSequencedNoteStopSinkProvider =
       (ref) => NotePlayer.instance.stopSequencedNotes,
     );
 
+/// Sink that sounds one whole guitar strum stroke as a single voice. [strings]
+/// carry each string's onset and duration; [guitarTone] null follows the
+/// shared guitar preference. Override in tests.
+typedef SongwriterGuitarStrokeSink =
+    void Function({
+      required List<GuitarStrokeString> strings,
+      required double volume,
+      required double pan,
+      GuitarTone? guitarTone,
+    });
+
+final songwriterGuitarStrokeSinkProvider = Provider<SongwriterGuitarStrokeSink>(
+  (ref) {
+    return ({
+      required List<GuitarStrokeString> strings,
+      required double volume,
+      required double pan,
+      GuitarTone? guitarTone,
+    }) {
+      NotePlayer.instance.playSequencedStroke(
+        strings,
+        volume: 0.6 * volume,
+        pan: pan,
+        guitarTone: guitarTone ?? ref.read(settingsProvider).guitarTone,
+      );
+    };
+  },
+);
+
 // ─── Transport State ─────────────────────────────────────────────────────────
 
 enum SongwriterPlaybackStatus { idle, playing, completed }
@@ -187,6 +218,48 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
     return const SongwriterPlaybackState();
   }
 
+  // Extra players absorb voices that outlive their release while stopping.
+  static const _sequencedPlayerHeadroom = 2;
+
+  static int _stringNoteCount(SongwriterPlaybackEvent event) =>
+      event.strokeGroups.fold<int>(0, (sum, group) => sum + group.notes.length);
+
+  Future<void> _prepareVoices(
+    PlaybackVoicePrepareSink sink,
+    SongwriterVoicePlan plan,
+    PlaybackProfileTask? runTrace,
+    int runId,
+  ) async {
+    if (plan.voices.isEmpty) return;
+    final watch = Stopwatch()..start();
+    try {
+      await sink(
+        plan.voices,
+        sequencedPlayers: plan.peakSequencedVoices == 0
+            ? 0
+            : plan.peakSequencedVoices + _sequencedPlayerHeadroom,
+      );
+      runTrace?.instant(
+        'writer.playback.prepare_voices_complete',
+        arguments: {
+          'run_id': runId,
+          'voice_count': plan.voices.length,
+          'peak_sequenced_voices': plan.peakSequencedVoices,
+          'duration_us': watch.elapsedMicroseconds,
+        },
+      );
+    } catch (error) {
+      // Lazy synthesis at play time still covers every voice.
+      runTrace?.instant(
+        'writer.playback.prepare_voices_failed',
+        arguments: {
+          'run_id': runId,
+          'error_type': error.runtimeType.toString(),
+        },
+      );
+    }
+  }
+
   Future<void> startPlayback({
     int startTick = 0,
     Duration? tickDurationOverride,
@@ -219,6 +292,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
         songwriterGuitarSequencedNoteSinkProvider,
       );
       final sequencedNoteSink = ref.read(songwriterSequencedNoteSinkProvider);
+      final strokeSink = ref.read(songwriterGuitarStrokeSinkProvider);
       final sequencedNoteStopSink = ref.read(
         songwriterSequencedNoteStopSinkProvider,
       );
@@ -250,7 +324,12 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
               event.sequencedNoteGroups.fold<int>(
                 0,
                 (sum, group) => sum + group.notes.length,
-              ),
+              ) +
+              _stringNoteCount(event),
+        );
+        final strokeCount = events.fold<int>(
+          0,
+          (count, event) => count + event.strokeGroups.length,
         );
         final drumCount = events.fold<int>(
           0,
@@ -267,6 +346,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
             'duration_us': flattenDurationUs,
             'event_count': events.length,
             'note_count': noteCount,
+            'stroke_count': strokeCount,
             'drum_count': drumCount,
           },
         );
@@ -291,24 +371,36 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       final tickDuration =
           tickDurationOverride ?? pr_rules.tickDuration(cfg.tempo);
 
+      final profileWindowEvents = playbackProfilingEnabled
+          ? events
+                .where(
+                  (event) =>
+                      event.tick >= profileStartTick && event.tick < endTick,
+                )
+                .toList(growable: false)
+          : const <SongwriterPlaybackEvent>[];
       final profileRun = playbackProfilingEnabled
           ? PlaybackProfileRunStats(
               runId: runId,
-              expectedVoiceCount: events
-                  .where(
-                    (event) =>
-                        event.tick >= profileStartTick && event.tick < endTick,
-                  )
-                  .fold<int>(
-                    0,
-                    (count, event) =>
-                        count +
-                        event.noteGroups.length +
-                        event.sequencedNoteGroups.fold<int>(
-                          0,
-                          (sum, group) => sum + group.notes.length,
-                        ),
-                  ),
+              expectedStrokeCount: profileWindowEvents.fold<int>(
+                0,
+                (count, event) => count + event.strokeGroups.length,
+              ),
+              expectedStringNoteCount: profileWindowEvents.fold<int>(
+                0,
+                (count, event) => count + _stringNoteCount(event),
+              ),
+              expectedVoiceCount: profileWindowEvents.fold<int>(
+                0,
+                (count, event) =>
+                    count +
+                    event.noteGroups.length +
+                    event.strokeGroups.length +
+                    event.sequencedNoteGroups.fold<int>(
+                      0,
+                      (sum, group) => sum + group.notes.length,
+                    ),
+              ),
             )
           : null;
       if (profileRun != null) {
@@ -334,6 +426,23 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
       );
 
       final audioSink = ref.read(songwriterAudioClipSinkProvider);
+      // Synthesis and player construction run now, off the clock's hot path;
+      // they overlap the clip prepare below and never fail the run.
+      final voicePlan = playbackVoicePlan(
+        events,
+        tickDuration: tickDuration,
+        measureTicks: measureTicks,
+        startTick: profileStartTick,
+        endTick: endTick,
+        metronome: metronomeOn,
+        defaultGuitarTone: settings.guitarTone,
+      );
+      final voicePrepare = _prepareVoices(
+        ref.read(playbackVoicePrepareSinkProvider),
+        voicePlan,
+        runTrace,
+        runId,
+      );
       // Already sorted by startMs by the rule.
       final clipScheduleWatch = playbackProfilingEnabled
           ? (Stopwatch()..start())
@@ -368,6 +477,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
         clipPrepareTrace?.finish(
           arguments: {'outcome': 'prepare_future_completed'},
         );
+        await voicePrepare;
       } catch (error, stackTrace) {
         clipPrepareTrace?.finishError(error, stage: 'prepare');
         Error.throwWithStackTrace(error, stackTrace);
@@ -541,6 +651,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                 'dispatch_lateness_us': eventLateUs,
                 'requested_voice_count':
                     event.noteGroups.length +
+                    event.strokeGroups.length +
                     event.sequencedNoteGroups.fold<int>(
                       0,
                       (sum, group) => sum + group.notes.length,
@@ -553,6 +664,8 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                   0,
                   (sum, group) => sum + group.notes.length,
                 ),
+                'stroke_count': event.strokeGroups.length,
+                'string_note_count': _stringNoteCount(event),
                 'drum_count': event.drumGroups.fold<int>(
                   0,
                   (sum, group) => sum + group.drumLanes.length,
@@ -571,12 +684,7 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                 );
           for (final group in event.noteGroups) {
             final sink = group.isGuitar ? guitarNoteSink : noteSink;
-            final gate = Duration(
-              microseconds: (tickDuration.inMicroseconds * measureTicks).clamp(
-                1,
-                700000,
-              ),
-            );
+            final gate = songwriterChordGate(tickDuration, measureTicks);
             if (eventProfile == null) {
               sink(group.midiNotes, group.volume, group.pan, duration: gate);
             } else {
@@ -629,6 +737,18 @@ class SongwriterPlaybackNotifier extends Notifier<SongwriterPlaybackState> {
                   invokeSink,
                 );
               }
+            }
+          }
+          for (final group in event.strokeGroups) {
+            void invokeStroke() => strokeSink(
+              strings: strokeStrings(group, tickDuration),
+              volume: group.volume,
+              pan: group.pan,
+            );
+            if (eventProfile == null) {
+              invokeStroke();
+            } else {
+              withPlaybackProfileVoice(eventProfile.nextVoice(), invokeStroke);
             }
           }
           for (final group in event.drumGroups) {

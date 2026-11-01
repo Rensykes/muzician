@@ -39,6 +39,12 @@ Writer block musical content is canonical in Save System entries; Writer keeps p
 
 Melody placement validation must account for expanded lane repeats and preserve their existing origins. Melody length is named and normalized to whole bars from the last note on save (1–32 editor bars). Placement limits use the last-note bar for normalized melodies and the rounded-up stored length for legacy non-bar-aligned patterns until their next save. Melody content and playback stop at the last-note bar; a retained over-long placement keeps its span and shows a silent tail, may move only with that unchanged span, and must resize within the placement limit. Linked reuse retains the canonical Save and pattern; Make Unique detaches one placement. New Melody lanes default to Piano; a legacy unset sound follows each pattern's target and shared guitar tone, while explicit lane sounds are independent.
 
+Writer plays each guitar strum stroke as one grouped voice (`strokeGroups`,
+`NotePlayer.playSequencedStroke`); keep melody notes on the per-note path. Keep
+`NotePlayer` one-shot players without the per-frame position updater, and verify
+transport timing with `lib/profile_writer_playback.dart` run-stats, not the
+audio Future completion.
+
 Writer native Harmony eligibility uses the saved instrument mode and selection: Fretboard requires valid Chord mode; Free remains an instrument-only idea. Exact Harmony preserves native notes and the user label without inferring chord identity. Each section assigns a Fretboard Harmony source to at most one Guitar Strum lane. Project key is canonical; instrument and Writer key changes require confirmation before updating `ProjectConfig`.
 
 Apply the persistent Sharps/Flats preference at display boundaries only. Keep music callbacks and transfer payloads canonical; preserve literal Save names and exact Harmony labels. Format recognized symbols only after validating root/quality metadata, retaining slash bass and octave information.

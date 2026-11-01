@@ -6,7 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/store/playback_voice_prepare_sink.dart';
+import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/song_playback_store.dart';
+import 'package:muzician/utils/playback_voice_spec.dart';
 import 'package:muzician/store/songwriter_audio_sink.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
@@ -151,6 +154,97 @@ void main() {
       expect(container.read(songwriterPlaybackProvider).currentTick, 8);
     },
   );
+  group('voice preparation', () {
+    final prepareCalls = <({Set<PlaybackVoiceSpec> voices, int players})>[];
+    final accents = <bool>[];
+    late _PreparingSink clips;
+    late ProviderContainer container;
+    var voicePrepare = Completer<void>();
+
+    Future<void> recordPrepare(
+      Iterable<PlaybackVoiceSpec> voices, {
+      int sequencedPlayers = 0,
+    }) {
+      prepareCalls.add((voices: voices.toSet(), players: sequencedPlayers));
+      return voicePrepare.future;
+    }
+
+    Future<void> setUpContainer() async {
+      prepareCalls.clear();
+      accents.clear();
+      voicePrepare = Completer<void>();
+      clips = _PreparingSink()..prepared.complete();
+      container = ProviderContainer(
+        overrides: [
+          songwriterAudioClipSinkProvider.overrideWithValue(clips),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required accent}) async => accents.add(accent),
+          ),
+          playbackVoicePrepareSinkProvider.overrideWithValue(recordPrepare),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .addSection(label: 'A', lengthBars: 1);
+      await container.read(settingsProvider.notifier).setMetronomeEnabled(true);
+    }
+
+    test('the run waits for preparation before its first tick', () async {
+      await setUpContainer();
+      final run = container
+          .read(songwriterPlaybackProvider.notifier)
+          .startPlayback(tickDurationOverride: Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(prepareCalls, hasLength(1));
+      expect(prepareCalls.single.voices, {
+        const PlaybackVoiceSpec.click(accent: true),
+        const PlaybackVoiceSpec.click(accent: false),
+      });
+      expect(accents, isEmpty);
+      expect(
+        container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.playing,
+      );
+      voicePrepare.complete();
+      await run;
+      expect(accents, isNotEmpty);
+      expect(
+        container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.completed,
+      );
+    });
+
+    test('Stop during voice preparation aborts without dispatching', () async {
+      await setUpContainer();
+      final transport = container.read(songwriterPlaybackProvider.notifier);
+      final run = transport.startPlayback(tickDurationOverride: Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      transport.stopPlayback();
+      voicePrepare.complete();
+      await run;
+      expect(accents, isEmpty);
+      expect(
+        container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.idle,
+      );
+    });
+
+    test('a failing voice preparation still plays the run', () async {
+      await setUpContainer();
+      final run = container
+          .read(songwriterPlaybackProvider.notifier)
+          .startPlayback(tickDurationOverride: Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      voicePrepare.completeError(StateError('render failed'));
+      await run;
+      expect(accents, isNotEmpty);
+      expect(
+        container.read(songwriterPlaybackProvider).status,
+        SongwriterPlaybackStatus.completed,
+      );
+    });
+  });
 }
 
 class _PreparingSink implements SongAudioClipSink {

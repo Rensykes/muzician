@@ -7,10 +7,12 @@ import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_playback_rules.dart';
 import 'package:muzician/store/drum_pattern_playback_store.dart';
+import 'package:muzician/store/playback_voice_prepare_sink.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
 import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/utils/playback_profiling.dart';
+import 'package:muzician/utils/playback_voice_spec.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -181,6 +183,133 @@ void main() {
           HarmonyLaneInstrument.fretboard,
         );
       }
+    },
+  );
+
+  test(
+    'transport sends one stroke sink call per strum stroke, in stroke order',
+    () async {
+      final strokes = <(List<(int, int, int)>, double, double, GuitarTone?)>[];
+      final perString = <int>[];
+      final container = ProviderContainer(
+        overrides: [
+          songwriterGuitarStrokeSinkProvider.overrideWithValue(
+            ({required strings, required volume, required pan, guitarTone}) =>
+                strokes.add((
+                  [for (final s in strings) (s.midi, s.onsetMs, s.durationMs)],
+                  volume,
+                  pan,
+                  guitarTone,
+                )),
+          ),
+          songwriterGuitarSequencedNoteSinkProvider.overrideWithValue(
+            ({
+              required midiNote,
+              required duration,
+              required onsetDelay,
+              required volume,
+              required pan,
+              guitarTone,
+            }) => perString.add(midiNote),
+          ),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required accent}) async {},
+          ),
+          songwriterNoteSinkProvider.overrideWithValue(
+            (midiNotes, volume, pan, {duration}) {},
+          ),
+          songwriterGuitarNoteSinkProvider.overrideWithValue(
+            (midiNotes, volume, pan, {duration}) {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(
+            const SongwriterProjectSnapshot(
+              config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+              sections: [
+                SongSection(
+                  id: 's',
+                  lengthBars: 1,
+                  order: 0,
+                  lanes: [
+                    SongLane(
+                      id: 'harmony',
+                      kind: SongLaneKind.harmony,
+                      order: 0,
+                      blocks: [
+                        SongBlock(
+                          id: 'c',
+                          startBar: 0,
+                          spanBars: 1,
+                          chordSymbol: 'C',
+                          chordQuality: '',
+                          chordRootPc: 0,
+                          chordNotes: ['C', 'E', 'G'],
+                        ),
+                      ],
+                    ),
+                    SongLane(
+                      id: 'strum',
+                      kind: SongLaneKind.guitarStrum,
+                      order: 1,
+                      anchorLaneId: 'harmony',
+                      volume: 0.5,
+                      pan: 0.25,
+                      blocks: [
+                        SongBlock(
+                          id: 'b',
+                          startBar: 0,
+                          spanBars: 1,
+                          patternId: 'p',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+              guitarStrumPatterns: [
+                GuitarStrumPattern(
+                  id: 'p',
+                  name: 'DU',
+                  lengthTicks: 16,
+                  events: [
+                    GuitarStrumEvent(
+                      tick: 0,
+                      direction: GuitarStrumDirection.down,
+                    ),
+                    GuitarStrumEvent(
+                      tick: 4,
+                      direction: GuitarStrumDirection.up,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+
+      await container
+          .read(songwriterPlaybackProvider.notifier)
+          .startPlayback(tickDurationOverride: const Duration(milliseconds: 1));
+
+      expect(perString, isEmpty);
+      expect(strokes, hasLength(2));
+      expect(strokes.map((s) => (s.$2, s.$3, s.$4)), [
+        (0.5, 0.25, null),
+        (0.5, 0.25, null),
+      ]);
+      // Down: low to high; up: high to low, each string 12 ms after the last.
+      expect(
+        strokes.map((s) => [for (final string in s.$1) (string.$1, string.$2)]),
+        [
+          [(60, 0), (64, 12), (67, 24)],
+          [(67, 0), (64, 12), (60, 24)],
+        ],
+      );
+      // The first stroke has a full gate (2 ticks at the 1 ms override).
+      expect(strokes.first.$1.map((string) => string.$3), [2, 2, 2]);
     },
   );
 
@@ -585,6 +714,115 @@ void main() {
         expect(volume, 0.8 * 0.5);
         expect(pan, 0.25);
       }
+    },
+  );
+
+  test(
+    'startPlayback prepares the unique chord and drum voices first',
+    () async {
+      final prepared = <PlaybackVoiceSpec>[];
+      var preparedBeforeFirstSink = false;
+      final container = ProviderContainer(
+        overrides: [
+          playbackVoicePrepareSinkProvider.overrideWithValue((
+            voices, {
+            sequencedPlayers = 0,
+          }) async {
+            prepared.addAll(voices);
+          }),
+          songwriterNoteSinkProvider.overrideWithValue((
+            notes,
+            volume,
+            pan, {
+            duration,
+          }) {
+            preparedBeforeFirstSink = prepared.isNotEmpty;
+          }),
+          drumPatternPlaybackSinkProvider.overrideWithValue(
+            (lanes, volume, pan) async {},
+          ),
+          songwriterMetronomeSinkProvider.overrideWithValue(
+            ({required bool accent}) async {},
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(songwriterProvider.notifier)
+          .loadProject(
+            const SongwriterProjectSnapshot(
+              config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+              sections: [
+                SongSection(
+                  id: 's1',
+                  lengthBars: 1,
+                  order: 0,
+                  lanes: [
+                    SongLane(
+                      id: 'l1',
+                      kind: SongLaneKind.harmony,
+                      order: 0,
+                      blocks: [
+                        SongBlock(
+                          id: 'b1',
+                          startBar: 0,
+                          spanBars: 1,
+                          chordSymbol: 'C',
+                          chordQuality: '',
+                          chordRootPc: 0,
+                          chordNotes: ['C', 'E', 'G'],
+                        ),
+                      ],
+                    ),
+                    SongLane(
+                      id: 'l2',
+                      kind: SongLaneKind.drum,
+                      order: 1,
+                      blocks: [
+                        SongBlock(
+                          id: 'b2',
+                          startBar: 0,
+                          spanBars: 1,
+                          patternId: 'p1',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+              drumPatterns: [
+                DrumPattern(
+                  id: 'p1',
+                  name: 'beat',
+                  lengthTicks: 16,
+                  lanes: [
+                    DrumLaneSequence(
+                      laneId: DrumLaneId.kick,
+                      activeTicks: [0, 8],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+
+      await container
+          .read(songwriterPlaybackProvider.notifier)
+          .startPlayback(tickDurationOverride: Duration.zero);
+
+      expect(preparedBeforeFirstSink, isTrue);
+      expect(prepared.map((voice) => voice.kind).toSet(), {
+        PlaybackVoiceKind.click,
+        PlaybackVoiceKind.sequencedChord,
+        PlaybackVoiceKind.drum,
+      });
+      expect(prepared.where((voice) => voice.kind == PlaybackVoiceKind.drum), [
+        const PlaybackVoiceSpec.drum(DrumLaneId.kick),
+      ]);
+      final chord = prepared.singleWhere(
+        (voice) => voice.kind == PlaybackVoiceKind.sequencedChord,
+      );
+      expect(chord.midiNotes, [60, 64, 67]);
     },
   );
 

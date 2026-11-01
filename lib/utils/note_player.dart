@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import '../models/guitar_sound.dart';
 import '../models/song_project.dart';
 import 'guitar_synth.dart';
+import 'playback_voice_spec.dart';
 import 'playback_profiling.dart';
 import 'playback_profile_source.dart';
 
@@ -38,6 +39,9 @@ const _sampleRate = 44100;
 const _noteDurationMs = 700;
 const _decayRate = 5.5;
 const _poolSize = 6;
+// Completion handling (seek back to the start) after a one-shot's own length.
+const _poolHoldMarginMs = 60;
+const _previewStrumHoldMs = 1800;
 
 // Metronome click — short percussive sine with steep decay. Two flavors:
 // the accent fires on the downbeat (beat 1), the weak click on other beats.
@@ -270,13 +274,135 @@ Uint8List _renderCrash(int sampleRate) {
   return _encodeWav(samples);
 }
 
+// ── Voice rendering (pure; safe to run in a background isolate) ──────────────
+
+Uint8List _renderDrumWav(DrumLaneId lane) {
+  switch (lane) {
+    case DrumLaneId.kick:
+      return _renderDrumKick(_sampleRate);
+    case DrumLaneId.snare:
+      return _renderDrumSnare(_sampleRate);
+    case DrumLaneId.closedHiHat:
+      return _renderHiHat(false, _sampleRate);
+    case DrumLaneId.openHiHat:
+      return _renderHiHat(true, _sampleRate);
+    case DrumLaneId.clap:
+      return _renderClap(_sampleRate);
+    case DrumLaneId.lowTom:
+      return _renderTom(
+        _drumLowTomFreq,
+        _drumLowTomDurationMs,
+        _drumLowTomDecay,
+        _sampleRate,
+      );
+    case DrumLaneId.highTom:
+      return _renderTom(
+        _drumHighTomFreq,
+        _drumHighTomDurationMs,
+        _drumHighTomDecay,
+        _sampleRate,
+      );
+    case DrumLaneId.crash:
+      return _renderCrash(_sampleRate);
+  }
+}
+
+Uint8List _renderPianoChord(List<int> notes, int durationMs) {
+  final mixed = Float64List(_sampleRate * durationMs ~/ 1000);
+  final gain = 1 / math.sqrt(notes.length);
+  for (final midi in notes) {
+    final wav = _renderSequencedNote(midi, durationMs);
+    final bytes = ByteData.sublistView(wav);
+    for (var i = 0; i < mixed.length; i++) {
+      mixed[i] += bytes.getInt16(44 + i * 2, Endian.little) * gain;
+    }
+  }
+  final peak = mixed.fold<double>(
+    32767,
+    (peak, value) => math.max(peak, value.abs()),
+  );
+  final samples = Int16List(mixed.length);
+  for (var i = 0; i < samples.length; i++) {
+    samples[i] = (mixed[i] * 32767 / peak).round();
+  }
+  return _encodeWav(samples);
+}
+
+/// Renders the WAV for [voice]. The single source of truth for every play and
+/// prepare path, keyed by [PlaybackVoiceSpec.cacheKey].
+Uint8List _renderPlaybackVoice(PlaybackVoiceSpec voice) {
+  switch (voice.kind) {
+    case PlaybackVoiceKind.click:
+      return _renderClick(voice.accent ? _clickFreqAccent : _clickFreqWeak);
+    case PlaybackVoiceKind.drum:
+      return _renderDrumWav(voice.lane!);
+    case PlaybackVoiceKind.sequencedNote:
+      final tone = voice.guitarTone;
+      return tone == null
+          ? _renderSequencedNote(voice.midiNotes.first, voice.durationMs)
+          : GuitarSynth.renderNote(
+              voice.midiNotes.first,
+              tone: tone,
+              duration: Duration(milliseconds: voice.durationMs),
+            );
+    case PlaybackVoiceKind.sequencedChord:
+      final tone = voice.guitarTone;
+      return tone == null
+          ? _renderPianoChord(voice.midiNotes, voice.durationMs)
+          : GuitarSynth.renderChord(
+              voice.midiNotes,
+              tone: tone,
+              duration: Duration(milliseconds: voice.durationMs),
+            );
+    case PlaybackVoiceKind.guitarStroke:
+      return GuitarSynth.renderStroke(
+        voice.strokeStrings,
+        tone: voice.guitarTone!,
+      );
+  }
+}
+
+List<Uint8List> _renderPlaybackVoices(List<PlaybackVoiceSpec> voices) => [
+  for (final voice in voices) _renderPlaybackVoice(voice),
+];
+
+/// Renders [voices] on at most [_maxRenderIsolates] background isolates.
+Future<List<Uint8List>> _renderOffIsolate(
+  List<PlaybackVoiceSpec> voices,
+) async {
+  final lanes = math.min(_maxRenderIsolates, voices.length);
+  final chunks = [for (var i = 0; i < lanes; i++) <PlaybackVoiceSpec>[]];
+  for (var i = 0; i < voices.length; i++) {
+    chunks[i % lanes].add(voices[i]);
+  }
+  final rendered = await Future.wait([
+    for (final chunk in chunks) compute(_renderPlaybackVoices, chunk),
+  ]);
+  return [
+    for (var i = 0; i < voices.length; i++) rendered[i % lanes][i ~/ lanes],
+  ];
+}
+
+/// Renders the WAVs for [voices], in order. Replaceable for tests.
+typedef PlaybackVoiceRenderer =
+    Future<List<Uint8List>> Function(List<PlaybackVoiceSpec> voices);
+
+const _maxRenderIsolates = 3;
+const _maxPreparedVoices = 256;
+const _maxPreparedSequencedPlayers = 16;
+// Hard cap on native sequenced players; prepare pre-creates only the plan's
+// peak (at most [_maxPreparedSequencedPlayers]).
+const _maxSequencedPlayers = 32;
+
 // ── Singleton ────────────────────────────────────────────────────────────────
 
 class NotePlayer {
-  NotePlayer._();
+  NotePlayer._() : _renderVoices = _renderOffIsolate;
 
   @visibleForTesting
-  NotePlayer.forTesting();
+  NotePlayer.forTesting({PlaybackVoiceRenderer? voiceRenderer})
+    : _renderVoices = voiceRenderer ?? _renderOffIsolate;
+
   static final NotePlayer instance = NotePlayer._();
 
   final List<AudioPlayer> _pool = [];
@@ -297,7 +423,15 @@ class NotePlayer {
   /// Last balance set on each pool player (see [_applyBalance]). Players
   /// start centered, so an absent entry means 0.0 has effectively been set.
   final Map<AudioPlayer, double> _balanceByPlayer = {};
+
+  /// Last volume set on each sequenced player; absent until first applied.
+  final Map<AudioPlayer, double> _volumeByPlayer = {};
   int _poolIndex = 0;
+
+  /// Which sample each pool player last held, and until when it is ringing.
+  final Map<AudioPlayer, Object> _poolSourceKey = {};
+  final Map<AudioPlayer, int> _poolBusyUntilMs = {};
+  final Stopwatch _poolClock = Stopwatch()..start();
 
   // Bytes cache — used by BytesSource on all non-iOS platforms.
   final Map<Object, Uint8List> _bytesCache = {};
@@ -309,7 +443,13 @@ class NotePlayer {
   final Set<String> _guitarStrumCacheKeys = {};
   static const _maxCachedGuitarStrums = 16;
 
+  // Prepared Writer strokes are LRU-bounded at the prepare cap, so one run's
+  // prepared set can never evict itself.
+  final Set<String> _strokeCacheKeys = {};
+  static const _maxCachedStrokes = _maxPreparedVoices;
+
   bool _ready = false;
+  final PlaybackVoiceRenderer _renderVoices;
 
   /// Initialises the player pool. Call once during app startup.
   Future<void> init({String? tempDirectoryOverride}) async {
@@ -331,7 +471,7 @@ class NotePlayer {
             await ioTempDir(); // resolves via note_player_io.dart
       }
       for (var i = 0; i < _poolSize; i++) {
-        final player = AudioPlayer();
+        final player = _newOneShotPlayer();
         await player.setReleaseMode(ReleaseMode.stop);
         _pool.add(player);
         if (playbackProfilingEnabled) {
@@ -465,54 +605,62 @@ class NotePlayer {
     GuitarTone? guitarTone,
   }) {
     if (!_ready || midiNotes.isEmpty) return;
-    final notes = midiNotes.map(GuitarSynth.safeMidi).toList()..sort();
-    final durationMs = GuitarSynth.durationMilliseconds(duration);
-    final key =
-        'chord_v${GuitarSynth.cacheVersion}_${guitarTone?.name ?? 'piano'}_'
-        '${notes.join('_')}_$durationMs';
-    Uint8List render() {
-      if (guitarTone != null) {
-        return GuitarSynth.renderChord(
-          notes,
-          tone: guitarTone,
-          duration: Duration(milliseconds: durationMs),
-        );
-      }
-      final mixed = Float64List(_sampleRate * durationMs ~/ 1000);
-      final gain = 1 / math.sqrt(notes.length);
-      for (final midi in notes) {
-        final wav = _renderSequencedNote(midi, durationMs);
-        final bytes = ByteData.sublistView(wav);
-        for (var i = 0; i < mixed.length; i++) {
-          mixed[i] += bytes.getInt16(44 + i * 2, Endian.little) * gain;
-        }
-      }
-      final peak = mixed.fold<double>(
-        32767,
-        (peak, value) => math.max(peak, value.abs()),
-      );
-      final samples = Int16List(mixed.length);
-      for (var i = 0; i < samples.length; i++) {
-        samples[i] = (mixed[i] * 32767 / peak).round();
-      }
-      return _encodeWav(samples);
-    }
-
+    final voice = PlaybackVoiceSpec.sequencedChord(
+      midiNotes,
+      duration: duration,
+      guitarTone: guitarTone,
+    );
     final profileVoice = playbackProfilingEnabled
         ? playbackProfileVoiceContext()
         : null;
     if (profileVoice != null) profileVoice.run.request(profileVoice);
     unawaited(
       _playSequencedNote(
-        notes.first,
-        duration: Duration(milliseconds: durationMs),
+        voice.midiNotes.first,
+        duration: Duration(milliseconds: voice.durationMs),
         onsetDelay: Duration.zero,
         volume: volume,
         pan: pan,
         generation: _sequencedGeneration,
         profileVoice: profileVoice,
-        cacheKeyOverride: key,
-        renderOverride: render,
+        cacheKeyOverride: voice.cacheKey,
+        renderOverride: () => _renderPlaybackVoice(voice),
+      ),
+    );
+  }
+
+  /// Plays one whole guitar stroke as a single voice. The stroke WAV carries
+  /// every string's own onset and duration, so the voice releases at the latest
+  /// string end and is cancelled by [stopSequencedNotes] like any sequenced
+  /// voice.
+  void playSequencedStroke(
+    List<GuitarStrokeString> strings, {
+    required GuitarTone guitarTone,
+    double volume = 0.8,
+    double pan = 0.0,
+  }) {
+    if (!_ready || strings.isEmpty) return;
+    final voice = PlaybackVoiceSpec.guitarStroke(
+      strings,
+      guitarTone: guitarTone,
+    );
+    final profileVoice = playbackProfilingEnabled
+        ? playbackProfileVoiceContext()
+        : null;
+    if (profileVoice != null) profileVoice.run.request(profileVoice);
+    final cacheKey = voice.cacheKey as String;
+    _rememberStrokes([cacheKey]);
+    unawaited(
+      _playSequencedNote(
+        voice.strokeStrings.first.midi,
+        duration: Duration(milliseconds: voice.durationMs),
+        onsetDelay: Duration.zero,
+        volume: volume,
+        pan: pan,
+        generation: _sequencedGeneration,
+        profileVoice: profileVoice,
+        cacheKeyOverride: cacheKey,
+        renderOverride: () => _renderPlaybackVoice(voice),
       ),
     );
   }
@@ -572,6 +720,125 @@ class NotePlayer {
     }
   }
 
+  /// Renders [voices] off the UI isolate, registers them in the WAV caches
+  /// (and the native file cache on Apple platforms), and pre-creates up to
+  /// [sequencedPlayers] sequenced players, so a run starts without synthesis
+  /// or player construction on its hot path.
+  ///
+  /// Idempotent: voices already cached and players already pooled cost nothing.
+  /// Best effort: a failure leaves the lazy play-time path to cover the voice.
+  /// A call that outlives its transport's Stop still fills the caches, which
+  /// the next run reuses.
+  Future<void> prepareForPlayback(
+    Iterable<PlaybackVoiceSpec> voices, {
+    int sequencedPlayers = 0,
+  }) async {
+    if (!_ready) return;
+    final unique = <Object, PlaybackVoiceSpec>{};
+    for (final voice in voices) {
+      if (unique.length >= _maxPreparedVoices) break;
+      unique.putIfAbsent(voice.cacheKey, () => voice);
+    }
+    final trace = playbackProfilingEnabled
+        ? PlaybackProfileTask.begin(
+            'note_player.prepare_for_playback',
+            arguments: {
+              'voice_count': unique.length,
+              'sequenced_players': sequencedPlayers,
+            },
+          )
+        : null;
+    try {
+      _rememberStrokes([
+        for (final voice in unique.values)
+          if (voice.kind == PlaybackVoiceKind.guitarStroke)
+            voice.cacheKey as String,
+      ]);
+      final toRender = [
+        for (final voice in unique.values)
+          if (!_bytesCache.containsKey(voice.cacheKey)) voice,
+      ];
+      if (toRender.isNotEmpty) {
+        List<Uint8List> rendered;
+        try {
+          rendered = await _renderVoices(toRender);
+          if (rendered.length != toRender.length) {
+            throw StateError('Renderer returned ${rendered.length} voices.');
+          }
+        } catch (_) {
+          rendered = _renderPlaybackVoices(toRender);
+        }
+        for (var i = 0; i < toRender.length; i++) {
+          _bytesCache.putIfAbsent(toRender[i].cacheKey, () => rendered[i]);
+        }
+      }
+      if (_needsFile) {
+        await Future.wait([
+          for (final voice in unique.values)
+            if (!_fileCache.containsKey(voice.cacheKey))
+              _ensureFile(
+                voice.cacheKey,
+                () => _renderPlaybackVoice(voice),
+              ).then<void>((_) {}, onError: (Object _) {}),
+        ]);
+      }
+      await _ensureSequencedPlayers(
+        sequencedPlayers.clamp(0, _maxPreparedSequencedPlayers),
+      );
+      trace?.finish(
+        arguments: {
+          'outcome': 'prepared',
+          'rendered_count': toRender.length,
+          'pooled_sequenced_players': _sequencedPool.length,
+        },
+      );
+    } catch (error) {
+      trace?.finishError(error, stage: 'prepare_for_playback');
+    }
+  }
+
+  int _sequencedPlayersBeingCreated = 0;
+
+  Future<void> _ensureSequencedPlayers(int count) async {
+    final missing =
+        count - _sequencedPool.length - _sequencedPlayersBeingCreated;
+    if (missing <= 0) return;
+    _sequencedPlayersBeingCreated += missing;
+    try {
+      final created = await Future.wait([
+        for (var i = 0; i < missing; i++) _createSequencedPlayer(),
+      ]);
+      _sequencedPool.addAll(created.whereType<AudioPlayer>());
+    } finally {
+      _sequencedPlayersBeingCreated -= missing;
+    }
+  }
+
+  /// A player for short one-shots. Nothing here listens to the position
+  /// stream, and the default per-frame updater queries the platform for every
+  /// ringing player on each frame, which loads the platform thread in step with
+  /// the number of simultaneous voices.
+  AudioPlayer _newOneShotPlayer() => AudioPlayer()..positionUpdater = null;
+
+  Future<AudioPlayer?> _createSequencedPlayer() async {
+    AudioPlayer? player;
+    try {
+      player = _newOneShotPlayer();
+      await player.setReleaseMode(ReleaseMode.stop);
+    } catch (_) {
+      if (player != null) unawaited(player.dispose());
+      return null;
+    }
+    playbackProfileInstant(
+      'note_player.player_created',
+      arguments: {
+        'kind': 'sequenced_prepared',
+        'player_id': identityHashCode(player),
+      },
+    );
+    return player;
+  }
+
   /// Plays a short metronome click at [volume] (0.0–1.0). [accent] picks the
   /// brighter downbeat click; otherwise the softer beat click.
   ///
@@ -593,27 +860,6 @@ class NotePlayer {
     unawaited(_playDrum(lane, volume, pan));
   }
 
-  static int _drumCacheKey(DrumLaneId lane) {
-    switch (lane) {
-      case DrumLaneId.kick:
-        return -10;
-      case DrumLaneId.snare:
-        return -11;
-      case DrumLaneId.closedHiHat:
-        return -12;
-      case DrumLaneId.openHiHat:
-        return -13;
-      case DrumLaneId.clap:
-        return -14;
-      case DrumLaneId.lowTom:
-        return -15;
-      case DrumLaneId.highTom:
-        return -16;
-      case DrumLaneId.crash:
-        return -17;
-    }
-  }
-
   /// Applies [pan] to a pool [player] only when it differs from the last
   /// value set — skips the platform-channel round trip in the common
   /// unpanned case (and lets clicks recenter for free).
@@ -624,49 +870,92 @@ class NotePlayer {
     await player.setBalance(clamped);
   }
 
-  Future<void> _playDrum(DrumLaneId lane, double volume, double pan) async {
-    final player = _pool[_poolIndex % _poolSize];
-    _poolIndex++;
-    await player.setVolume(volume.clamp(0.0, 1.0));
-    await _applyBalance(player, pan);
-    final cacheKey = _drumCacheKey(lane);
-    if (_needsFile) {
-      final path = await _ensureFile(cacheKey, () => _renderDrum(lane));
-      await player.play(DeviceFileSource(path));
-    } else {
-      final bytes = _bytesCache.putIfAbsent(cacheKey, () => _renderDrum(lane));
-      await player.play(BytesSource(bytes));
+  /// Applies [volume] to a sequenced [player] only when it differs from the
+  /// last value set, avoiding a platform round trip per voice.
+  Future<void> _applyVolume(AudioPlayer player, double volume) async {
+    final clamped = volume.clamp(0.0, 1.0);
+    if (_volumeByPlayer[player] == clamped) return;
+    final previous = _volumeByPlayer[player];
+    // Recorded before the await so concurrent voices on the same player skip
+    // the redundant call; platform calls keep their issue order.
+    _volumeByPlayer[player] = clamped;
+    try {
+      await player.setVolume(clamped);
+    } catch (_) {
+      if (previous == null) {
+        _volumeByPlayer.remove(player);
+      } else {
+        _volumeByPlayer[player] = previous;
+      }
+      rethrow;
     }
   }
 
-  Uint8List _renderDrum(DrumLaneId lane) {
-    switch (lane) {
-      case DrumLaneId.kick:
-        return _renderDrumKick(_sampleRate);
-      case DrumLaneId.snare:
-        return _renderDrumSnare(_sampleRate);
-      case DrumLaneId.closedHiHat:
-        return _renderHiHat(false, _sampleRate);
-      case DrumLaneId.openHiHat:
-        return _renderHiHat(true, _sampleRate);
-      case DrumLaneId.clap:
-        return _renderClap(_sampleRate);
-      case DrumLaneId.lowTom:
-        return _renderTom(
-          _drumLowTomFreq,
-          _drumLowTomDurationMs,
-          _drumLowTomDecay,
-          _sampleRate,
-        );
-      case DrumLaneId.highTom:
-        return _renderTom(
-          _drumHighTomFreq,
-          _drumHighTomDurationMs,
-          _drumHighTomDecay,
-          _sampleRate,
-        );
-      case DrumLaneId.crash:
-        return _renderCrash(_sampleRate);
+  /// Chooses the pool player for a short one-shot of [cacheKey].
+  ///
+  /// The Darwin player rebuilds its native item whenever the source URL
+  /// changes, which costs far more than replaying the URL it already holds. A
+  /// player that is idle and already holds this sample is therefore preferred;
+  /// otherwise the least recently used idle player, and only when every player
+  /// is still ringing the oldest one is taken over. A ringing player is never
+  /// chosen for the same sample, so a retrigger is not swallowed.
+  AudioPlayer _acquirePoolPlayer(Object cacheKey, int sampleMs) {
+    final nowMs = _poolClock.elapsedMilliseconds;
+    AudioPlayer? holder;
+    AudioPlayer? idle;
+    var idleSince = 0;
+    for (final candidate in _pool) {
+      final busyUntil = _poolBusyUntilMs[candidate] ?? 0;
+      if (busyUntil > nowMs) continue;
+      if (_poolSourceKey[candidate] == cacheKey) {
+        holder = candidate;
+        break;
+      }
+      if (idle == null || busyUntil < idleSince) {
+        idle = candidate;
+        idleSince = busyUntil;
+      }
+    }
+    final player = holder ?? idle ?? _pool[_poolIndex++ % _poolSize];
+    _markPoolPlayer(player, cacheKey, sampleMs);
+    return player;
+  }
+
+  void _markPoolPlayer(AudioPlayer player, Object cacheKey, int sampleMs) {
+    _poolSourceKey[player] = cacheKey;
+    _poolBusyUntilMs[player] =
+        _poolClock.elapsedMilliseconds + sampleMs + _poolHoldMarginMs;
+  }
+
+  static int _drumSampleMs(DrumLaneId lane) => switch (lane) {
+    DrumLaneId.kick => _drumKickDurationMs,
+    DrumLaneId.snare => _drumSnareDurationMs,
+    DrumLaneId.closedHiHat => _drumHiHatClosedDurationMs,
+    DrumLaneId.openHiHat => _drumHiHatOpenDurationMs,
+    DrumLaneId.clap => _drumClapDurationMs,
+    DrumLaneId.lowTom => _drumLowTomDurationMs,
+    DrumLaneId.highTom => _drumHighTomDurationMs,
+    DrumLaneId.crash => _drumCrashDurationMs,
+  };
+
+  Future<void> _playDrum(DrumLaneId lane, double volume, double pan) async {
+    final voice = PlaybackVoiceSpec.drum(lane);
+    final cacheKey = voice.cacheKey;
+    final player = _acquirePoolPlayer(cacheKey, _drumSampleMs(lane));
+    await player.setVolume(volume.clamp(0.0, 1.0));
+    await _applyBalance(player, pan);
+    if (_needsFile) {
+      final path = await _ensureFile(
+        cacheKey,
+        () => _renderPlaybackVoice(voice),
+      );
+      await player.play(DeviceFileSource(path));
+    } else {
+      final bytes = _bytesCache.putIfAbsent(
+        cacheKey,
+        () => _renderPlaybackVoice(voice),
+      );
+      await player.play(BytesSource(bytes));
     }
   }
 
@@ -682,6 +971,11 @@ class NotePlayer {
     render ??= () => _renderNote(midi);
     final player = _pool[_poolIndex % _poolSize];
     _poolIndex++;
+    _markPoolPlayer(
+      player,
+      cacheKey,
+      cacheKey is String ? _previewStrumHoldMs : _noteDurationMs,
+    );
     if (profileVoice != null) profileVoice.run.playerReusedCount++;
     final previewTrace = playbackProfilingEnabled
         ? PlaybackProfileTask.begin(
@@ -910,9 +1204,33 @@ class NotePlayer {
       }
       final AudioPlayer player;
       if (availablePlayer == null) {
-        player = AudioPlayer();
-        await player.setReleaseMode(ReleaseMode.stop);
-        _sequencedPool.add(player);
+        if (_sequencedPool.length + _sequencedPlayersBeingCreated >=
+            _maxSequencedPlayers) {
+          // Bounded pool: a voice that finds every player busy is dropped
+          // instead of growing the native player count without limit.
+          if (profileVoice != null) {
+            profileVoice.run.outcome(profileVoice, 'dropped_pool_exhausted');
+          }
+          noteTrace?.finish(
+            arguments: sequencedPlaybackProfileArguments(
+              profileTimelineArguments: profileVoice?.timelineArguments,
+              sequencedVoiceId: sequencedVoiceId,
+              additionalArguments: {
+                'outcome': 'dropped_pool_exhausted',
+                'pool_size': _sequencedPool.length,
+              },
+            ),
+          );
+          return;
+        }
+        _sequencedPlayersBeingCreated++;
+        try {
+          player = _newOneShotPlayer();
+          await player.setReleaseMode(ReleaseMode.stop);
+          _sequencedPool.add(player);
+        } finally {
+          _sequencedPlayersBeingCreated--;
+        }
         if (profileVoice != null) profileVoice.run.playerCreatedCount++;
         playbackProfileInstant(
           'note_player.player_created',
@@ -994,7 +1312,7 @@ class NotePlayer {
               )
             : null;
         try {
-          await player.setVolume(volume.clamp(0.0, 1.0));
+          await _applyVolume(player, volume);
           await _applyBalance(player, pan);
           configureTrace?.finish(
             arguments: sequencedPlaybackProfileArguments(
@@ -1037,24 +1355,14 @@ class NotePlayer {
           return;
         }
 
-        final Object cacheKey =
-            cacheKeyOverride ??
-            (guitarTone == null
-                ? 1000000 + midi * 10000000000 + durationMs
-                : GuitarSynth.noteCacheKey(
-                    midi,
-                    tone: guitarTone,
-                    duration: Duration(milliseconds: durationMs),
-                  ));
+        final noteVoice = PlaybackVoiceSpec.sequencedNote(
+          midi,
+          duration: Duration(milliseconds: durationMs),
+          guitarTone: guitarTone,
+        );
+        final Object cacheKey = cacheKeyOverride ?? noteVoice.cacheKey;
         Uint8List render() =>
-            renderOverride?.call() ??
-            (guitarTone == null
-                ? _renderSequencedNote(midi, durationMs)
-                : GuitarSynth.renderNote(
-                    midi,
-                    tone: guitarTone,
-                    duration: Duration(milliseconds: durationMs),
-                  ));
+            renderOverride?.call() ?? _renderPlaybackVoice(noteVoice);
         if (_needsFile) {
           final fileWasCached = playbackProfilingEnabled
               ? _fileCache.containsKey(cacheKey)
@@ -1455,34 +1763,45 @@ class NotePlayer {
   }
 
   Future<void> _playClick(bool accent, double volume) async {
-    final player = _pool[_poolIndex % _poolSize];
-    _poolIndex++;
+    final voice = PlaybackVoiceSpec.click(accent: accent);
+    final cacheKey = voice.cacheKey;
+    final player = _acquirePoolPlayer(cacheKey, _clickDurationMs);
     await player.setVolume(volume.clamp(0.0, 1.0));
     // Pool players are shared with panned notes/drums — recenter for clicks.
     await _applyBalance(player, 0.0);
-    final cacheKey = accent ? -1 : -2;
     if (_needsFile) {
       final path = await _ensureFile(
         cacheKey,
-        () => _renderClick(accent ? _clickFreqAccent : _clickFreqWeak),
+        () => _renderPlaybackVoice(voice),
       );
       await player.play(DeviceFileSource(path));
     } else {
       final bytes = _bytesCache.putIfAbsent(
         cacheKey,
-        () => _renderClick(accent ? _clickFreqAccent : _clickFreqWeak),
+        () => _renderPlaybackVoice(voice),
       );
       await player.play(BytesSource(bytes));
     }
   }
 
-  void _rememberGuitarStrum(String cacheKey) {
-    _guitarStrumCacheKeys
-      ..remove(cacheKey)
-      ..add(cacheKey);
-    while (_guitarStrumCacheKeys.length > _maxCachedGuitarStrums) {
-      final oldest = _guitarStrumCacheKeys.first;
-      _guitarStrumCacheKeys.remove(oldest);
+  void _rememberGuitarStrum(String cacheKey) =>
+      _rememberLru(_guitarStrumCacheKeys, [cacheKey], _maxCachedGuitarStrums);
+
+  void _rememberStrokes(Iterable<String> cacheKeys) =>
+      _rememberLru(_strokeCacheKeys, cacheKeys, _maxCachedStrokes);
+
+  /// Marks [cacheKeys] most recent, then evicts the oldest beyond [maxKeys].
+  /// Touching the whole set first keeps a run's own keys from evicting each
+  /// other.
+  void _rememberLru(Set<String> keys, Iterable<String> cacheKeys, int maxKeys) {
+    for (final cacheKey in cacheKeys) {
+      keys
+        ..remove(cacheKey)
+        ..add(cacheKey);
+    }
+    while (keys.length > maxKeys) {
+      final oldest = keys.first;
+      keys.remove(oldest);
       _bytesCache.remove(oldest);
       final path = _fileCache.remove(oldest);
       if (path == null) continue;

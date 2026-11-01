@@ -11,7 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song_project.dart';
 import '../schema/rules/piano_roll_playback_rules.dart' as rules;
 import '../utils/note_player.dart';
+import '../utils/playback_voice_spec.dart';
 import '../utils/tick_pacer.dart';
+import 'playback_voice_prepare_sink.dart';
 
 /// Signature for a function that plays [lanes] as drum voices at [volume],
 /// panned by [pan] (-1.0 left .. 1.0 right).
@@ -46,7 +48,10 @@ final drumPatternBackingSinkProvider = Provider<DrumPatternBackingSink>((ref) {
 /// Descriptor for the drum editor's "audition with backing": the section loop
 /// length in ticks and a `tick → midi pitches` chord bed that loops under the
 /// pattern.
-typedef DrumBackingDescriptor = ({int loopTicks, Map<int, List<int>> notesByTick});
+typedef DrumBackingDescriptor = ({
+  int loopTicks,
+  Map<int, List<int>> notesByTick,
+});
 
 enum DrumPatternPlaybackStatus { idle, playing }
 
@@ -108,6 +113,14 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
       }
     }
 
+    // Rendered before the clock starts so the first loop pass is not delayed
+    // by synthesis; preparation is best effort and never blocks Stop.
+    final prepareVoices = ref.read(playbackVoicePrepareSinkProvider);
+    final voices = {
+      for (final lane in pattern.lanes)
+        if (lane.activeTicks.isNotEmpty) PlaybackVoiceSpec.drum(lane.laneId),
+    };
+
     // Sixteenth-grid tick: a quarter note spans 4 ticks, so one tick is a
     // sixteenth.
     final tickDuration = rules.tickDuration(tempo);
@@ -117,6 +130,14 @@ class DrumPatternPlaybackNotifier extends Notifier<DrumPatternPlaybackState> {
       status: DrumPatternPlaybackStatus.playing,
       currentTick: 0,
     );
+    if (voices.isNotEmpty) {
+      try {
+        await prepareVoices(voices);
+      } catch (_) {
+        // Lazy synthesis at play time still covers every lane.
+      }
+      if (_version != version) return;
+    }
 
     // [TickPacer] anchors each tick to the wall clock so per-tick body work
     // (state mutation → rebuilds, the sinks) cannot accumulate into drift.

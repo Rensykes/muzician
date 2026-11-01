@@ -55,10 +55,19 @@ class PlaybackProfileRunStats {
   PlaybackProfileRunStats({
     required this.runId,
     required this.expectedVoiceCount,
+    this.expectedStrokeCount = 0,
+    this.expectedStringNoteCount = 0,
   });
 
   final int runId;
+
+  /// Platform voices the run should request; a strum stroke is one voice.
   final int expectedVoiceCount;
+
+  /// Strum strokes among the expected voices, and the individual string notes
+  /// they carry (the per-string voices of earlier measurements).
+  final int expectedStrokeCount;
+  final int expectedStringNoteCount;
   final Map<String, PlaybackProfileVoiceRecord> _voices = {};
   final List<int> _tickDispatchErrorsUs = [];
   final List<int> _eventDispatchErrorsUs = [];
@@ -79,7 +88,11 @@ class PlaybackProfileRunStats {
   int get activeVoiceCount =>
       _voices.values.where((voice) => voice.active).length;
   int get droppedVoiceCount => _voices.values
-      .where((voice) => voice.outcome == 'dropped_not_ready')
+      .where(
+        (voice) =>
+            voice.outcome == 'dropped_not_ready' ||
+            voice.outcome == 'dropped_pool_exhausted',
+      )
       .length;
   int get errorVoiceCount =>
       _voices.values.where((voice) => voice.outcome == 'error').length;
@@ -127,6 +140,7 @@ class PlaybackProfileRunStats {
       case 'error':
       case 'stolen_before_completion':
       case 'dropped_not_ready':
+      case 'dropped_pool_exhausted':
         if (!voice.terminated) {
           if (outcome == 'stolen_before_completion') stolenVoiceCount++;
           voice.outcome = outcome;
@@ -155,6 +169,8 @@ class PlaybackProfileRunStats {
     return {
       'run_id': runId,
       'expected_voice_count': expectedVoiceCount,
+      'expected_stroke_count': expectedStrokeCount,
+      'expected_string_note_count': expectedStringNoteCount,
       'requested_voice_count': requestedVoiceCount,
       'launched_voice_count': launchedVoiceCount,
       'play_future_completed_count': playFutureCompletedCount,
