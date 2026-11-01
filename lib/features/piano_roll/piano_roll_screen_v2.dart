@@ -22,6 +22,7 @@ import '../../ui/project_chip.dart';
 import '../../ui/transport_strip.dart' as transport;
 import '../../ui/core/app_info_panel.dart';
 import '../../utils/note_utils.dart';
+import '../../utils/note_player.dart';
 import '../_mockup_shell.dart';
 import '../instrument_shared/shared_scale_picker.dart';
 import 'piano_roll_detection_panel.dart';
@@ -663,7 +664,8 @@ class _PortraitActionBar extends ConsumerWidget {
 }
 
 // ── Tempo / Settings sheets ───────────────────────────────────────────────
-/// Bottom-sheet for page-level Roll settings (currently: metronome toggle).
+/// Bottom-sheet for page-level Roll settings (currently: metronome and
+/// sound).
 class _SettingsSheet extends ConsumerWidget {
   const _SettingsSheet();
 
@@ -671,6 +673,8 @@ class _SettingsSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppSettings settings = ref.watch(settingsProvider);
     final settingsNotifier = ref.read(settingsProvider.notifier);
+    final sound = ref.watch(pianoRollProvider.select((s) => s.sound));
+    final rollNotifier = ref.read(pianoRollProvider.notifier);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -695,7 +699,93 @@ class _SettingsSheet extends ConsumerWidget {
             height: 1.4,
           ),
         ),
+        const SizedBox(height: 16),
+        Text(
+          'Sound',
+          style: TextStyle(
+            color: StudioPalette.of(context).textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in PianoRollSound.values)
+              _SoundPill(
+                label: option.label,
+                active: option == sound,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  rollNotifier.setSound(option);
+                  NotePlayer.instance.previewTimbre(
+                    option,
+                    60,
+                    volume: settings.noteVolume,
+                  );
+                },
+              ),
+          ],
+        ),
       ],
+    );
+  }
+}
+
+/// A selectable sound chip used by [_SettingsSheet]. Mirrors the sizing and
+/// border language of [_ToolPill] but keeps its own accent color and
+/// Semantics so screen readers announce the sound name and selected state.
+class _SoundPill extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _SoundPill({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      button: true,
+      selected: active,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: active
+                ? StudioPalette.of(context).purple.withValues(alpha: 0.18)
+                : (StudioPalette.of(context).isStudio
+                          ? StudioPalette.of(context).textPrimary
+                          : Colors.white)
+                      .withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: active
+                  ? StudioPalette.of(context).purple.withValues(alpha: 0.5)
+                  : StudioPalette.of(context).glassBorder,
+              width: active ? 1.5 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: active
+                  ? StudioPalette.of(context).purple
+                  : StudioPalette.of(context).textSecondary,
+              fontSize: 12,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
