@@ -76,7 +76,9 @@ chmod +x "${xcode_tools_dir}/xcrun"
 export PATH="${xcode_tools_dir}:${PATH}"
 
 devices_json="$(flutter devices --machine)"
-selection="$(MUZICIAN_IOS_DEVICE_ID="${MUZICIAN_IOS_DEVICE_ID:-}" python3 -c '
+selection_error="$(mktemp)"
+selection=""
+if ! selection="$(MUZICIAN_IOS_DEVICE_ID="${MUZICIAN_IOS_DEVICE_ID:-}" python3 -c '
 import json
 import os
 import sys
@@ -112,7 +114,81 @@ else:
 selected_id = selected["id"]
 selected_name = selected.get("name", "iPhone")
 print(f"{selected_id}\t{selected_name}")
-' <<<"$devices_json")"
+' <<<"$devices_json" 2>"$selection_error")"; then
+  selection=""
+fi
+
+# Flutter intermittently fails to list a phone connected over Wi-Fi, while
+# CoreDevice (which the install and launch steps below already use) sees it.
+if [ -z "$selection" ]; then
+  devicectl_json="$(xcrun devicectl list devices --json-output - 2>/dev/null || true)"
+  if ! selection="$(MUZICIAN_IOS_DEVICE_ID="${MUZICIAN_IOS_DEVICE_ID:-}" python3 -c '
+import json
+import os
+import sys
+
+try:
+    devices = json.load(sys.stdin).get("result", {}).get("devices", [])
+except json.JSONDecodeError:
+    devices = []
+
+def is_physical_iphone(device):
+    hardware = device.get("hardwareProperties", {})
+    connection = device.get("connectionProperties", {})
+    return (
+        hardware.get("platform") == "iOS"
+        and hardware.get("reality") == "physical"
+        and hardware.get("deviceType") == "iPhone"
+        and connection.get("pairingState") == "paired"
+    )
+
+def device_id(device):
+    return device.get("hardwareProperties", {}).get("udid") or device.get("identifier", "")
+
+iphones = [device for device in devices if is_physical_iphone(device)]
+requested_id = os.environ["MUZICIAN_IOS_DEVICE_ID"]
+
+if requested_id:
+    selected = next(
+        (
+            device
+            for device in iphones
+            if requested_id in (device_id(device), device.get("identifier"))
+        ),
+        None,
+    )
+    if selected is None:
+        print(f"No paired physical iPhone matches MUZICIAN_IOS_DEVICE_ID={requested_id}.", file=sys.stderr)
+        sys.exit(2)
+elif len(iphones) == 1:
+    selected = iphones[0]
+elif not iphones:
+    print("No physical iPhone is available. Connect and unlock it, then run `flutter devices`.", file=sys.stderr)
+    sys.exit(2)
+else:
+    print("More than one physical iPhone is paired. Choose one with MUZICIAN_IOS_DEVICE_ID:", file=sys.stderr)
+    for device in iphones:
+        name = device.get("deviceProperties", {}).get("name", "iPhone")
+        print(f"  {name}: {device_id(device)}", file=sys.stderr)
+    sys.exit(2)
+
+selected_name = selected.get("deviceProperties", {}).get("name", "iPhone")
+print(f"{device_id(selected)}\t{selected_name}")
+' <<<"$devicectl_json" 2>"$selection_error")"; then
+    selection=""
+  fi
+fi
+
+if [ -z "$selection" ]; then
+  if [ -s "$selection_error" ]; then
+    cat "$selection_error" >&2
+  else
+    echo "No physical iPhone is available. Connect and unlock it, then run \`flutter devices\`." >&2
+  fi
+  rm -f "$selection_error"
+  exit 2
+fi
+rm -f "$selection_error"
 
 device_id="${selection%%$'\t'*}"
 device_name="${selection#*$'\t'}"
