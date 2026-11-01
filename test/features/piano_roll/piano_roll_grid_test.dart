@@ -885,6 +885,155 @@ void main() {
     expect(container.read(pianoRollProvider).selectedNoteIds, {'partial-a'});
   });
 
+  // ── Select tool tap ──────────────────────────────────────────────────────
+
+  testWidgets('select tool tap solo-selects a note', (tester) async {
+    const note = PianoRollNote(
+      id: 'select-tap-note',
+      midiNote: 66,
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      notes: const [note],
+      activeTool: PianoRollTool.select,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    // midi 66, tick 0: row index 84 - 66 = 18, so y = 18 * 18 = 324..342.
+    await tester.tapAt(
+      tester.getRect(gridFinder).topLeft + const Offset(56, 333),
+    );
+    await tester.pump();
+
+    final state = container.read(pianoRollProvider);
+    expect(state.selectedNoteIds, {
+      'select-tap-note',
+    }, reason: 'A tap on a note in Select must select it');
+    expect(
+      state.selectedColumnTick,
+      0,
+      reason: 'A tap on a note must anchor the selected column to it',
+    );
+  });
+
+  testWidgets('select tool double-tap adds a note to the selection', (
+    tester,
+  ) async {
+    const noteA = PianoRollNote(
+      id: 'select-tap-a',
+      midiNote: 66,
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    const noteB = PianoRollNote(
+      id: 'select-tap-b',
+      midiNote: 68,
+      pitchClass: 'G#',
+      noteWithOctave: 'G#4',
+      startTick: 2,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      notes: const [noteA, noteB],
+      activeTool: PianoRollTool.select,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final topLeft = tester.getRect(gridFinder).topLeft;
+    final noteAPoint = topLeft + const Offset(56, 333);
+    // midi 68, tick 2: row 16 -> y 289..305; x 56..168.
+    final noteBPoint = topLeft + const Offset(112, 297);
+
+    await tester.tapAt(noteAPoint);
+    await tester.pump();
+    await tester.tapAt(noteBPoint);
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.tapAt(noteBPoint);
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).selectedNoteIds,
+      containsAll(<String>{'select-tap-a', 'select-tap-b'}),
+      reason: 'Double-tap in Select must add the second note',
+    );
+  });
+
+  testWidgets('select tool tap on empty space clears the selection', (
+    tester,
+  ) async {
+    const note = PianoRollNote(
+      id: 'select-empty-note',
+      midiNote: 66,
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      notes: const [note],
+      activeTool: PianoRollTool.select,
+      selectedNoteIds: const {'select-empty-note'},
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    // x 500 is inside the listener (which spans 555px in width) but far
+    // beyond the one note at ticks 0..4, so the tap lands on empty space.
+    await tester.tapAt(
+      tester.getRect(gridFinder).topLeft + const Offset(500, 60),
+    );
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).selectedNoteIds,
+      isEmpty,
+      reason: 'A tap on empty space must still clear the selection',
+    );
+  });
+
   testWidgets('select tool drag does not move selected notes', (tester) async {
     final note = PianoRollNote(
       id: 'no-move',

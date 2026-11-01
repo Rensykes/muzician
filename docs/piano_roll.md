@@ -28,6 +28,7 @@ still work in text fields.
 
 - **Select tool (primary)**: Switch to `Select`, then drag a marquee rectangle across the grid. All notes the box touches (partial overlap) are selected. Each new marquee replaces the previous selection.
 - **Double-tap (refinement)**: In Draw or Select, double-tap a note to add or remove it from the current selection.
+- **Tap a note (Select)**: solo-select that note, audition it and anchor the selected column; a drag still marquees.
 - **Tap a note (Draw)**: solo-select that note (replace current note selection).
 - **Select column (secondary shortcut)**: Use the selection action to select all notes active at `selectedColumnTick` without changing the active tool.
 - **Move a selected group (Draw)**: drag a selected note body to move all selected notes together.
@@ -411,7 +412,7 @@ Each piano roll has one playback timbre, `PianoRollState.sound` (a `PianoRollSou
 | Tool | Icon | Tap on empty cell | Tap on note | Drag |
 |---|---|---|---|---|
 | `draw` | ✏ `edit_rounded` | Insert 1-tick note (or snap-length on double-tap). | Select / multi-select (double-tap). Long-press (500 ms) deletes. | Move / resize the note. |
-| `select` | Ⓢ `select_all_rounded` | Draws a marquee to select notes in area. | Double-tap to add/remove from selection. | Draws marquee; on release, all intersected notes are selected. |
+| `select` | Ⓢ `select_all_rounded` | Draws a marquee to select notes in area. | Solo-select it (audition + column anchor); double-tap to add/remove from selection. | Draws marquee; on release, all intersected notes are selected. |
 | `scissors` | ✂ `content_cut_rounded` | No-op. | Split the note at the tap position. | No-op (no move/resize in this mode). |
 | `paint` | 🖌 `brush_rounded` | Insert a note at `snapTicks` duration. | No-op (cell already occupied). | Continues inserting notes along the drag path, snap-aligned; cells already occupied are skipped. |
 | `delete` | 🗑 `delete_outline_rounded` | No-op. | Remove the note. | Removes every note touched along the drag path. |
@@ -544,7 +545,7 @@ The state machine below applies to `draw`, `select`, and `scissors`. `paint` and
 | `onPointerDown` | Record hit, start 500 ms long-press timer (skipped for `select`) | Enter pinch mode, record initial spread |
 | `onPointerMove` (< 8 px) | No-op (inside slop threshold); `select` also no-op until slop is exceeded | Scale `_cellW` / `_rowH` |
 | `onPointerMove` (≥ 8 px) | `draw`/`scissors`: if on note → move/resize; else → scroll. `select`: draw marquee rectangle, intersect notes | Scale `_cellW` / `_rowH` |
-| `onPointerUp` | `draw`/`scissors`: if no movement → tap (add/select/split); if timer fired → already deleted. `select`: commit marquee selection via `setSelection(ids)` | Exit pinch if last finger lifted |
+| `onPointerUp` | `draw`/`scissors`: if no movement → tap (add/select/split); if timer fired → already deleted. `select`: commit marquee selection via `setSelection(ids)`; a stationary tap on a note runs the tap-select path instead | Exit pinch if last finger lifted |
 
 **Note interactions:**
 
