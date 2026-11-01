@@ -8,6 +8,7 @@ library;
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hum_to_midi.dart';
+import '../models/piano_roll.dart';
 import '../models/piano_roll_playback.dart';
 import '../schema/rules/piano_roll_playback_rules.dart' as rules;
 import '../utils/note_player.dart';
@@ -24,13 +25,27 @@ typedef PianoRollPlaybackSink =
 /// the downbeat (beat 1 of a measure), false on other beats.
 typedef PianoRollMetronomeSink = Future<void> Function({required bool accent});
 
+/// Plays one note with a Piano Roll sound. Overridden in tests.
+typedef PianoRollTimbrePlayer =
+    void Function(PianoRollSound sound, int midiNote, double volume);
+
+final pianoRollTimbrePlayerProvider = Provider<PianoRollTimbrePlayer>((ref) {
+  return (sound, midiNote, volume) =>
+      NotePlayer.instance.previewTimbre(sound, midiNote, volume: volume);
+});
+
 /// Injected playback sink that wraps the synthesised [NotePlayer] engine.
 ///
 /// Override this provider in tests to capture events without real audio.
+///
+/// Reads the roll's sound at call time, so changing it applies to the next
+/// note even while playing.
 final pianoRollPlaybackSinkProvider = Provider<PianoRollPlaybackSink>((ref) {
+  final play = ref.read(pianoRollTimbrePlayerProvider);
   return (List<int> midiNotes, double volume) async {
+    final sound = ref.read(pianoRollProvider).sound;
     for (final midi in midiNotes) {
-      NotePlayer.instance.previewNote(midi, volume: volume);
+      play(sound, midi, volume);
     }
   };
 });
