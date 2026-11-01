@@ -73,12 +73,17 @@ class PianoRollScreenV2 extends ConsumerStatefulWidget {
   /// its Bars canvas and the stored project bars always share one measure.
   final bool lockTiming;
 
+  /// Whether Roll Settings offers the sound picker; disabled in embedded
+  /// hosts whose patterns don't store a sound.
+  final bool showSound;
+
   const PianoRollScreenV2({
     super.key,
     this.showScale = true,
     this.showSavePanels = true,
     this.showBackground = true,
     this.lockTiming = false,
+    this.showSound = true,
   });
 
   @override
@@ -389,7 +394,10 @@ class _PianoRollScreenV2State extends ConsumerState<PianoRollScreenV2> {
       case 'detection':
         _showPanel('Detection', const PianoRollDetectionPanel());
       case 'settings':
-        _showPanel('Roll Settings', const _SettingsSheet());
+        _showPanel(
+          'Roll Settings',
+          _SettingsSheet(showSound: widget.showSound),
+        );
       case 'help':
         showAppInfoPanel(context, initialTab: 2);
     }
@@ -667,7 +675,9 @@ class _PortraitActionBar extends ConsumerWidget {
 /// Bottom-sheet for page-level Roll settings (currently: metronome and
 /// sound).
 class _SettingsSheet extends ConsumerWidget {
-  const _SettingsSheet();
+  final bool showSound;
+
+  const _SettingsSheet({this.showSound = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -699,36 +709,38 @@ class _SettingsSheet extends ConsumerWidget {
             height: 1.4,
           ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          'Sound',
-          style: TextStyle(
-            color: StudioPalette.of(context).textPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+        if (showSound) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Sound',
+            style: TextStyle(
+              color: StudioPalette.of(context).textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final option in PianoRollSound.values)
-              _SoundPill(
-                label: option.label,
-                active: option == sound,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  rollNotifier.setSound(option);
-                  NotePlayer.instance.previewTimbre(
-                    option,
-                    60,
-                    volume: settings.noteVolume,
-                  );
-                },
-              ),
-          ],
-        ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in PianoRollSound.values)
+                _SoundPill(
+                  label: option.label,
+                  active: option == sound,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    rollNotifier.setSound(option);
+                    NotePlayer.instance.previewTimbre(
+                      option,
+                      60,
+                      volume: settings.noteVolume,
+                    );
+                  },
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }

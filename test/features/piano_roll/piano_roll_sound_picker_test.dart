@@ -51,6 +51,7 @@ ProviderContainer _buildContainer() => ProviderContainer(
 Widget _host(
   ProviderContainer container, {
   AppThemeVariant variant = AppThemeVariant.studio,
+  bool showSound = true,
 }) {
   return UncontrolledProviderScope(
     container: container,
@@ -58,8 +59,11 @@ Widget _host(
       variant: variant,
       child: MaterialApp(
         theme: StudioTheme.data(variant),
-        home: const Scaffold(
-          body: StudioRouteTheme(isStudio: true, child: PianoRollScreenV2()),
+        home: Scaffold(
+          body: StudioRouteTheme(
+            isStudio: true,
+            child: PianoRollScreenV2(showSound: showSound),
+          ),
         ),
       ),
     ),
@@ -135,4 +139,25 @@ void main() {
       }
     },
   );
+
+  testWidgets('Roll Settings hides the Sound section when showSound is false', (
+    tester,
+  ) async {
+    final container = _buildContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_host(container, showSound: false));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Roll Settings').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sound'), findsNothing);
+    for (final sound in PianoRollSound.values) {
+      expect(find.text(sound.label), findsNothing);
+    }
+    // The rest of Roll Settings (metronome) still renders.
+    expect(find.text('Metronome'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

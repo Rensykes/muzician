@@ -34,13 +34,14 @@ final pianoRollTimbrePlayerProvider = Provider<PianoRollTimbrePlayer>((ref) {
       NotePlayer.instance.previewTimbre(sound, midiNote, volume: volume);
 });
 
-/// Injected playback sink that wraps the synthesised [NotePlayer] engine.
+/// Builds the default playback sink that wraps the synthesised [NotePlayer]
+/// engine, reading the roll's sound from [ref] at call time.
 ///
-/// Override this provider in tests to capture events without real audio.
-///
-/// Reads the roll's sound at call time, so changing it applies to the next
-/// note even while playing.
-final pianoRollPlaybackSinkProvider = Provider<PianoRollPlaybackSink>((ref) {
+/// Exposed so embedded hosts (e.g. Song's isolated pattern editor) can
+/// re-apply it as an override on a child [ProviderContainer], keeping the
+/// sink scoped to that container's own [pianoRollProvider] rather than the
+/// parent/root roll's sound.
+PianoRollPlaybackSink defaultPianoRollPlaybackSink(Ref ref) {
   final play = ref.read(pianoRollTimbrePlayerProvider);
   return (List<int> midiNotes, double volume) async {
     final sound = ref.read(pianoRollProvider).sound;
@@ -48,7 +49,17 @@ final pianoRollPlaybackSinkProvider = Provider<PianoRollPlaybackSink>((ref) {
       play(sound, midi, volume);
     }
   };
-});
+}
+
+/// Injected playback sink that wraps the synthesised [NotePlayer] engine.
+///
+/// Override this provider in tests to capture events without real audio.
+///
+/// Reads the roll's sound at call time, so changing it applies to the next
+/// note even while playing.
+final pianoRollPlaybackSinkProvider = Provider<PianoRollPlaybackSink>(
+  defaultPianoRollPlaybackSink,
+);
 
 /// Injected metronome sink. Defaults to the synthesised click in [NotePlayer];
 /// tests override this with a recorder.

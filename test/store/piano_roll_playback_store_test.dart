@@ -386,5 +386,45 @@ void main() {
         (PianoRollSound.bell, 67, 0.5),
       ]);
     });
+
+    test('re-applying defaultPianoRollPlaybackSink on a child container reads '
+        "the child's own roll, not the parent's", () async {
+      final played = <(PianoRollSound, int, double)>[];
+
+      // Root container: its own roll is set to bell. Simulates the root
+      // Piano Roll screen / a host's enclosing container.
+      final root = ProviderContainer(
+        overrides: [
+          pianoRollTimbrePlayerProvider.overrideWithValue(
+            (sound, midi, volume) => played.add((sound, midi, volume)),
+          ),
+        ],
+      );
+      addTearDown(root.dispose);
+      root.read(pianoRollProvider.notifier).setSound(PianoRollSound.bell);
+
+      // Child container (e.g. Song's isolated pattern editor): overrides
+      // pianoRollProvider with its own roll state and re-applies the
+      // default sink builder so the sink reads from *this* container's
+      // pianoRollProvider via `ref.read`, not the parent's.
+      final child = ProviderContainer(
+        parent: root,
+        overrides: [
+          pianoRollProvider.overrideWith(PianoRollNotifier.new),
+          pianoRollPlaybackSinkProvider.overrideWith(
+            defaultPianoRollPlaybackSink,
+          ),
+        ],
+      );
+      addTearDown(child.dispose);
+      child.read(pianoRollProvider.notifier).setSound(PianoRollSound.organ);
+
+      final sink = child.read(pianoRollPlaybackSinkProvider);
+      await sink([67], 0.5);
+
+      expect(played, [(PianoRollSound.organ, 67, 0.5)]);
+      // The root's own roll is untouched by the child's edits.
+      expect(root.read(pianoRollProvider).sound, PianoRollSound.bell);
+    });
   });
 }
