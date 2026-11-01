@@ -321,8 +321,8 @@ testWidgets('cancelled pointer does not fake a second finger', (tester) async {
   const note = PianoRollNote(
     id: 'cancel-note',
     midiNote: 66,
-    pitchClass: 'C',
-    noteWithOctave: 'C4',
+    pitchClass: 'F#',
+    noteWithOctave: 'F#4',
     startTick: 0,
     durationTicks: 4,
   );
@@ -375,8 +375,8 @@ testWidgets('cancelled long-press does not delete in scissors mode', (
   const note = PianoRollNote(
     id: 'scissors-note',
     midiNote: 66,
-    pitchClass: 'C',
-    noteWithOctave: 'C4',
+    pitchClass: 'F#',
+    noteWithOctave: 'F#4',
     startTick: 0,
     durationTicks: 4,
   );
