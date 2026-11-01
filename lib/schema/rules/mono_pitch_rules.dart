@@ -168,6 +168,46 @@ PitchEstimate? estimateDominantFrequencyFromSamples(
   return PitchEstimate(frequencyHz: frequency, confidence: confidence);
 }
 
+/// Analyses one window into a [PitchFrame]. Peak amplitude below [gate] is
+/// silence and skips pitch estimation.
+PitchFrame analyzeHumWindow(
+  List<double> window, {
+  required int sampleRate,
+  required int timestampMs,
+  required double gate,
+}) {
+  var peak = 0.0;
+  for (final sample in window) {
+    final v = sample.abs();
+    if (v > peak) peak = v;
+  }
+  if (peak < gate) {
+    return PitchFrame(
+      timestampMs: timestampMs,
+      frequencyHz: 0,
+      midiNote: null,
+      centsOffset: 0,
+      amplitude: peak,
+      confidence: 0,
+      isSilence: true,
+    );
+  }
+  final estimate = estimateDominantFrequencyFromSamples(
+    window,
+    sampleRate: sampleRate,
+  );
+  final midi = estimate == null ? null : frequencyToMidi(estimate.frequencyHz);
+  return PitchFrame(
+    timestampMs: timestampMs,
+    frequencyHz: estimate?.frequencyHz ?? 0,
+    midiNote: midi,
+    centsOffset: 0,
+    amplitude: peak,
+    confidence: estimate?.confidence ?? 0,
+    isSilence: midi == null,
+  );
+}
+
 List<DetectedMonoNote> segmentStableNotes(
   List<PitchFrame> frames, {
   HumSensitivity sensitivity = HumSensitivity.strict,
