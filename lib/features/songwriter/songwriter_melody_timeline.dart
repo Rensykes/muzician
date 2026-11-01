@@ -11,6 +11,7 @@ import '../../schema/rules/songwriter_rules.dart';
 import '../../store/songwriter_playback_store.dart';
 import '../../store/songwriter_store.dart';
 import '../../theme/studio_theme.dart';
+import '../../utils/pointer_buttons.dart';
 import 'songwriter_melody_preview.dart';
 
 /// Bar-aligned Melody placements; repeated occurrences retain their source.
@@ -75,6 +76,7 @@ class _TimelineState extends ConsumerState<SongwriterMelodyTimeline>
 
   void _start(SongBlock block, PointerDownEvent event, int rowStart) {
     if (!mounted || _dragPointer != null) return;
+    if (!isPrimaryPointerButton(event)) return;
     final box =
         _rowKeys[rowStart]!.currentContext!.findRenderObject()! as RenderBox;
     final local = box.globalToLocal(event.position);
