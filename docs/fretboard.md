@@ -90,6 +90,9 @@ Unthemed legacy hosts retain the previous fixed Scale/Chord dock composition.
 
 ## Playing and settings
 
+Only the primary mouse button plays or selects a fret. Right-click and
+middle-click are ignored on web and desktop.
+
 - **Sound:** Clean electric is the default; choose Distorted for a driven electric
   tone. The choice is remembered on this device and also applies to guitar parts
   in Writer's main transport. Tapping a fret auditions that pitch with the chosen
