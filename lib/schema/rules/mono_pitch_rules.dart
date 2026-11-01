@@ -12,6 +12,28 @@ const minStableNoteMs = 80;
 const maxMergeGapMs = 180;
 const _yinThreshold = 0.15;
 const minHumAmplitude = 0.02;
+const maxHumGate = 0.12;
+
+/// Tracks the ambient noise floor from frames that carry no stable pitch, so
+/// the silence gate rises in noisy rooms but never learns from the hum itself.
+class NoiseFloorTracker {
+  NoiseFloorTracker({this.riseRate = 0.02, this.multiplier = 2.5});
+
+  final double riseRate;
+  final double multiplier;
+  double _floor = 0;
+
+  double get gate => (_floor * multiplier).clamp(minHumAmplitude, maxHumGate);
+
+  void update(double amplitude, {required bool pitched}) {
+    if (pitched) return;
+    if (amplitude <= _floor) {
+      _floor = amplitude;
+    } else {
+      _floor += (amplitude - _floor) * riseRate;
+    }
+  }
+}
 
 enum HumSensitivity { strict, balanced, forgiving }
 

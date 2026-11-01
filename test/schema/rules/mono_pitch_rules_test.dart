@@ -303,5 +303,37 @@ void main() {
         expect(normalized[1].durationTicks, 4);
       },
     );
+
+    group('NoiseFloorTracker', () {
+      test('starts at the minimum gate', () {
+        expect(rules.NoiseFloorTracker().gate, rules.minHumAmplitude);
+      });
+
+      test('raises the gate from unpitched noise and caps it', () {
+        final tracker = rules.NoiseFloorTracker();
+        for (var i = 0; i < 400; i++) {
+          tracker.update(0.05, pitched: false);
+        }
+        expect(tracker.gate, greaterThan(0.1));
+        expect(tracker.gate, lessThanOrEqualTo(rules.maxHumGate));
+      });
+
+      test('does not learn from pitched frames', () {
+        final tracker = rules.NoiseFloorTracker();
+        for (var i = 0; i < 400; i++) {
+          tracker.update(0.5, pitched: true);
+        }
+        expect(tracker.gate, rules.minHumAmplitude);
+      });
+
+      test('falls immediately when the room goes quiet', () {
+        final tracker = rules.NoiseFloorTracker();
+        for (var i = 0; i < 400; i++) {
+          tracker.update(0.05, pitched: false);
+        }
+        tracker.update(0.0, pitched: false);
+        expect(tracker.gate, rules.minHumAmplitude);
+      });
+    });
   });
 }
