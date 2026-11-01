@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,8 +12,7 @@ import '../../schema/rules/mono_pitch_rules.dart' show HumSensitivity;
 import '../../utils/note_utils.dart';
 
 class PianoRollHumRecorderPanel extends ConsumerStatefulWidget {
-  final bool isWeb;
-  const PianoRollHumRecorderPanel({super.key, this.isWeb = kIsWeb});
+  const PianoRollHumRecorderPanel({super.key});
 
   @override
   ConsumerState<PianoRollHumRecorderPanel> createState() =>
@@ -33,20 +31,6 @@ class _PianoRollHumRecorderPanelState
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isWeb) {
-      return const PianoRollHumRecorderCard(
-        status: HumToMidiStatus.idle,
-        liveNoteLabel: 'No pitch',
-        statusLabel: 'Hum to MIDI not supported on web',
-        elapsedLabel: 'N/A',
-        onStart: null,
-        onStop: null,
-        onJumpToLatest: null,
-        sensitivity: HumSensitivity.balanced,
-        onSensitivityChanged: null,
-      );
-    }
-
     final ref = this.ref;
     final state = ref.watch(humToMidiProvider);
     final latestImportedRange = ref.watch(

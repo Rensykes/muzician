@@ -383,41 +383,12 @@ void main() {
     expect(container.read(pianoRollProvider).notes, isNotEmpty);
   });
 
-  // ── Hum recorder web gating test ───────────────────────────────────────
+  // ── Hum recorder test ───────────────────────────────────────────────────
 
-  testWidgets('hum recorder shows web message when isWeb is true', (
-    tester,
-  ) async {
+  testWidgets('hum recorder shows the record button', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: PianoRollHumRecorderPanel(isWeb: true)),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    // Should show "not supported" message instead of record button.
-    expect(
-      find.text('Hum to MIDI not supported on web'),
-      findsOneWidget,
-      reason: 'Web mode should show not-supported message',
-    );
-    expect(
-      find.byType(FilledButton),
-      findsNothing,
-      reason: 'Record button should be hidden on web',
-    );
-  });
-
-  testWidgets('hum recorder shows record button when isWeb is false', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: PianoRollHumRecorderPanel(isWeb: false)),
-        ),
+        child: MaterialApp(home: Scaffold(body: PianoRollHumRecorderPanel())),
       ),
     );
     await tester.pump();
