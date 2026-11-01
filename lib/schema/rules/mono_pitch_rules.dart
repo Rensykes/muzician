@@ -41,26 +41,34 @@ class HumSensitivityTuning {
   final int switchFrames;
   final int deadbandCents;
   final int minNoteMs;
+
+  /// Unvoiced gap (ms, between the last and next voiced frame, excluding one
+  /// frame span) at which two same-pitch notes are split instead of bridged.
+  final int reattackGapMs;
   const HumSensitivityTuning({
     required this.switchFrames,
     required this.deadbandCents,
     required this.minNoteMs,
+    required this.reattackGapMs,
   });
 
   static const _strict = HumSensitivityTuning(
     switchFrames: 2,
     deadbandCents: 0,
     minNoteMs: 80,
+    reattackGapMs: 70,
   );
   static const _balanced = HumSensitivityTuning(
     switchFrames: 4,
     deadbandCents: 35,
     minNoteMs: 120,
+    reattackGapMs: 100,
   );
   static const _forgiving = HumSensitivityTuning(
     switchFrames: 7,
     deadbandCents: 60,
     minNoteMs: 180,
+    reattackGapMs: 1 << 30,
   );
 
   static HumSensitivityTuning of(HumSensitivity sensitivity) =>
@@ -269,22 +277,27 @@ List<DetectedMonoNote> segmentStableNotes(
   if (frames.isEmpty) return const [];
 
   final tuning = HumSensitivityTuning.of(sensitivity);
-  final frameSpanMs = _estimateMedianFrameSpanMs(frames);
+  final smoothed = smoothPitchFrames(frames);
+  final frameSpanMs = _estimateMedianFrameSpanMs(smoothed);
 
   final notes = <DetectedMonoNote>[];
   int? activeMidi;
   int? startMs;
   double confidenceTotal = 0;
   int confidenceCount = 0;
-  int lastVoicedMs = frames.first.timestampMs;
+  // Last frame that matched the active pitch; ends the note.
+  int lastActiveMs = smoothed.first.timestampMs;
+  // Last voiced frame of any pitch; measures silent gaps.
+  int lastVoicedMs = smoothed.first.timestampMs;
   int? pendingMidi;
+  int? pendingStartMs;
   int pendingFrames = 0;
 
   void emit() {
     final midi = activeMidi;
     final start = startMs;
     if (midi == null || start == null) return;
-    final rawDuration = lastVoicedMs - start;
+    final rawDuration = lastActiveMs - start;
     final duration = rawDuration <= 0 ? frameSpanMs : rawDuration;
     if (duration < tuning.minNoteMs) return;
     notes.add(
@@ -299,13 +312,29 @@ List<DetectedMonoNote> segmentStableNotes(
     );
   }
 
-  for (final frame in frames) {
+  void startNote(int midi, int atMs) {
+    activeMidi = midi;
+    startMs = atMs;
+    lastActiveMs = atMs;
+    confidenceTotal = 0;
+    confidenceCount = 0;
+    pendingMidi = null;
+    pendingStartMs = null;
+    pendingFrames = 0;
+  }
+
+  for (final frame in smoothed) {
     final isVoiced =
         !frame.isSilence &&
         frame.midiNote != null &&
         frame.confidence >= minStableConfidence;
     if (isVoiced) {
       final midi = frame.midiNote!;
+      final gapMs = frame.timestampMs - lastVoicedMs - frameSpanMs;
+      if (activeMidi != null && gapMs >= tuning.reattackGapMs) {
+        emit();
+        startNote(midi, frame.timestampMs);
+      }
       final active = activeMidi;
       final withinDeadband =
           active != null &&
@@ -314,29 +343,25 @@ List<DetectedMonoNote> segmentStableNotes(
           frame.frequencyHz > 0 &&
           _absCentsFromMidi(frame.frequencyHz, active) <= tuning.deadbandCents;
       if (active == null) {
-        activeMidi = midi;
-        startMs = frame.timestampMs;
-        pendingMidi = null;
-        pendingFrames = 0;
+        startNote(midi, frame.timestampMs);
       } else if (midi != active && !withinDeadband) {
         if (pendingMidi == midi) {
           pendingFrames += 1;
         } else {
           pendingMidi = midi;
+          pendingStartMs = frame.timestampMs;
           pendingFrames = 1;
         }
         if (pendingFrames >= tuning.switchFrames) {
           emit();
-          activeMidi = midi;
-          startMs = frame.timestampMs;
-          confidenceTotal = 0;
-          confidenceCount = 0;
-          pendingMidi = null;
-          pendingFrames = 0;
+          startNote(midi, pendingStartMs ?? frame.timestampMs);
+          lastActiveMs = frame.timestampMs;
         }
       } else {
         pendingMidi = null;
+        pendingStartMs = null;
         pendingFrames = 0;
+        lastActiveMs = frame.timestampMs;
       }
       lastVoicedMs = frame.timestampMs;
       confidenceTotal += frame.confidence;
@@ -352,6 +377,7 @@ List<DetectedMonoNote> segmentStableNotes(
       confidenceTotal = 0;
       confidenceCount = 0;
       pendingMidi = null;
+      pendingStartMs = null;
       pendingFrames = 0;
     }
   }

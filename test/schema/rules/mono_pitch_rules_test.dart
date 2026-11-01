@@ -5,6 +5,26 @@ import 'package:muzician/schema/rules/mono_pitch_rules.dart' as rules;
 
 import '../../support/hum_signal.dart';
 
+PitchFrame _v(int ts, double hz, {double amp = 0.5}) => PitchFrame(
+  timestampMs: ts,
+  frequencyHz: hz,
+  midiNote: rules.frequencyToMidi(hz),
+  centsOffset: 0,
+  amplitude: amp,
+  confidence: 0.95,
+  isSilence: false,
+);
+
+PitchFrame _s(int ts) => PitchFrame(
+  timestampMs: ts,
+  frequencyHz: 0,
+  midiNote: null,
+  centsOffset: 0,
+  amplitude: 0,
+  confidence: 0,
+  isSilence: true,
+);
+
 void main() {
   group('mono pitch rules', () {
     test('maps 440 Hz to MIDI 69', () {
@@ -376,6 +396,62 @@ void main() {
         final frames = [voiced(0, 440), voiced(16, 880)];
         final smoothed = rules.smoothPitchFrames(frames);
         expect(smoothed[1].midiNote, 81);
+      });
+    });
+
+    group('segmentStableNotes accuracy', () {
+      test('a committed pitch change starts at its first frame', () {
+        // 16 ms frames: A4 for 400 ms then C5; strict commits after 2 frames.
+        final frames = [
+          for (var ts = 0; ts < 400; ts += 16) _v(ts, 440),
+          for (var ts = 400; ts < 800; ts += 16) _v(ts, 523.25),
+        ];
+        final notes = rules.segmentStableNotes(frames);
+        expect(notes.map((n) => n.midiNote), [69, 72]);
+        expect(notes[1].startMs, 400);
+        expect(notes[0].endMs, lessThanOrEqualTo(400));
+      });
+
+      test('a silent gap between same-pitch notes splits them', () {
+        final frames = [
+          for (var ts = 0; ts < 300; ts += 16) _v(ts, 440),
+          for (var ts = 300; ts < 480; ts += 16) _s(ts),
+          for (var ts = 480; ts < 800; ts += 16) _v(ts, 440),
+        ];
+        final notes = rules.segmentStableNotes(frames);
+        expect(notes, hasLength(2));
+        expect(notes[1].startMs, 480);
+      });
+
+      test('a dropout shorter than the re-attack gap is bridged', () {
+        final frames = [
+          for (var ts = 0; ts < 300; ts += 16) _v(ts, 440),
+          for (var ts = 300; ts < 332; ts += 16) _s(ts),
+          for (var ts = 332; ts < 700; ts += 16) _v(ts, 440),
+        ];
+        expect(rules.segmentStableNotes(frames), hasLength(1));
+      });
+
+      test('forgiving never splits on gaps', () {
+        final frames = [
+          for (var ts = 0; ts < 300; ts += 16) _v(ts, 440),
+          for (var ts = 300; ts < 440; ts += 16) _s(ts),
+          for (var ts = 440; ts < 800; ts += 16) _v(ts, 440),
+        ];
+        final notes = rules.segmentStableNotes(
+          frames,
+          sensitivity: rules.HumSensitivity.forgiving,
+        );
+        expect(notes, hasLength(1));
+      });
+
+      test('an isolated octave glitch does not create notes', () {
+        final frames = [
+          for (var ts = 0; ts < 400; ts += 16) _v(ts, ts == 192 ? 880 : 440),
+        ];
+        final notes = rules.segmentStableNotes(frames);
+        expect(notes, hasLength(1));
+        expect(notes.single.midiNote, 69);
       });
     });
   });
