@@ -179,6 +179,8 @@ class PianoRollNotifier extends Notifier<PianoRollState>
   void setSnapTicks(int ticks) =>
       state = state.copyWith(snapTicks: ticks.clamp(1, 16));
 
+  void setSound(PianoRollSound sound) => state = state.copyWith(sound: sound);
+
   void toggleNoteInSelection(String noteId) {
     final updated = state.selectedNoteIds.contains(noteId)
         ? state.selectedNoteIds.difference({noteId})
@@ -636,6 +638,7 @@ class PianoRollNotifier extends Notifier<PianoRollState>
           ? List<String>.from(snap.highlightedNotes)
           : projectScale,
       latestImportedRange: null,
+      sound: snap.sound,
     );
     ref.read(pianoRollPendingScaleProvider.notifier).state = null;
     ref

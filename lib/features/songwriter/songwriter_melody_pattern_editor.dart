@@ -319,6 +319,7 @@ class _SongwriterMelodyPatternEditorState
                 showSavePanels: false,
                 showBackground: false,
                 lockTiming: true,
+                showSound: false,
               ),
             ),
           ],

@@ -10,6 +10,7 @@ import 'fretboard.dart';
 import 'guitar_sound.dart';
 import 'harmony_lane_instrument.dart';
 import 'piano.dart';
+import 'piano_roll.dart';
 import 'project_config.dart';
 import 'song_project.dart';
 import 'songwriter.dart';
@@ -360,6 +361,7 @@ class PianoRollSnapshot extends InstrumentSnapshot {
   final int? selectedColumnTick;
   final int snapTicks;
   final List<String> highlightedNotes;
+  final PianoRollSound sound;
   final PendingScale? _pendingScale;
 
   PianoRollSnapshot({
@@ -374,6 +376,7 @@ class PianoRollSnapshot extends InstrumentSnapshot {
     this.selectedColumnTick,
     required this.snapTicks,
     required this.highlightedNotes,
+    this.sound = PianoRollSound.piano,
     PendingScale? pendingScale,
   }) : _pendingScale = pendingScale;
 
@@ -442,6 +445,7 @@ class PianoRollSnapshot extends InstrumentSnapshot {
     'selectedColumnTick': selectedColumnTick,
     'snapTicks': snapTicks,
     'highlightedNotes': highlightedNotes,
+    'sound': sound.name,
     'pendingScale': _pendingScale?.toJson(),
   };
 
@@ -466,6 +470,7 @@ class PianoRollSnapshot extends InstrumentSnapshot {
               ?.map((n) => n as String)
               .toList() ??
           [],
+      sound: PianoRollSound.fromName(json['sound'] as String?),
       pendingScale: json['pendingScale'] != null
           ? PendingScale.fromJson(json['pendingScale'] as Map<String, dynamic>)
           : null,

@@ -683,6 +683,7 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
         selectedColumnTick: snap.selectedColumnTick,
         snapTicks: snap.snapTicks,
         highlightedNotes: scaleNotes,
+        sound: snap.sound,
         pendingScale: cfg.keyRootPc == null || cfg.keyScaleName == null
             ? null
             : PendingScale(

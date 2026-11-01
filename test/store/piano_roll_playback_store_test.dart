@@ -310,59 +310,121 @@ void main() {
       },
     );
 
-    test(
-      'tick clock is wall-anchored: per-beat body cost does not accumulate '
-      'as drift',
-      () async {
-        // Inject a heavy synchronous cost on every metronome beat. Without
-        // wall-clock anchoring the loop adds this on top of every tick's fixed
-        // delay, so total playback time balloons past the ideal span. With
-        // anchoring it is absorbed into the per-tick budget.
-        final container = ProviderContainer(
-          overrides: [
-            pianoRollPlaybackSinkProvider.overrideWithValue(
-              (notes, volume) async {},
-            ),
-            pianoRollMetronomeSinkProvider.overrideWithValue(({
-              required bool accent,
-            }) async {
-              final spin = Stopwatch()..start();
-              while (spin.elapsedMilliseconds < 12) {
-                // Busy-wait simulating per-beat UI/audio work on the loop.
-              }
-            }),
-          ],
-        );
-        addTearDown(container.dispose);
+    test('tick clock is wall-anchored: per-beat body cost does not accumulate '
+        'as drift', () async {
+      // Inject a heavy synchronous cost on every metronome beat. Without
+      // wall-clock anchoring the loop adds this on top of every tick's fixed
+      // delay, so total playback time balloons past the ideal span. With
+      // anchoring it is absorbed into the per-tick budget.
+      final container = ProviderContainer(
+        overrides: [
+          pianoRollPlaybackSinkProvider.overrideWithValue(
+            (notes, volume) async {},
+          ),
+          pianoRollMetronomeSinkProvider.overrideWithValue(({
+            required bool accent,
+          }) async {
+            final spin = Stopwatch()..start();
+            while (spin.elapsedMilliseconds < 12) {
+              // Busy-wait simulating per-beat UI/audio work on the loop.
+            }
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
 
-        // ignore: invalid_use_of_protected_member
-        container.read(settingsProvider.notifier).state = AppSettings(
-          metronomeEnabled: true,
-        );
-        final pr = container.read(pianoRollProvider.notifier);
-        pr.setTotalMeasures(2); // 2 bars 4/4 → 32 ticks, 8 beats.
-        pr.selectColumn(0);
+      // ignore: invalid_use_of_protected_member
+      container.read(settingsProvider.notifier).state = AppSettings(
+        metronomeEnabled: true,
+      );
+      final pr = container.read(pianoRollProvider.notifier);
+      pr.setTotalMeasures(2); // 2 bars 4/4 → 32 ticks, 8 beats.
+      pr.selectColumn(0);
 
-        final notifier = container.read(pianoRollPlaybackProvider.notifier);
-        final clock = Stopwatch()..start();
-        // 32 ticks × 4ms ≈ 128ms ideal span; 8 beats × 12ms = 96ms injected
-        // cost. Anchored, total stays near the ideal span (cost overlaps the
-        // waits). Unanchored it would be ~128 + 96 ≈ 224ms.
-        await notifier.startPlayback(
-          tickDurationOverride: const Duration(milliseconds: 4),
-        );
-        final elapsedMs = clock.elapsedMilliseconds;
+      final notifier = container.read(pianoRollPlaybackProvider.notifier);
+      final clock = Stopwatch()..start();
+      // 32 ticks × 4ms ≈ 128ms ideal span; 8 beats × 12ms = 96ms injected
+      // cost. Anchored, total stays near the ideal span (cost overlaps the
+      // waits). Unanchored it would be ~128 + 96 ≈ 224ms.
+      await notifier.startPlayback(
+        tickDurationOverride: const Duration(milliseconds: 4),
+      );
+      final elapsedMs = clock.elapsedMilliseconds;
 
-        expect(
-          container.read(pianoRollPlaybackProvider).status,
-          PianoRollPlaybackStatus.completed,
-        );
-        expect(
-          elapsedMs,
-          lessThan(180),
-          reason: 'drift not absorbed; loop ran for ${elapsedMs}ms',
-        );
-      },
-    );
+      expect(
+        container.read(pianoRollPlaybackProvider).status,
+        PianoRollPlaybackStatus.completed,
+      );
+      expect(
+        elapsedMs,
+        lessThan(180),
+        reason: 'drift not absorbed; loop ran for ${elapsedMs}ms',
+      );
+    });
+  });
+
+  group('pianoRollPlaybackSinkProvider default', () {
+    test('default sink plays through the sound read at call time', () async {
+      final played = <(PianoRollSound, int, double)>[];
+      final container = ProviderContainer(
+        overrides: [
+          pianoRollTimbrePlayerProvider.overrideWithValue(
+            (sound, midi, volume) => played.add((sound, midi, volume)),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final sink = container.read(pianoRollPlaybackSinkProvider);
+      await sink([60, 64], 0.5);
+      container.read(pianoRollProvider.notifier).setSound(PianoRollSound.bell);
+      await sink([67], 0.5);
+
+      expect(played, [
+        (PianoRollSound.piano, 60, 0.5),
+        (PianoRollSound.piano, 64, 0.5),
+        (PianoRollSound.bell, 67, 0.5),
+      ]);
+    });
+
+    test('re-applying defaultPianoRollPlaybackSink on a child container reads '
+        "the child's own roll, not the parent's", () async {
+      final played = <(PianoRollSound, int, double)>[];
+
+      // Root container: its own roll is set to bell. Simulates the root
+      // Piano Roll screen / a host's enclosing container.
+      final root = ProviderContainer(
+        overrides: [
+          pianoRollTimbrePlayerProvider.overrideWithValue(
+            (sound, midi, volume) => played.add((sound, midi, volume)),
+          ),
+        ],
+      );
+      addTearDown(root.dispose);
+      root.read(pianoRollProvider.notifier).setSound(PianoRollSound.bell);
+
+      // Child container (e.g. Song's isolated pattern editor): overrides
+      // pianoRollProvider with its own roll state and re-applies the
+      // default sink builder so the sink reads from *this* container's
+      // pianoRollProvider via `ref.read`, not the parent's.
+      final child = ProviderContainer(
+        parent: root,
+        overrides: [
+          pianoRollProvider.overrideWith(PianoRollNotifier.new),
+          pianoRollPlaybackSinkProvider.overrideWith(
+            defaultPianoRollPlaybackSink,
+          ),
+        ],
+      );
+      addTearDown(child.dispose);
+      child.read(pianoRollProvider.notifier).setSound(PianoRollSound.organ);
+
+      final sink = child.read(pianoRollPlaybackSinkProvider);
+      await sink([67], 0.5);
+
+      expect(played, [(PianoRollSound.organ, 67, 0.5)]);
+      // The root's own roll is untouched by the child's edits.
+      expect(root.read(pianoRollProvider).sound, PianoRollSound.bell);
+    });
   });
 }

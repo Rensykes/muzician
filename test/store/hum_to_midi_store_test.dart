@@ -35,6 +35,17 @@ class _FakeMicPitchSession implements MicPitchSession {
   }
 }
 
+class _ThrowingMicPitchSession implements MicPitchSession {
+  @override
+  Future<bool> hasPermission() async => throw UnsupportedError('no mic');
+  @override
+  Future<Stream<PitchFrame>> start() async => throw UnsupportedError('no mic');
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> dispose() async {}
+}
+
 void main() {
   test('startRecording enters recording when permission is granted', () async {
     final fake = _FakeMicPitchSession();
@@ -336,6 +347,24 @@ void main() {
         container.read(humToMidiProvider).feedbackMessage,
         'No stable note detected',
       );
+    },
+  );
+
+  test(
+    'startRecording reports an error when the microphone is unavailable',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          micPitchSessionProvider.overrideWithValue(_ThrowingMicPitchSession()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(humToMidiProvider.notifier).startRecording();
+
+      final state = container.read(humToMidiProvider);
+      expect(state.status, HumToMidiStatus.error);
+      expect(state.errorMessage, 'Microphone unavailable');
     },
   );
 }

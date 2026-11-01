@@ -16,11 +16,13 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/guitar_sound.dart';
+import '../models/piano_roll.dart';
 import '../models/song_project.dart';
 import 'guitar_synth.dart';
 import 'playback_voice_spec.dart';
 import 'playback_profiling.dart';
 import 'playback_profile_source.dart';
+import 'timbre_synth.dart';
 
 // Conditional import: note_player_io.dart on native, note_player_web.dart on web.
 import 'note_player_io.dart' if (dart.library.html) 'note_player_web.dart';
@@ -552,6 +554,43 @@ class NotePlayer {
       cacheKey: GuitarSynth.strumCacheKey(notes, tone: tone),
       render: () => GuitarSynth.renderStrum(notes, tone: tone),
     );
+  }
+
+  /// Previews [midiNote] with the Piano Roll [sound].
+  void previewTimbre(
+    PianoRollSound sound,
+    int midiNote, {
+    double volume = 0.8,
+    double pan = 0.0,
+  }) {
+    switch (sound) {
+      case PianoRollSound.piano:
+        previewNote(midiNote, volume: volume, pan: pan);
+      case PianoRollSound.cleanGuitar:
+        previewGuitarNote(
+          midiNote,
+          tone: GuitarTone.clean,
+          volume: volume,
+          pan: pan,
+        );
+      case PianoRollSound.distortedGuitar:
+        previewGuitarNote(
+          midiNote,
+          tone: GuitarTone.distorted,
+          volume: volume,
+          pan: pan,
+        );
+      case PianoRollSound.organ:
+      case PianoRollSound.synthLead:
+      case PianoRollSound.bell:
+        _previewNote(
+          midiNote,
+          volume: volume,
+          pan: pan,
+          cacheKey: TimbreSynth.cacheKey(sound, midiNote),
+          render: () => _encodeWav(TimbreSynth.render(sound, midiNote)),
+        );
+    }
   }
 
   void _previewNote(
