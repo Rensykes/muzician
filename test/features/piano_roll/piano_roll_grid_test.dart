@@ -1100,6 +1100,157 @@ void main() {
       reason: 'A secondary-button move must not paint another cell',
     );
   });
+
+  testWidgets('cancelled pointer does not fake a second finger', (
+    tester,
+  ) async {
+    const note = PianoRollNote(
+      id: 'cancel-note',
+      midiNote: 66,
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(notes: const [note]);
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    // midi 66, tick 0: row index 84 - 66 = 18, so y = 18 * 18 = 324..342.
+    final notePoint =
+        tester.getRect(gridFinder).topLeft + const Offset(56, 333);
+
+    final cancelled = await tester.startGesture(notePoint, pointer: 9);
+    await cancelled.cancel();
+    await tester.pump();
+
+    await tester.tapAt(notePoint);
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).selectedNoteIds,
+      {'cancel-note'},
+      reason: 'The tap after a cancel must behave like a first touch',
+    );
+  });
+
+  testWidgets('cancelled marquee does not block the next marquee', (
+    tester,
+  ) async {
+    const note = PianoRollNote(
+      id: 'marquee-cancel-note',
+      midiNote: 66,
+      pitchClass: 'F#',
+      noteWithOctave: 'F#4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      notes: const [note],
+      activeTool: PianoRollTool.select,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    final gridRect = tester.getRect(gridFinder);
+
+    final cancelled = await tester.startGesture(
+      gridRect.topLeft + const Offset(8, 8),
+      pointer: 9,
+    );
+    await cancelled.moveTo(gridRect.topLeft + const Offset(40, 40));
+    await cancelled.cancel();
+    await tester.pump();
+    expect(
+      container.read(pianoRollProvider).selectedNoteIds,
+      isEmpty,
+      reason: 'A cancelled marquee must not commit its preview',
+    );
+
+    final fresh = await tester.startGesture(
+      gridRect.topLeft + const Offset(8, 8),
+      pointer: 10,
+    );
+    await fresh.moveTo(gridRect.topLeft + const Offset(1000, 1000));
+    await fresh.up();
+    await tester.pump();
+
+    expect(
+      container.read(pianoRollProvider).selectedNoteIds,
+      {'marquee-cancel-note'},
+      reason: 'A marquee after a cancel must still work',
+    );
+  });
+
+  testWidgets('cancelled long-press does not delete in scissors mode', (
+    tester,
+  ) async {
+    const note = PianoRollNote(
+      id: 'scissors-note',
+      midiNote: 66,
+      pitchClass: 'C',
+      noteWithOctave: 'C4',
+      startTick: 0,
+      durationTicks: 4,
+    );
+    final initial = _defaultPRState.copyWith(
+      notes: const [note],
+      activeTool: PianoRollTool.scissors,
+    );
+    final notifier = _TrackingNotifier(initial);
+    final container = ProviderContainer(
+      overrides: [
+        pianoRollProvider.overrideWith(() => notifier),
+        pianoRollPlaybackProvider.overrideWith(
+          () => _FakePlaybackNotifier(const PianoRollPlaybackState()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_wrapGrid(container));
+    await tester.pump();
+
+    final gridFinder = find.byKey(const ValueKey('piano-roll-grid-listener'));
+    // midi 66, tick 0: row index 84 - 66 = 18, so y = 18 * 18 = 324..342.
+    final notePoint =
+        tester.getRect(gridFinder).topLeft + const Offset(56, 333);
+
+    final gesture = await tester.startGesture(notePoint, pointer: 11);
+    await tester.pump(const Duration(milliseconds: 200));
+    await gesture.cancel();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(
+      container.read(pianoRollProvider).notes,
+      hasLength(1),
+      reason: 'A cancelled long-press must not delete the note',
+    );
+  });
 }
 
 // Keep the old fake notifier for the playback playhead test.
