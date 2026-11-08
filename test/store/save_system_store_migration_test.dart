@@ -125,10 +125,20 @@ void main() {
     final writerFile = File('${writerDir.path}/take.wav')
       ..writeAsStringSync('writer');
 
-    await wipeRemovedSongAudioDir(documentsDirectory: () async => root);
+    expect(
+      await wipeRemovedSongAudioDir(documentsDirectory: () async => root),
+      isTrue,
+    );
 
     expect(songDir.existsSync(), isFalse);
     expect(songTmp.existsSync(), isFalse);
     expect(writerFile.existsSync(), isTrue);
+
+    expect(
+      await wipeRemovedSongAudioDir(
+        documentsDirectory: () async => throw StateError('no docs'),
+      ),
+      isFalse,
+    );
   });
 }

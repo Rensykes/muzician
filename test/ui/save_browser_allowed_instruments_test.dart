@@ -14,7 +14,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('allowedInstruments restricts the picker to the listed types '
-      'and hides songwriter + song saves', (tester) async {
+      'and hides songwriter saves', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final settings = container.read(settingsProvider.notifier);
@@ -59,17 +59,19 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: SaveBrowserPanel(
-            allowedInstruments: const {'fretboard', 'piano', 'piano_roll'},
-            onPick: (_) {},
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SaveBrowserPanel(
+              allowedInstruments: const {'fretboard', 'piano', 'piano_roll'},
+              onPick: (_) {},
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Mixed'));
@@ -77,7 +79,10 @@ void main() {
 
     expect(find.text('FretSave'), findsOneWidget);
     expect(find.text('PianoSave'), findsOneWidget);
-    expect(find.text('SongwriterSave'), findsNothing,
-        reason: 'songwriter saves must be hidden by the allowlist');
+    expect(
+      find.text('SongwriterSave'),
+      findsNothing,
+      reason: 'songwriter saves must be hidden by the allowlist',
+    );
   });
 }

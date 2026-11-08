@@ -9,20 +9,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Song variant hides Dump and disables Cancel', (tester) async {
+  testWidgets('gate variant hides Dump and disables Cancel', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final c = ProviderContainer();
     addTearDown(c.dispose);
     await c.read(saveSystemProvider.notifier).hydrate();
-    c.read(saveSystemProvider.notifier).createProject('Alpha', const ProjectConfig());
+    c
+        .read(saveSystemProvider.notifier)
+        .createProject('Alpha', const ProjectConfig());
     c.read(saveSystemProvider.notifier).ensureDumpFolder();
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: c,
-      child: const MaterialApp(
-        home: Scaffold(body: ProjectGateModal(allowDump: false, allowCancel: false)),
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: ProjectGateModal(allowDump: false, allowCancel: false),
+          ),
+        ),
       ),
-    ));
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Dump'), findsNothing);

@@ -503,7 +503,7 @@ void main() {
 
   for (final legacy in [false, true]) {
     testWidgets(
-      'Roll utility and tempo sheets keep isolated ${legacy ? "Song" : "Studio"} container',
+      'Roll utility and tempo sheets keep isolated ${legacy ? "legacy" : "Studio"} container',
       (tester) async {
         tester.view.physicalSize = const Size(390, 844);
         tester.view.devicePixelRatio = 1;
@@ -572,42 +572,41 @@ void main() {
     );
   }
 
-  testWidgets(
-    'embedded Studio capabilities and legacy Song layout remain scoped',
-    (tester) async {
-      final container = _container();
-      final theme = ValueNotifier(AppThemeVariant.studio);
-      addTearDown(container.dispose);
-      addTearDown(theme.dispose);
-      await tester.pumpWidget(_host(container, theme, embedded: true));
-      expect(find.byKey(const ValueKey('studio-piano-roll')), findsOneWidget);
-      expect(find.text('Scale'), findsNothing);
-      expect(find.text('Save'), findsNothing);
-      expect(find.text('Import'), findsNothing);
-      expect(find.byTooltip('Hum recorder'), findsOneWidget);
-      await tester.pumpWidget(
-        _host(container, theme, legacy: true, embedded: true),
-      );
-      expect(find.byKey(const ValueKey('studio-piano-roll')), findsNothing);
-      expect(find.text('Roll'), findsOneWidget);
-      final painter = tester
-          .widget<CustomPaint>(
-            find.byKey(const ValueKey('piano-roll-grid-paint')),
-          )
-          .painter;
-      expect((painter as dynamic).palette, StudioPalette.legacy);
-      theme.value = AppThemeVariant.studioMuzician;
-      await tester.pumpAndSettle();
-      expect(
-        (tester
-                    .widget<CustomPaint>(
-                      find.byKey(const ValueKey('piano-roll-grid-paint')),
-                    )
-                    .painter
-                as dynamic)
-            .palette,
-        StudioPalette.legacy,
-      );
-    },
-  );
+  testWidgets('embedded Studio capabilities and legacy layout remain scoped', (
+    tester,
+  ) async {
+    final container = _container();
+    final theme = ValueNotifier(AppThemeVariant.studio);
+    addTearDown(container.dispose);
+    addTearDown(theme.dispose);
+    await tester.pumpWidget(_host(container, theme, embedded: true));
+    expect(find.byKey(const ValueKey('studio-piano-roll')), findsOneWidget);
+    expect(find.text('Scale'), findsNothing);
+    expect(find.text('Save'), findsNothing);
+    expect(find.text('Import'), findsNothing);
+    expect(find.byTooltip('Hum recorder'), findsOneWidget);
+    await tester.pumpWidget(
+      _host(container, theme, legacy: true, embedded: true),
+    );
+    expect(find.byKey(const ValueKey('studio-piano-roll')), findsNothing);
+    expect(find.text('Roll'), findsOneWidget);
+    final painter = tester
+        .widget<CustomPaint>(
+          find.byKey(const ValueKey('piano-roll-grid-paint')),
+        )
+        .painter;
+    expect((painter as dynamic).palette, StudioPalette.legacy);
+    theme.value = AppThemeVariant.studioMuzician;
+    await tester.pumpAndSettle();
+    expect(
+      (tester
+                  .widget<CustomPaint>(
+                    find.byKey(const ValueKey('piano-roll-grid-paint')),
+                  )
+                  .painter
+              as dynamic)
+          .palette,
+      StudioPalette.legacy,
+    );
+  });
 }

@@ -19,9 +19,13 @@ import 'writer_save_sync_store.dart';
 
 typedef DocumentsDirectoryResolver = Future<Directory> Function();
 
+const removedSongAudioCleanupStorageKey =
+    '@muzician/removed_song_audio_cleanup/v1';
+
 /// Best-effort removal of the Song-era audio directories. Writer audio lives
-/// in `songwriter_audio/` and is never touched.
-Future<void> wipeRemovedSongAudioDir({
+/// in `songwriter_audio/` and is never touched. Returns false when the wipe
+/// could not run, so the next launch retries it.
+Future<bool> wipeRemovedSongAudioDir({
   DocumentsDirectoryResolver documentsDirectory =
       getApplicationDocumentsDirectory,
 }) async {
@@ -33,8 +37,9 @@ Future<void> wipeRemovedSongAudioDir({
         await dir.delete(recursive: true);
       }
     }
+    return true;
   } catch (_) {
-    /* best-effort; ignore */
+    return false;
   }
 }
 
@@ -66,8 +71,17 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   }
 
   Future<void> hydrate() async {
-    unawaited(wipeRemovedSongAudioDir());
     final prefs = await SharedPreferences.getInstance();
+    if (prefs.get(removedSongAudioCleanupStorageKey) != true) {
+      unawaited(() async {
+        if (!await wipeRemovedSongAudioDir()) return;
+        try {
+          await prefs.setBool(removedSongAudioCleanupStorageKey, true);
+        } catch (_) {
+          /* best-effort; retry next launch */
+        }
+      }());
+    }
     final existing = prefs.getString(saveSystemStorageKey);
     if (existing != null) {
       final parsed = deserialiseState(existing);

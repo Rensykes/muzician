@@ -22,20 +22,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('removed Song preference falls back to Writer', () {
-    expect(contentWorkspaceTabForPreference('song'), 3);
-    expect(contentWorkspacePreferenceForTab(3), 'writer');
-    for (final entry in {
-      0: 'fretboard',
-      1: 'piano',
-      2: 'roll',
-      3: 'writer',
-    }.entries) {
-      expect(contentWorkspaceTabForPreference(entry.value), entry.key);
-      expect(contentWorkspacePreferenceForTab(entry.key), entry.value);
-    }
-  });
-
   test('Song storage is discarded and Writer storage survives', () async {
     SharedPreferences.setMockInitialValues({
       '@muzician/song_sessions/v1': '{"song":{}}',
@@ -302,6 +288,8 @@ void main() {
   test('content workspace preference mapping defaults to Writer', () {
     expect(contentWorkspaceTabForPreference(null), 3);
     expect(contentWorkspaceTabForPreference('unknown'), 3);
+    expect(contentWorkspaceTabForPreference('song'), 3);
+    expect(contentWorkspacePreferenceForTab(3), 'writer');
     expect(contentWorkspaceNames, ['fretboard', 'piano', 'roll', 'writer']);
     for (var tab = 0; tab < contentWorkspaceNames.length; tab++) {
       final workspace = contentWorkspaceNames[tab];
