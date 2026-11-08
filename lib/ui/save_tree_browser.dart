@@ -510,8 +510,6 @@ class _SaveRow extends StatelessWidget {
         return 'FRETBOARD';
       case 'piano_roll':
         return 'PIANO ROLL';
-      case 'song':
-        return 'SONG';
       default:
         return instrument.toUpperCase();
     }

@@ -15,7 +15,7 @@ const bool playbackProfilingEnabled = kDebugMode || kProfileMode;
 const Object _profileEventZoneKey = #muzicianPlaybackProfileEvent;
 const Object _profileVoiceZoneKey = #muzicianPlaybackProfileVoice;
 
-/// Correlation data for one intended note in a profiled Writer/Song run.
+/// Correlation data for one intended note in a profiled Writer run.
 /// Deadlines are relative to the run's monotonic Stopwatch, never wall clock.
 class PlaybackProfileVoiceContext {
   const PlaybackProfileVoiceContext({

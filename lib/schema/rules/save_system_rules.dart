@@ -264,6 +264,18 @@ bool _isRemovedSongSave(Map<String, dynamic> save) {
   return snapshot['type'] == 'song' || snapshot['instrument'] == 'song';
 }
 
+/// True when [raw] still carries a persisted Song save that hydration drops.
+bool containsRemovedSongSaves(String raw) {
+  try {
+    final parsed = jsonDecode(raw) as Map<String, dynamic>;
+    final saves = parsed['saves'];
+    if (saves is! List) return false;
+    return saves.whereType<Map<String, dynamic>>().any(_isRemovedSongSave);
+  } catch (_) {
+    return false;
+  }
+}
+
 List<SaveFolder> getProjectFolders(List<SaveFolder> folders) {
   return folders
       .where((f) => f.parentId == null && f.kind == SaveFolderKind.project)

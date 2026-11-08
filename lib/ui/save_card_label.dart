@@ -116,8 +116,6 @@ IconData saveInstrumentIcon(String instrument) {
       return Icons.piano;
     case 'piano_roll':
       return Icons.grid_on;
-    case 'song':
-      return Icons.queue_music;
     case 'writer_block':
       return Icons.library_add;
     case 'songwriter':

@@ -17,6 +17,27 @@ import 'songwriter_sessions_store.dart';
 import 'writer_save_binding_store.dart';
 import 'writer_save_sync_store.dart';
 
+typedef DocumentsDirectoryResolver = Future<Directory> Function();
+
+/// Best-effort removal of the Song-era audio directories. Writer audio lives
+/// in `songwriter_audio/` and is never touched.
+Future<void> wipeRemovedSongAudioDir({
+  DocumentsDirectoryResolver documentsDirectory =
+      getApplicationDocumentsDirectory,
+}) async {
+  try {
+    final docsDir = await documentsDirectory();
+    for (final name in const ['song_audio', 'song_audio_tmp']) {
+      final dir = Directory('${docsDir.path}/$name');
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+      }
+    }
+  } catch (_) {
+    /* best-effort; ignore */
+  }
+}
+
 class SaveSystemNotifier extends Notifier<SaveSystemState> {
   String? lastMutationError;
   bool _publishingPreparedWriterProject = false;
@@ -45,7 +66,7 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   }
 
   Future<void> hydrate() async {
-    unawaited(_wipeRemovedSongAudioDir());
+    unawaited(wipeRemovedSongAudioDir());
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(saveSystemStorageKey);
     if (existing != null) {
@@ -63,41 +84,20 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
         selectedProjectId: () => parsed.selectedProjectId,
         hydrated: true,
       );
+      if (containsRemovedSongSaves(existing)) {
+        await _persist();
+      }
       return;
     }
-    // First v3 launch — wipe legacy blobs, but only when legacy data was
-    // actually present (a truly fresh install has nothing to clean, and the
-    // audio-dir wipe touches path_provider, which test environments lack).
-    var hadLegacy = false;
+    // First v3 launch — wipe legacy blobs.
     for (final key in legacySaveSystemStorageKeys) {
-      if (prefs.containsKey(key)) {
-        hadLegacy = true;
-        await prefs.remove(key);
-      }
+      await prefs.remove(key);
     }
     for (final key in legacySessionKeys) {
-      if (prefs.containsKey(key)) {
-        hadLegacy = true;
-        await prefs.remove(key);
-      }
-    }
-    if (hadLegacy) {
-      await _wipeRemovedSongAudioDir();
+      await prefs.remove(key);
     }
     state = state.copyWith(hydrated: true);
     await _persist();
-  }
-
-  Future<void> _wipeRemovedSongAudioDir() async {
-    try {
-      final docsDir = await getApplicationDocumentsDirectory();
-      final audioDir = Directory('${docsDir.path}/song_audio');
-      if (await audioDir.exists()) {
-        await audioDir.delete(recursive: true);
-      }
-    } catch (_) {
-      /* best-effort; ignore */
-    }
   }
 
   Future<void> _persist() => ref

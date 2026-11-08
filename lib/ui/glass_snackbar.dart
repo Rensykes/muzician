@@ -1,4 +1,4 @@
-/// Compact palette-aware notifications, retaining legacy Song presentation.
+/// Compact palette-aware notifications.
 library;
 
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';

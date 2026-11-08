@@ -6,8 +6,8 @@ import '../../models/songwriter.dart';
 import 'piano_roll_playback_rules.dart' as playback;
 import 'songwriter_rules.dart';
 
-/// Ticks → milliseconds at the project tempo. Parallels `audioTickToMs` in
-/// `audio_rules.dart` (same formula, different config type).
+/// Ticks → milliseconds at the project tempo.
+
 int songwriterAudioTickToMs(int tick, SongwriterConfig config) {
   return (tick * playback.millisecondsPerTick(config.tempo)).round();
 }

@@ -62,8 +62,12 @@ Future<void> hydrateStores(ProviderReader read) async {
     throw StartupStorageFailure('Could not read saved workspaces.', error);
   }
 
-  for (final key in _removedSongStorageKeys) {
-    await prefs.remove(key);
+  try {
+    for (final key in _removedSongStorageKeys) {
+      await prefs.remove(key);
+    }
+  } catch (error) {
+    throw StartupStorageFailure('Could not clear removed Song data.', error);
   }
 
   // A complete Writer transaction is authoritative over its older individual

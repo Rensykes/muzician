@@ -1,5 +1,5 @@
 /// Save System Type Definitions
-/// Nested folder tree mirroring Song > Part > State with progression metadata.
+/// Nested folder tree mirroring Project > Section > Category with progression metadata.
 library;
 
 import '../schema/rules/mono_pitch_rules.dart';

@@ -56,12 +56,12 @@ String _headerChipLabel(PianoRollState state) {
 
 class PianoRollScreenV2 extends ConsumerStatefulWidget {
   /// Whether to show the scale picker entry points (landscape section, portrait
-  /// chip).  The Song workspace mounts this shell with [showScale] = false so
-  /// the active scale is inherited from the song.
+  /// chip).  Embedded hosts mount this shell with [showScale] = false so
+  /// the active scale is inherited from the host.
   final bool showScale;
 
   /// Whether to show the save/load and import-from-saves panels.  Disabled in
-  /// embedded contexts (Song workspace) where loading would smash the host's
+  /// embedded contexts where loading would smash the host's
   /// pattern length and scale state.
   final bool showSavePanels;
 

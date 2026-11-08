@@ -10,10 +10,7 @@ void main() {
   tearDown(() => tmp.deleteSync(recursive: true));
 
   test('subdir scopes files and reconcile to one feature', () async {
-    final defaultRepo = AudioRepository.testWith(
-      rootDirectory: tmp,
-      subdir: 'writer_audio',
-    );
+    final defaultRepo = AudioRepository.testWith(rootDirectory: tmp);
     final writerRepo = AudioRepository.testWith(
       rootDirectory: tmp,
       subdir: 'songwriter_audio',

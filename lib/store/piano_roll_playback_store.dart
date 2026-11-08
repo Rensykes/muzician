@@ -37,7 +37,7 @@ final pianoRollTimbrePlayerProvider = Provider<PianoRollTimbrePlayer>((ref) {
 /// Builds the default playback sink that wraps the synthesised [NotePlayer]
 /// engine, reading the roll's sound from [ref] at call time.
 ///
-/// Exposed so embedded hosts (e.g. Song's isolated pattern editor) can
+/// Exposed so embedded hosts (e.g. Writer's melody editor) can
 /// re-apply it as an override on a child [ProviderContainer], keeping the
 /// sink scoped to that container's own [pianoRollProvider] rather than the
 /// parent/root roll's sound.
@@ -188,8 +188,8 @@ class PianoRollPlaybackNotifier extends Notifier<PianoRollPlaybackState> {
   /// Reflects an external transport's position as the visible playhead without
   /// generating any audio.
   ///
-  /// Used when the song pattern editor plays a pattern in *song context*: the
-  /// song transport produces the sound, while this mirrors the mapped local
+  /// Used when an embedded editor plays a pattern in a host transport: the
+  /// host transport produces the sound, while this mirrors the mapped local
   /// tick into the embedded grid so the playhead still animates.  Pass `null`
   /// to clear the mirrored playhead.
   void mirrorExternalTick(int? localTick) {

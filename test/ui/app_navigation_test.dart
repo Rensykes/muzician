@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/app_theme_variant.dart';
 import 'package:muzician/theme/studio_theme.dart';
@@ -23,23 +24,17 @@ List<AppNavDestination> _destinations(List<int> taps) => [
     label: 'Roll',
     onTap: () => taps.add(2),
   ),
-  const AppNavDestination(
+  AppNavDestination(
     tabIndex: 3,
-    icon: Icons.article_outlined,
-    label: 'Song',
-    semanticHint: 'Temporarily unavailable',
+    icon: Icons.edit_outlined,
+    label: 'Writer',
+    onTap: () => taps.add(3),
   ),
   AppNavDestination(
     tabIndex: 4,
-    icon: Icons.edit_outlined,
-    label: 'Writer',
-    onTap: () => taps.add(4),
-  ),
-  AppNavDestination(
-    tabIndex: 5,
     icon: Icons.settings_outlined,
     label: 'Settings',
-    onTap: () => taps.add(5),
+    onTap: () => taps.add(4),
     pinnedToBottom: true,
   ),
 ];
@@ -80,9 +75,7 @@ void main() {
     }
   });
 
-  testWidgets('rail lists workspaces, pins Settings, disables Song', (
-    tester,
-  ) async {
+  testWidgets('rail lists workspaces and pins Settings', (tester) async {
     final taps = <int>[];
     await _pump(
       tester,
@@ -91,7 +84,7 @@ void main() {
         children: [
           StudioNavigationRail(
             destinations: _destinations(taps),
-            selectedIndex: 4,
+            selectedIndex: 3,
           ),
           const Expanded(child: SizedBox()),
         ],
@@ -99,14 +92,7 @@ void main() {
     );
 
     expect(find.byKey(const Key('studioNavigationRail')), findsOneWidget);
-    for (final label in [
-      'Fretboard',
-      'Piano',
-      'Roll',
-      'Song',
-      'Writer',
-      'Settings',
-    ]) {
+    for (final label in ['Fretboard', 'Piano', 'Roll', 'Writer', 'Settings']) {
       expect(find.byKey(ValueKey('nav_$label')), findsOneWidget);
     }
     final writerBottom = tester
@@ -126,13 +112,41 @@ void main() {
     expect(itemSize.width, greaterThanOrEqualTo(44));
 
     await tester.tap(find.byKey(const ValueKey('nav_Piano')));
-    await tester.tap(find.byKey(const ValueKey('nav_Song')));
+    await tester.tap(find.byKey(const ValueKey('nav_Writer')));
     await tester.tap(find.byKey(const ValueKey('nav_Settings')));
-    expect(taps, [1, 5]);
+    expect(taps, [1, 3, 4]);
+  });
+
+  testWidgets('a destination without onTap is disabled with a hint', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const Size(1440, 900),
+      Row(
+        children: [
+          StudioNavigationRail(
+            destinations: const [
+              AppNavDestination(
+                tabIndex: 0,
+                icon: Icons.lock_outline,
+                label: 'Locked',
+                semanticHint: 'Unavailable in this fixture',
+              ),
+            ],
+            selectedIndex: 0,
+          ),
+          const Expanded(child: SizedBox()),
+        ],
+      ),
+    );
 
     final semantics = tester.ensureSemantics();
-    final song = tester.getSemantics(find.byKey(const ValueKey('nav_Song')));
-    expect(song.hint, 'Temporarily unavailable');
+    final locked = tester
+        .getSemantics(find.byKey(const ValueKey('nav_Locked')))
+        .getSemanticsData();
+    expect(locked.hint, 'Unavailable in this fixture');
+    expect(locked.hasAction(SemanticsAction.tap), isFalse);
     semantics.dispose();
   });
 
@@ -173,6 +187,6 @@ void main() {
     );
     expect(find.byKey(const Key('studioBottomNavBar')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('nav_Writer')));
-    expect(taps, [4]);
+    expect(taps, [3]);
   });
 }

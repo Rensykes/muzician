@@ -1,6 +1,6 @@
 /// Filesystem-backed repository for audio clip files.
 ///
-/// All disk I/O for song audio lives here.  Other layers refer to assets by
+/// All disk I/O for audio clips lives here.  Other layers refer to assets by
 /// id; this class is the only place that converts an id into a real `File`.
 library;
 

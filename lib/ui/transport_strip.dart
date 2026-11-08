@@ -1,6 +1,6 @@
 /// Shared playback transport strip + BPM editor sheet.
 ///
-/// Used by the Piano Roll and Song workspaces so the rewind / play-pause /
+/// Used by the Piano Roll and Writer workspaces so the rewind / play-pause /
 /// stop / BPM / BAR / time-signature readouts stay visually consistent.
 library;
 

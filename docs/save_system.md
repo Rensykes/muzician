@@ -38,7 +38,7 @@ Every top-level folder has a `kind`:
 | `project` | A user-facing project root. Carries a `ProjectConfig` (key, tempo, time signature, default Harmony instrument). |
 | `dump` | Single global spare folder (at most one). Holds ad-hoc saves until copied into a real project. |
 
-`SaveSystemState.selectedProjectId` identifies the active project (`project` or `dump`). Persisted in the v3 blob. Song + Songwriter require `kind == project` (Dump is rejected). Fretboard / Piano / Roll accept either.
+`SaveSystemState.selectedProjectId` identifies the active project (`project` or `dump`). Persisted in the v3 blob. Writer requires `kind == project` (Dump is rejected). Fretboard / Piano / Roll accept either.
 
 `ProjectConfig` (defined in `lib/models/project_config.dart`):
 
@@ -86,7 +86,7 @@ shown in the startup recovery prompt until the user chooses **Start fresh**.
 |---|---|
 | `PendingChord` | Root + quality pending detection (`root`, `quality`, `symbol`) |
 | `PendingScale` | Root + scale name pending detection |
-| `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `HarmonyChordSnapshot`, `PianoRollSnapshot`, `SongProjectSnapshot`, `SongwriterProjectSnapshot`, `WriterBlockSnapshot`, `DrumLoopSnapshot` |
+| `InstrumentSnapshot` | Abstract class — `FretboardSnapshot`, `PianoSnapshot`, `HarmonyChordSnapshot`, `PianoRollSnapshot`, `SongwriterProjectSnapshot`, `WriterBlockSnapshot`, `DrumLoopSnapshot` |
 | `HarmonyChordSnapshot` | Recognized chord or named exact Harmony content, native Piano/Fretboard snapshot, and fixed lane instrument identity |
 | `FretboardSnapshot` | Fretboard save: tuning, capo, selected cells, notes, view mode, pending chord/scale |
 | `PianoSnapshot` | Piano save: key range, selected keys, notes, view mode, pending chord/scale |
@@ -335,7 +335,7 @@ with its contents.
 
 | Prop | Type | Description |
 |---|---|---|
-| `instrumentFilter` | `String?` | Filters saves to a single instrument type (`'fretboard'`, `'piano'`, `'piano_roll'`, `'song'`, `'songwriter'`, `'writer_block'`, `'drum_loop'`); Writer's Section blocks view can show mixed Writer and instrument save types |
+| `instrumentFilter` | `String?` | Filters saves to a single instrument type (`'fretboard'`, `'piano'`, `'piano_roll'`, `'songwriter'`, `'writer_block'`, `'drum_loop'`); Writer's Section blocks view can show mixed Writer and instrument save types |
 | `allowedInstruments` | `Set<String>?` | Allowlist of snapshot types; when combined with `instrumentFilter`, a save must satisfy both filters |
 | `captureSnapshot` | `InstrumentSnapshot Function()?` | Captures a snapshot from the current instrument state for saving |
 | `onLoad` | `void Function(InstrumentSnapshot)?` | Applies a loaded snapshot to the current instrument |

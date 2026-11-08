@@ -415,7 +415,7 @@ Preparation is best effort (a failure falls back to lazy synthesis)
 and Stop during it aborts through `_version`. The drum audition loop prepares its
 lanes the same way. Override the sink in tests so they need no audio.
 
-### Drum pattern editor (`lib/features/song/drum_machine_editor.dart`)
+### Drum pattern editor (`lib/features/songwriter/drum_machine_editor.dart`)
 
 Drum-lane blocks open the shared `DrumMachineEditorBody` — a step grid plus a
 transport row. Beyond tapping individual steps it offers:
