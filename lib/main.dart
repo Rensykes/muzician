@@ -10,6 +10,7 @@ import 'features/fretboard/fretboard_audition_controls.dart';
 import 'features/instrument_shared/instrument_screen.dart';
 import 'features/instrument_shared/shared_scale_picker.dart';
 import 'ui/core/app_info_panel.dart';
+import 'ui/core/feedback_sheet.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
 import 'features/songwriter/songwriter_feature.dart';
@@ -20,6 +21,7 @@ import 'models/piano.dart' show PianoViewMode;
 import 'models/save_system.dart';
 import 'utils/note_utils.dart'
     show NoteSpelling, chromaticNotes, formatRootChoiceLabel;
+import 'utils/feedback_diagnostics.dart' show isFeedbackAvailable;
 import 'store/app_bootstrap.dart';
 import 'store/persisted_data_recovery_store.dart';
 import 'store/fretboard_store.dart';
@@ -1181,6 +1183,8 @@ class _SettingsScreen extends ConsumerWidget {
           ),
         ),
         const DataRecoveryPanel(),
+        if (isFeedbackAvailable)
+          const _SettingsGroup(child: FeedbackSettingsTile()),
         _SettingsGroup(
           child: SwitchListTile.adaptive(
             key: const ValueKey('settings_note_spelling'),
