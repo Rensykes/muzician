@@ -12,5 +12,29 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "location": "eur3"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "muzician-b0953",
+          "appId": "1:249096781239:android:26f08e534c54a3f3713c32",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "muzician-b0953",
+          "configurations": {
+            "android": "1:249096781239:android:26f08e534c54a3f3713c32",
+            "web": "1:249096781239:web:1f89b52dfde0a6ab713c32"
+          }
+        }
+      }
+    }
   }
 }
