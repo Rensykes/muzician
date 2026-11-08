@@ -15,12 +15,12 @@ Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESI
 | Rendering | `CustomPainter` + `RepaintBoundary` |
 | Music theory | `music_notes` (Dart) |
 | Audio | `audioplayers` for playback; `record` for capture |
-| Generated files | `share_plus`, `file_picker`, and `archive` for platform delivery and Song Bundles |
+| Generated files | `share_plus` and `file_picker` for platform delivery |
 | IDs | `uuid` |
 
 ## Features
 
-The navigation (a bottom bar in portrait, a left rail in landscape) is labeled **Fretboard**, **Piano**, **Roll**, **Song**, **Writer**, and **Settings**. **Song is temporarily unavailable in V2**: its entry stays visible and disabled, while saved arrangements remain intact. Save System is a shared project feature rather than a navigation destination.
+The navigation (a bottom bar in portrait, a left rail in landscape) is labeled **Fretboard**, **Piano**, **Roll**, **Writer**, and **Settings**. Save System is a shared project feature rather than a navigation destination.
 
 Fretboard and Piano keep the instrument visible while a bounded Notes / Voicings / Setup inspector scrolls independently. Compact Input/View menus replace full-width mode bars. A single selection **Actions** sheet holds note details, Save idea and Add to Writer across all inspector tabs. Voicings use a horizontal carousel with **From notes** suggestions filtered by selected pitch classes and the active scale, when set, plus independent **By chord** browsing. See the [V2 implementation plan](docs/instrument-ux-v2/PLAN.md) and [verification evidence](docs/instrument-ux-v2/PROGRESS.md).
 
@@ -29,8 +29,7 @@ Fretboard and Piano keep the instrument visible while a bounded Notes / Voicings
 | **Fretboard** | Studio 24-fret guitar workspace with Full/Solo note labels, clean/distorted electric sound, down/up strum audition, a compact Notes / Voicings / Setup inspector, tuning and capo, Save idea, and Chord-only Writer Harmony handoff | [docs/fretboard.md](docs/fretboard.md) |
 | **Piano** | Studio piano workspace with Full/Solo note labels, a compact Notes / Voicings / Setup inspector, 49 / 61 / 88-key ranges, Scale and Library shortcuts, Save idea, and recognized or exact-note Writer Harmony | [docs/piano.md](docs/piano.md) |
 | **Piano Roll** | Studio timeline editor (navigation label **Roll**) with all five tools, a Stack Builder / Selection inspector, Quick, snap, pitch-range, **Hum recorder** (mobile, web, desktop) and a per-roll playback sound | [docs/piano_roll.md](docs/piano_roll.md) |
-| **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; removable Drums, Sample, Guitar Strum and Melody lanes, named multi-bar melodies with a Bars stepper and whole-bar length, a wrapped Melody timeline with single-pass note previews, placement limits and silent tails, unresolved-content warnings and bar-snapped resizing, repeat-aware linked reuse, independent lane sounds (new lanes default to Piano; legacy lanes retain pattern sounds), Harmony guitar tone selection, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Song & Writer guide](docs/song_writer_guide.md) |
-| **Song** | Temporarily disabled in V2; retained clip arrangement workspace with recording review, contextual Writer import when tracks are available, project-scoped undo/redo, PCM16 WAV mixdown, and portable Song Bundle import/export | [docs/song_workspace.md](docs/song_workspace.md), [Song & Writer guide](docs/song_writer_guide.md) |
+| **Writer** | Studio section sketch with **Save version**, **Writer versions**, and an auto-persisted **Draft**; removable Drums, Sample, Guitar Strum and Melody lanes, named multi-bar melodies with a Bars stepper and whole-bar length, a wrapped Melody timeline with single-pass note previews, placement limits and silent tails, unresolved-content warnings and bar-snapped resizing, repeat-aware linked reuse, independent lane sounds (new lanes default to Piano; legacy lanes retain pattern sounds), Harmony guitar tone selection, and project-scoped undo/redo | [docs/songwriter.md](docs/songwriter.md), [Writer guide](docs/writer_guide.md) |
 | **Save System** | Project-scoped saves with Writer-managed section/category folders, composite Harmony chord snapshots, shared canonical content, protected linked work, and startup recovery for malformed or interrupted saved data | [docs/save_system.md](docs/save_system.md) |
 | **Settings** | Compact, divider-grouped device preferences for Studio / Studio Muzician appearance, Sharps/Flats spelling, project Harmony defaults, preview volume and scale warnings; preserved recovery backups remain available here; on web, Android, iOS, macOS and Windows, **Send feedback** opens the in-app feedback composer | [docs/save_system.md](docs/save_system.md), [docs/feedback.md](docs/feedback.md) |
 | **Feedback** | Settings → **Send feedback** (web, Android, iOS, macOS and Windows), or shake an Android or iOS device: sends a message, an optional reply email and coarse app/device details to the developer; projects, lyrics, saves and audio never leave the device | [docs/feedback.md](docs/feedback.md), [privacy policy](https://muzician.bytebakehouseinc.xyz/privacy) |
@@ -42,7 +41,7 @@ lib/
   main.dart                   ← App shell, tab navigation, screen layouts
   theme/
     studio_theme.dart         ← Immutable Studio palettes and semantic UI colors
-    muzician_theme.dart       ← Legacy palette retained for Song and compatibility views
+    muzician_theme.dart       ← Legacy palette retained for compatibility views
   models/                     ← Immutable data types
   schema/rules/               ← Validation, music math, default state factories
   store/                      ← Riverpod providers and project-scoped undo history
@@ -62,15 +61,13 @@ lib/
     piano/                    ← Piano keyboard and harmony tools
     piano_roll/               ← Note editor and hum-to-MIDI
     songwriter/               ← Section, chord, lyric, melody, drum, strum, and audio writing
-    song/                     ← Track and clip arranger
     save_system/              ← Save system barrel export
 docs/
   fretboard.md
   piano.md
   piano_roll.md
   songwriter.md
-  song_workspace.md
-  song_writer_guide.md
+  writer_guide.md
   save_system.md
   feedback.md
   superpowers/
@@ -87,7 +84,7 @@ docs/
 
 - **View modes:** Both fretboard and piano offer **Full** (all note labels) and **Solo** (selected positions only), independently of Chord/Free input. Serialized values remain `exact` / `exactFocus` for compatibility. See [lib/features/fretboard/fretboard.dart](lib/features/fretboard/fretboard.dart) and [lib/features/piano/piano_keyboard.dart](lib/features/piano/piano_keyboard.dart).
 
-- **Appearance:** Settings → **Appearance** switches between **Studio** (default graphite / mint) and **Studio Muzician** (night / sky / teal / violet). The choice is saved on this device and applies to Fretboard, Piano, Piano Roll, Writer, and shared panels. Song is temporarily disabled; its retained implementation uses the legacy layout and palette.
+- **Appearance:** Settings → **Appearance** switches between **Studio** (default graphite / mint) and **Studio Muzician** (night / sky / teal / violet). The choice is saved on this device and applies to Fretboard, Piano, Piano Roll, Writer, and shared panels.
 
 
 ## Running the App

@@ -514,16 +514,6 @@ class _PianoRollInfoTab extends StatelessWidget {
                   'and utility actions remain available alongside the editor.',
               color: StudioPalette.of(context).emerald,
             ),
-            _Entry(
-              icon: Icons.compare_arrows_outlined,
-              label: 'Song-embedded Roll',
-              desc:
-                  'Song is temporarily unavailable in V2. Its retained Roll layout '
-                  'and host settings stay compatible. Embedded '
-                  'editors can hide background, scale, or save/import actions when '
-                  'those controls belong to the host workspace.',
-              color: StudioPalette.of(context).emerald,
-            ),
           ],
         ),
         SizedBox(height: 16),

@@ -59,9 +59,9 @@ labels retain their meaning. Writer's chord wheel supports seven-degree scales;
 other configured scales open the root/quality picker directly without changing
 the key.
 
-Writer supports reusable section-level melody and guitar-strum patterns that
-can move into Song as note tracks. Strum patterns use an explicitly selected
-Fretboard Harmony lane and preview their down/up events on each tile. Within
+Writer supports reusable section-level melody and guitar-strum patterns.
+Strum patterns use an explicitly selected Fretboard Harmony lane and preview
+their down/up events on each tile. Within
 a section, each Fretboard Harmony lane can be assigned to only one Guitar
 Strum lane; occupied targets are hidden from other strum selectors.
 Unassigned lanes reserve no target.
@@ -84,12 +84,9 @@ retain per-pattern sound and the shared guitar tone until explicitly changed.
 Writer's main menu can create a separate Save System project; Keep, Discard,
 and Cancel protect the current Writer session. Discard restores its bound
 named Save or clears the session and binding while retaining named Saves.
-Writer audio lanes remain part of the section sketch and are not included in
-that import.
-Both Writer and Song provide bounded, project-scoped undo and redo so a draft
-can be explored and recovered. Native Song Bundles carry an arrangement and
-its referenced audio sources between devices; Web explains that bundle import
-and export are unsupported because its audio repository is filesystem-backed.
+Writer audio lanes remain part of the section sketch.
+Writer provides bounded, project-scoped undo and redo so a draft can be
+explored and recovered.
 
 ## Brand Personality
 
@@ -110,7 +107,7 @@ Creative, clear, musician-first. Muzician should feel encouraging and musically 
 3. **Show theory in context.** Chord, scale, key, and voicing information should support a musical decision and remain optional.
 4. **Make the draft audible.** Let users hear changes in the section or arrangement they are writing.
 5. **Protect creative work.** Keep drafts recoverable with undo and redo, communicate save state clearly, and confirm project replacement before it begins.
-6. **Make the next handoff visible.** Instrument → Writer remains available in V2. Song entry and its import actions are temporarily unavailable; retain the underlying import contract: sections become measures and markers; harmony, saved voicings, melody, and guitar strums become note tracks; drum lanes become drum tracks; tempo, meter, and key carry over. Writer audio stays in Writer.
+6. **Make the next handoff visible.** Instrument → Writer remains available. Harmony, saved voicings, melody, and guitar strums become Writer lanes; tempo, meter, and key carry over. Writer audio stays in Writer.
 
 ## Accessibility & Inclusion
 
@@ -120,7 +117,7 @@ Design for touch-first use on phones and tablets, with readable text, scalable l
 
 A musician rehearses or writes in a room with moderate or dim light, moving between a physical instrument and a phone/tablet. Studio uses a dark neutral canvas, readable controls and restrained musical accents so the interface supports sustained writing without competing with the music.
 
-The initial redesign covers Fretboard, Piano, Piano Roll, Writer, their shared dialogs/library, application navigation and the necessary Settings surfaces. **Song is temporarily unavailable in instrument UX V2.** Its navigation entry remains visible and disabled with an explanation. Keep its implementation, saved arrangements and serialization compatible for a later return; normal navigation must not mount it. Writer remains available. Embedded Roll editors must retain their host configuration and capabilities.
+The initial redesign covers Fretboard, Piano, Piano Roll, Writer, their shared dialogs/library, application navigation and the necessary Settings surfaces. Writer is the only arrangement workspace. Embedded Roll editors must retain their host configuration and capabilities.
 
 The app offers two presentation themes in Settings: **Studio** (default graphite/mint) and **Studio Muzician** (the same layout with Muzician's night/sky/teal/violet palette). The preference is device-local and persisted across launches; it does not belong to a project or named Save. Existing settings without this field select Studio. Switching themes must preserve projects, selections, playback position, edits, history, open panels and scroll state. This is a presentation change, not a project operation.
 

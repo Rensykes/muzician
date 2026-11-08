@@ -5,7 +5,7 @@ sidebar notes, detection, scale/root choices, hum previews, and saved-stack
 details. Sharps is the default; Flats displays Eb for D# and Gb for F# without
 changing MIDI notes, octaves, project keys, or custom names.
 
-A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, Stack Builder and Quick, live chord/scale detection per selected column, Hum-to-MIDI recording on mobile, web and desktop, a selectable playback sound, transport with optional metronome, and responsive Studio layout with a bounded contextual inspector. Song-hosted note editors retain the legacy layout.
+A quantized, timeline-based note editor rendered with `CustomPainter`. Supports five tap-mode tools (Draw / Select / Scissors / Paint / Delete), explicit area selection via Select tool, marquee rectangle, drag-to-move (pitch + position), drag-to-resize, pinch-to-zoom (both axes), beat snapping, Stack Builder and Quick, live chord/scale detection per selected column, Hum-to-MIDI recording on mobile, web and desktop, a selectable playback sound, transport with optional metronome, and responsive Studio layout with a bounded contextual inspector.
 
 ---
 
@@ -401,7 +401,7 @@ Each piano roll has one playback timbre, `PianoRollState.sound` (a `PianoRollSou
 - **Persistence:** saved as `PianoRollSnapshot.sound` (the enum's `name`, see [PianoRollSnapshot](#pianorollsnapshot-libmodelssave_systemdart)); `lib/store/save_system_store.dart`'s project-config rewrite carries `snap.sound` forward when it rebuilds a `PianoRollSnapshot`'s tempo/key/signature fields.
 - **Playback:** the default `pianoRollPlaybackSinkProvider` reads `pianoRollProvider`'s `sound` at the moment each note plays (via `pianoRollTimbrePlayerProvider` → `NotePlayer.previewTimbre`), so changing the sound mid-edit applies to the next playback without restarting.
 - **Grid auditions:** tapping/dragging a note in `PianoRollGrid` previews it with the same roll sound.
-- **Out of scope:** the Song workspace and Writer's embedded note editors are unaffected — they keep their existing legacy sound handling. `PianoRollScreenV2(showSound: false)` hides the Sound section of Roll Settings in both embedded hosts, since their `NotePattern`s have no field to persist a picked sound.
+- **Out of scope:** Writer's embedded note editors are unaffected — they keep their existing legacy sound handling. `PianoRollScreenV2(showSound: false)` hides the Sound section of Roll Settings in both embedded hosts, since their `NotePattern`s have no field to persist a picked sound.
 
 ---
 
@@ -499,15 +499,6 @@ These follow the live Studio theme while open, including nested confirmation
 dialogs. Save uses the full-roll Save/Load flow; Import places note stacks from
 Piano or Fretboard Saves. No velocity lane, automation or Writer-transfer action
 is added.
-
-### Legacy Song host
-
-Song's fullscreen note editor passes through the fixed legacy theme scope.
-Its Roll uses the established 600px landscape threshold: grid plus scrollable
-utility rail when wide, or grid plus the portrait action bar and modal panels
-when compact. The legacy title remains Roll, canvas colors remain fixed, and
-root appearance changes do not redesign it. Capability flags still control
-Scale, Save/Import and outer background independently in every host.
 
 ---
 
@@ -749,16 +740,14 @@ project scale is pushed into `highlightedNotes` via
 `projectConfigSyncProvider`, so note/chord/scale detection works against the
 project's tonal centre.
 
-## Standalone Roll vs. Song Note Editor
+## Standalone Roll vs. Writer Melody Editor
 
 The standalone `Roll` tab (`PianoRollScreenV2`) uses `pianoRollProvider` with the default container and the selected Studio appearance. Writer's isolated melody editor inherits that Studio appearance while disabling Scale and Save/Import.
-The Song workspace uses an **isolated `ProviderContainer`** seeded from a `NotePattern` when editing note clips.
 Both use `PianoRollGrid` and `PianoRollDetectionPanel`, but the provider scope keeps their states independent. Utility and tempo sheets retain the launching editor container, so their Consumers edit that pattern rather than the standalone Roll.
-Closing the Song note editor writes a converted `NotePattern` back through `applyNotePattern` on the Song store.
-This ensures that editing a Song pattern does not mutate the standalone Roll session. Song supplies its fixed legacy palette/layout; an isolated provider container never chooses presentation themes.
+Closing the Writer melody editor writes a converted `NotePattern` back through the Writer store, so editing a melody pattern does not mutate the standalone Roll session.
 
 ### Studio visual refinement (19 October 2026)
 
 Compact portrait keeps the active tool labelled, the other four tools available as labelled-by-tooltip icons, and Snap visible. The utility row uses Quick / Scale / Hum / Save / Import; Hum retains the full Hum recorder tooltip and panel title. Large text and short viewports retain scrolling rather than compressing targets below44px.
 
-The ruler identifies each measure as bar:1 and labels its subsequent beats when zoom permits. Stronger beat lines, mint active-column notes and a2px selected-note outline distinguish musical state. With adequate vertical space, column context and existing selection actions sit under the grid while Stack Builder stays open. Wide canonical builders use a bounded panel; Custom and other inspectors retain their available editing space. Added notes from toolbar/builder operations are revealed vertically when no grid gesture is active; this does not change pitches, timing or the gesture state machine. Song's embedded legacy grid retains its prior presentation.
+The ruler identifies each measure as bar:1 and labels its subsequent beats when zoom permits. Stronger beat lines, mint active-column notes and a2px selected-note outline distinguish musical state. With adequate vertical space, column context and existing selection actions sit under the grid while Stack Builder stays open. Wide canonical builders use a bounded panel; Custom and other inspectors retain their available editing space. Added notes from toolbar/builder operations are revealed vertically when no grid gesture is active; this does not change pitches, timing or the gesture state machine.

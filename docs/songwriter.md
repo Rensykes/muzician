@@ -7,13 +7,11 @@ and audio. Recoverable block content links to a canonical save in the selected
 project's Save System; placement and lyrics stay with the Writer block. If a
 save and its fallback content are both unavailable, Writer keeps the block
 visible as broken rather than inventing replacement content.
-Use Writer to shape the song's sections. **Song is temporarily unavailable in
-V2**; its saved arrangements and clip-arranger implementation are retained.
+Use Writer to shape the song's sections.
 
 Writer is the first workspace on a new install. After startup it restores the
-last available content workspace (Fretboard, Piano, Roll, or Writer); a saved
-Song destination falls back to Writer. Opening Settings does not change that
-preference.
+last available content workspace (Fretboard, Piano, Roll, or Writer). Opening
+Settings does not change that preference.
 
 ## Studio workspace
 
@@ -144,7 +142,7 @@ name and native notes even without recognition. They appear in Harmony Library
 and offer **Change chord** and **Replace chord**. Root, quality, and Roman
 numeral remain absent until the user explicitly chooses a chord; theory and
 voicing suggestions require that identity. Exact Harmony playback retains
-octaves and instrument positions in Writer, strums, and Song import.
+octaves and instrument positions in Writer and strums.
 Free Fretboard selections remain savable and loadable for exploration but
 cannot be imported into Writer or used in its playback. Chord selections
 must have one valid position per string; a mode change does not remove
@@ -314,10 +312,6 @@ another block's repeat origins. A clipped block can be dragged back inside a
 shortened section. Incompatible canonical Saves remain unchanged and cannot be
 edited or made unique through the incompatible placement.
 
-Song's **Import from Writer** remains a legacy looping conversion: it repeats
-melody content across each converted note clip's block span and does not inherit
-Writer's one-pass or silent-tail rule.
-
 Each melody pattern has one Piano or Fretboard performance target. Piano
 positions use the note's MIDI key. Fretboard positions store a playable string
 and physical fret per note and must match the note's pitch under the current
@@ -335,7 +329,7 @@ again. The selected instrument
 performance view and position editing are blocked if any note is outside the
 current Piano range or Fretboard's playable positions; Piano Roll remains
 available to correct notes. These Writer-only mappings are kept beside the
-shared `NotePattern`, not added to the Song pattern schema.
+shared `NotePattern`, not added to the shared pattern schema.
 
 Guitar-strum placements must stay within the section and not overlap authored
 blocks in their lane; Melody's repeat-aware restrictions do not apply. Strum
@@ -348,13 +342,13 @@ half a beat. When a melody or strum voice reaches a pattern, block, or section
 edge, its duration is shortened by its onset delay so its release stays inside
 the clipped window.
 
-All Writer and Song ticks share one tempo conversion: four ticks per quarter
-note, or `60,000 / (tempo × 4)` milliseconds per tick. The time signature sets
-the number of ticks in a bar, not the wall-clock duration of a tick. At 120 BPM
-a 4/4 bar lasts 2 seconds and a 6/8 bar (12 ticks) lasts 1.5 seconds. Live
-playback, Song audio clip placement/seek/length, and WAV note positions use the
-same conversion. Sub-tick onset offsets and boundary duration trims are
-preserved when importing or editing Song note patterns.
+All Writer ticks share one tempo conversion: four ticks per quarter note, or
+`60,000 / (tempo × 4)` milliseconds per tick. The time signature sets the
+number of ticks in a bar, not the wall-clock duration of a tick. At 120 BPM a
+4/4 bar lasts 2 seconds and a 6/8 bar (12 ticks) lasts 1.5 seconds. Writer
+playback, audio clip placement/seek/length, and WAV note positions use the same
+conversion. Sub-tick onset offsets and boundary duration trims are preserved
+when editing Writer note patterns.
 
 ### Playback audio (`lib/schema/rules/songwriter_playback_rules.dart`)
 
@@ -379,7 +373,7 @@ tick-indexed event list the transport walks:
 - **Guitar-strum blocks** resolve each down/up step against their explicitly
   selected Fretboard Harmony source and stay silent when it is unassigned or has
   no playable Harmony at that step. Named exact Harmony uses its native
-  register and positions here as in ordinary Writer playback and Song import.
+  register and positions here as in ordinary Writer playback.
   Each step is one `strokeGroups` entry on its event: the strings in stroke
   order (down: low to high, up: reversed) with their 12 ms onsets and their own
   clipped durations (`strokeStrings`). The transport sends it to
@@ -439,9 +433,8 @@ transport row. Beyond tapping individual steps it offers:
   preset or a loop overwrites the current pattern in place, keeping its id so the
   referencing block stays linked.
 
-The Songwriter drum sheet opts into the library and backing via `enableLibrary` /
-`backing` on `DrumMachineEditorBody`; the Song feature embeds the same body without
-them, so neither surface appears there.
+The Writer drum sheet opts into the library and backing via `enableLibrary` /
+`backing` on `DrumMachineEditorBody`.
 
 ## Store (`lib/store/songwriter_store.dart`)
 
@@ -457,7 +450,7 @@ Provider: `songwriterProvider` (`NotifierProvider<SongwriterNotifier, Songwriter
 | `repeatMelodyBlock(...)` / `setMelodyLaneSound(...)` | Create a linked placement at a valid start / set an explicit sound for one Melody lane. |
 | `insertInstrumentSelectionAtBar(...)` | Adds a named, saved chord or exact Fretboard/Piano snapshot to a Writer lane after section/bar selection and a name prompt. |
 | `makeBlockUnique(...)` | Copy the canonical save and detach the selected placement; one Writer history step. |
-| `loadProject(project)` | Replace the active Writer session from a named Song version, materializing its retained block content when shared saves have since changed. |
+| `loadProject(project)` | Replace the active Writer session from a named Writer version, materializing its retained block content when shared saves have since changed. |
 
 Writer's **Add chord** action creates a named canonical Harmony save, using the
 chord symbol as its default name. Block actions can rename the save, replace a
@@ -570,14 +563,13 @@ Instrument handoff asks the user to select a real project if
 there is no project selected or Dump is active.
 
 `projectConfigSyncProvider` (`lib/store/project_config_sync.dart`) pushes the
-active project's tempo, meter, and key into the songwriter and Song stores
-whenever a project is selected or its config changes. Changed master config
-clears stale local undo history; an equal sync keeps current history. Key sync
-also recomputes Writer Roman numerals. Project key is authoritative when
-loading an instrument Save, including Piano Roll; the Save's embedded scale
-does not replace it. Dump and no-project scale choices remain local. A named
-Song version load keeps the active project config after showing any differences
-from that version. When loading a project that has no session yet,
+active project's tempo, meter, and key into the Writer store whenever a project
+is selected or its config changes. Changed master config clears stale local undo
+history; an equal sync keeps current history. Key sync also recomputes Writer
+Roman numerals. Project key is authoritative when loading an instrument Save,
+including Piano Roll; the Save's embedded scale does not replace it. Dump and
+no-project scale choices remain local. A named Writer version load keeps the
+active project config after showing any differences from that version. When loading a project that has no session yet,
 `_defaultFor` seeds a new `SongwriterProjectSnapshot` from the project folder's
 `ProjectConfig` (name, tempo, beatsPerBar, beatUnit, keyRoot, keyScaleName).
 

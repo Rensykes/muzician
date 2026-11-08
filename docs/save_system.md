@@ -1,7 +1,7 @@
 # Save System
 
 The save system provides project-scoped folders and canonical snapshots for
-Fretboard, Piano, Piano Roll, Song, Writer, and reusable drum loops. Recoverable
+Fretboard, Piano, Piano Roll, Writer, and reusable drum loops. Recoverable
 Writer blocks link to shared saves through managed section folders and their
 lane-category subfolders. A shared save keeps one snapshot even when several
 Writer placements use it. A block whose save and fallback content are both
@@ -56,8 +56,8 @@ project config sheet prompts before retrofitting eligible saves in the project's
 subtree. Writer, Fretboard, and Piano also let the user set, change, or clear
 the project's tonic and scale/mode after confirmation. Cancel keeps the prior
 key. Instrument Save loads retain the active project key, including Piano Roll.
-Named Writer Song versions are immutable and are not retrofitted; the active
-Writer session follows the current project config.
+Named Writer versions are immutable and are not retrofitted; the active Writer
+session follows the current project config.
 
 Writer's main-menu **New project** action creates and selects an independent project root
 with an empty Writer session. It asks for Piano or Fretboard on every creation
@@ -78,8 +78,8 @@ Storage key bumped to `@muzician/save-system/v3`. When no valid v3 state exists,
 startup validates the known legacy save-system keys
 (`@muzician/save-system/v2`, `@muzician/save_system`) and singular session keys
 (`@muzician/song_session/v1`, `@muzician/songwriter_session/v1`) before the
-existing migration clears them and `appDocs/song_audio/`. Valid legacy payloads
-keep that migration policy. A malformed legacy string is kept in place and
+existing migration clears them. Valid legacy payloads keep that migration
+policy. A malformed legacy string is kept in place and
 shown in the startup recovery prompt until the user chooses **Start fresh**.
 
 | Type | Description |
@@ -169,17 +169,9 @@ Full piano-roll session: tempo, key, time signature, total measures, notes, pitc
 - `pendingChord` and `pendingScale` are derived from those pitch classes.
 - Save browser shows note chips for quick identification.
 
-### SongProjectSnapshot (`type: 'song'`)
-
-Entire Song project with tracks, clips, note patterns, and drum patterns.
-
-- `selectedNotes` aggregates unique pitch classes across all note patterns.
-- `pendingChord` and `pendingScale` return `null` — Song saves do not produce chord/scale summaries.
-- Save browser shows track/clip/pattern counts instead of note chips.
-
 ### SongwriterProjectSnapshot (`type: 'songwriter'`)
 
-Named Song version — ordered `SongSection`s, parallel `SongLane`s, and
+Named Writer version — ordered `SongSection`s, parallel `SongLane`s, and
 `SongBlock`s with materialized fallback content for recoverable musical state.
 The active Writer session resolves current content through each block's
 canonical save first; fallback content lets a named version restore the content
@@ -200,7 +192,7 @@ metadata. Melody block snapshots also carry the pattern's Piano/Fretboard
 target and per-note physical mapping so canonical Save reuse and restore retain
 performance state. `defaultLyrics` is copied into a new placement once and later
 lyric edits remain local to that placement. Source audio bytes remain in
-`SongAudioRepository`. Save-lane voicings continue to use `FretboardSnapshot`
+`AudioRepository`. Save-lane voicings continue to use `FretboardSnapshot`
 or `PianoSnapshot`.
 
 ### DrumLoopSnapshot (`type: 'drum_loop'`)
@@ -208,7 +200,7 @@ or `PianoSnapshot`.
 A single reusable drum loop (one `DrumPattern`) saved to the library so custom grooves persist and can be reused across projects. Defined in `lib/models/save_system.dart`.
 
 - `selectedNotes` is empty; `pendingChord` / `pendingScale` return `null`.
-- Saved + browsed via `DrumLoopSavePanel` (`lib/features/song/drum_loop_save_panel.dart`), a `SaveBrowserPanel` filtered to `'drum_loop'`. Loading applies the loop into the drum pattern currently being edited (`onLoad` → the editor's `_applyLoadedPattern`, keeping the pattern id so the referencing block stays linked). Built-in (non-saved) presets are code-defined in `lib/schema/rules/drum_presets.dart`.
+- Saved + browsed via `DrumLoopSavePanel` (`lib/features/songwriter/drum_loop_save_panel.dart`), a `SaveBrowserPanel` filtered to `'drum_loop'`. Loading applies the loop into the drum pattern currently being edited (`onLoad` → the editor's `_applyLoadedPattern`, keeping the pattern id so the referencing block stays linked). Built-in (non-saved) presets are code-defined in `lib/schema/rules/drum_presets.dart`.
 
 ---
 
@@ -358,12 +350,11 @@ Each instrument has a thin save panel widget that wraps `SaveBrowserPanel` with 
 | `FretboardSavePanel` | `lib/features/fretboard/fretboard_save_panel.dart` | `'fretboard'` |
 | `PianoSavePanel` | `lib/features/piano/piano_save_panel.dart` | `'piano'` |
 | `PianoRollSavePanel` | `lib/features/piano_roll/piano_roll_save_panel.dart` | `'piano_roll'` |
-| `SongSavePanel` | `lib/features/song/song_save_panel.dart` | `'song'` |
 | `SongwriterSavePanel` | `lib/features/songwriter/songwriter_save_panel.dart` | `'songwriter'` |
 
-The Writer panel separates whole-project **Song versions** from individual
+The Writer panel separates whole-project **Writer versions** from individual
 **Section blocks**. A Writer-native block save can be browsed, renamed, or used
-in Writer, but is never loaded as a whole Song version. Fretboard and Piano
+in Writer, but is never loaded as a whole Writer version. Fretboard and Piano
 ideas in a project root have an explicit **Use in Writer** action; Dump-root
 ideas stay in Dump. Opening a linked voicing for editing offers **Update linked
 save** only while that save still has a Writer link.
@@ -394,8 +385,7 @@ Appearance and spelling are persisted in the existing settings JSON; missing or
 unknown theme values select **Studio**, and missing or unknown spelling values
 use Sharps. Settings → **Appearance** offers **Studio** (default graphite/mint)
 and **Studio Muzician** (night/sky/teal/violet). The device-local theme applies
-to Fretboard, Piano, Piano Roll, Writer, and shared panels; Song keeps its
-existing layout and palette. Theme selection is independent of project config
+to Fretboard, Piano, Piano Roll, Writer, and shared panels. Theme selection is independent of project config
 and named Saves. Spelling is also a presentation preference: recognized chord
 summaries retain their quality and slash bass, while custom Save names, exact
 Harmony labels, lyrics, and pattern names stay literal. Switching spelling
@@ -410,7 +400,7 @@ App start
   │
   ├─ hydrate settings
   ├─ replay pending Writer/save journal    ← finish a coordinated write first
-  ├─ hydrate Song, Writer draft, and binding stores
+  ├─ hydrate Writer draft and binding stores
   ├─ saveSystemProvider.hydrate()          ← load from SharedPreferences
   │
   ├─ restore selected project or create Dump
@@ -434,14 +424,13 @@ App start
 
 Provider: `projectConfigSyncProvider` (mounted once in `main.dart`).
 
-Watches `selectedProjectProvider` and, when the active project changes (or is set on startup), pushes the project's `ProjectConfig` — key, tempo, time signature — into all five instrument stores:
+Watches `selectedProjectProvider` and, when the active project changes (or is set on startup), pushes the project's `ProjectConfig` — key, tempo, time signature — into all four instrument stores:
 
 | Instrument | Fields pushed |
 |---|---|
 | Fretboard | `setHighlightedNotes(scaleNotes)` |
 | Piano | `setHighlightedNotes(scaleNotes)` |
 | Piano Roll | `setTempo`, `setTimeSignature`, `setKey`, `setHighlightedNotes` |
-| Song | `setTempo`, `setTimeSignature`, `setScale` |
 | Songwriter | `setTempo`, `setKey` |
 
 `activeProjectKeyProvider` exposes the active project's key as a `({String root, String scaleName})?` record for use in instrument headers and other UI.
