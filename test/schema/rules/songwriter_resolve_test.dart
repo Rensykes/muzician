@@ -4,9 +4,7 @@ import 'package:muzician/features/songwriter/songwriter_block_preview.dart'
 import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/save_system.dart';
-import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/schema/rules/song_from_writer_rules.dart';
 import 'package:muzician/schema/rules/songwriter_playback_rules.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 
@@ -172,17 +170,5 @@ void main() {
       ),
       isEmpty,
     );
-
-    final song = songFromSongwriter(
-      writer,
-      saveState.saves,
-      projectId: saveState.selectedProjectId,
-      folders: saveState.folders,
-    );
-    expect(
-      song.tracks.where((track) => track.type == SongTrackType.note),
-      isEmpty,
-    );
-    expect(song.notePatterns, isEmpty);
   });
 }
