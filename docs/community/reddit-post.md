@@ -31,8 +31,9 @@ first five minutes that you could not? Where did you stop? A song that never
 got finished because the app got in the way is the most useful thing you can
 tell me.
 
-Screenshots: the fretboard and piano with a chord detected, the Writer, the
-feedback form, and the same app on a phone.
+Screenshots: the fretboard and piano with a chord detected, the Writer with a
+four-chord section and lyrics, the Piano Roll's stack builder, the feedback
+form, and the same app on a phone.
 
 ---
 
