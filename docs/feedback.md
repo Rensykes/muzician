@@ -29,9 +29,14 @@ succeeds.
 ### Shake to open
 
 Native Android and iOS builds open the same composer when the device is
-shaken: three consecutive accelerometer samples at or above 2.6 g, where a
-quiet sample resets the run, with a 1.5 s cooldown after each open. A shake
-only opens the sheet — it never sends by itself.
+shaken: a short run of hard accelerations, with a quiet moment breaking the
+run and a cooldown swallowing the tail of one physical gesture. A shake only
+opens the sheet — it never sends by itself.
+
+The threshold, the sample count and the cooldown are the constructor defaults
+on `ShakeFeedbackDetector` (`lib/utils/shake_feedback_detector.dart`); tune
+them there. They are deliberately not repeated here, because a number copied
+into two places goes stale the first time one of them is tuned.
 
 Shakes are ignored while another route covers the workspace, and ignored
 until the workspace shell has finished hydrating, so the startup and recovery
