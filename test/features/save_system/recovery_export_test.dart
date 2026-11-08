@@ -26,12 +26,12 @@ void main() {
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       const first = DataRecoveryBackup(
         storageKey: '${dataRecoveryStoragePrefix}backup-one:0:c291cmNl',
-        sourceKey: '@muzician/song_sessions/v1',
+        sourceKey: '@muzician/writer_sessions/v1',
         raw: '{"one":1}',
       );
       const second = DataRecoveryBackup(
         storageKey: '${dataRecoveryStoragePrefix}backup-two:1:c291cmNl',
-        sourceKey: '@muzician/song_sessions/v1',
+        sourceKey: '@muzician/writer_sessions/v1',
         raw: '{"two":2}',
       );
       final origin = Rect.fromLTWH(10, 20, 30, 40);
@@ -65,7 +65,7 @@ void main() {
       expect(firstParams!.sharePositionOrigin, origin);
       expect(
         firstParams!.fileNameOverrides!.single,
-        contains('_muzician_song_sessions_v1'),
+        contains('_muzician_writer_sessions_v1'),
       );
       expect(firstParams!.fileNameOverrides!.single, contains('backup-one'));
       expect(secondParams!.fileNameOverrides!.single, contains('backup-two'));

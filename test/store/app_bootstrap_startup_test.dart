@@ -7,14 +7,11 @@ import 'package:muzician/models/piano.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/schema/rules/song_rules.dart'
-    show getDefaultSongProject;
 import 'package:muzician/schema/rules/save_system_rules.dart';
 import 'package:muzician/store/app_bootstrap.dart';
 import 'package:muzician/store/persisted_data_recovery_store.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/settings_store.dart';
-import 'package:muzician/store/song_sessions_store.dart';
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/writer_save_binding_store.dart';
@@ -37,6 +34,23 @@ void main() {
       expect(contentWorkspaceTabForPreference(entry.value), entry.key);
       expect(contentWorkspacePreferenceForTab(entry.key), entry.value);
     }
+  });
+
+  test('Song storage is discarded and Writer storage survives', () async {
+    SharedPreferences.setMockInitialValues({
+      '@muzician/song_sessions/v1': '{"song":{}}',
+      '@muzician/song_session/v1': '{"config":{}}',
+      songwriterSessionsStorageKey: '{"writer":{}}',
+    });
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await hydrateStores(container.read);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey('@muzician/song_sessions/v1'), isFalse);
+    expect(prefs.containsKey('@muzician/song_session/v1'), isFalse);
+    expect(prefs.containsKey(songwriterSessionsStorageKey), isTrue);
   });
 
   test(
@@ -331,10 +345,9 @@ void main() {
   );
 
   test(
-    'malformed Song, Writer, and save data is preserved until fresh start',
+    'malformed Writer and save data is preserved until fresh start',
     () async {
       const malformed = <String, String>{
-        songSessionsStorageKey: '{ "song": [broken] }',
         songwriterSessionsStorageKey: '{ "writer": [broken] }',
         '@muzician/save-system/v3': '{ "folders": [broken] }',
         writerSaveBindingsStorageKey: '{ "writer": { "activeSaveId": 3 } }',
@@ -406,7 +419,6 @@ void main() {
       const malformed = <String, String>{
         '@muzician/save-system/v2': '{ "folders": [broken] }',
         '@muzician/save_system': '{ "saves": [broken] }',
-        '@muzician/song_session/v1': '{ "tracks": [broken] }',
         '@muzician/songwriter_session/v1': '{ "sections": [broken] }',
       };
       SharedPreferences.setMockInitialValues(malformed);
@@ -436,14 +448,12 @@ void main() {
   test(
     'valid legacy data follows the existing migration wipe policy',
     () async {
-      final song = getDefaultSongProject();
       const writer = SongwriterProjectSnapshot(
         config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
       );
       final legacy = <String, String>{
         '@muzician/save-system/v2': jsonEncode({'folders': [], 'saves': []}),
         '@muzician/save_system': jsonEncode({'folders': [], 'saves': []}),
-        '@muzician/song_session/v1': jsonEncode(song.toJson()),
         '@muzician/songwriter_session/v1': jsonEncode(writer.toJson()),
       };
       SharedPreferences.setMockInitialValues(legacy);

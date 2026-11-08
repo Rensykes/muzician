@@ -54,7 +54,6 @@ class DataRecoveryBackup {
 
   String get label => switch (sourceKey) {
     '@muzician/save-system/v3' => 'Project and save system',
-    '@muzician/song_sessions/v1' => 'Song drafts',
     '@muzician/songwriter_sessions/v1' => 'Writer drafts',
     '@muzician/writer_save_bindings/v1' => 'Writer save links',
     _ => sourceKey,

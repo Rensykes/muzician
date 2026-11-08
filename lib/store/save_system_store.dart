@@ -45,6 +45,7 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   }
 
   Future<void> hydrate() async {
+    await _wipeRemovedSongAudioDir();
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(saveSystemStorageKey);
     if (existing != null) {
@@ -81,13 +82,13 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
       }
     }
     if (hadLegacy) {
-      await _wipeAudioDir();
+      await _wipeRemovedSongAudioDir();
     }
     state = state.copyWith(hydrated: true);
     await _persist();
   }
 
-  Future<void> _wipeAudioDir() async {
+  Future<void> _wipeRemovedSongAudioDir() async {
     try {
       final docsDir = await getApplicationDocumentsDirectory();
       final audioDir = Directory('${docsDir.path}/song_audio');
