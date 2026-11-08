@@ -61,20 +61,27 @@ is `2.0.0+2`.
 
 - **Draft persistence.** Every edit is written to `shared_preferences` under
   `@muzician/feedback_draft/v1` as `{message, category, contact, docId,
-  attempt, lastSentAt, lastSentMessage}`. It survives a relaunch and is
-  restored by `hydrate()` at startup. The sheet never auto-opens; the
-  Settings tile shows *Draft saved* instead.
+  attempt, possiblyWritten, lastSentAt, lastSentMessage}`. It survives a
+  relaunch and is restored by `hydrate()` at startup. The sheet never
+  auto-opens; the Settings tile shows *Draft saved* instead.
 - **One document per draft.** The first edit mints a uuid v4, and every send
   or retry of that draft targets the same document. The id is cleared only
   after a successful send, so a later message always gets a new document.
 - **Success clears the draft.** The message and contact are cleared only when
-  the write is acknowledged. A `permission-denied` on a retry is also treated
-  as success — the code assumes the first attempt is the one that wrote the
-  document — while a first-attempt denial is a failure. Text typed while a send
-  was in flight is kept, not discarded.
+  the write is acknowledged. A `permission-denied` on a retry also counts as
+  success, but only when the draft records `possiblyWritten`: the previous
+  attempt timed out or failed as unreachable, so its write may have reached
+  the server (the rules allow `create` only). A retry after a rejected
+  payload, misdeployed rules or a future rules tightening clears
+  `possiblyWritten`, so its denial stays a failure and the text is kept. Text
+  typed while a send was in flight is kept, not discarded.
 - **Failure keeps the text.** A rejected or unreachable send leaves the
   draft, its document ID and the attempt counter intact, and offers **Retry**
-  plus **Copy**.
+  plus **Copy**. The store recomputes `possiblyWritten` from the failure:
+  `true` after a timeout or an unreachable error, `false` after a rejection.
+  Editing the message or contact after a possibly-written attempt mints a new
+  document and clears `possiblyWritten`, so the edited text is its own
+  submission and a denial aimed at the old document cannot clear it.
 - **Pending after 8 seconds.** A write still unanswered after 8 s switches to
   *Still trying… your text is saved.* with **Retry** and **Copy**, instead of
   an endless spinner. Retry reuses the document ID, so a write the SDK later
@@ -85,9 +92,10 @@ is `2.0.0+2`.
   time, so a Retry is never inside the cooldown window; recovery after a bad
   connection is the main path. A clock that moves backwards does not block a
   resend.
-- **Offline.** Firestore is initialized lazily on the first send, not at app
-  launch, so startup never depends on the network. In airplane mode the text
-  is saved and can be copied out; Retry works once connectivity returns.
+- **Offline.** Firestore is initialized lazily when the feedback sheet opens
+  (a warm-up that keeps the 8 s send deadline for the write itself), never at
+  app launch, so startup never depends on the network. In airplane mode the
+  text is saved and can be copied out; Retry works once connectivity returns.
 
 ## Reading feedback
 
@@ -151,9 +159,9 @@ request.
   catch-all so the policy is not swallowed by `index.html`.
 - Client and rules ceilings differ on purpose: the client caps the message at
   4000 runes and the contact at 200 runes, while the rules cap the stored
-  strings at 16000 and 800 characters. Rules count string size in a way that
-  can exceed the rune count for multi-byte text, so the larger ceiling keeps
-  an all-emoji message that the client accepts from being rejected on the
+  strings at 16000 and 800 bytes. Firestore rules `size()` counts UTF-8
+  bytes, and a rune can occupy up to 4 bytes, so the larger ceiling keeps an
+  all-emoji message that the client accepts from being rejected on the
   server.
 
 ## Play Console answers

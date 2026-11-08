@@ -4,7 +4,7 @@
 
 **Goal:** A tester can send a bug report or idea from Settings on web and Android, with app context attached, into a Firestore collection the developer reads in the console.
 
-**Architecture:** A local draft store (Riverpod + `shared_preferences`) owns the message and its client-generated document ID; `FeedbackService` maps Firestore errors to four outcomes; `FirestoreDocWriter` is the only file that touches the Firebase SDK. The sheet is a Studio-palette bottom sheet opened from a new Settings group.
+**Architecture:** A local draft store (Riverpod + `shared_preferences`) owns the message and its client-generated document ID; `FeedbackService` maps Firestore errors to four outcomes; `FirestoreDocWriter` is the only file that creates Firestore clients and collections (the service may reference SDK types such as `FieldValue` and `FirebaseException`, never a client). The sheet is a Studio-palette bottom sheet opened from a new Settings group.
 
 **Tech Stack:** Flutter 3.x, Riverpod `NotifierProvider`, `shared_preferences`, `uuid`, `package_info_plus`, `cloud_firestore`, `firebase_core`, Firebase CLI + FlutterFire CLI.
 
@@ -14,7 +14,7 @@
 
 - Document ID is a uuid v4 generated on the device and reused across retries.
 - Collection `feedback`, schema version `1`, Firestore location `eur3` (created once, permanent).
-- Client caps the message at **4000 runes**; rules cap the stored string at **8000 bytes** to leave room for multi-byte text.
+- Client caps the message at **4000 runes**; rules cap the stored string at **16000** so that any client-valid message passes regardless of how rules count multi-byte text.
 - No install identifier, analytics or crash reporting. The only outbound write is a feedback submission the tester confirms.
 - Public contact address everywhere: `bytebakehouseinc@gmail.com`.
 - The Settings entry appears only when `isFeedbackAvailable` (web, or Android).
@@ -247,23 +247,38 @@ Add `<uses-permission android:name="android.permission.INTERNET"/>` to `android/
 
 - [ ] **Step 4: Write `firestore.rules`**
 
+The deployed file is `firestore.rules`; it is the source of truth.
+
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /feedback/{docId} {
-      allow create: if docId.matches('^[0-9a-fA-F-]{36}$')
+      allow create: if docId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
         && request.resource.data.keys().hasOnly([
+          'schemaVersion','message','category','contact','appVersion',
+          'platform','osVersion','screen','locale','createdAt',
+          'clientSessionId'])
+        && request.resource.data.keys().hasAll([
           'schemaVersion','message','category','contact','appVersion',
           'platform','osVersion','screen','locale','createdAt',
           'clientSessionId'])
         && request.resource.data.schemaVersion == 1
         && request.resource.data.message is string
         && request.resource.data.message.size() > 0
-        && request.resource.data.message.size() <= 8000
+        && request.resource.data.message.size() <= 16000
         && request.resource.data.category in ['bug','idea','confusing','other']
         && request.resource.data.contact is string
-        && request.resource.data.contact.size() <= 400
+        && request.resource.data.contact.size() <= 800
+        && request.resource.data.platform in ['web','android']
+        && request.resource.data.appVersion is string
+        && request.resource.data.appVersion.size() <= 120
+        && request.resource.data.osVersion is string
+        && request.resource.data.osVersion.size() <= 120
+        && request.resource.data.screen is string
+        && request.resource.data.screen.size() <= 120
+        && request.resource.data.locale is string
+        && request.resource.data.locale.size() <= 120
         && request.resource.data.clientSessionId is string
         && request.resource.data.clientSessionId.size() <= 40
         && request.resource.data.createdAt == request.time;
@@ -311,7 +326,7 @@ git commit -m "feat: wire firebase and feedback collection rules"
   - `class FeedbackSendException implements Exception { const FeedbackSendException(this.failure); final FeedbackSendFailure failure; }`
   - `abstract interface class FeedbackService { Future<void> send(FeedbackEntry entry); }`
   - `class FirestoreFeedbackService implements FeedbackService { const FirestoreFeedbackService(this.writer); final FeedbackDocWriter writer; }`
-  - `class FakeFeedbackService implements FeedbackService` with `final List<FeedbackEntry> attempts`, `List<FeedbackEntry> get sent`, `int failing`, `bool hang`, and a named constructor `FakeFeedbackService({this.failing = 0, this.hang = false})`.
+  - `class FakeFeedbackService implements FeedbackService` with `final List<FeedbackEntry> attempts`, `List<FeedbackEntry> get sent`, `int failing`, `bool hang`, `FeedbackSendFailure failure`, and a named constructor `FakeFeedbackService({this.failing = 0, this.hang = false, this.failure = FeedbackSendFailure.unreachable})`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -524,6 +539,19 @@ test('a timeout leaves the text pending, not failed', () async {
   expect(c.read(feedbackProvider).message, 'offline');
 });
 
+test('alreadyRecorded from a retry counts as sent', () async {
+  SharedPreferences.setMockInitialValues({});
+  final c = containerWith(
+    FakeFeedbackService(failing: 1, failure: FeedbackSendFailure.alreadyRecorded),
+  );
+  addTearDown(c.dispose);
+  final n = await loaded(c);
+  await n.setMessage('landed twice');
+  await n.send();                 // failed: permission-denied on attempt 1 -> rejected
+  await n.send();                 // retry: alreadyRecorded -> success
+  expect(c.read(feedbackProvider).status, FeedbackStatus.sent);
+});
+
 test('the draft and its docId survive a new container', () async {
   SharedPreferences.setMockInitialValues({});
   final a = containerWith(FakeFeedbackService());
@@ -574,7 +602,7 @@ Expected: FAIL — `feedbackProvider` is not defined.
 
 - [ ] **Step 3: Implement `lib/store/feedback_store.dart`**
 
-`build()` returns `FeedbackState(sessionId: const Uuid().v4())`. `send()`: validate the message; skip while `sending`; skip when `sent` and the same text was sent under 60 s ago; otherwise `docId ??= const Uuid().v4()`, `attempt + 1`, status `sending`, then `service.send(entry).timeout(timeout)`. Success clears message, contact, error, `docId` and `attempt` — a resend must never reuse a document ID that already landed — and clears the stored draft. `TimeoutException` sets `pending` with *Still trying… your text is saved.* `alreadyRecorded` is treated as success. Anything else is `failed` with *Couldn't send. Your text is saved — try again.* Every mutation persists `{message, category, contact, docId, attempt, lastSentAt, lastSentMessage}`; `hydrate()` restores it and generates a fresh `sessionId`.
+`build()` returns `FeedbackState(sessionId: const Uuid().v4())`. `send()`: validate the message; skip while `sending`; skip when `sent` and the same text was sent under 60 s ago; otherwise `docId ??= const Uuid().v4()`, `attempt + 1`, status `sending`, then `service.send(entry).timeout(timeout)`. Success clears message, contact, error, `docId` and `attempt` — a resend must never reuse a document ID that already landed — and clears the stored draft. `TimeoutException` sets `pending` with *Still trying… your text is saved.* `alreadyRecorded` is treated as success. Anything else is `failed` with *Couldn't send. Your text is saved — try again.* Every mutation persists `{message, category, contact, docId, attempt, lastSentAt, lastSentMessage}`; `hydrate()` restores it and generates a fresh `sessionId`. If `FakeFeedbackService` from Task 4 still throws only `unreachable`, add the `failure` parameter described in this task's Interfaces before writing the tests.
 
 - [ ] **Step 4: Run the test**
 
@@ -679,7 +707,7 @@ Expected: FAIL — `FeedbackSheet` is not defined.
 
 - [ ] **Step 3: Implement the sheet**
 
-`initState` calls `captureDiagnostics(screen: 'Settings')` and `attachDiagnostics`. Body: `SingleChildScrollView` in `SafeArea`; category `ChoiceChip`s keyed `feedback_category_<wireName>`; message `TextField` keyed `feedback_message` with `maxLength: FeedbackEntry.maxMessageLength` and `MaxLengthEnforcement.enforced`; contact `TextField` keyed `feedback_contact`; an `ExpansionTile` keyed `feedback_what_is_sent` holding the full policy text and `diagnostics?.summary`; a `Copy` text button keyed `feedback_copy` whenever `hasDraft`, writing `'${state.message}\n\n${state.diagnostics?.summary ?? ''}'`; and one primary button keyed `feedback_send`, `feedback_retry` or `feedback_sent` by status, disabled while `sending`. Success pops the sheet after showing `showGlassSnackbar(contentType: ContentType.success)`; `pending` keeps the sheet open with its copy; `failed` shows the store's error inline.
+`initState` calls `captureDiagnostics(screen: 'Settings')` and `attachDiagnostics`. Body: `SingleChildScrollView` in `SafeArea`; category `ChoiceChip`s keyed `feedback_category_<wireName>`; message `TextField` keyed `feedback_message` with `maxLength: FeedbackEntry.maxMessageLength` and `MaxLengthEnforcement.enforced`, disabled while `sending`; contact `TextField` keyed `feedback_contact`; an `ExpansionTile` keyed `feedback_what_is_sent` holding the full policy text and `diagnostics?.summary`; a `Copy` text button keyed `feedback_copy` whenever `hasDraft`, writing `'${state.message}\n\n${state.diagnostics?.summary ?? ''}'`; and one primary button whose key is `feedback_retry` when `hasDraft && (failed || pending)`, `feedback_send` when `hasDraft`, `feedback_sent` when the previous send succeeded and no draft remains — disabled while `sending`. Close the sheet only when `await send()` returns `true` (a send can succeed while a draft typed mid-flight remains, so `status` alone cannot decide this); show `showGlassSnackbar(contentType: ContentType.success)` on the way out. `pending` keeps the sheet open with its copy; `failed` shows the store's error inline.
 
 - [ ] **Step 4: Add the Settings entry**
 

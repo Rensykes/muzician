@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/feedback_entry.dart';
 import 'package:muzician/store/feedback_store.dart';
+import 'package:muzician/utils/feedback_diagnostics.dart';
 import 'package:muzician/utils/feedback_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,11 +18,13 @@ void main() {
     FakeFeedbackService service, {
     DateTime Function()? clock,
     Duration timeout = const Duration(seconds: 8),
+    List<Override> overrides = const [],
   }) => ProviderContainer(
     overrides: [
       feedbackServiceProvider.overrideWithValue(service),
       if (clock != null) feedbackClockProvider.overrideWithValue(clock),
       feedbackSendTimeoutProvider.overrideWithValue(timeout),
+      ...overrides,
     ],
   );
 
@@ -97,6 +101,137 @@ void main() {
     expect(service.attempts.map((e) => e.docId).toSet(), hasLength(1));
     expect(service.attempts.map((e) => e.attempt), [1, 2]);
   });
+
+  test('a rejected send retried stays failed and keeps the draft', () async {
+    SharedPreferences.setMockInitialValues({});
+    final service = FakeFeedbackService(
+      failing: 2,
+      failure: FeedbackSendFailure.rejected,
+    );
+    final c = containerWith(service);
+    addTearDown(c.dispose);
+    final n = await loaded(c);
+    await n.setMessage('bad payload');
+    expect(await n.send(), isFalse);
+    expect(c.read(feedbackProvider).status, FeedbackStatus.failed);
+    expect(await n.send(), isFalse);
+    expect(c.read(feedbackProvider).status, FeedbackStatus.failed);
+    expect(c.read(feedbackProvider).message, 'bad payload');
+    expect(c.read(feedbackProvider).docId, isNotNull);
+    expect(c.read(feedbackProvider).possiblyWritten, isFalse);
+    // Nothing could have landed, so neither attempt is treated as written.
+    expect(service.attempts.map((e) => e.possiblyWritten), [false, false]);
+  });
+
+  test('a timed-out retry reads a denial as already recorded', () async {
+    SharedPreferences.setMockInitialValues({});
+    final service = FakeFeedbackService(
+      hang: true,
+      failures: [
+        FeedbackSendFailure.unreachable,
+        FeedbackSendFailure.alreadyRecorded,
+      ],
+    );
+    final c = containerWith(service, timeout: const Duration(milliseconds: 20));
+    addTearDown(c.dispose);
+    final n = await loaded(c);
+    await n.setMessage('slow but landed');
+    expect(await n.send(), isFalse);
+    expect(c.read(feedbackProvider).status, FeedbackStatus.pending);
+    expect(c.read(feedbackProvider).possiblyWritten, isTrue);
+
+    service.hang = false;
+    expect(await n.send(), isTrue);
+    expect(c.read(feedbackProvider).status, FeedbackStatus.sent);
+    expect(c.read(feedbackProvider).message, '');
+    expect(service.attempts.map((e) => e.possiblyWritten), [false, true]);
+  });
+
+  test('send waits for diagnostics captured after it was called', () async {
+    SharedPreferences.setMockInitialValues({});
+    final service = FakeFeedbackService();
+    final capture = Completer<FeedbackDiagnostics>();
+    final c = containerWith(
+      service,
+      overrides: [
+        feedbackDiagnosticsProvider.overrideWithValue((_) => capture.future),
+      ],
+    );
+    addTearDown(c.dispose);
+    final n = await loaded(c);
+    await n.setMessage('late details');
+    final sending = n.send();
+    await Future<void>.delayed(Duration.zero);
+    capture.complete(
+      const FeedbackDiagnostics(
+        appVersion: '2.0.0+2',
+        platform: 'web',
+        osVersion: 'Chrome / macOS',
+        screen: 'Settings',
+        locale: 'en',
+      ),
+    );
+    expect(await sending, isTrue);
+    final diagnostics = service.sent.single.diagnostics;
+    expect(diagnostics.appVersion, '2.0.0+2');
+    expect(diagnostics.osVersion, 'Chrome / macOS');
+    expect(service.sent.single.toMap()['appVersion'], '2.0.0+2');
+  });
+
+  test('a failed capture still sends a rules-valid platform', () async {
+    SharedPreferences.setMockInitialValues({});
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final service = FakeFeedbackService();
+    final c = containerWith(
+      service,
+      overrides: [
+        feedbackDiagnosticsProvider.overrideWithValue(
+          (_) => Future<FeedbackDiagnostics>.error(StateError('no plugin')),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+    final n = await loaded(c);
+    await n.setMessage('no details');
+    expect(await n.send(screen: 'Settings'), isTrue);
+    final entry = service.sent.single;
+    expect(entry.diagnostics.platform, isIn(['web', 'android']));
+    expect(entry.diagnostics.platform, isNot('unknown'));
+    expect(entry.diagnostics.screen, 'Settings');
+    expect(entry.toMap()['platform'], isNot('unknown'));
+  });
+
+  test(
+    'editing after a possibly-written attempt starts a new document',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final service = FakeFeedbackService(
+        failures: [
+          FeedbackSendFailure.unreachable,
+          FeedbackSendFailure.rejected,
+        ],
+      );
+      final c = containerWith(service);
+      addTearDown(c.dispose);
+      final n = await loaded(c);
+      await n.setMessage('original');
+      expect(await n.send(), isFalse); // unreachable: may have landed
+      expect(c.read(feedbackProvider).possiblyWritten, isTrue);
+      final firstDocId = c.read(feedbackProvider).docId;
+
+      await n.setMessage('edited');
+      expect(c.read(feedbackProvider).possiblyWritten, isFalse);
+      expect(c.read(feedbackProvider).docId, isNot(firstDocId));
+
+      // The edited text gets its own document, so a denial stays a failure.
+      expect(await n.send(), isFalse);
+      expect(c.read(feedbackProvider).status, FeedbackStatus.failed);
+      expect(c.read(feedbackProvider).message, 'edited');
+      expect(service.attempts.map((e) => e.docId).toSet(), hasLength(2));
+      expect(service.attempts.last.possiblyWritten, isFalse);
+    },
+  );
 
   test('text typed during an in-flight send survives the success', () async {
     SharedPreferences.setMockInitialValues({});

@@ -188,8 +188,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey('feedback_send')));
     await tester.pumpAndSettle();
+    // With 280px of keyboard on a 568-high screen the sheet body is 288 tall,
+    // so the button must stay inside that, not merely inside the screen.
     final rect = tester.getRect(find.byKey(const ValueKey('feedback_send')));
-    expect(rect.bottom, lessThanOrEqualTo(568));
+    expect(rect.bottom, lessThanOrEqualTo(288));
     expect(rect.top, greaterThanOrEqualTo(0));
   });
 }

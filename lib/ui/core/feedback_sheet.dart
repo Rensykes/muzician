@@ -49,6 +49,13 @@ class _FeedbackSheetState extends ConsumerState<FeedbackSheet> {
     final state = ref.read(feedbackProvider);
     _messageController = TextEditingController(text: state.message);
     _contactController = TextEditingController(text: state.contact);
+    // Warm the transport so the send deadline covers the write, not the
+    // Firebase SDK download. Still never touched at app startup.
+    unawaited(
+      // A failed warm-up must not surface as an unhandled error; the real
+      // send reports the failure.
+      ref.read(feedbackServiceProvider).warmUp().catchError((Object _) {}),
+    );
     unawaited(_attachDiagnostics());
   }
 
@@ -67,7 +74,9 @@ class _FeedbackSheetState extends ConsumerState<FeedbackSheet> {
   }
 
   Future<void> _send() async {
-    final sent = await ref.read(feedbackProvider.notifier).send();
+    final sent = await ref
+        .read(feedbackProvider.notifier)
+        .send(screen: 'Settings');
     if (!mounted || !sent) return;
     showGlassSnackbar(
       context,

@@ -42,6 +42,9 @@ class FakeFeedbackService implements FeedbackService {
   List<FeedbackEntry> get sent => List.unmodifiable(_sent);
 
   @override
+  Future<void> warmUp() async {}
+
+  @override
   Future<void> send(FeedbackEntry entry) async {
     attempts.add(entry);
     if (hang) {

@@ -6,21 +6,23 @@ import 'package:muzician/utils/feedback_doc_writer.dart';
 import 'package:muzician/utils/feedback_service.dart';
 
 void main() {
-  FeedbackEntry entry({int attempt = 1}) => FeedbackEntry(
-    docId: 'doc-1',
-    sessionId: 'sess-1',
-    message: 'hello',
-    category: FeedbackCategory.idea,
-    contact: '',
-    diagnostics: const FeedbackDiagnostics(
-      appVersion: '2.0.0+2',
-      platform: 'web',
-      osVersion: 'Chrome / macOS',
-      screen: 'Settings',
-      locale: 'en',
-    ),
-    attempt: attempt,
-  );
+  FeedbackEntry entry({int attempt = 1, bool possiblyWritten = false}) =>
+      FeedbackEntry(
+        docId: 'doc-1',
+        sessionId: 'sess-1',
+        message: 'hello',
+        category: FeedbackCategory.idea,
+        contact: '',
+        diagnostics: const FeedbackDiagnostics(
+          appVersion: '2.0.0+2',
+          platform: 'web',
+          osVersion: 'Chrome / macOS',
+          screen: 'Settings',
+          locale: 'en',
+        ),
+        attempt: attempt,
+        possiblyWritten: possiblyWritten,
+      );
 
   test('passes the client document id and adds a server timestamp', () async {
     final writer = _Writer(() async {});
@@ -31,7 +33,7 @@ void main() {
   });
 
   test(
-    'permission_denied on a retry means the document already landed',
+    'permission_denied on a retry that may have written is alreadyRecorded',
     () async {
       final writer = _Writer(
         () async => throw FirebaseException(
@@ -40,12 +42,40 @@ void main() {
         ),
       );
       await expectLater(
-        FirestoreFeedbackService(writer).send(entry(attempt: 2)),
+        FirestoreFeedbackService(
+          writer,
+        ).send(entry(attempt: 2, possiblyWritten: true)),
         throwsA(
           isA<FeedbackSendException>().having(
             (e) => e.failure,
             'failure',
             FeedbackSendFailure.alreadyRecorded,
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'permission_denied on a retry that could not have written is rejected',
+    () async {
+      final writer = _Writer(
+        () async => throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'permission-denied',
+        ),
+      );
+      // A rejected first attempt means nothing landed, so the retry's denial
+      // must not be reported as a send.
+      await expectLater(
+        FirestoreFeedbackService(
+          writer,
+        ).send(entry(attempt: 2, possiblyWritten: false)),
+        throwsA(
+          isA<FeedbackSendException>().having(
+            (e) => e.failure,
+            'failure',
+            FeedbackSendFailure.rejected,
           ),
         ),
       );
@@ -80,11 +110,13 @@ void main() {
       await expectLater(
         FirestoreFeedbackService(writer).send(entry(attempt: 1)),
         throwsA(
-          isA<FeedbackSendException>().having(
-            (e) => e.failure,
-            'failure',
-            FeedbackSendFailure.unreachable,
-          ),
+          isA<FeedbackSendException>()
+              .having(
+                (e) => e.failure,
+                'failure',
+                FeedbackSendFailure.unreachable,
+              )
+              .having((e) => e.cause, 'cause', isA<FirebaseException>()),
         ),
       );
     }
@@ -96,6 +128,10 @@ class _Writer implements FeedbackDocWriter {
   final Future<void> Function() behaviour;
   String? docId;
   Map<String, Object?>? fields;
+
+  @override
+  Future<void> warmUp() async {}
+
   @override
   Future<void> create(String docId, Map<String, Object?> fields) async {
     this.docId = docId;

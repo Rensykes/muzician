@@ -2,8 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /feedback/{docId} {
-      allow create: if docId.matches('^[0-9a-fA-F-]{36}$')
+      allow create: if docId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
         && request.resource.data.keys().hasOnly([
+          'schemaVersion','message','category','contact','appVersion',
+          'platform','osVersion','screen','locale','createdAt',
+          'clientSessionId'])
+        && request.resource.data.keys().hasAll([
           'schemaVersion','message','category','contact','appVersion',
           'platform','osVersion','screen','locale','createdAt',
           'clientSessionId'])
@@ -14,6 +18,15 @@ service cloud.firestore {
         && request.resource.data.category in ['bug','idea','confusing','other']
         && request.resource.data.contact is string
         && request.resource.data.contact.size() <= 800
+        && request.resource.data.platform in ['web','android']
+        && request.resource.data.appVersion is string
+        && request.resource.data.appVersion.size() <= 120
+        && request.resource.data.osVersion is string
+        && request.resource.data.osVersion.size() <= 120
+        && request.resource.data.screen is string
+        && request.resource.data.screen.size() <= 120
+        && request.resource.data.locale is string
+        && request.resource.data.locale.size() <= 120
         && request.resource.data.clientSessionId is string
         && request.resource.data.clientSessionId.size() <= 40
         && request.resource.data.createdAt == request.time;

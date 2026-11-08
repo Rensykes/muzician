@@ -22,9 +22,9 @@ enum FeedbackCategory {
 
 /// A validated feedback draft, ready for the send service to submit.
 ///
-/// [docId] is the document path chosen by the client retry loop and [attempt]
-/// is client-only; neither is part of [toMap], which carries only the fields
-/// the backend accepts.
+/// [docId] is the document path chosen by the client retry loop; [attempt] and
+/// [possiblyWritten] are client-only, and none of them is part of [toMap],
+/// which carries only the fields the backend accepts.
 class FeedbackEntry {
   const FeedbackEntry({
     required this.docId,
@@ -34,6 +34,7 @@ class FeedbackEntry {
     required this.contact,
     required this.diagnostics,
     required this.attempt,
+    this.possiblyWritten = false,
   });
 
   static const int maxMessageLength = 4000;
@@ -46,6 +47,13 @@ class FeedbackEntry {
   final String contact;
   final FeedbackDiagnostics diagnostics;
   final int attempt;
+
+  /// Whether the previous attempt could have reached the server.
+  ///
+  /// Only a timeout or an unreachable error leaves a write possibly recorded;
+  /// a rejected or unknown failure means nothing landed. A `permission-denied`
+  /// on the next attempt is only read as "already recorded" when this is true.
+  final bool possiblyWritten;
 
   /// The fields written to the backend document.
   Map<String, Object?> toMap() => <String, Object?>{
@@ -65,6 +73,7 @@ class FeedbackEntry {
     String? contact,
     FeedbackDiagnostics? diagnostics,
     int? attempt,
+    bool? possiblyWritten,
   }) => FeedbackEntry(
     docId: docId ?? this.docId,
     sessionId: sessionId ?? this.sessionId,
@@ -73,6 +82,7 @@ class FeedbackEntry {
     contact: contact ?? this.contact,
     diagnostics: diagnostics ?? this.diagnostics,
     attempt: attempt ?? this.attempt,
+    possiblyWritten: possiblyWritten ?? this.possiblyWritten,
   );
 
   /// `null` when [raw] has visible text within [maxMessageLength] runes.

@@ -128,29 +128,52 @@ A `uid already exists` error is treated as success.
 macOS`, `Safari / iOS 18`); on Android use `Platform.operatingSystemVersion`.
 No device model, no advertising ID, no IP capture beyond what Firestore logs.
 
-The rules ceiling (16000) is deliberately larger than the client's 4000-rune
-cap: the client counts runes, and a rune may occupy up to 4 bytes, so a
-byte-counting rule at 8000 would reject a valid all-emoji message.
+The rules ceiling (16000 bytes) is deliberately larger than the client's
+4000-rune cap: the client counts runes, Firestore rules `size()` counts UTF-8
+bytes, and a rune may occupy up to 4 bytes. A 4000-rune all-emoji message can
+therefore be up to 16000 bytes, and the larger ceiling lets every
+client-valid message through instead of rejecting it on the server.
 
 ### Security rules
 
-```
-match /feedback/{docId} {
-  allow create: if docId.matches('^[0-9a-fA-F-]{36}$')
-    && request.resource.data.keys().hasOnly(
-      ['schemaVersion','message','category','contact','appVersion',
-       'platform','osVersion','screen','locale','createdAt','clientSessionId'])
-    && request.resource.data.schemaVersion == 1
-    && request.resource.data.message is string
-    && request.resource.data.message.size() > 0
-    && request.resource.data.message.size() <= 16000
-    && request.resource.data.category in ['bug','idea','confusing','other']
-    && request.resource.data.contact is string
-    && request.resource.data.contact.size() <= 800
-    && request.resource.data.createdAt == request.time
-    && request.resource.data.clientSessionId is string
-    && request.resource.data.clientSessionId.size() <= 40;
-  allow read, update, delete: if false;
+The deployed file is `firestore.rules`; it is the source of truth.
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /feedback/{docId} {
+      allow create: if docId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+        && request.resource.data.keys().hasOnly([
+          'schemaVersion','message','category','contact','appVersion',
+          'platform','osVersion','screen','locale','createdAt',
+          'clientSessionId'])
+        && request.resource.data.keys().hasAll([
+          'schemaVersion','message','category','contact','appVersion',
+          'platform','osVersion','screen','locale','createdAt',
+          'clientSessionId'])
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 16000
+        && request.resource.data.category in ['bug','idea','confusing','other']
+        && request.resource.data.contact is string
+        && request.resource.data.contact.size() <= 800
+        && request.resource.data.platform in ['web','android']
+        && request.resource.data.appVersion is string
+        && request.resource.data.appVersion.size() <= 120
+        && request.resource.data.osVersion is string
+        && request.resource.data.osVersion.size() <= 120
+        && request.resource.data.screen is string
+        && request.resource.data.screen.size() <= 120
+        && request.resource.data.locale is string
+        && request.resource.data.locale.size() <= 120
+        && request.resource.data.clientSessionId is string
+        && request.resource.data.clientSessionId.size() <= 40
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
+  }
 }
 ```
 
