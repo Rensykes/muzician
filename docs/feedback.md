@@ -64,9 +64,11 @@ is `2.0.0+2`.
   attempt, possiblyWritten, lastSentAt, lastSentMessage}`. It survives a
   relaunch and is restored by `hydrate()` at startup. The sheet never
   auto-opens; the Settings tile shows *Draft saved* instead.
-- **One document per draft.** The first edit mints a uuid v4, and every send
-  or retry of that draft targets the same document. The id is cleared only
-  after a successful send, so a later message always gets a new document.
+- **One document per draft, until the text changes after a possibly-written
+  attempt.** The first edit mints a uuid v4, and every send or retry of that
+  draft targets the same document. The id is cleared after a successful send,
+  so a later message always gets a new document. The one exception is the
+  edit-after-`possiblyWritten` case below, which mints a new id on purpose.
 - **Success clears the draft.** The message and contact are cleared only when
   the write is acknowledged. A `permission-denied` on a retry also counts as
   success, but only when the draft records `possiblyWritten`: the previous
@@ -85,7 +87,8 @@ is `2.0.0+2`.
 - **Pending after 8 seconds.** A write still unanswered after 8 s switches to
   *Still trying… your text is saved.* with **Retry** and **Copy**, instead of
   an endless spinner. Retry reuses the document ID, so a write the SDK later
-  replays from its own queue cannot produce a second document.
+  replays from its own queue cannot produce a second document — unless the
+  message was edited in the meantime, which mints a new id as described above.
 - **60-second cooldown.** After a *successful* send, the same trimmed message
   is held back for 60 s (`feedbackSendCooldown`) and the sheet says *You just
   sent this — give it a minute.* Failed and pending sends never record a send
