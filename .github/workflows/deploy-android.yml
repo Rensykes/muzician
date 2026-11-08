@@ -45,11 +45,48 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build appbundle --release --build-number=$GITHUB_RUN_NUMBER
 
+      # The Play Developer API intermittently answers 503 "The service is
+      # currently unavailable" right after creating an edit. The build is
+      # already done by this point, so retry the upload instead of failing
+      # the whole deploy. Earlier attempts are allowed to fail quietly; only
+      # the last one can turn the job red.
       - name: Upload to Google Play (internal track)
+        id: play_upload_1
+        continue-on-error: true
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
           packageName: io.bytebakehouse.muzician
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
-          track: internal
+          tracks: internal
+          status: draft
+
+      - name: Wait before retrying the Play upload
+        if: steps.play_upload_1.outcome == 'failure'
+        run: sleep 60
+
+      - name: Upload to Google Play (retry 1)
+        id: play_upload_2
+        if: steps.play_upload_1.outcome == 'failure'
+        continue-on-error: true
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: io.bytebakehouse.muzician
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          tracks: internal
+          status: draft
+
+      - name: Wait before the final Play upload retry
+        if: steps.play_upload_2.outcome == 'failure'
+        run: sleep 180
+
+      - name: Upload to Google Play (retry 2)
+        if: steps.play_upload_2.outcome == 'failure'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: io.bytebakehouse.muzician
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          tracks: internal
           status: draft
