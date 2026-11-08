@@ -58,13 +58,24 @@ class ShakeFeedbackListener extends ConsumerStatefulWidget {
       _ShakeFeedbackListenerState();
 }
 
-class _ShakeFeedbackListenerState extends ConsumerState<ShakeFeedbackListener> {
+class _ShakeFeedbackListenerState extends ConsumerState<ShakeFeedbackListener>
+    with WidgetsBindingObserver {
   final _detector = ShakeFeedbackDetector();
   StreamSubscription<AccelerometerEvent>? _subscription;
+  bool _appActive = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _syncSubscription();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final active = state == AppLifecycleState.resumed;
+    if (active == _appActive) return;
+    _appActive = active;
     _syncSubscription();
   }
 
@@ -76,14 +87,17 @@ class _ShakeFeedbackListenerState extends ConsumerState<ShakeFeedbackListener> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _subscription?.cancel();
     super.dispose();
   }
 
   /// Opens the sensor stream while shakes can do something, and closes it as
-  /// soon as they cannot, so no subscription outlives the workspace shell.
+  /// soon as they cannot, so no subscription outlives the workspace shell or
+  /// keeps sampling in the background.
   void _syncSubscription() {
-    final shouldListen = widget.enabled && isShakeFeedbackAvailable;
+    final shouldListen =
+        _appActive && widget.enabled && isShakeFeedbackAvailable;
     if (!shouldListen) {
       if (_subscription == null) return;
       _subscription?.cancel();

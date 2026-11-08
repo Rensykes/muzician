@@ -241,6 +241,38 @@ void main() {
     });
   });
 
+  testWidgets('a shake while paused never opens the sheet after resume', (
+    tester,
+  ) async {
+    await _onPhone(() async {
+      // A broadcast stream is resubscribable, like the real sensor stream.
+      final controller = StreamController<AccelerometerEvent>.broadcast();
+      addTearDown(controller.close);
+      var opened = 0;
+      await _pumpListener(
+        tester,
+        controller.stream,
+        onStreamRequested: () => opened++,
+      );
+      expect(opened, 1);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      _addShake(controller);
+      await tester.pumpAndSettle();
+      expect(find.text('Send feedback'), findsNothing);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(opened, 2);
+      expect(find.text('Send feedback'), findsNothing);
+
+      _addShake(controller);
+      await tester.pumpAndSettle();
+      expect(find.text('Send feedback'), findsOneWidget);
+    });
+  });
+
   testWidgets('unmounting cancels the sensor subscription', (tester) async {
     await _onPhone(() async {
       var cancelled = false;

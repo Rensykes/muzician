@@ -202,6 +202,42 @@ void main() {
     expect(entry.toMap()['platform'], isNot('unknown'));
   });
 
+  test('a send from a new screen captures fresh diagnostics', () async {
+    SharedPreferences.setMockInitialValues({});
+    final service = FakeFeedbackService();
+    String? captured;
+    final c = containerWith(
+      service,
+      overrides: [
+        feedbackDiagnosticsProvider.overrideWithValue((screen) async {
+          captured = screen;
+          return FeedbackDiagnostics(
+            appVersion: '2.0.0+2',
+            platform: 'web',
+            osVersion: 'Chrome / macOS',
+            screen: screen,
+            locale: 'en',
+          );
+        }),
+      ],
+    );
+    addTearDown(c.dispose);
+    final n = await loaded(c);
+    await n.setMessage('wrong tab');
+    await n.attachDiagnostics(
+      const FeedbackDiagnostics(
+        appVersion: '2.0.0+2',
+        platform: 'web',
+        osVersion: 'Chrome / macOS',
+        screen: 'roll',
+        locale: 'en',
+      ),
+    );
+    expect(await n.send(screen: 'piano'), isTrue);
+    expect(captured, 'piano');
+    expect(service.sent.single.diagnostics.screen, 'piano');
+  });
+
   test(
     'editing after a possibly-written attempt starts a new document',
     () async {

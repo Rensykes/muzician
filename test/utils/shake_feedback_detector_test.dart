@@ -47,6 +47,45 @@ void main() {
     }
   });
 
+  test('a NaN magnitude never counts as loud', () {
+    final d = ShakeFeedbackDetector();
+    final t = DateTime(2026, 11, 8, 12);
+    for (var i = 0; i < 3; i++) {
+      expect(
+        d.add(
+          double.nan,
+          double.nan,
+          double.nan,
+          t.add(Duration(milliseconds: 16 * i)),
+        ),
+        isFalse,
+      );
+    }
+  });
+
+  test('fires again once the cooldown has expired', () {
+    final d = ShakeFeedbackDetector();
+    final t = DateTime(2026, 11, 8, 12);
+    // The first shake fires on its third sample at t + 32 ms.
+    for (var i = 0; i < 3; i++) {
+      expect(d.add(30, 0, 0, t.add(Duration(milliseconds: 16 * i))), i == 2);
+    }
+    final lastFire = t.add(const Duration(milliseconds: 32));
+    // 1600 ms after that report the full run is outside the 1500 ms cooldown.
+    expect(
+      d.add(30, 0, 0, lastFire.add(const Duration(milliseconds: 1600))),
+      isFalse,
+    );
+    expect(
+      d.add(30, 0, 0, lastFire.add(const Duration(milliseconds: 1616))),
+      isFalse,
+    );
+    expect(
+      d.add(30, 0, 0, lastFire.add(const Duration(milliseconds: 1632))),
+      isTrue,
+    );
+  });
+
   test('reset forgets the run and the cooldown', () {
     final d = ShakeFeedbackDetector();
     final t = DateTime(2026, 11, 8, 12);

@@ -308,8 +308,11 @@ class _AppShellState extends ConsumerState<_AppShell> {
   }
 
   /// The diagnostics screen name for the tab currently shown in the shell.
-  String _screenLabelForTab(int tabIndex) =>
-      tabIndex >= 0 && tabIndex < contentWorkspaceNames.length
+  ///
+  /// The disabled Song tab maps to `writer`, matching the rest of the app.
+  String _screenLabelForTab(int tabIndex) => tabIndex == songWorkspaceTabIndex
+      ? 'writer'
+      : tabIndex >= 0 && tabIndex < contentWorkspaceNames.length
       ? contentWorkspaceNames[tabIndex]
       : 'settings';
 

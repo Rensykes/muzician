@@ -45,7 +45,9 @@ class ShakeFeedbackDetector {
   /// [threshold], or a suppressed report, starts the run over.
   bool add(double x, double y, double z, DateTime at) {
     final magnitude = math.sqrt(x * x + y * y + z * z) / _gravity;
-    if (magnitude < threshold) {
+    // Inverted so a NaN magnitude (an absent sensor reading) fails the test
+    // and starts the run over instead of counting as loud.
+    if (!(magnitude >= threshold)) {
       _run = 0;
       return false;
     }

@@ -35,8 +35,10 @@ only opens the sheet — it never sends by itself.
 
 Shakes are ignored while another route covers the workspace, and ignored
 until the workspace shell has finished hydrating, so the startup and recovery
-views cannot report a tab the tester never saw. Web and desktop open no
-sensor stream at all; there is no shake there.
+views cannot report a tab the tester never saw. The sensor subscription is
+also closed while the app is not in the foreground, so a pocket bump cannot
+open the sheet on resume. Web and desktop open no sensor stream at all; there
+is no shake there.
 
 A shaked report is labelled with the tab that was showing: `fretboard`,
 `piano`, `roll` or `writer`. The Settings tile records `settings`.

@@ -279,8 +279,10 @@ class FeedbackNotifier extends Notifier<FeedbackState> {
     FeedbackState current,
     String screen,
   ) async {
+    // Only an attachment captured for this entry point is reused; one left
+    // over from a different screen would submit the previous tab.
     final attached = current.diagnostics;
-    if (attached != null) return attached;
+    if (attached != null && attached.screen == screen) return attached;
     try {
       return await ref
           .read(feedbackDiagnosticsProvider)(screen)

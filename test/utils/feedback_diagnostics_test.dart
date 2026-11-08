@@ -45,6 +45,7 @@ void main() {
   });
 
   test('feedback is available on web, android, ios, macos and windows', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     for (final platform in [
       TargetPlatform.android,
       TargetPlatform.iOS,
@@ -56,12 +57,19 @@ void main() {
     }
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     expect(isFeedbackAvailable, isFalse);
-    debugDefaultTargetPlatformOverride = null;
   });
 
   test('platform names are lowercase and stable for the rules', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    expect(platformWireName(), 'ios');
+    const wireNames = <TargetPlatform, String>{
+      TargetPlatform.android: 'android',
+      TargetPlatform.iOS: 'ios',
+      TargetPlatform.macOS: 'macos',
+      TargetPlatform.windows: 'windows',
+    };
+    for (final entry in wireNames.entries) {
+      debugDefaultTargetPlatformOverride = entry.key;
+      expect(platformWireName(), entry.value, reason: '${entry.key}');
+    }
   });
 }

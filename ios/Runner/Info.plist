@@ -68,6 +68,8 @@
 		</array>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>Allow microphone access to turn your humming into piano roll notes.</string>
+		<key>NSMotionUsageDescription</key>
+		<string>Muzician uses motion only to detect a shake that opens the feedback form.</string>
 		<key>UIStatusBarHidden</key>
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
