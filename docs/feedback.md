@@ -1,10 +1,10 @@
 # In-App Feedback
 
 Muzician has one outbound write: a feedback message a tester chooses to send
-from Settings. Everything else — projects, saves, lyrics, note content and
-audio — stays on the device. This guide covers the entry point, the exact
-payload, the draft and retry behaviour, where to read submissions, and the
-Play Console answers that depend on it.
+from Settings or, on a phone, by shaking it. Everything else — projects,
+saves, lyrics, note content and audio — stays on the device. This guide covers
+the entry points, the exact payload, the draft and retry behaviour, where to
+read submissions, and the Play Console answers that depend on it.
 
 ## Entry point
 
@@ -12,10 +12,11 @@ Play Console answers that depend on it.
 Feedback group. The row's subtitle reads *Bugs, ideas, anything confusing*,
 or *Draft saved* when an unsent draft is waiting.
 
-The entry appears only where Firebase is configured: web and Android.
-`isFeedbackAvailable` in `lib/utils/feedback_diagnostics.dart` gates it, so
-iOS, macOS, Windows and Linux do not show the row until those platforms are
-wired to a Firebase app.
+The entry appears on web, Android, iOS, macOS and Windows — every platform
+FlutterFire is configured for. `isFeedbackAvailable` in
+`lib/utils/feedback_diagnostics.dart` gates it. Linux has no entry point:
+`cloud_firestore` has no Linux implementation, so there is nothing to send
+with.
 
 The sheet opens from the current workspace and stays inside the app. It shows
 four category chips — **Bug** (default), **Idea**, **Confusing**, **Other** —
@@ -24,6 +25,21 @@ and a collapsed **What gets sent** section containing the same privacy text
 as `/privacy`. **Copy** puts the message and the diagnostics line on the
 clipboard so a tester can rescue their text offline, even before a send
 succeeds.
+
+### Shake to open
+
+Native Android and iOS builds open the same composer when the device is
+shaken: three consecutive accelerometer samples at or above 2.6 g, where a
+quiet sample resets the run, with a 1.5 s cooldown after each open. A shake
+only opens the sheet — it never sends by itself.
+
+Shakes are ignored while another route covers the workspace, and ignored
+until the workspace shell has finished hydrating, so the startup and recovery
+views cannot report a tab the tester never saw. Web and desktop open no
+sensor stream at all; there is no shake there.
+
+A shaked report is labelled with the tab that was showing: `fretboard`,
+`piano`, `roll` or `writer`. The Settings tile records `settings`.
 
 ## Fields sent
 
@@ -38,9 +54,9 @@ can never create a duplicate.
 | `category` | `bug` | One of `bug`, `idea`, `confusing`, `other` |
 | `contact` | `name@example.com` | Optional; `''` when omitted; 0–200 runes |
 | `appVersion` | `2.0.0+2` | From `package_info_plus`; `unknown` on failure |
-| `platform` | `web` or `android` | Coarse platform name |
+| `platform` | `web`, `android`, `ios`, `macos`, `windows` | Lowercase platform name; rules accept only this set |
 | `osVersion` | `Chrome / macOS` | Coarse user agent on web; trimmed `Platform.operatingSystemVersion` on Android (`Android 14`); `unknown` when unclassifiable |
-| `screen` | `Settings` | Call-site label |
+| `screen` | `fretboard`, `roll`, `settings` | Current tab (`fretboard`, `piano`, `roll`, `writer`) or `settings` |
 | `locale` | `en`, `it` | Device language code |
 | `createdAt` | server timestamp | Set by Firestore; rules require `request.time` |
 | `clientSessionId` | uuid v4 | Regenerated on every app launch; used only to spot repeated sends, never to identify a person; not persisted |
@@ -109,6 +125,8 @@ Open the Firebase console for the project:
 - Project `muzician-b0953`, database `(default)`, location `eur3`
   (Europe multi-region; permanent once provisioned).
 - Collection `feedback`, one document per submission.
+- `platform` is lowercase and exactly one of `web`, `android`, `ios`,
+  `macos`, `windows`; the rules reject anything else, including `linux`.
 - Sort by `createdAt` descending to read the newest first. Each document
   carries the fields above.
 
@@ -141,8 +159,8 @@ request.
 ## Setup and build notes
 
 - Firestore `(default)` exists on `muzician-b0953` in `eur3`. FlutterFire
-  generated `lib/firebase_options.dart`, `android/app/google-services.json`
-  and the Android Gradle wiring for web and Android.
+  generated `lib/firebase_options.dart`, the Android and Apple service files,
+  and the Gradle and Xcode wiring for web, Android, iOS, macOS and Windows.
 - The Android release manifest needs `android.permission.INTERNET`; it is
   present in `android/app/src/main/AndroidManifest.xml`. Without it a release
   build cannot reach Firestore.
@@ -157,6 +175,13 @@ request.
   `google_analytics` and similar are absent from `pubspec.yaml`), and nothing
   in the app sends analytics events or screen views. The id is config, not
   instrumentation.
+- macOS is sandboxed. `com.apple.security.network.client` must be present in
+  both `macos/Runner/DebugProfile.entitlements` and
+  `macos/Runner/Release.entitlements`; without it even a debug build cannot
+  reach Firestore.
+- Windows is configured and gated like the other desktop platforms, but it
+  cannot be built on this machine. The Windows entry point stays unverified
+  until a Windows build is run.
 - The privacy page is `web/privacy.html`, served at `/privacy`. `firebase.json`
   has an explicit `/privacy → /privacy.html` rewrite ahead of the SPA
   catch-all so the policy is not swallowed by `index.html`.
@@ -185,12 +210,12 @@ request.
 
 The Play closed-testing questionnaire asks how feedback was gathered. Answer:
 
-> In-app feedback form. Testers open Settings → Send feedback, choose a
-> category, write a message and optionally leave an email for a reply. The
-> form submits to a private Cloud Firestore collection owned by the developer;
-> there is no third-party survey, no analytics SDK and no public review
-> channel. App version, platform, coarse OS version, screen and language are
-> attached automatically. Submissions are read in the Firebase console and
-> deleted on request.
+> In-app feedback form. Testers open Settings → Send feedback, or shake an
+> Android or iOS device, choose a category, write a message and optionally
+> leave an email for a reply. The form submits to a private Cloud Firestore
+> collection owned by the developer; there is no third-party survey, no
+> analytics SDK and no public review channel. App version, platform, coarse
+> OS version, screen and language are attached automatically. Submissions are
+> read in the Firebase console and deleted on request.
 
 Point to this document and to `/privacy` if a reviewer asks for detail.

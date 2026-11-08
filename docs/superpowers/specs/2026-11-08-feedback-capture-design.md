@@ -12,10 +12,11 @@ first weeks of feedback are the most valuable ones to capture well.
 ## Intent
 
 A tester presses **Settings → Send feedback**, types a message, optionally
-leaves an email for a reply, and presses Send. The message lands in a
-Firestore collection the developer reads in the Firebase console, with the
-app version, platform, OS version and screen attached. Nothing about the
-user's projects, lyrics or saves is ever sent.
+leaves an email for a reply, and presses Send. On a phone, shaking the device
+opens the same sheet, labelled with the tab that was showing. The message
+lands in a Firestore collection the developer reads in the Firebase console,
+with the app version, platform, OS version and screen attached. Nothing about
+the user's projects, lyrics or saves is ever sent.
 
 ## Approaches considered
 
@@ -34,7 +35,8 @@ must be visible and opt-in in the UI, not silent.
 ## Goals
 
 1. A tester can send a message in three taps plus typing, from Settings, on
-   web and Android.
+   web, Android, iOS, macOS and Windows — or by shaking an Android or iOS
+   device.
 2. The message carries version, platform, OS, screen and locale automatically.
 3. No musical content, project names, save data, or identifiers leave the
    device. A persistent install identifier is explicitly not collected.
@@ -46,8 +48,9 @@ must be visible and opt-in in the UI, not silent.
 - No in-app inbox, thread, or reply channel.
 - No usage analytics, crash reporting, or session tracking of any kind.
 - No accounts, sign-in, or user identity.
-- No iOS, macOS, Windows or Linux configuration in this phase. Those
-  platforms ship later; FlutterFire config is added then.
+- No Linux configuration: `cloud_firestore` has no Linux implementation, so
+  Linux keeps no feedback entry point. iOS, macOS and Windows were added after
+  this first phase, once their FlutterFire options existed.
 - No Cloud Functions, no email notification on new feedback (Spark plan).
 
 ## Current state
@@ -101,6 +104,19 @@ copies the message and the detail block to the clipboard).
 The draft is persisted (debounced, ~500 ms) as soon as the tester types, and
 cleared only after a successful send.
 
+### Shake to open
+
+Android and iOS also open the sheet when the phone is shaken: three
+consecutive accelerometer samples at or above 2.6 g, with a quiet sample
+resetting the run and a 1.5 s cooldown swallowing the tail of the same
+gesture. A shake only opens the composer; it never sends.
+
+The listener is mounted once in the shell and reports the current tab
+(`fretboard`, `piano`, `roll`, `writer`) or `settings` from the Settings tile.
+It stays inert while another route is on top, and until the shell has
+finished hydrating, so a shake cannot report a tab the tester never saw. No
+sensor subscription exists on web or desktop.
+
 ## Data
 
 Collection `feedback`, one document per submission. **The document ID is a
@@ -117,9 +133,9 @@ A `uid already exists` error is treated as success.
 | `category` | string | one of `bug`, `idea`, `confusing`, `other` |
 | `contact` | string | 0–200 chars, `''` when omitted |
 | `appVersion` | string | from `package_info_plus`, e.g. `2.0.0+2` |
-| `platform` | string | `web` or `android` |
+| `platform` | string | lowercase; one of `web`, `android`, `ios`, `macos`, `windows` |
 | `osVersion` | string | best effort, `unknown` fallback |
-| `screen` | string | call-site label, e.g. `Settings` |
+| `screen` | string | current tab (`fretboard`, `piano`, `roll`, `writer`) or `settings` |
 | `locale` | string | e.g. `en` |
 | `createdAt` | timestamp | must equal `request.time` |
 | `clientSessionId` | string | uuid v4 regenerated on each app launch |
@@ -159,7 +175,7 @@ service cloud.firestore {
         && request.resource.data.category in ['bug','idea','confusing','other']
         && request.resource.data.contact is string
         && request.resource.data.contact.size() <= 800
-        && request.resource.data.platform in ['web','android']
+        && request.resource.data.platform in ['web','android','ios','macos','windows']
         && request.resource.data.appVersion is string
         && request.resource.data.appVersion.size() <= 120
         && request.resource.data.osVersion is string
@@ -244,8 +260,10 @@ Decided here, open to correction: category chips with `bug` preselected;
 4000-character cap; draft persistence with a client-generated document ID
 and idempotent retry; 8 s pending threshold; `package_info_plus` for the
 version string; no `url_launcher` (the full policy text lives in the sheet,
-the public page is for the Play listing); feedback entry visible only on web
-and Android until other platforms are configured; Firestore in the `eur3`
+the public page is for the Play listing); the feedback entry is visible
+wherever FlutterFire is configured — web, Android, iOS, macOS and Windows —
+with shake on Android and iOS only, and Linux left out because
+`cloud_firestore` has no Linux implementation; Firestore in the `eur3`
 multi-region, which is permanent once provisioned.
 
 ## Proposed structure
@@ -254,6 +272,8 @@ multi-region, which is permanent once provisioned.
 lib/models/feedback_entry.dart        immutable entry + toMap/fromDraft
 lib/utils/feedback_diagnostics.dart   version/platform/os/screen collection,
                                       user-agent parsing, the detail block text
+lib/utils/shake_feedback_detector.dart  threshold/cooldown shake detector
+lib/ui/core/shake_feedback_listener.dart  shell listener that opens the sheet
 lib/utils/feedback_service.dart       abstract FeedbackService + Firestore impl
 lib/store/feedback_store.dart         Riverpod Notifier: draft, status, send(),
                                       cooldown, restore-on-launch
@@ -270,7 +290,10 @@ document, cooldown blocks a second successful send but not a retry, restored
 draft is prefilled), `test/ui/core/feedback_sheet_test.dart` (empty message
 can't be sent, sent state, failure keeps text), and
 `test/utils/feedback_service_test.dart` for the entry validation that rules
-and client share.
+and client share. The shake work adds
+`test/utils/shake_feedback_detector_test.dart` (three confirming samples, a
+quiet reset, the cooldown) and `test/ui/core/shake_feedback_listener_test.dart`
+(a shake opens the sheet with the current tab label; quiet movement does not).
 
 ## Setup and ownership
 
@@ -278,9 +301,11 @@ Provisioned and verified: the Firestore Native database `(default)` on
 `muzician-b0953` in `eur3` (Europe multi-region, permanent once created);
 `firestore.rules` deployed with
 `firebase deploy --only firestore:rules --project muzician-b0953`; FlutterFire
-generated `lib/firebase_options.dart`, `android/app/google-services.json` and
-the Gradle wiring for web and Android; `INTERNET` added to the release Android
-manifest.
+generated `lib/firebase_options.dart`, the Android and Apple service files and
+the wiring for web, Android, iOS, macOS and Windows; `INTERNET` added to the
+release Android manifest; `com.apple.security.network.client` added to both
+macOS entitlements. The Windows target is configured but cannot be built on
+this machine, so its entry point remains unverified.
 
 Public contact address on `/privacy`, in the sheet, and in the Play "request
 deletion" answer: `bytebakehouseinc@gmail.com`.
@@ -298,7 +323,11 @@ around.
   succeeds on Wi-Fi; airplane mode keeps the text across a relaunch, and
   Retry succeeds once reconnected.
 - Rules: an unauthenticated client cannot read the collection; a 20000-character
-  message and an unknown category are rejected.
+  message and an unknown category are rejected; `platform: 'linux'` and
+  `platform: 'iOS'` are rejected.
+- Shake: a deliberate shake on Android or iOS opens the sheet labelled with
+  the current tab; strumming, tapping and quiet movement do not.
+- Linux shows no feedback entry point.
 - `flutter analyze` clean; the new tests pass.
 - `dart format` clean on every touched file.
 
