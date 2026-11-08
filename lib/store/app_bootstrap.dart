@@ -9,6 +9,7 @@ import '../models/save_system.dart';
 import '../models/song_project.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
+import 'feedback_store.dart';
 import 'persisted_data_recovery_store.dart';
 import 'save_system_store.dart';
 import 'settings_store.dart';
@@ -59,6 +60,7 @@ String? contentWorkspacePreferenceForTab(int tabIndex) =>
 /// empty maps, so a project opened with a blank session instead of its draft.
 Future<void> hydrateStores(ProviderReader read) async {
   await read(settingsProvider.notifier).hydrate();
+  await read(feedbackProvider.notifier).hydrate();
 
   late final SharedPreferences prefs;
   try {
