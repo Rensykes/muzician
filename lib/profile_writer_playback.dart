@@ -37,13 +37,10 @@ import 'features/instrument_shared/instrument_screen.dart'
     show InstrumentScreen;
 import 'features/piano/piano_keyboard.dart'
     show PianoKeyboard, pianoKeyboardHeight;
-import 'features/song/song_screen.dart' show SongScreen;
 import 'features/songwriter/songwriter_screen.dart' show SongwriterScreen;
 import 'schema/rules/songwriter_audio_rules.dart';
 import 'schema/rules/songwriter_playback_rules.dart';
-import 'schema/rules/song_from_writer_rules.dart' show songFromSongwriter;
 import 'schema/rules/piano_roll_playback_rules.dart' as pr_rules;
-import 'schema/rules/song_playback_rules.dart' as song_playback_rules;
 import 'schema/rules/songwriter_rules.dart';
 import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
@@ -51,8 +48,6 @@ import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
 import 'store/song_audio_repository.dart';
 import 'store/song_audio_player_sink.dart';
-import 'store/song_playback_store.dart';
-import 'store/song_project_store.dart';
 import 'store/drum_pattern_playback_store.dart';
 import 'store/songwriter_audio_sink.dart';
 import 'store/songwriter_playback_store.dart';
@@ -93,13 +88,12 @@ const _auditionDurationMs = int.fromEnvironment(
   defaultValue: 1000,
 );
 
-enum ProfileViewMode { minimal, writer, song, fretboard, piano }
+enum ProfileViewMode { minimal, writer, fretboard, piano }
 
 extension ProfileViewModeParsing on ProfileViewMode {
   static ProfileViewMode parse(String value) => switch (value) {
     'minimal' => ProfileViewMode.minimal,
     'writer' => ProfileViewMode.writer,
-    'song' => ProfileViewMode.song,
     'fretboard' => ProfileViewMode.fretboard,
     'piano' => ProfileViewMode.piano,
     _ => throw ArgumentError.value(value, 'WRITER_PROFILE_VIEW'),
@@ -628,61 +622,6 @@ class _ProfileSaveSystemNotifier extends SaveSystemNotifier {
       _saveStateFor(ref.watch(_profileScenarioProvider), tempo: _tempo);
 }
 
-class _ProfileSongProjectNotifier extends SongProjectNotifier {
-  @override
-  SongProject build() {
-    final scenario = ref.watch(_profileScenarioProvider);
-    final saveState = _saveStateFor(scenario, tempo: _tempo);
-    final writer = _fixtureFor(scenario, _qaAsset, tempo: _tempo, bars: _bars);
-    final song = songFromSongwriter(
-      writer,
-      saveState.saves,
-      projectId: saveState.selectedProjectId,
-      folders: saveState.folders,
-      projectDefaultHarmonyInstrument:
-          saveState.folders.single.projectConfig!.defaultHarmonyInstrument,
-    );
-    return scenario == 'recorded_clip'
-        ? _withControlledSongAudioClip(song, _qaAsset)
-        : song;
-  }
-}
-
-SongProject _withControlledSongAudioClip(SongProject song, AudioAsset asset) {
-  const trackId = 'qa_recorded_clip_track';
-  const patternId = 'qa_recorded_clip_pattern';
-  return song.copyWith(
-    tracks: [
-      ...song.tracks,
-      const SongTrack(
-        id: trackId,
-        name: 'Generated QA clip',
-        type: SongTrackType.audio,
-        order: 100,
-      ),
-    ],
-    clips: [
-      ...song.clips,
-      const SongClipInstance(
-        id: 'qa_recorded_clip_instance',
-        trackId: trackId,
-        patternId: patternId,
-        patternType: SongPatternType.audio,
-        startTick: 0,
-      ),
-    ],
-    audioAssets: [...song.audioAssets, asset],
-    audioPatterns: [
-      ...song.audioPatterns,
-      const AudioClipPattern(
-        id: patternId,
-        name: 'Generated QA clip',
-        assetId: _qaAssetId,
-      ),
-    ],
-  );
-}
-
 class _ProfileFretboardNotifier extends FretboardNotifier {
   @override
   FretboardState build() {
@@ -722,26 +661,20 @@ class _ProfilePianoNotifier extends PianoNotifier {
 
 /// Overrides every state source used by the harness with in-memory fixtures.
 /// This lets widget tests mount production pages without calling app bootstrap,
-/// SharedPreferences hydration, or the persistent Song audio repository.
+/// SharedPreferences hydration, or the persistent audio repository.
 List<Override> buildWriterPlaybackProfileProviderOverrides({
   required SongAudioRepository repository,
-  required SongAudioRepository songRepository,
   String scenario = _fixtureScenario,
 }) => [
   _profileScenarioProvider.overrideWith((ref) => scenario),
   songwriterProvider.overrideWith(_ProfileWriterNotifier.new),
   settingsProvider.overrideWith(_ProfileSettingsNotifier.new),
   saveSystemProvider.overrideWith(_ProfileSaveSystemNotifier.new),
-  songProjectProvider.overrideWith(_ProfileSongProjectNotifier.new),
   fretboardProvider.overrideWith(_ProfileFretboardNotifier.new),
   pianoProvider.overrideWith(_ProfilePianoNotifier.new),
   songwriterAudioRepositoryProvider.overrideWithValue(repository),
   songwriterAudioClipSinkProvider.overrideWith(
     (ref) => AudioPlayersClipSink(ref.read(songwriterAudioRepositoryProvider)),
-  ),
-  songAudioRepositoryProvider.overrideWithValue(songRepository),
-  songAudioClipSinkProvider.overrideWith(
-    (ref) => AudioPlayersClipSink(ref.read(songAudioRepositoryProvider)),
   ),
 ];
 
@@ -1078,125 +1011,6 @@ Map<String, Object?> buildWriterPlaybackProfileManifest({
   };
 }
 
-/// Builds the matching Song schedule from the same isolated Writer fixture.
-/// The comparison is specifically MIDI, score tick, onset offset, and count;
-/// it reports note-tail duration separately because Writer Harmony previews
-/// and imported Song patterns use different duration semantics.
-Map<String, Object?> buildSongPlaybackProfileManifest({
-  required String scenario,
-  int tempo = _tempo,
-  int durationSeconds = _durationSeconds,
-}) {
-  final writerManifest = buildWriterPlaybackProfileManifest(
-    scenario: scenario,
-    tempo: tempo,
-    durationSeconds: durationSeconds,
-  );
-  final saveState = _saveStateFor(scenario, tempo: tempo);
-  final writer = _fixtureFor(
-    scenario,
-    _qaAsset,
-    tempo: tempo,
-    bars: _barsFor(tempo, durationSeconds),
-  );
-  final importedSong = songFromSongwriter(
-    writer,
-    saveState.saves,
-    projectId: saveState.selectedProjectId,
-    folders: saveState.folders,
-    projectDefaultHarmonyInstrument:
-        saveState.folders.single.projectConfig!.defaultHarmonyInstrument,
-  );
-  final song = scenario == 'recorded_clip'
-      ? _withControlledSongAudioClip(importedSong, _qaAsset)
-      : importedSong;
-  final scoreTickCount = writerManifest['score_tick_count']! as int;
-  final songEvents = song_playback_rules
-      .buildPlaybackEvents(song)
-      .where((event) => event.tick < scoreTickCount)
-      .toList(growable: false);
-  final songVoices = <Map<String, Object?>>[
-    for (final event in songEvents)
-      for (final group in event.sequencedNoteGroups)
-        for (final note in group.notes)
-          {
-            'score_tick': event.tick,
-            'midi': note.midiNote,
-            'onset_offset_us': note.onsetOffsetMs * 1000,
-            'duration_ticks': note.durationTicks,
-            'duration_offset_ms': note.durationOffsetMs,
-          },
-  ]..sort(_compareScheduledMidiVoices);
-  final writerVoices =
-      (writerManifest['scheduled_voices']! as List)
-          .cast<Map<String, Object?>>()
-          .where((voice) => voice['midi'] is int)
-          .map(
-            (voice) => <String, Object?>{
-              'score_tick': voice['score_tick'],
-              'midi': voice['midi'],
-              'onset_offset_us': voice['onset_offset_us'],
-              'duration_us': voice['duration_us'],
-            },
-          )
-          .toList(growable: false)
-        ..sort(_compareScheduledMidiVoices);
-  final matches =
-      _midiScheduleSignature(writerVoices).join('|') ==
-      _midiScheduleSignature(songVoices).join('|');
-  return {
-    'schema_version': 1,
-    'fixture': scenario,
-    'tempo_bpm': tempo,
-    'score_tick_count': scoreTickCount,
-    'song_track_count': song.tracks.length,
-    'song_note_clip_count': song.clips
-        .where((clip) => clip.patternType == SongPatternType.note)
-        .length,
-    'song_audio_clip_count': song.clips
-        .where((clip) => clip.patternType == SongPatternType.audio)
-        .length,
-    'writer_audio_asset_count': writer.audioAssets.length,
-    'song_audio_asset_count': song.audioAssets.length,
-    'song_audio_clip_sink': 'AudioPlayersClipSink',
-    'song_audio_fixture_storage':
-        'isolated temporary song_audio repository with a generated QA WAV',
-    if (scenario == 'recorded_clip')
-      'recorded_clip_comparison_note':
-          'Writer audio is excluded from Writer-to-Song handoff. Song playback uses an independent synthetic audio lane with the same generated QA WAV copied into its isolated song_audio repository; this does not claim Writer audio transfers.',
-    'writer_midi_voice_count': writerVoices.length,
-    'song_midi_voice_count': songVoices.length,
-    'writer_event_count': writerManifest['expected_event_count'],
-    'song_event_count': songEvents.length,
-    'midi_tick_offset_count_match': matches,
-    'writer_midi_schedule': writerVoices,
-    'song_midi_schedule': songVoices,
-    'duration_comparison_note': scenario == 'plain_harmony'
-        ? 'MIDI, score tick, onset offset, and count are compared exactly. Writer Harmony preview voices use a 700ms note request; Song-imported Harmony notes use beat-length sequenced patterns, so note-tail duration is not equivalent.'
-        : scenario == 'recorded_clip'
-        ? 'MIDI, score tick, onset offset, and count are compared exactly. The Song audio clip is an independent controlled fixture because Writer audio is excluded from handoff; see recorded_clip_comparison_note.'
-        : 'MIDI, score tick, onset offset, and count are compared exactly. Writer and Song may use different note-duration semantics; see each schedule entry.',
-    'writer_audio_transfer_note':
-        'Writer audio is intentionally excluded from the Song handoff.',
-  };
-}
-
-int _compareScheduledMidiVoices(
-  Map<String, Object?> a,
-  Map<String, Object?> b,
-) {
-  final tick = (a['score_tick']! as int).compareTo(b['score_tick']! as int);
-  if (tick != 0) return tick;
-  final midi = (a['midi']! as int).compareTo(b['midi']! as int);
-  if (midi != 0) return midi;
-  return (a['onset_offset_us']! as int).compareTo(b['onset_offset_us']! as int);
-}
-
-List<String> _midiScheduleSignature(List<Map<String, Object?>> voices) => [
-  for (final voice in voices)
-    '${voice['score_tick']}:${voice['midi']}:${voice['onset_offset_us']}',
-];
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kReleaseMode) {
@@ -1225,15 +1039,8 @@ Future<void> main() async {
     subdir: 'songwriter_audio',
   );
   final clipFile = await repository.resolvePath(_qaAssetId, 'wav');
-  final songRepository = SongAudioRepository.testWith(
-    rootDirectory: runDirectory,
-  );
-  final songClipFile = await songRepository.resolvePath(_qaAssetId, 'wav');
   final qaTone = _writeQaTone();
-  await Future.wait([
-    clipFile.writeAsBytes(qaTone),
-    songClipFile.writeAsBytes(qaTone),
-  ]);
+  await clipFile.writeAsBytes(qaTone);
   final fixtureMetrics = verifyWriterPlaybackProfileFixtures();
   final fixtureVoices = verifyWriterPlaybackProfileFixtureVoices();
   final runTag = p.basename(runDirectory.path);
@@ -1243,10 +1050,6 @@ Future<void> main() async {
       runTag: runTag,
     ),
     'profile_view': _profileViewMode.name,
-    if (_profileViewMode == ProfileViewMode.song)
-      'song_comparator': buildSongPlaybackProfileManifest(
-        scenario: _fixtureScenario,
-      ),
   };
   await File(
     p.join(runDirectory.path, 'fixture_schedule_manifest.json'),
@@ -1273,10 +1076,7 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [
-        ...buildWriterPlaybackProfileProviderOverrides(
-          repository: repository,
-          songRepository: songRepository,
-        ),
+        ...buildWriterPlaybackProfileProviderOverrides(repository: repository),
         ...buildWriterPlaybackProfileSinkProbeOverrides(),
       ],
       child: WriterPlaybackProfileApp(
@@ -1616,17 +1416,6 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                   ),
             );
             break;
-          case ProfileViewMode.song:
-            unawaited(
-              ref
-                  .read(songPlaybackProvider.notifier)
-                  .startPlayback(
-                    endTickExclusive:
-                        _scoreTickLimitFor(_tempo, _durationSeconds) ??
-                        _bars * 16,
-                  ),
-            );
-            break;
           case ProfileViewMode.fretboard || ProfileViewMode.piano:
             _startNativeAudition();
             break;
@@ -1794,9 +1583,6 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
     final metadata = Map<String, Object?>.of(attempt.metadata);
     final viewMode = attempt.viewMode;
     final runDirectory = widget.runDirectory;
-    final songComparator = viewMode == ProfileViewMode.song
-        ? buildSongPlaybackProfileManifest(scenario: attempt.scenario)
-        : null;
     final refreshRate = (metadata['display_refresh_rate_hz'] as num?)
         ?.toDouble();
     final timingAttempt = attempt.timingAttempt;
@@ -1844,7 +1630,6 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
       'late_timing_callback_policy':
           'FrameTiming batches are accepted through the ordered post-window frame fence only when raster-finish wall time is within the closed active sample window. The fence frame and all later frames are excluded. Timeout exports an incomplete capture and disables frame-budget evaluation.',
       'frame_timing': summary.toJson(),
-      'song_comparator': ?songComparator,
       'writer_voice_outcomes': ?attempt.writerRun?.toJson(),
     };
     await _writeFrameTimingReport(
@@ -2130,15 +1915,6 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
           );
         });
         return const Scaffold(body: SongwriterScreen());
-      case ProfileViewMode.song:
-        ref.listen(songPlaybackProvider, (previous, next) {
-          _transportStatusChanged(
-            view: 'song',
-            previous: previous?.status.name,
-            next: next.status.name,
-          );
-        });
-        return const Scaffold(body: SongScreen());
       case ProfileViewMode.fretboard:
         return _ProfileInstrumentView(
           fretboard: true,
@@ -2260,7 +2036,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
             onPressed: _startNativeAudition,
             icon: const Icon(Icons.music_note),
             label: const Text(
-              'Preview matching Cmaj7 through shared instrument/Song path',
+              'Preview matching Cmaj7 through shared instrument path',
             ),
           ),
           const SizedBox(height: 12),
