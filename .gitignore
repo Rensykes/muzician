@@ -51,3 +51,6 @@ app.*.map.json
 # Firebase CLI
 .firebase/
 firebase-debug.log
+
+# Local agent screenshots and scratch state
+.openchamber/
