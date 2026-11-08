@@ -167,7 +167,7 @@ void main() {
         appVersion: '2.0.0+2',
         platform: 'web',
         osVersion: 'Chrome / macOS',
-        screen: 'Settings',
+        screen: 'settings',
         locale: 'en',
       ),
     );
@@ -194,11 +194,11 @@ void main() {
     addTearDown(c.dispose);
     final n = await loaded(c);
     await n.setMessage('no details');
-    expect(await n.send(screen: 'Settings'), isTrue);
+    expect(await n.send(screen: 'settings'), isTrue);
     final entry = service.sent.single;
     expect(entry.diagnostics.platform, isIn(['web', 'android']));
     expect(entry.diagnostics.platform, isNot('unknown'));
-    expect(entry.diagnostics.screen, 'Settings');
+    expect(entry.diagnostics.screen, 'settings');
     expect(entry.toMap()['platform'], isNot('unknown'));
   });
 

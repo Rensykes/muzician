@@ -28,10 +28,10 @@ void main() {
       appVersion: '2.0.0+2',
       platform: 'android',
       osVersion: 'Android 14',
-      screen: 'Settings',
+      screen: 'settings',
       locale: 'en',
     );
-    expect(d.summary, 'Muzician 2.0.0+2 · Android 14 · Settings · en');
+    expect(d.summary, 'Muzician 2.0.0+2 · Android 14 · settings · en');
     expect(
       d.toMap().keys,
       containsAll(<String>[

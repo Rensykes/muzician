@@ -11,6 +11,7 @@ import 'features/instrument_shared/instrument_screen.dart';
 import 'features/instrument_shared/shared_scale_picker.dart';
 import 'ui/core/app_info_panel.dart';
 import 'ui/core/feedback_sheet.dart';
+import 'ui/core/shake_feedback_listener.dart';
 import 'features/piano/piano_feature.dart';
 import 'features/piano_roll/piano_roll_screen_v2.dart';
 import 'features/songwriter/songwriter_feature.dart';
@@ -265,40 +266,52 @@ class _AppShellState extends ConsumerState<_AppShell> {
         ],
       ),
     );
-    return Scaffold(
-      body: !showNavigation
-          ? _buildStartupView()
-          : railMode
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                StudioNavigationRail(
-                  destinations: destinations,
-                  selectedIndex: _tabIndex,
-                ),
-                Expanded(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeLeft: true,
-                    child: SafeArea(
-                      top: false,
-                      left: false,
-                      right: false,
-                      child: workspaces,
+    return ShakeFeedbackListener(
+      screenLabel: _screenLabelForTab(_tabIndex),
+      // Startup, recovery and failure views are not a workspace: a shake
+      // there would report a tab the user never reached.
+      enabled: showNavigation,
+      child: Scaffold(
+        body: !showNavigation
+            ? _buildStartupView()
+            : railMode
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  StudioNavigationRail(
+                    destinations: destinations,
+                    selectedIndex: _tabIndex,
+                  ),
+                  Expanded(
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeLeft: true,
+                      child: SafeArea(
+                        top: false,
+                        left: false,
+                        right: false,
+                        child: workspaces,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            )
-          : workspaces,
-      bottomNavigationBar: showNavigation && !railMode
-          ? StudioBottomNavBar(
-              destinations: destinations,
-              selectedIndex: _tabIndex,
-            )
-          : null,
+                ],
+              )
+            : workspaces,
+        bottomNavigationBar: showNavigation && !railMode
+            ? StudioBottomNavBar(
+                destinations: destinations,
+                selectedIndex: _tabIndex,
+              )
+            : null,
+      ),
     );
   }
+
+  /// The diagnostics screen name for the tab currently shown in the shell.
+  String _screenLabelForTab(int tabIndex) =>
+      tabIndex >= 0 && tabIndex < contentWorkspaceNames.length
+      ? contentWorkspaceNames[tabIndex]
+      : 'settings';
 
   List<AppNavDestination> _navDestinations() => [
     AppNavDestination(

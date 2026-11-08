@@ -197,7 +197,7 @@ class FeedbackNotifier extends Notifier<FeedbackState> {
   /// When the sheet has not attached diagnostics yet, this waits up to
   /// [feedbackDiagnosticsTimeout] for a fresh capture from [screen] rather
   /// than sending the unknown placeholders.
-  Future<bool> send({String screen = 'Settings'}) async {
+  Future<bool> send({String screen = 'settings'}) async {
     final current = state;
     if (current.status == FeedbackStatus.sending) return false;
 

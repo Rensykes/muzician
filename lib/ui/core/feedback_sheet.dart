@@ -1,4 +1,4 @@
-/// In-app feedback composer reached from Settings.
+/// In-app feedback composer reached from Settings or by shaking a phone.
 library;
 
 import 'dart:async';
@@ -25,15 +25,20 @@ const _whatGetsSentText =
 
 /// A palette-aware feedback form that keeps its draft until a send succeeds.
 class FeedbackSheet extends ConsumerStatefulWidget {
-  const FeedbackSheet({super.key});
+  const FeedbackSheet({super.key, this.screen = 'settings'});
+
+  /// The screen reported in the diagnostics, such as `roll` or `settings`.
+  final String screen;
 
   /// Opens the feedback composer above the current workspace.
-  static Future<void> show(BuildContext context) =>
-      showStudioModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => const FeedbackSheet(),
-      );
+  static Future<void> show(
+    BuildContext context, {
+    String screen = 'settings',
+  }) => showStudioModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => FeedbackSheet(screen: screen),
+  );
 
   @override
   ConsumerState<FeedbackSheet> createState() => _FeedbackSheetState();
@@ -68,7 +73,7 @@ class _FeedbackSheetState extends ConsumerState<FeedbackSheet> {
 
   /// Captures the coarse device details the sheet shows and sends.
   Future<void> _attachDiagnostics() async {
-    final diagnostics = await captureDiagnostics(screen: 'Settings');
+    final diagnostics = await captureDiagnostics(screen: widget.screen);
     if (!mounted) return;
     await ref.read(feedbackProvider.notifier).attachDiagnostics(diagnostics);
   }
@@ -76,7 +81,7 @@ class _FeedbackSheetState extends ConsumerState<FeedbackSheet> {
   Future<void> _send() async {
     final sent = await ref
         .read(feedbackProvider.notifier)
-        .send(screen: 'Settings');
+        .send(screen: widget.screen);
     if (!mounted || !sent) return;
     showGlassSnackbar(
       context,

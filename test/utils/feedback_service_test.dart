@@ -17,7 +17,7 @@ void main() {
           appVersion: '2.0.0+2',
           platform: 'web',
           osVersion: 'Chrome / macOS',
-          screen: 'Settings',
+          screen: 'settings',
           locale: 'en',
         ),
         attempt: attempt,

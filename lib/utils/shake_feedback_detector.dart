@@ -8,6 +8,10 @@ library;
 import 'dart:math' as math;
 
 /// Counts consecutive high-acceleration samples and reports a shake once.
+///
+/// Feed it raw accelerometer samples, which include gravity (about 9.8 m/s²
+/// at rest) — `accelerometerEventStream`, not `userAccelerometerEventStream`
+/// — so [threshold] is a multiple of gravity.
 class ShakeFeedbackDetector {
   ShakeFeedbackDetector({
     this.threshold = 2.6,
