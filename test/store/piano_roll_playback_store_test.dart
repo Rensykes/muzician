@@ -403,7 +403,7 @@ void main() {
       addTearDown(root.dispose);
       root.read(pianoRollProvider.notifier).setSound(PianoRollSound.bell);
 
-      // Child container (e.g. Song's isolated pattern editor): overrides
+      // Child container (e.g. Writer's isolated melody editor): overrides
       // pianoRollProvider with its own roll state and re-applies the
       // default sink builder so the sink reads from *this* container's
       // pianoRollProvider via `ref.read`, not the parent's.

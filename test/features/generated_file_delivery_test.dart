@@ -52,7 +52,7 @@ void main() {
         bytes: Uint8List.fromList([9]),
         fileName: 'song.mzbundle',
         mimeType: 'application/zip',
-        dialogTitle: 'Export Song Bundle',
+        dialogTitle: 'Export file',
         allowedExtensions: const ['mzbundle'],
         writeTemporaryFile: ({required bytes, required fileName}) async =>
             '/tmp/$fileName',

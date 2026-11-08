@@ -170,8 +170,8 @@ mode. Free remains savable, loadable, and playable for exploration on the
 instrument. Writer accepts only Chord mode with a nonempty valid selection
 and at most one position per string; changing modes does not silently delete
 duplicate-string notes. Free is excluded from Writer handoff, saved-source
-reuse, linked editing, playback, and import into Song. Free-to-melody conversion
-is outside this phase.
+reuse, linked editing, and playback. Free-to-melody conversion is outside this
+phase.
 
 In the save browser, **Use in Writer** explicitly links that
 existing project-root save to a selected Writer section and placement without
