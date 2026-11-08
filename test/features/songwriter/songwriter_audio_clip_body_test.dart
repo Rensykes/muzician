@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/features/song/song_audio_clip_body.dart';
+import 'package:muzician/features/songwriter/songwriter_audio_clip_body.dart';
 import 'package:muzician/models/app_theme_variant.dart';
 import 'package:muzician/theme/studio_theme.dart';
 

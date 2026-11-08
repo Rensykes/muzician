@@ -4,17 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/studio_theme.dart';
 
-class SongAudioPickerSheet extends ConsumerWidget {
-  final String trackId;
-  final int startTick;
+class SongwriterAudioPickerSheet extends ConsumerWidget {
   final bool recordSupported;
   final VoidCallback onRecord;
   final VoidCallback onImport;
 
-  const SongAudioPickerSheet({
+  const SongwriterAudioPickerSheet({
     super.key,
-    required this.trackId,
-    required this.startTick,
     required this.onRecord,
     required this.onImport,
     bool? recordSupported,

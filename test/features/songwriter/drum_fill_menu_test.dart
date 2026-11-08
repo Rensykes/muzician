@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/features/song/drum_machine_editor.dart';
+import 'package:muzician/features/songwriter/drum_machine_editor.dart';
 import 'package:muzician/models/song_project.dart';
 
 DrumPattern _emptyPattern() => const DrumPattern(
@@ -51,8 +51,7 @@ void main() {
     await tester.tap(find.byKey(const Key('fillEvery_4')));
     await tester.pumpAndSettle();
 
-    final kick =
-        captured!.lanes.firstWhere((l) => l.laneId == DrumLaneId.kick);
+    final kick = captured!.lanes.firstWhere((l) => l.laneId == DrumLaneId.kick);
     expect(kick.activeTicks, [0, 4, 8, 12]);
   });
 
@@ -68,8 +67,9 @@ void main() {
     await tester.tap(find.byKey(const Key('fillEuclidApply')));
     await tester.pumpAndSettle();
 
-    final snare =
-        captured!.lanes.firstWhere((l) => l.laneId == DrumLaneId.snare);
+    final snare = captured!.lanes.firstWhere(
+      (l) => l.laneId == DrumLaneId.snare,
+    );
     // 3 hits over 16 ticks → Bjorklund spacing 5,5,6.
     expect(snare.activeTicks, [0, 5, 10]);
   });

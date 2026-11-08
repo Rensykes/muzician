@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/features/song/drum_library_sheet.dart';
-import 'package:muzician/features/song/drum_machine_editor.dart';
+import 'package:muzician/features/songwriter/drum_library_sheet.dart';
+import 'package:muzician/features/songwriter/drum_machine_editor.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/schema/rules/drum_presets.dart';
 
@@ -96,7 +96,9 @@ void main() {
     expect(find.byKey(const Key('drumLibraryButton')), findsNothing);
   });
 
-  testWidgets('My Loops button shows when enableLibrary is true', (tester) async {
+  testWidgets('My Loops button shows when enableLibrary is true', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(

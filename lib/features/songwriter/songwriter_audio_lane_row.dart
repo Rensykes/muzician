@@ -10,7 +10,7 @@ import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
-import '../song/song_audio_clip_body.dart';
+import 'songwriter_audio_clip_body.dart';
 import 'songwriter_block_preview.dart';
 import 'songwriter_audio_actions.dart';
 import 'songwriter_audio_clip_sheet.dart';

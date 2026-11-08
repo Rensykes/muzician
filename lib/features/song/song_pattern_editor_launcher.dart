@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/song_project.dart';
 import '../../theme/studio_theme.dart';
-import 'drum_machine_editor.dart';
+import '../songwriter/drum_machine_editor.dart';
 import 'song_note_pattern_editor.dart';
 
 /// Opens the pattern editor for [clip].

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/features/song/song_audio_picker_sheet.dart';
+import 'package:muzician/features/songwriter/songwriter_audio_picker_sheet.dart';
 
 void main() {
   testWidgets('shows Record audio and Import audio entries', (tester) async {
@@ -11,9 +11,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            body: SongAudioPickerSheet(
-              trackId: 't1',
-              startTick: 0,
+            body: SongwriterAudioPickerSheet(
               recordSupported: true,
               onRecord: () => recordTapped = true,
               onImport: () => importTapped = true,
@@ -36,9 +34,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            body: SongAudioPickerSheet(
-              trackId: 't1',
-              startTick: 0,
+            body: SongwriterAudioPickerSheet(
               recordSupported: false,
               onRecord: () {},
               onImport: () {},

@@ -17,7 +17,7 @@ import '../../store/song_audio_repository.dart';
 import '../../store/songwriter_audio_recorder_store.dart'
     show SongwriterRecordMonitor;
 import '../../store/songwriter_store.dart';
-import '../song/song_audio_picker_sheet.dart';
+import 'songwriter_audio_picker_sheet.dart';
 import 'songwriter_audio_recorder_sheet.dart';
 
 /// Opens the record/import picker for an audio lane and commits the result as
@@ -32,9 +32,7 @@ Future<void> showSongwriterAudioPicker(
 }) async {
   await showStudioModalBottomSheet<void>(
     context: context,
-    builder: (context) => SongAudioPickerSheet(
-      trackId: '',
-      startTick: 0,
+    builder: (context) => SongwriterAudioPickerSheet(
       onRecord: () async {
         Navigator.of(context).pop();
         final project = ref.read(songwriterProvider);

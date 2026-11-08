@@ -15,7 +15,7 @@ import '../../store/songwriter_store.dart';
 import '../../store/songwriter_stretch_controller.dart';
 import '../../theme/studio_theme.dart';
 import '../../utils/note_utils.dart';
-import '../song/song_audio_clip_body.dart';
+import 'songwriter_audio_clip_body.dart';
 import '../_mockup_shell.dart' show showWidgetSheet;
 import 'harmony_chord_sheet.dart';
 import 'songwriter_audio_lane_row.dart' show fitGlyph;

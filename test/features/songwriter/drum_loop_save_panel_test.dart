@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:muzician/features/song/drum_loop_save_panel.dart';
+import 'package:muzician/features/songwriter/drum_loop_save_panel.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/store/save_system_store.dart';
@@ -14,7 +14,9 @@ DrumPattern _pattern() => const DrumPattern(
   id: 'd1',
   name: 'Beat',
   lengthTicks: 16,
-  lanes: [DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0])],
+  lanes: [
+    DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: [0]),
+  ],
 );
 
 Future<void> _pump(WidgetTester tester, ProviderContainer container) async {
@@ -23,10 +25,7 @@ Future<void> _pump(WidgetTester tester, ProviderContainer container) async {
       container: container,
       child: MaterialApp(
         home: Scaffold(
-          body: DrumLoopSavePanel(
-            currentPattern: _pattern(),
-            onApply: (_) {},
-          ),
+          body: DrumLoopSavePanel(currentPattern: _pattern(), onApply: (_) {}),
         ),
       ),
     ),
