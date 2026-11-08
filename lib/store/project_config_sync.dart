@@ -15,7 +15,6 @@ import '../store/fretboard_store.dart';
 import '../store/piano_roll_store.dart';
 import '../store/piano_store.dart';
 import '../store/save_system_store.dart';
-import '../store/song_project_store.dart';
 import '../store/songwriter_store.dart';
 import '../utils/note_utils.dart';
 
@@ -98,18 +97,6 @@ void _apply(Ref ref, SaveFolder? folder) {
   ref.read(pianoRollActiveScaleProvider.notifier).state = activeScale;
   ref.read(pianoRollPendingScaleProvider.notifier).state = null;
 
-  // Song
-  final song = ref.read(songProjectProvider.notifier);
-  song.syncProjectConfig(
-    tempo: cfg.tempo,
-    timeSignature: TimeSignature(
-      beatsPerMeasure: cfg.beatsPerBar,
-      beatUnit: cfg.beatUnit,
-    ),
-    scaleRoot: keyString,
-    scaleName: cfg.keyScaleName,
-  );
-
   // Songwriter
   final writer = ref.read(songwriterProvider.notifier);
   writer.syncProjectConfig(
@@ -134,17 +121,6 @@ void _clearProjectKeyContext(Ref ref) {
   roll.setHighlightedNotes(const []);
   ref.read(pianoRollActiveScaleProvider.notifier).state = null;
   ref.read(pianoRollPendingScaleProvider.notifier).state = null;
-
-  final songState = ref.read(songProjectProvider);
-  final songConfig = songState.config;
-  ref
-      .read(songProjectProvider.notifier)
-      .syncProjectConfig(
-        tempo: songConfig.tempo,
-        timeSignature: songConfig.timeSignature,
-        scaleRoot: null,
-        scaleName: null,
-      );
 
   final writerConfig = ref.read(songwriterProvider).config;
   ref

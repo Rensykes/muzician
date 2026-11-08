@@ -432,8 +432,6 @@ class _SaveBrowserPanelState extends ConsumerState<SaveBrowserPanel> {
           : s.notes.map((n) => n.pitchClass).toSet().toList();
       selectedNotes = colNotes;
       highlightedNotes = s.highlightedNotes;
-    } else if (widget.instrumentFilter == 'song') {
-      return ['Song Project'];
     } else {
       return [];
     }
@@ -1523,8 +1521,6 @@ class _SaveRowState extends State<_SaveRow>
       ? '🎼'
       : widget.save.snapshot.instrument == 'writer_block'
       ? '🎵'
-      : widget.save.snapshot.instrument == 'song'
-      ? '🎵'
       : widget.save.snapshot.instrument == 'piano'
       ? '🎹'
       : widget.save.snapshot.instrument == 'piano_roll'
@@ -1894,9 +1890,7 @@ class _SaveExpandedDetails extends StatelessWidget {
             height: 12,
             thickness: 0.5,
           ),
-          if (save.snapshot is SongProjectSnapshot)
-            _buildSongSummary(context, save.snapshot as SongProjectSnapshot)
-          else if (save.snapshot is WriterBlockSnapshot)
+          if (save.snapshot is WriterBlockSnapshot)
             _buildWriterBlockSummary(
               context,
               save.snapshot as WriterBlockSnapshot,
@@ -2031,24 +2025,6 @@ class _SaveExpandedDetails extends StatelessWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildSongSummary(BuildContext context, SongProjectSnapshot snap) {
-    final trackCount = snap.project.tracks.length;
-    final clipCount = snap.project.clips.length;
-    final patternCount =
-        snap.project.notePatterns.length + snap.project.drumPatterns.length;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
-      child: Text(
-        '$trackCount tracks · $clipCount clips · $patternCount patterns',
-        style: TextStyle(
-          color: StudioPalette.of(context).emerald,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }

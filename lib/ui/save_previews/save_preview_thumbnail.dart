@@ -7,7 +7,6 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../models/save_system.dart';
-import '../../models/song_project.dart';
 import '../../theme/studio_theme.dart';
 
 const double kSavePreviewWidth = 64;
@@ -54,7 +53,6 @@ class SavePreviewThumbnail extends StatelessWidget {
     if (snap is PianoSnapshot) return _PianoMiniPainter(snap, palette);
     if (snap is FretboardSnapshot) return _FretboardMiniPainter(snap, palette);
     if (snap is PianoRollSnapshot) return _PianoRollMiniPainter(snap, palette);
-    if (snap is SongProjectSnapshot) return _SongMiniPainter(snap, palette);
     return null;
   }
 }
@@ -316,85 +314,5 @@ class _PianoRollMiniPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PianoRollMiniPainter oldDelegate) =>
-      oldDelegate.palette != palette || oldDelegate.snapshot != snapshot;
-}
-
-// ─── Song project mini ──────────────────────────────────────────────────────
-
-class _SongMiniPainter extends CustomPainter {
-  final SongProjectSnapshot snapshot;
-  _SongMiniPainter(this.snapshot, this.palette);
-  final StudioPalette palette;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final project = snapshot.project;
-    final maxTracks = 4;
-    final orderedTracks = [...project.tracks]
-      ..sort((a, b) => a.order.compareTo(b.order));
-    final shown = orderedTracks.take(maxTracks).toList();
-    if (shown.isEmpty) {
-      _paintEmpty(canvas, size);
-      return;
-    }
-
-    final laneHeight = size.height / maxTracks;
-    final measureTicks = 16;
-    final totalTicks = (project.config.totalMeasures * measureTicks).clamp(
-      1,
-      1 << 30,
-    );
-
-    final patternLengths = <String, int>{};
-    for (final p in project.notePatterns) {
-      patternLengths[p.id] = p.lengthTicks;
-    }
-    for (final p in project.drumPatterns) {
-      patternLengths[p.id] = p.lengthTicks;
-    }
-
-    for (var i = 0; i < shown.length; i++) {
-      final track = shown[i];
-      final laneTop = i * laneHeight;
-      final laneRect = Rect.fromLTWH(0, laneTop, size.width, laneHeight - 1);
-      canvas.drawRect(
-        laneRect,
-        Paint()..color = Colors.white.withValues(alpha: 0.04),
-      );
-
-      final color = track.type == SongTrackType.note
-          ? palette.sky
-          : palette.orange;
-      final clips = project.clips.where((c) => c.trackId == track.id);
-      for (final clip in clips) {
-        final length = patternLengths[clip.patternId] ?? measureTicks;
-        final left = clip.startTick / totalTicks * size.width;
-        final right = (clip.startTick + length) / totalTicks * size.width;
-        final rect = Rect.fromLTRB(
-          left.clamp(0, size.width - 1),
-          laneTop + 2,
-          right.clamp(left + 1, size.width),
-          laneTop + laneHeight - 3,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(2)),
-          Paint()..color = color.withValues(alpha: 0.55),
-        );
-      }
-    }
-  }
-
-  void _paintEmpty(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.06)
-      ..strokeWidth = 0.5;
-    final step = size.height / 4;
-    for (var i = 1; i < 4; i++) {
-      canvas.drawLine(Offset(0, step * i), Offset(size.width, step * i), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SongMiniPainter oldDelegate) =>
       oldDelegate.palette != palette || oldDelegate.snapshot != snapshot;
 }

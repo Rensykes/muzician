@@ -235,7 +235,9 @@ deserialiseState(String raw) {
         .map((f) => SaveFolder.fromJson(f as Map<String, dynamic>))
         .toList();
     final saves = (parsed['saves'] as List)
-        .map((s) => SaveEntry.fromJson(s as Map<String, dynamic>))
+        .cast<Map<String, dynamic>>()
+        .where((save) => !_isRemovedSongSave(save))
+        .map(SaveEntry.fromJson)
         .toList();
     final writerLinks =
         (parsed['writerLinks'] as List?)
@@ -254,6 +256,12 @@ deserialiseState(String raw) {
   } catch (_) {
     return null;
   }
+}
+
+bool _isRemovedSongSave(Map<String, dynamic> save) {
+  final snapshot = save['snapshot'];
+  if (snapshot is! Map) return false;
+  return snapshot['type'] == 'song' || snapshot['instrument'] == 'song';
 }
 
 List<SaveFolder> getProjectFolders(List<SaveFolder> folders) {

@@ -6,7 +6,6 @@ import 'package:muzician/store/piano_roll_store.dart';
 import 'package:muzician/store/piano_store.dart';
 import 'package:muzician/store/project_config_sync.dart';
 import 'package:muzician/store/save_system_store.dart';
-import 'package:muzician/store/song_project_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -73,7 +72,6 @@ void main() {
       expect(container.read(pianoRollActiveScaleProvider), isNull);
       expect(container.read(pianoRollPendingScaleProvider), isNull);
       expect(container.read(songwriterProvider).config.keyRoot, isNull);
-      expect(container.read(songProjectProvider).config.scaleRoot, isNull);
     },
   );
 
@@ -103,7 +101,6 @@ void main() {
       ));
       expect(container.read(pianoRollProvider).config.key, 'G');
       expect(container.read(songwriterProvider).config.keyRoot, 7);
-      expect(container.read(songProjectProvider).config.scaleRoot, 'G');
     },
   );
 
@@ -129,6 +126,5 @@ void main() {
     expect(container.read(pianoRollProvider).config.key, isNull);
     expect(container.read(pianoRollProvider).highlightedNotes, isEmpty);
     expect(container.read(songwriterProvider).config.keyRoot, isNull);
-    expect(container.read(songProjectProvider).config.scaleRoot, isNull);
   });
 }

@@ -24,7 +24,6 @@ import '../_mockup_shell.dart' show showWidgetSheet, showPickerSheet;
 import 'song_arranger_timeline.dart';
 import 'song_clip_action_bar.dart';
 import 'song_import_picker_sheet.dart';
-import 'song_save_panel.dart';
 
 class SongScreen extends ConsumerStatefulWidget {
   const SongScreen({super.key});
@@ -133,14 +132,6 @@ class _SongScreenState extends ConsumerState<SongScreen> {
                       color: MuzicianTheme.sky,
                     ),
                     onPressed: () => _showAddTrackSheet(context),
-                  ),
-                  IconButton(
-                    tooltip: 'Save / Load',
-                    icon: const Icon(
-                      Icons.save_outlined,
-                      color: MuzicianTheme.sky,
-                    ),
-                    onPressed: () => _showSavePanel(context),
                   ),
                   PopupMenuButton<String>(
                     key: _coachKeys.overflow,
@@ -440,24 +431,6 @@ class _SongScreenState extends ConsumerState<SongScreen> {
           ),
         );
       },
-    );
-  }
-
-  void _showSavePanel(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: MuzicianTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => SongSavePanel(),
-      ),
     );
   }
 

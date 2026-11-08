@@ -82,9 +82,6 @@ abstract class InstrumentSnapshot {
     if (type == 'piano_roll' || instrument == 'piano_roll') {
       return PianoRollSnapshot.fromJson(json);
     }
-    if (type == 'song' || instrument == 'song') {
-      return SongProjectSnapshot.fromJson(json);
-    }
     if (instrument == 'piano') {
       return PianoSnapshot.fromJson(json);
     }
@@ -476,40 +473,6 @@ class PianoRollSnapshot extends InstrumentSnapshot {
           : null,
     );
   }
-}
-
-class SongProjectSnapshot extends InstrumentSnapshot {
-  @override
-  String get instrument => 'song';
-
-  final SongProject project;
-
-  SongProjectSnapshot({required this.project});
-
-  @override
-  List<String> get selectedNotes => project.notePatterns
-      .expand((pattern) => pattern.notes)
-      .map((note) => pr_rules.midiToPitchClass(note.midiNote))
-      .toSet()
-      .toList();
-
-  @override
-  PendingChord? get pendingChord => null;
-
-  @override
-  PendingScale? get pendingScale => null;
-
-  @override
-  Map<String, dynamic> toJson() => {
-    'type': 'song',
-    'instrument': 'song',
-    'project': project.toJson(),
-  };
-
-  factory SongProjectSnapshot.fromJson(Map<String, dynamic> json) =>
-      SongProjectSnapshot(
-        project: SongProject.fromJson(json['project'] as Map<String, dynamic>),
-      );
 }
 
 /// A single reusable drum [DrumPattern] saved to the library. Loaded loops are

@@ -1,14 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/project_config.dart';
-import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/schema/rules/song_rules.dart';
 import 'package:muzician/store/project_config_sync.dart';
 import 'package:muzician/store/save_system_store.dart';
-import 'package:muzician/store/song_project_store.dart';
-import 'package:muzician/store/song_sessions_store.dart';
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,7 +24,7 @@ void main() {
         keyRootPc: 0,
         keyScaleName: 'major',
       );
-      final projectId = saveSystem.createProject('Song', authoritative)!;
+      final projectId = saveSystem.createProject('Writer', authoritative)!;
       saveSystem.selectProject(projectId);
 
       final writerSessions = container.read(
@@ -47,24 +42,9 @@ void main() {
           ),
         ),
       );
-      final songSessions = container.read(songSessionsProvider.notifier);
-      final emptySong = getDefaultSongProject();
-      songSessions.put(
-        projectId,
-        emptySong.copyWith(
-          config: emptySong.config.copyWith(
-            tempo: 137,
-            timeSignature: const TimeSignature(beatsPerMeasure: 3, beatUnit: 4),
-            scaleRoot: () => 'D',
-            scaleName: () => 'minor',
-          ),
-        ),
-      );
 
       final writer = container.read(songwriterProvider.notifier);
-      final song = container.read(songProjectProvider.notifier);
       expect(container.read(songwriterProvider).config.tempo, 137);
-      expect(container.read(songProjectProvider).config.tempo, 137);
 
       container.read(projectConfigSyncProvider);
       await Future<void>.delayed(Duration.zero);
@@ -74,13 +54,7 @@ void main() {
       expect(writerConfig.beatsPerBar, 4);
       expect(writerConfig.keyRoot, 0);
       expect(writerConfig.keyScaleName, 'major');
-      final songConfig = container.read(songProjectProvider).config;
-      expect(songConfig.tempo, 120);
-      expect(songConfig.timeSignature.beatsPerMeasure, 4);
-      expect(songConfig.scaleRoot, 'C');
-      expect(songConfig.scaleName, 'major');
       expect(writer.canUndo, isFalse);
-      expect(song.canUndo, isFalse);
     },
   );
 
@@ -95,22 +69,18 @@ void main() {
         keyRootPc: 0,
         keyScaleName: 'major',
       );
-      final projectId = saveSystem.createProject('Song', initial)!;
+      final projectId = saveSystem.createProject('Writer', initial)!;
       saveSystem.selectProject(projectId);
       container.read(projectConfigSyncProvider);
       await Future<void>.delayed(Duration.zero);
 
       final writer = container.read(songwriterProvider.notifier);
-      final song = container.read(songProjectProvider.notifier);
       writer.addSection(label: 'Verse', lengthBars: 4);
-      song.addTrack(SongTrackType.note, name: 'Verse');
       expect(writer.canUndo, isTrue);
-      expect(song.canUndo, isTrue);
 
       saveSystem.updateProjectConfig(projectId, initial);
       await Future<void>.delayed(Duration.zero);
       expect(writer.canUndo, isTrue);
-      expect(song.canUndo, isTrue);
 
       const changed = ProjectConfig(
         tempo: 96,
@@ -125,20 +95,8 @@ void main() {
       expect(container.read(songwriterProvider).config.tempo, 96);
       expect(container.read(songwriterProvider).config.beatsPerBar, 3);
       expect(container.read(songwriterProvider).config.keyRoot, 2);
-      expect(container.read(songProjectProvider).config.tempo, 96);
-      expect(
-        container
-            .read(songProjectProvider)
-            .config
-            .timeSignature
-            .beatsPerMeasure,
-        3,
-      );
-      expect(container.read(songProjectProvider).config.scaleRoot, 'D');
       expect(writer.canUndo, isFalse);
-      expect(song.canUndo, isFalse);
       expect(writer.undo(), isFalse);
-      expect(song.undo(), isFalse);
     },
   );
 }

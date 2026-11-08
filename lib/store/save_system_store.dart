@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/piano_roll.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
 import '../models/songwriter.dart';
@@ -691,21 +690,6 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
                 scaleName: cfg.keyScaleName!,
               ),
       );
-    }
-    if (snap is SongProjectSnapshot) {
-      final project = snap.project.copyWith(
-        config: snap.project.config.copyWith(
-          tempo: cfg.tempo,
-          timeSignature: TimeSignature(
-            beatsPerMeasure: cfg.beatsPerBar,
-            beatUnit: cfg.beatUnit,
-          ),
-          scaleRoot: () =>
-              cfg.keyRootPc == null ? null : chromaticNotes[cfg.keyRootPc!],
-          scaleName: () => cfg.keyScaleName,
-        ),
-      );
-      return SongProjectSnapshot(project: project);
     }
     if (snap is SongwriterProjectSnapshot) {
       return snap.copyWith(
