@@ -37,10 +37,9 @@ import 'store/settings_store.dart';
 import 'ui/project_chip.dart';
 import 'ui/app_navigation.dart';
 import 'store/record_audio_session.dart';
-import 'store/song_audio_player_sink.dart';
 import 'store/song_audio_recorder_driver_impl.dart';
 import 'store/song_audio_recorder_store.dart';
-import 'store/song_playback_store.dart';
+
 import 'store/songwriter_audio_sink.dart';
 import 'theme/studio_theme.dart';
 import 'models/app_theme_variant.dart';
@@ -59,9 +58,6 @@ void main() {
       overrides: [
         songAudioRecorderDriverProvider.overrideWith(
           (ref) => RecordPackageDriver(),
-        ),
-        songAudioClipSinkProvider.overrideWith(
-          (ref) => ref.watch(productionSongAudioClipSinkProvider),
         ),
         songwriterAudioClipSinkProvider.overrideWith(
           (ref) => ref.watch(productionSongwriterAudioClipSinkProvider),
@@ -103,7 +99,7 @@ class _AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<_AppShell> {
-  int _tabIndex = 4;
+  int _tabIndex = 3;
   final _workspaceStackKey = GlobalKey(debugLabel: 'workspaceStack');
   String? _linkedEditSaveId;
   String? _linkedEditProjectId;
@@ -246,21 +242,21 @@ class _AppShellState extends ConsumerState<_AppShell> {
         index: _tabIndex,
         children: [
           _FretboardScreen(
-            onHandoffCompleted: () => _setTab(4),
+            onHandoffCompleted: () => _setTab(3),
             linkedEditSaveId: _linkedEditProjectId == selectedProjectId
                 ? _linkedEditSaveId
                 : null,
             onDifferentSaveLoaded: _onInstrumentSaveLoaded,
           ),
           _PianoScreen(
-            onHandoffCompleted: () => _setTab(4),
+            onHandoffCompleted: () => _setTab(3),
             linkedEditSaveId: _linkedEditProjectId == selectedProjectId
                 ? _linkedEditSaveId
                 : null,
             onDifferentSaveLoaded: _onInstrumentSaveLoaded,
           ),
           const PianoRollScreenV2(),
-          const _UnavailableSongWorkspace(),
+
           SongwriterScreen(onEditInstrumentSave: _openLinkedSaveInInstrument),
           const _SettingsScreen(key: ValueKey('settings_screen')),
         ],
@@ -308,11 +304,8 @@ class _AppShellState extends ConsumerState<_AppShell> {
   }
 
   /// The diagnostics screen name for the tab currently shown in the shell.
-  ///
-  /// The disabled Song tab maps to `writer`, matching the rest of the app.
-  String _screenLabelForTab(int tabIndex) => tabIndex == songWorkspaceTabIndex
-      ? 'writer'
-      : tabIndex >= 0 && tabIndex < contentWorkspaceNames.length
+  String _screenLabelForTab(int tabIndex) =>
+      tabIndex >= 0 && tabIndex < contentWorkspaceNames.length
       ? contentWorkspaceNames[tabIndex]
       : 'settings';
 
@@ -335,23 +328,17 @@ class _AppShellState extends ConsumerState<_AppShell> {
       label: 'Roll',
       onTap: () => _setTab(2),
     ),
-    const AppNavDestination(
-      tabIndex: songWorkspaceTabIndex,
-      icon: Icons.article_outlined,
-      label: 'Song',
-      semanticHint: 'Temporarily unavailable',
+    AppNavDestination(
+      tabIndex: 3,
+      icon: Icons.edit_outlined,
+      label: 'Writer',
+      onTap: () => _setTab(3),
     ),
     AppNavDestination(
       tabIndex: 4,
-      icon: Icons.edit_outlined,
-      label: 'Writer',
-      onTap: () => _setTab(4),
-    ),
-    AppNavDestination(
-      tabIndex: 5,
       icon: Icons.settings_outlined,
       label: 'Settings',
-      onTap: () => _setTab(5),
+      onTap: () => _setTab(4),
       pinnedToBottom: true,
     ),
   ];
@@ -407,7 +394,6 @@ class _AppShellState extends ConsumerState<_AppShell> {
   }
 
   void _setTab(int index) {
-    if (index == songWorkspaceTabIndex) return;
     if (index != _tabIndex) {
       HapticFeedback.selectionClick();
       setState(() => _tabIndex = index);
@@ -603,20 +589,6 @@ class _StartupRecoveryPrompt extends StatelessWidget {
         ),
       ),
     ],
-  );
-}
-
-class _UnavailableSongWorkspace extends StatelessWidget {
-  const _UnavailableSongWorkspace();
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: Text(
-        'Temporarily unavailable',
-        style: TextStyle(color: StudioPalette.of(context).textSecondary),
-      ),
-    ),
   );
 }
 

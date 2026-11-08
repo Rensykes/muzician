@@ -25,22 +25,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'Song preferences fall back without changing available workspace mappings',
-    () {
-      expect(contentWorkspaceTabForPreference('song'), 4);
-      expect(contentWorkspacePreferenceForTab(3), isNull);
-      for (final entry in {
-        0: 'fretboard',
-        1: 'piano',
-        2: 'roll',
-        4: 'writer',
-      }.entries) {
-        expect(contentWorkspaceTabForPreference(entry.value), entry.key);
-        expect(contentWorkspacePreferenceForTab(entry.key), entry.value);
-      }
-    },
-  );
+  test('removed Song preference falls back to Writer', () {
+    expect(contentWorkspaceTabForPreference('song'), 3);
+    expect(contentWorkspacePreferenceForTab(3), 'writer');
+    for (final entry in {
+      0: 'fretboard',
+      1: 'piano',
+      2: 'roll',
+      3: 'writer',
+    }.entries) {
+      expect(contentWorkspaceTabForPreference(entry.value), entry.key);
+      expect(contentWorkspacePreferenceForTab(entry.key), entry.value);
+    }
+  });
 
   test(
     'startup replays a Writer journal before hydrating workspaces',
@@ -289,24 +286,15 @@ void main() {
   });
 
   test('content workspace preference mapping defaults to Writer', () {
-    expect(contentWorkspaceTabForPreference(null), 4);
-    expect(contentWorkspaceTabForPreference('unknown'), 4);
-    expect(contentWorkspaceNames, [
-      'fretboard',
-      'piano',
-      'roll',
-      'song',
-      'writer',
-    ]);
+    expect(contentWorkspaceTabForPreference(null), 3);
+    expect(contentWorkspaceTabForPreference('unknown'), 3);
+    expect(contentWorkspaceNames, ['fretboard', 'piano', 'roll', 'writer']);
     for (var tab = 0; tab < contentWorkspaceNames.length; tab++) {
       final workspace = contentWorkspaceNames[tab];
-      expect(contentWorkspaceTabForPreference(workspace), tab == 3 ? 4 : tab);
-      expect(
-        contentWorkspacePreferenceForTab(tab),
-        tab == 3 ? null : workspace,
-      );
+      expect(contentWorkspaceTabForPreference(workspace), tab);
+      expect(contentWorkspacePreferenceForTab(tab), workspace);
     }
-    expect(contentWorkspacePreferenceForTab(5), isNull);
+    expect(contentWorkspacePreferenceForTab(4), isNull);
   });
 
   test('content workspace selection persists through app settings', () async {
@@ -316,14 +304,14 @@ void main() {
 
     await container
         .read(settingsProvider.notifier)
-        .setLastContentWorkspace('song');
+        .setLastContentWorkspace('roll');
 
     final prefs = await SharedPreferences.getInstance();
     final settings = AppSettings.fromJson(
       (jsonDecode(prefs.getString('@muzician/settings/v1')!) as Map)
           .cast<String, dynamic>(),
     );
-    expect(settings.lastContentWorkspace, 'song');
+    expect(settings.lastContentWorkspace, 'roll');
   });
 
   test(

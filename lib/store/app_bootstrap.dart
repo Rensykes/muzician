@@ -27,26 +27,15 @@ import 'writer_save_sync_store.dart'
 /// so the bootstrap can run from the app shell and from tests.
 typedef ProviderReader = T Function<T>(ProviderListenable<T> provider);
 
-const contentWorkspaceNames = <String>[
-  'fretboard',
-  'piano',
-  'roll',
-  'song',
-  'writer',
-];
-
-const songWorkspaceTabIndex = 3;
+const contentWorkspaceNames = <String>['fretboard', 'piano', 'roll', 'writer'];
 
 int contentWorkspaceTabForPreference(String? workspace) {
   final index = contentWorkspaceNames.indexOf(workspace ?? 'writer');
-  if (index == songWorkspaceTabIndex) return 4;
-  return index < 0 ? 4 : index;
+  return index < 0 ? 3 : index;
 }
 
 String? contentWorkspacePreferenceForTab(int tabIndex) =>
-    tabIndex >= 0 &&
-        tabIndex < contentWorkspaceNames.length &&
-        tabIndex != songWorkspaceTabIndex
+    tabIndex >= 0 && tabIndex < contentWorkspaceNames.length
     ? contentWorkspaceNames[tabIndex]
     : null;
 
