@@ -119,7 +119,7 @@ A `uid already exists` error is treated as success.
 | `appVersion` | string | from `package_info_plus`, e.g. `2.0.0+2` |
 | `platform` | string | `web` or `android` |
 | `osVersion` | string | best effort, `unknown` fallback |
-| `screen` | string | call-site label, e.g. `settings` |
+| `screen` | string | call-site label, e.g. `Settings` |
 | `locale` | string | e.g. `en` |
 | `createdAt` | timestamp | must equal `request.time` |
 | `clientSessionId` | string | uuid v4 regenerated on each app launch |
@@ -127,6 +127,10 @@ A `uid already exists` error is treated as success.
 `osVersion`: on web parse the user agent into a coarse value (`Chrome 141 /
 macOS`, `Safari / iOS 18`); on Android use `Platform.operatingSystemVersion`.
 No device model, no advertising ID, no IP capture beyond what Firestore logs.
+
+The rules ceiling (16000) is deliberately larger than the client's 4000-rune
+cap: the client counts runes, and a rune may occupy up to 4 bytes, so a
+byte-counting rule at 8000 would reject a valid all-emoji message.
 
 ### Security rules
 
@@ -139,10 +143,10 @@ match /feedback/{docId} {
     && request.resource.data.schemaVersion == 1
     && request.resource.data.message is string
     && request.resource.data.message.size() > 0
-    && request.resource.data.message.size() <= 4000
+    && request.resource.data.message.size() <= 16000
     && request.resource.data.category in ['bug','idea','confusing','other']
     && request.resource.data.contact is string
-    && request.resource.data.contact.size() <= 200
+    && request.resource.data.contact.size() <= 800
     && request.resource.data.createdAt == request.time
     && request.resource.data.clientSessionId is string
     && request.resource.data.clientSessionId.size() <= 40;
@@ -245,25 +249,23 @@ can't be sent, sent state, failure keeps text), and
 `test/utils/feedback_service_test.dart` for the entry validation that rules
 and client share.
 
-## Set-up the owner must run
+## Setup and ownership
 
-1. Enable Firestore (Native mode) on `muzician-b0953` in location `eur3`
-   (Europe multi-region). Permanent once created.
-2. `flutterfire configure --platforms=web,android` to generate
-   `lib/firebase_options.dart`, `android/app/google-services.json`, and the
-   Gradle plugin wiring.
-3. Add the privacy policy URL to the Play listing and complete Data safety.
+Provisioned and verified: the Firestore Native database `(default)` on
+`muzician-b0953` in `eur3` (Europe multi-region, permanent once created);
+`firestore.rules` deployed with
+`firebase deploy --only firestore:rules --project muzician-b0953`; FlutterFire
+generated `lib/firebase_options.dart`, `android/app/google-services.json` and
+the Gradle wiring for web and Android; `INTERNET` added to the release Android
+manifest.
 
-Steps 1–2 need the owner's Google account; the CLI is already logged in as
-`bytebakehouseinc@gmail.com`.
+Public contact address on `/privacy`, in the sheet, and in the Play "request
+deletion" answer: `bytebakehouseinc@gmail.com`.
 
-## Resolved with the owner
-
-- Public contact address on `/privacy`, in the sheet, and in the Play
-  "request deletion" answer: `bytebakehouseinc@gmail.com`.
-- The builder runs the two console steps (Firestore database in `eur3`,
-  `flutterfire configure`); anything that needs an interactive Google login
-  is handed back rather than worked around.
+Owner-only and still open: add the `/privacy` URL to the Play listing and
+complete the Data safety form using the answers in `docs/feedback.md`.
+Interactive Google logins are handed back to the owner rather than worked
+around.
 
 ## Success check
 
@@ -272,7 +274,7 @@ Steps 1–2 need the owner's Google account; the CLI is already logged in as
 - Android release build: `INTERNET` present in the merged manifest; send
   succeeds on Wi-Fi; airplane mode keeps the text across a relaunch, and
   Retry succeeds once reconnected.
-- Rules: an unauthenticated client cannot read the collection; a 5000-char
+- Rules: an unauthenticated client cannot read the collection; a 20000-character
   message and an unknown category are rejected.
 - `flutter analyze` clean; the new tests pass.
 - `dart format` clean on every touched file.

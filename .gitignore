@@ -47,3 +47,7 @@ app.*.map.json
 
 # Superpowers SDD scratch workspace
 .superpowers/
+
+# Firebase CLI
+.firebase/
+firebase-debug.log
