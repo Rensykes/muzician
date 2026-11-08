@@ -120,8 +120,9 @@ class SongwriterAudioAuditionNotifier
       final notes = bed.notesByTick[tick];
       if (notes != null && notes.isNotEmpty) noteSink(notes, 1.0, 0.0);
       final drums = bed.drumByTick[tick];
-      if (drums != null && drums.isNotEmpty)
+      if (drums != null && drums.isNotEmpty) {
         unawaited(drumSink(drums, 0.8, 0.0));
+      }
       await pacer.awaitBoundary(++elapsedTicks);
       if (_version != version) return;
       tick = (tick + 1) % loopTicks;

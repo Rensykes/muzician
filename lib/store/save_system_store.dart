@@ -45,7 +45,7 @@ class SaveSystemNotifier extends Notifier<SaveSystemState> {
   }
 
   Future<void> hydrate() async {
-    await _wipeRemovedSongAudioDir();
+    unawaited(_wipeRemovedSongAudioDir());
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(saveSystemStorageKey);
     if (existing != null) {

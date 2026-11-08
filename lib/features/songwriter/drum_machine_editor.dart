@@ -2,7 +2,7 @@
 ///
 /// A full-screen dialog with sticky lane labels, a scrollable step grid
 /// grouped by beat, and a beat-number header. Each step cell is tappable to
-/// toggle. Edits are applied immediately via [songProjectProvider].
+/// toggle. The body emits the full updated pattern through its callback.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,7 +15,6 @@ import '../../schema/rules/drum_presets.dart';
 import '../../store/drum_pattern_playback_store.dart';
 import 'drum_library_sheet.dart';
 import 'drum_loop_save_panel.dart';
-import '../../store/song_project_store.dart';
 import '../../theme/studio_theme.dart';
 import '../../ui/core/muzician_dialog.dart';
 import '../_mockup_shell.dart';
@@ -26,184 +25,11 @@ const double _kLaneHeight = 40;
 const double _kBeatGap = 4;
 const double _kLabelColumnWidth = 110;
 
-class DrumMachineEditor extends ConsumerStatefulWidget {
-  final String clipId;
-  final String patternId;
-
-  const DrumMachineEditor({
-    super.key,
-    required this.clipId,
-    required this.patternId,
-  });
-
-  @override
-  ConsumerState<DrumMachineEditor> createState() => _DrumMachineEditorState();
-}
-
-class _DrumMachineEditorState extends ConsumerState<DrumMachineEditor> {
-  @override
-  void dispose() {
-    // Stop the audition loop so it does not keep playing after the editor pops.
-    // Guarded: in widget tests the enclosing ProviderScope container can be
-    // torn down before this widget unmounts, which makes `ref` unusable.
-    try {
-      ref.read(drumPatternPlaybackProvider.notifier).stop();
-    } catch (_) {
-      // Provider container already disposed — nothing left to stop.
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = StudioPalette.of(context);
-    final patternId = widget.patternId;
-    final clipId = widget.clipId;
-    final project = ref.watch(songProjectProvider);
-    final pattern = project.drumPatterns.firstWhere((p) => p.id == patternId);
-    final usedCount = project.clips
-        .where((clip) => clip.patternId == patternId)
-        .length;
-    final timeSig = project.config.timeSignature;
-
-    return Scaffold(
-      backgroundColor: palette.scaffoldBg,
-      appBar: AppBar(
-        title: Text(pattern.name),
-        actions: [
-          TextButton(
-            onPressed: () {
-              ref
-                  .read(songProjectProvider.notifier)
-                  .makeClipPatternUnique(clipId);
-              Navigator.pop(context);
-            },
-            child: Text('Make unique', style: TextStyle(color: palette.sky)),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _MetaRow(
-            usedCount: usedCount,
-            stepCount: pattern.lengthTicks,
-            timeSig: timeSig,
-          ),
-          Expanded(
-            child: DrumMachineEditorBody(
-              pattern: pattern,
-              tempo: project.config.tempo,
-              beatUnit: timeSig.beatUnit,
-              onChanged: (updated) {
-                ref
-                    .read(songProjectProvider.notifier)
-                    .applyDrumPattern(patternId, updated);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetaRow extends StatelessWidget {
-  final int usedCount;
-  final int stepCount;
-  final TimeSignature timeSig;
-
-  const _MetaRow({
-    required this.usedCount,
-    required this.stepCount,
-    required this.timeSig,
-  });
-
-  int get _beatTicks => timeSig.ticksPerBeat;
-  int get _measureTicks => _beatTicks * timeSig.beatsPerMeasure;
-  String get _lengthLabel {
-    final measures = stepCount ~/ _measureTicks;
-    if (measures < 1) return '$stepCount steps';
-    if (measures == 1) return '1 measure';
-    return '$measures measures';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = StudioPalette.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-      child: Row(
-        children: [
-          _MetaChip(
-            icon: Icons.straighten,
-            label: _lengthLabel,
-            color: palette.sky,
-          ),
-          const SizedBox(width: 8),
-          _MetaChip(
-            icon: Icons.music_note,
-            label: '${timeSig.beatsPerMeasure}/${timeSig.beatUnit}',
-            color: palette.teal,
-          ),
-          const Spacer(),
-          Text(
-            'Used in $usedCount clips',
-            style: TextStyle(
-              color: palette.textMuted,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Source-agnostic drum machine editor body.
 ///
-/// Renders the same step grid + transport as [DrumMachineEditor] but reads
-/// from [pattern] and emits the full updated pattern via [onChanged]. Has no
-/// dependency on `songProjectProvider`, so it can be embedded by any feature
-/// that owns its own pattern storage (Songwriter, ad-hoc dialogs, etc.).
+/// Reads from [pattern] and emits the full updated pattern via [onChanged].
+/// It has no project-store dependency, so it can be embedded by any feature
+/// that owns its own pattern storage (Writer, ad-hoc dialogs, etc.).
 class DrumMachineEditorBody extends ConsumerStatefulWidget {
   const DrumMachineEditorBody({
     super.key,
