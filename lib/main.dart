@@ -37,8 +37,8 @@ import 'store/settings_store.dart';
 import 'ui/project_chip.dart';
 import 'ui/app_navigation.dart';
 import 'store/record_audio_session.dart';
-import 'store/song_audio_recorder_driver_impl.dart';
-import 'store/song_audio_recorder_store.dart';
+import 'store/audio_recorder_driver_impl.dart';
+import 'store/audio_recorder_core.dart';
 
 import 'store/songwriter_audio_sink.dart';
 import 'theme/studio_theme.dart';
@@ -56,7 +56,7 @@ void main() {
   runApp(
     ProviderScope(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWith(
+        audioRecorderDriverProvider.overrideWith(
           (ref) => RecordPackageDriver(),
         ),
         songwriterAudioClipSinkProvider.overrideWith(

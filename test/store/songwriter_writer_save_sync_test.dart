@@ -7,7 +7,7 @@ import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/project_config.dart';
 import 'package:muzician/models/save_system.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/save_system_rules.dart'
     show deserialiseState, saveSystemStorageKey, serialiseSaveSystemState;
@@ -18,7 +18,7 @@ import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/app_bootstrap.dart' show hydrateStores;
 import 'package:muzician/store/songwriter_sessions_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/store/writer_save_binding_store.dart';
 import 'package:muzician/store/writer_save_sync_store.dart'
     show
@@ -800,7 +800,7 @@ void main() {
     () async {
       final root = await Directory.systemTemp.createTemp('writer-lane-audio-');
       addTearDown(() => root.delete(recursive: true));
-      final repository = SongAudioRepository.testWith(rootDirectory: root);
+      final repository = AudioRepository.testWith(rootDirectory: root);
       final file = await repository.resolvePath('source-audio', 'wav');
       await file.writeAsBytes([1, 2, 3]);
       final container = ProviderContainer(

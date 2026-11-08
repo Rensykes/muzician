@@ -8,7 +8,7 @@ library;
 
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/song_project.dart';
+import '../models/arrangement_content.dart';
 import '../schema/rules/piano_roll_playback_rules.dart' as rules;
 import '../schema/rules/songwriter_playback_rules.dart'
     show SongwriterAuditionBed;

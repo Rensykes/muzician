@@ -4,7 +4,7 @@ library;
 import '../../models/fretboard.dart';
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/piano.dart';
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../models/songwriter.dart';
 import 'fretboard_rules.dart' show tunings;
 import 'piano_rules.dart' show pianoRanges;

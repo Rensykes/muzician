@@ -5,17 +5,10 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum SongAudioRecorderStatus {
-  idle,
-  countIn,
-  recording,
-  finalising,
-  ready,
-  error,
-}
+enum AudioRecorderStatus { idle, countIn, recording, finalising, ready, error }
 
 /// Abstraction over the real `record` package so tests can inject a fake.
-abstract class SongAudioRecorderDriver {
+abstract class AudioRecorderDriver {
   Future<bool> ensurePermission();
 
   /// Starts capture. [manageIosAudioSession] forwards to the `record` package's
@@ -27,10 +20,8 @@ abstract class SongAudioRecorderDriver {
   Future<void> dispose();
 }
 
-final songAudioRecorderDriverProvider = Provider<SongAudioRecorderDriver>((
-  ref,
-) {
+final audioRecorderDriverProvider = Provider<AudioRecorderDriver>((ref) {
   throw UnimplementedError(
-    'Override songAudioRecorderDriverProvider in real launches and tests',
+    'Override audioRecorderDriverProvider in real launches and tests',
   );
 });

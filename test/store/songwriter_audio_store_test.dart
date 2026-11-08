@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:muzician/models/song_project.dart' show AudioAsset;
+import 'package:muzician/models/arrangement_content.dart' show AudioAsset;
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
 void main() {
@@ -215,7 +215,7 @@ void main() {
       final tmp = await Directory.systemTemp.createTemp('sw_audio_gc_test_');
       addTearDown(() => tmp.delete(recursive: true));
 
-      final repo = SongAudioRepository.testWith(rootDirectory: tmp);
+      final repo = AudioRepository.testWith(rootDirectory: tmp);
       final container = ProviderContainer(
         overrides: [songwriterAudioRepositoryProvider.overrideWithValue(repo)],
       );
@@ -305,7 +305,7 @@ void main() {
     () async {
       final tmp = await Directory.systemTemp.createTemp('sw_stretch_gc_');
       addTearDown(() => tmp.delete(recursive: true));
-      final repo = SongAudioRepository.testWith(rootDirectory: tmp);
+      final repo = AudioRepository.testWith(rootDirectory: tmp);
       final container = ProviderContainer(
         overrides: [songwriterAudioRepositoryProvider.overrideWithValue(repo)],
       );

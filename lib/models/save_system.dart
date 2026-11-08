@@ -12,7 +12,7 @@ import 'harmony_lane_instrument.dart';
 import 'piano.dart';
 import 'piano_roll.dart';
 import 'project_config.dart';
-import 'song_project.dart';
+import 'arrangement_content.dart';
 import 'songwriter.dart';
 
 // ─── Musical Context ──────────────────────────────────────────────────────────

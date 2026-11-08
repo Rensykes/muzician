@@ -18,7 +18,7 @@ import 'package:muzician/models/app_theme_variant.dart';
 import 'package:muzician/models/piano_roll.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/models/project_config.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/store/save_system_store.dart';
 import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/piano_roll_store.dart';

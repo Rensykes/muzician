@@ -7,7 +7,7 @@ import 'package:muzician/features/songwriter/songwriter_melody_performance_edito
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/fretboard.dart' show TuningName;
 import 'package:muzician/models/piano.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/models/songwriter.dart' show FretboardNotePosition;
 import 'package:muzician/store/fretboard_store.dart';
 import 'package:muzician/store/piano_store.dart';

@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/piano_roll.dart';
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/piano_roll_rules.dart' as piano_roll_rules;
-import '../../schema/rules/song_pattern_bridge_rules.dart' as bridge;
+import '../../schema/rules/pattern_bridge_rules.dart' as bridge;
 import '../../schema/rules/songwriter_rules.dart'
     show melodyMaxBars, quantizeMelodyPatternLength;
 import '../../store/piano_roll_store.dart';

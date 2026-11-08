@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/utils/wav_writer.dart';
 
 void main() {
@@ -12,7 +12,7 @@ void main() {
   test(
     'writeStretched writes a wav whose duration matches the samples',
     () async {
-      final repo = SongAudioRepository.testWith(
+      final repo = AudioRepository.testWith(
         rootDirectory: tmp,
         subdir: 'songwriter_audio',
       );
@@ -31,7 +31,7 @@ void main() {
   );
 
   test('readInt16Samples round-trips written samples', () async {
-    final repo = SongAudioRepository.testWith(
+    final repo = AudioRepository.testWith(
       rootDirectory: tmp,
       subdir: 'songwriter_audio',
     );

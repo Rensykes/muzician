@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/guitar_sound.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/utils/guitar_synth.dart';
 import 'package:muzician/utils/note_player.dart';
 import 'package:muzician/utils/playback_voice_spec.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/save_system.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/models/songwriter.dart';
 
 void main() {

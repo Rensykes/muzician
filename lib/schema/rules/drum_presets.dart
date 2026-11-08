@@ -6,7 +6,7 @@
 /// applied preset fills the full editor grid.
 library;
 
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 
 class DrumPreset {
   final String name;
@@ -39,7 +39,24 @@ class DrumPreset {
 
 // Common hi-hat figures (sixteenth grid).
 const List<int> _eighths = [0, 2, 4, 6, 8, 10, 12, 14];
-const List<int> _sixteenths = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+const List<int> _sixteenths = [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+];
 const List<int> _backbeat = [4, 12];
 
 /// The built-in library, grouped by category in display order.

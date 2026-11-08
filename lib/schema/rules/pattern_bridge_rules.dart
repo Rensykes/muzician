@@ -1,25 +1,18 @@
-/// Song Pattern Bridge Rules
-/// Conversions between NotePattern (song domain) and PianoRollState (editor domain).
+/// Pattern Bridge Rules
+/// Conversions between NotePattern and PianoRollState (editor domain).
 library;
 
 import 'dart:math';
 import '../../models/piano_roll.dart';
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import 'piano_roll_rules.dart' as pr_rules;
 
 /// Converts a [NotePattern] into a [PianoRollState] suitable for seeding an
 /// isolated piano-roll editor.
-///
-/// If [songHighlightedNotes] is non-null and non-empty it overrides the
-/// pattern's own `highlightedNotes` — used by the Song workspace so every
-/// note pattern inherits the song-level scale.  When the song has no scale,
-/// the pattern's own highlight set is preserved as a fallback.
 PianoRollState pianoRollStateFromNotePattern(
   NotePattern pattern, {
   required int tempo,
   required TimeSignature timeSignature,
-  List<String>? songHighlightedNotes,
-  String? songKey,
 }) {
   final measureTicks = pr_rules.ticksPerMeasure(timeSignature);
   final totalMeasures = max(
@@ -40,15 +33,12 @@ PianoRollState pianoRollStateFromNotePattern(
     );
   }).toList();
 
-  final highlighted =
-      (songHighlightedNotes != null && songHighlightedNotes.isNotEmpty)
-      ? List<String>.from(songHighlightedNotes)
-      : List<String>.from(pattern.highlightedNotes);
+  final highlighted = List<String>.from(pattern.highlightedNotes);
 
   return PianoRollState(
     config: PianoRollConfig(
       tempo: tempo.clamp(pr_rules.minTempo, pr_rules.maxTempo),
-      key: songKey,
+      key: null,
       timeSignature: timeSignature,
       totalMeasures: totalMeasures,
     ),
@@ -69,10 +59,10 @@ PianoRollState pianoRollStateFromNotePattern(
 /// The pattern's [NotePattern.lengthTicks] keeps at least the previous saved
 /// length so trailing space and empty patterns are preserved, while still
 /// extending when edited notes reach further right.
-/// When the host (Song workspace) injects a song-scale highlight that doesn't
-/// belong to the pattern, pass the pattern's original highlight set via
-/// [highlightedNotesOverride] so the saved pattern keeps its own fallback
-/// rather than being overwritten with the inherited song scale.
+/// When the host injects a scale highlight that doesn't belong to the pattern,
+/// pass the pattern's original highlight set via [highlightedNotesOverride] so
+/// the saved pattern keeps its own fallback rather than being overwritten with
+/// the inherited scale.
 NotePattern notePatternFromPianoRollState(
   PianoRollState state, {
   required String patternId,

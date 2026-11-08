@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/piano_roll.dart';
-import 'package:muzician/models/song_project.dart';
-import 'package:muzician/schema/rules/song_pattern_bridge_rules.dart' as bridge;
+import 'package:muzician/models/arrangement_content.dart';
+import 'package:muzician/schema/rules/pattern_bridge_rules.dart' as bridge;
 
 void main() {
   test('pianoRollStateFromNotePattern preserves notes and range', () {

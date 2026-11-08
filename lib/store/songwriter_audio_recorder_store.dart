@@ -6,7 +6,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/song_project.dart' show AudioAsset;
+import '../models/arrangement_content.dart' show AudioAsset;
 import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../schema/rules/songwriter_audio_rules.dart'
     show SongwriterScheduledClip;
@@ -15,10 +15,10 @@ import '../schema/rules/songwriter_playback_rules.dart'
 import '../utils/note_player.dart';
 import '../utils/tick_pacer.dart';
 import 'drum_pattern_playback_store.dart';
-import 'song_audio_recorder_store.dart'
-    show SongAudioRecorderStatus, songAudioRecorderDriverProvider;
+import 'audio_recorder_core.dart'
+    show AudioRecorderStatus, audioRecorderDriverProvider;
 import 'record_audio_session.dart';
-import 'song_audio_repository.dart';
+import 'audio_repository.dart';
 import 'songwriter_audio_sink.dart';
 import 'songwriter_playback_store.dart';
 
@@ -63,16 +63,16 @@ class SongwriterRecordMonitor {
 }
 
 class SongwriterAudioRecorderState {
-  final SongAudioRecorderStatus status;
+  final AudioRecorderStatus status;
   final AudioAsset? pendingAsset;
   final String? errorMessage;
   const SongwriterAudioRecorderState({
-    this.status = SongAudioRecorderStatus.idle,
+    this.status = AudioRecorderStatus.idle,
     this.pendingAsset,
     this.errorMessage,
   });
   SongwriterAudioRecorderState copyWith({
-    SongAudioRecorderStatus? status,
+    AudioRecorderStatus? status,
     AudioAsset? Function()? pendingAsset,
     String? Function()? errorMessage,
   }) => SongwriterAudioRecorderState(
@@ -97,32 +97,31 @@ class SongwriterAudioRecorderNotifier
     SongwriterRecordMonitor? monitor,
   }) async {
     final st = state.status;
-    if (st != SongAudioRecorderStatus.idle &&
-        st != SongAudioRecorderStatus.error) {
+    if (st != AudioRecorderStatus.idle && st != AudioRecorderStatus.error) {
       return;
     }
     _cancelled = false;
-    final driver = ref.read(songAudioRecorderDriverProvider);
+    final driver = ref.read(audioRecorderDriverProvider);
     if (!await driver.ensurePermission()) {
       state = state.copyWith(
-        status: SongAudioRecorderStatus.error,
+        status: AudioRecorderStatus.error,
         errorMessage: () => 'Microphone permission denied',
       );
       return;
     }
     state = const SongwriterAudioRecorderState(
-      status: SongAudioRecorderStatus.countIn,
+      status: AudioRecorderStatus.countIn,
     );
     if (countInMs > 0 && countInBeats > 0) {
       final beat = Duration(milliseconds: (countInMs / countInBeats).round());
       for (var i = 0; i < countInBeats; i++) {
-        if (state.status != SongAudioRecorderStatus.countIn) return;
+        if (state.status != AudioRecorderStatus.countIn) return;
         NotePlayer.instance.playClick(accent: i == 0);
         await Future<void>.delayed(beat);
       }
     }
-    if (state.status != SongAudioRecorderStatus.countIn) return;
-    state = state.copyWith(status: SongAudioRecorderStatus.recording);
+    if (state.status != AudioRecorderStatus.countIn) return;
+    state = state.copyWith(status: AudioRecorderStatus.recording);
     final monitoring =
         monitor != null && (monitor.backing || monitor.metronome);
     try {
@@ -143,7 +142,7 @@ class SongwriterAudioRecorderNotifier
       // with the shared iOS session stuck in playAndRecord.
       _restoreRecordSession();
       state = state.copyWith(
-        status: SongAudioRecorderStatus.error,
+        status: AudioRecorderStatus.error,
         errorMessage: () => 'Recording failed: $e',
       );
       return;
@@ -245,10 +244,10 @@ class SongwriterAudioRecorderNotifier
   }
 
   Future<void> stop() async {
-    if (state.status != SongAudioRecorderStatus.recording) return;
-    state = state.copyWith(status: SongAudioRecorderStatus.finalising);
+    if (state.status != AudioRecorderStatus.recording) return;
+    state = state.copyWith(status: AudioRecorderStatus.finalising);
     _stopMonitor();
-    final driver = ref.read(songAudioRecorderDriverProvider);
+    final driver = ref.read(audioRecorderDriverProvider);
     try {
       final bytes = await driver.stop();
       final asset = await ref
@@ -262,12 +261,12 @@ class SongwriterAudioRecorderNotifier
         return;
       }
       state = state.copyWith(
-        status: SongAudioRecorderStatus.ready,
+        status: AudioRecorderStatus.ready,
         pendingAsset: () => asset,
       );
     } catch (e) {
       state = state.copyWith(
-        status: SongAudioRecorderStatus.error,
+        status: AudioRecorderStatus.error,
         errorMessage: () => 'Recording failed: $e',
       );
     } finally {
@@ -280,13 +279,13 @@ class SongwriterAudioRecorderNotifier
   Future<void> cancel() async {
     _cancelled = true;
     _stopMonitor();
-    if (state.status == SongAudioRecorderStatus.idle) {
+    if (state.status == AudioRecorderStatus.idle) {
       _restoreRecordSession();
       return;
     }
-    if (state.status == SongAudioRecorderStatus.recording) {
+    if (state.status == AudioRecorderStatus.recording) {
       try {
-        await ref.read(songAudioRecorderDriverProvider).stop();
+        await ref.read(audioRecorderDriverProvider).stop();
       } catch (_) {}
     }
     // Restore the playback-only session only after the recorder has released

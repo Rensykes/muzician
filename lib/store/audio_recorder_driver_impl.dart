@@ -1,4 +1,4 @@
-/// Production implementation of [SongAudioRecorderDriver] backed by the
+/// Production implementation of [AudioRecorderDriver] backed by the
 /// `record` package.  Always records mono WAV 16-bit at 44.1 kHz so the in-app
 /// peak/waveform pipeline can decode the bytes.
 library;
@@ -10,9 +10,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-import 'song_audio_recorder_store.dart';
+import 'audio_recorder_core.dart';
 
-class RecordPackageDriver implements SongAudioRecorderDriver {
+class RecordPackageDriver implements AudioRecorderDriver {
   final AudioRecorder _recorder = AudioRecorder();
   File? _currentFile;
 
@@ -22,7 +22,7 @@ class RecordPackageDriver implements SongAudioRecorderDriver {
   @override
   Future<void> start({bool manageIosAudioSession = true}) async {
     final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'song_audio_tmp'));
+    final dir = Directory(p.join(docs.path, 'writer_audio_tmp'));
     if (!dir.existsSync()) dir.createSync(recursive: true);
     final file = File(
       p.join(dir.path, 'rec_${DateTime.now().millisecondsSinceEpoch}.wav'),

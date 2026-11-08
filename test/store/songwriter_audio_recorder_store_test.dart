@@ -2,24 +2,22 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/models/song_project.dart' show AudioAsset, DrumLaneId;
+import 'package:muzician/models/arrangement_content.dart'
+    show AudioAsset, DrumLaneId;
 import 'package:muzician/schema/rules/songwriter_audio_rules.dart'
     show SongwriterScheduledClip;
 import 'package:muzician/store/drum_pattern_playback_store.dart';
 import 'package:muzician/store/record_audio_session.dart';
-import 'package:muzician/store/song_audio_recorder_store.dart'
-    show
-        SongAudioRecorderDriver,
-        SongAudioRecorderStatus,
-        songAudioRecorderDriverProvider;
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_recorder_core.dart'
+    show AudioRecorderDriver, AudioRecorderStatus, audioRecorderDriverProvider;
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/songwriter_audio_recorder_store.dart';
 import 'package:muzician/store/songwriter_audio_sink.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
 import 'package:muzician/utils/wav_writer.dart';
 
-class _FakeDriver implements SongAudioRecorderDriver {
+class _FakeDriver implements AudioRecorderDriver {
   bool started = false;
   bool? lastManageIosAudioSession;
   @override
@@ -82,9 +80,9 @@ void main() {
   test('record -> ready exposes a ~100ms asset', () async {
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -97,12 +95,12 @@ void main() {
     await n.start(countInMs: 0);
     expect(
       c.read(songwriterAudioRecorderProvider).status,
-      SongAudioRecorderStatus.recording,
+      AudioRecorderStatus.recording,
     );
     await n.stop();
     expect(
       c.read(songwriterAudioRecorderProvider).status,
-      SongAudioRecorderStatus.ready,
+      AudioRecorderStatus.ready,
     );
 
     final asset = n.consumePendingAsset();
@@ -110,7 +108,7 @@ void main() {
     expect(asset!.durationMs, inInclusiveRange(90, 110));
     expect(
       c.read(songwriterAudioRecorderProvider).status,
-      SongAudioRecorderStatus.idle,
+      AudioRecorderStatus.idle,
     );
   });
 
@@ -143,9 +141,9 @@ void main() {
     final clip = _FakeClipSink();
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -177,9 +175,9 @@ void main() {
     final clip = _FakeClipSink();
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -234,9 +232,9 @@ void main() {
     final clip = _FakeClipSink();
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -295,9 +293,9 @@ void main() {
     final notes = <List<int>>[];
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -326,9 +324,9 @@ void main() {
     final clip = _FakeClipSink();
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -349,7 +347,7 @@ void main() {
     expect(clip.stopAllCount, greaterThanOrEqualTo(1));
     expect(
       c.read(songwriterAudioRecorderProvider).status,
-      SongAudioRecorderStatus.ready,
+      AudioRecorderStatus.ready,
     );
   });
 
@@ -357,9 +355,9 @@ void main() {
     final clip = _FakeClipSink();
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -372,7 +370,7 @@ void main() {
     await n.start();
     expect(
       c.read(songwriterAudioRecorderProvider).status,
-      SongAudioRecorderStatus.recording,
+      AudioRecorderStatus.recording,
     );
     expect(clip.startCount, 0);
     await n.cancel();
@@ -384,9 +382,9 @@ void main() {
       final session = _FakeRecordSession();
       final c = ProviderContainer(
         overrides: [
-          songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+          audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
           songwriterAudioRepositoryProvider.overrideWithValue(
-            SongAudioRepository.testWith(
+            AudioRepository.testWith(
               rootDirectory: tmp,
               subdir: 'songwriter_audio',
             ),
@@ -417,9 +415,9 @@ void main() {
     final session = _FakeRecordSession();
     final c = ProviderContainer(
       overrides: [
-        songAudioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
+        audioRecorderDriverProvider.overrideWithValue(_FakeDriver()),
         songwriterAudioRepositoryProvider.overrideWithValue(
-          SongAudioRepository.testWith(
+          AudioRepository.testWith(
             rootDirectory: tmp,
             subdir: 'songwriter_audio',
           ),
@@ -442,9 +440,9 @@ void main() {
       final driver = _FakeDriver();
       final c = ProviderContainer(
         overrides: [
-          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          audioRecorderDriverProvider.overrideWithValue(driver),
           songwriterAudioRepositoryProvider.overrideWithValue(
-            SongAudioRepository.testWith(
+            AudioRepository.testWith(
               rootDirectory: tmp,
               subdir: 'songwriter_audio',
             ),
@@ -473,9 +471,9 @@ void main() {
       final driver = _FakeDriver();
       final c = ProviderContainer(
         overrides: [
-          songAudioRecorderDriverProvider.overrideWithValue(driver),
+          audioRecorderDriverProvider.overrideWithValue(driver),
           songwriterAudioRepositoryProvider.overrideWithValue(
-            SongAudioRepository.testWith(
+            AudioRepository.testWith(
               rootDirectory: tmp,
               subdir: 'songwriter_audio',
             ),

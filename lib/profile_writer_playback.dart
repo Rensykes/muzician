@@ -28,7 +28,7 @@ import 'models/harmony_lane_instrument.dart';
 import 'models/piano.dart';
 import 'models/project_config.dart';
 import 'models/save_system.dart';
-import 'models/song_project.dart';
+import 'models/arrangement_content.dart';
 import 'models/songwriter.dart';
 import 'features/_mockup_shell.dart' show ModeSegment;
 import 'features/fretboard/fretboard.dart'
@@ -46,8 +46,8 @@ import 'store/fretboard_store.dart';
 import 'store/piano_store.dart';
 import 'store/save_system_store.dart';
 import 'store/settings_store.dart';
-import 'store/song_audio_repository.dart';
-import 'store/song_audio_player_sink.dart';
+import 'store/audio_repository.dart';
+import 'store/audio_player_sink.dart';
 import 'store/drum_pattern_playback_store.dart';
 import 'store/songwriter_audio_sink.dart';
 import 'store/songwriter_playback_store.dart';
@@ -663,7 +663,7 @@ class _ProfilePianoNotifier extends PianoNotifier {
 /// This lets widget tests mount production pages without calling app bootstrap,
 /// SharedPreferences hydration, or the persistent audio repository.
 List<Override> buildWriterPlaybackProfileProviderOverrides({
-  required SongAudioRepository repository,
+  required AudioRepository repository,
   String scenario = _fixtureScenario,
 }) => [
   _profileScenarioProvider.overrideWith((ref) => scenario),
@@ -1034,7 +1034,7 @@ Future<void> main() async {
     ),
   );
   await runDirectory.create(recursive: true);
-  final repository = SongAudioRepository.testWith(
+  final repository = AudioRepository.testWith(
     rootDirectory: runDirectory,
     subdir: 'songwriter_audio',
   );

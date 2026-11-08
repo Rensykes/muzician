@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../theme/studio_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/song_project.dart' show AudioAsset;
+import '../../models/arrangement_content.dart' show AudioAsset;
 import '../../models/songwriter.dart' show AudioFitMode;
 import '../../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../../schema/rules/songwriter_audio_rules.dart';
@@ -13,7 +13,7 @@ import '../../schema/rules/songwriter_playback_rules.dart'
     show sectionAuditionBed;
 import '../../schema/rules/songwriter_rules.dart';
 import '../../store/save_system_store.dart';
-import '../../store/song_audio_repository.dart';
+import '../../store/audio_repository.dart';
 import '../../store/songwriter_audio_recorder_store.dart'
     show SongwriterRecordMonitor;
 import '../../store/songwriter_store.dart';

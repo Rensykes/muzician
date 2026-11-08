@@ -17,7 +17,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/guitar_sound.dart';
 import '../models/piano_roll.dart';
-import '../models/song_project.dart';
+import '../models/arrangement_content.dart';
 import 'guitar_synth.dart';
 import 'playback_voice_spec.dart';
 import 'playback_profiling.dart';

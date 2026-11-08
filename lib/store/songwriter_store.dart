@@ -12,7 +12,7 @@ import '../models/harmony_lane_instrument.dart';
 import '../models/piano.dart';
 import '../models/project_config.dart';
 import '../models/save_system.dart';
-import '../models/song_project.dart';
+import '../models/arrangement_content.dart';
 import '../models/songwriter.dart';
 import '../schema/rules/save_system_rules.dart';
 import '../schema/rules/fretboard_rules.dart' show tunings;

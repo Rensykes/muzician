@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/fretboard.dart';
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/piano.dart' show PianoRangeName;
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../models/songwriter.dart';
 import '../../schema/rules/fretboard_rules.dart' show tunings;
 import '../../schema/rules/piano_rules.dart' show pianoRanges;

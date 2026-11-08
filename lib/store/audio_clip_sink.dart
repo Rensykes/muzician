@@ -1,4 +1,4 @@
-import '../models/song_project.dart';
+import '../models/arrangement_content.dart';
 
 /// Sink for audio clips on audio lanes. The default implementation is a no-op
 /// so unit tests do not need to touch real audio playback; production code

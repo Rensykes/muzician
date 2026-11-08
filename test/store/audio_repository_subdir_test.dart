@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/utils/wav_writer.dart';
 
 void main() {
@@ -10,11 +10,11 @@ void main() {
   tearDown(() => tmp.deleteSync(recursive: true));
 
   test('subdir scopes files and reconcile to one feature', () async {
-    final songRepo = SongAudioRepository.testWith(
+    final defaultRepo = AudioRepository.testWith(
       rootDirectory: tmp,
-      subdir: 'song_audio',
+      subdir: 'writer_audio',
     );
-    final writerRepo = SongAudioRepository.testWith(
+    final writerRepo = AudioRepository.testWith(
       rootDirectory: tmp,
       subdir: 'songwriter_audio',
     );
@@ -24,10 +24,10 @@ void main() {
       sampleRate: 44100,
     );
 
-    final a = await songRepo.writeRecording(wav);
+    final a = await defaultRepo.writeRecording(wav);
     final b = await writerRepo.writeRecording(wav);
 
-    expect(File('${tmp.path}/song_audio/${a.id}.wav').existsSync(), isTrue);
+    expect(File('${tmp.path}/writer_audio/${a.id}.wav').existsSync(), isTrue);
     expect(
       File('${tmp.path}/songwriter_audio/${b.id}.wav').existsSync(),
       isTrue,
@@ -35,7 +35,7 @@ void main() {
 
     final result = await writerRepo.reconcileOrphans(referencedAssetIds: {});
     expect(result.deletedAssetIds, [b.id]);
-    expect(File('${tmp.path}/song_audio/${a.id}.wav').existsSync(), isTrue);
+    expect(File('${tmp.path}/writer_audio/${a.id}.wav').existsSync(), isTrue);
     expect(
       File('${tmp.path}/songwriter_audio/${b.id}.wav').existsSync(),
       isFalse,

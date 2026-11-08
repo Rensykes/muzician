@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/save_system.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 
 void main() {
   test('snapshot round-trips through InstrumentSnapshot.fromJson', () {

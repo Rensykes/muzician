@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:muzician/features/songwriter/drum_pattern_sheet.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
@@ -14,22 +14,24 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
-    container.read(songwriterProvider.notifier).loadProject(
-      const SongwriterProjectSnapshot(
-        name: 'demo',
-        config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
-        drumPatterns: [
-          DrumPattern(
-            id: 'p1',
-            name: 'Beat',
-            lengthTicks: 16,
-            lanes: [
-              DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: []),
+    container
+        .read(songwriterProvider.notifier)
+        .loadProject(
+          const SongwriterProjectSnapshot(
+            name: 'demo',
+            config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
+            drumPatterns: [
+              DrumPattern(
+                id: 'p1',
+                name: 'Beat',
+                lengthTicks: 16,
+                lanes: [
+                  DrumLaneSequence(laneId: DrumLaneId.kick, activeTicks: []),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
-    );
+        );
 
     await tester.pumpWidget(
       UncontrolledProviderScope(

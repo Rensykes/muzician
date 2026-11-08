@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/songwriter_audio_audition_store.dart';
 import 'package:muzician/store/songwriter_audio_sink.dart';
@@ -36,7 +36,7 @@ class _FakeSink implements AudioClipSink {
 
 void main() {
   // AudioAsset fields: id, durationMs, sampleRate, channels, format, peaks,
-  // sourceLabel (no 'path' field — verified against lib/models/song_project.dart).
+  // sourceLabel (no 'path' field — verified against lib/models/arrangement_content.dart).
   const asset = AudioAsset(
     id: 'a1',
     sourceLabel: 'take',

@@ -13,7 +13,7 @@ import 'package:muzician/profile_writer_playback.dart'
         verifyWriterPlaybackProfileFixtureVoices,
         verifyWriterPlaybackProfileFixtures;
 import 'package:muzician/store/save_system_store.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/settings_store.dart';
 
@@ -149,7 +149,7 @@ void main() {
       final runDirectory = (await tester.runAsync(
         () => Directory.systemTemp.createTemp('muzician-profile-view-'),
       ))!;
-      final repository = SongAudioRepository.testWith(
+      final repository = AudioRepository.testWith(
         rootDirectory: runDirectory,
         subdir: 'songwriter_audio',
       );

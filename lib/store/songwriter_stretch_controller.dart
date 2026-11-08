@@ -8,9 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/songwriter.dart';
 import '../schema/rules/audio_stretch_rules.dart';
-import '../schema/rules/song_audio_rules.dart' show downmixToMono;
+import '../schema/rules/audio_rules.dart' show downmixToMono;
 import '../schema/rules/songwriter_stretch_rules.dart';
-import 'song_audio_repository.dart';
+import 'audio_repository.dart';
 import 'songwriter_store.dart';
 
 /// Clip ids currently being (re)rendered.

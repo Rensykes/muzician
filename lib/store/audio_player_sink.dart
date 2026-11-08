@@ -10,11 +10,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/song_project.dart';
+import '../models/arrangement_content.dart';
 import '../utils/playback_profiling.dart';
-import 'song_audio_repository.dart';
+import 'audio_repository.dart';
 import 'audio_clip_sink.dart';
 
 class AudioPlayersClipSink implements AudioClipSink {
@@ -61,7 +60,7 @@ class AudioPlayersClipSink implements AudioClipSink {
     }
   }
 
-  final SongAudioRepository repository;
+  final AudioRepository repository;
   final Map<String, AudioPlayer> _players = {};
 
   /// Last balance set per asset player — players start centered, so skip the
@@ -294,10 +293,3 @@ class AudioPlayersClipSink implements AudioClipSink {
     }
   }
 }
-
-/// Override in `main.dart` to swap the no-op sink in [songAudioClipSinkProvider]
-/// for the real one.  Tests keep using the no-op default unless they override
-/// the same provider explicitly.
-final productionAudioClipSinkProvider = Provider<AudioClipSink>((ref) {
-  return AudioPlayersClipSink(ref.read(songAudioRepositoryProvider));
-});

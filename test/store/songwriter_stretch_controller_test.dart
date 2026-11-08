@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/store/songwriter_store.dart';
 import 'package:muzician/store/songwriter_stretch_controller.dart';
 import 'package:muzician/utils/wav_writer.dart';
@@ -16,7 +16,7 @@ void main() {
   tearDown(() => tmp.deleteSync(recursive: true));
 
   test('rerender stamps a stretchedAssetId sized to the span', () async {
-    final repo = SongAudioRepository.testWith(
+    final repo = AudioRepository.testWith(
       rootDirectory: tmp,
       subdir: 'songwriter_audio',
     );

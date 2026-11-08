@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/song_project.dart' show AudioAsset;
+import '../../models/arrangement_content.dart' show AudioAsset;
 import '../../models/songwriter.dart';
 import '../../schema/rules/songwriter_playback_rules.dart';
 import '../../schema/rules/songwriter_segment_rules.dart';

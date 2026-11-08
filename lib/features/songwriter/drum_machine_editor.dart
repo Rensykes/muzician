@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/piano_roll.dart' show TimeSignature;
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../schema/rules/drum_fill_rules.dart';
 import '../../schema/rules/drum_presets.dart';
 import '../../store/drum_pattern_playback_store.dart';

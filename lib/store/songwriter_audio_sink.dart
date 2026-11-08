@@ -5,8 +5,8 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'song_audio_player_sink.dart';
-import 'song_audio_repository.dart';
+import 'audio_player_sink.dart';
+import 'audio_repository.dart';
 import 'audio_clip_sink.dart';
 
 final songwriterAudioClipSinkProvider = Provider<AudioClipSink>(

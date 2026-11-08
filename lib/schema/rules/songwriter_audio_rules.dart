@@ -1,13 +1,13 @@
 /// Pure scheduling helpers for Songwriter audio-lane playback.
 library;
 
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../models/songwriter.dart';
 import 'piano_roll_playback_rules.dart' as playback;
 import 'songwriter_rules.dart';
 
 /// Ticks → milliseconds at the project tempo. Parallels `audioTickToMs` in
-/// `song_audio_rules.dart` (same formula, different config type).
+/// `audio_rules.dart` (same formula, different config type).
 int songwriterAudioTickToMs(int tick, SongwriterConfig config) {
   return (tick * playback.millisecondsPerTick(config.tempo)).round();
 }

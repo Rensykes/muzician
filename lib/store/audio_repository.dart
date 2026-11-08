@@ -8,14 +8,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/song_project.dart';
-import '../schema/rules/song_audio_rules.dart';
+import '../models/arrangement_content.dart';
+import '../schema/rules/audio_rules.dart';
 import '../utils/wav_writer.dart';
 
 class ReconcileResult {
@@ -23,25 +22,25 @@ class ReconcileResult {
   const ReconcileResult(this.deletedAssetIds);
 }
 
-class SongAudioRepository {
+class AudioRepository {
   final Directory? _rootOverride;
   final String _subdir;
   final Uuid _uuid;
   Directory? _rootCache;
 
-  SongAudioRepository._({Directory? root, String? subdir, Uuid? uuid})
+  AudioRepository._({Directory? root, String? subdir, Uuid? uuid})
     : _rootOverride = root,
-      _subdir = subdir ?? 'song_audio',
+      _subdir = subdir ?? 'writer_audio',
       _uuid = uuid ?? const Uuid();
 
-  factory SongAudioRepository.production({String? subdir}) =>
-      SongAudioRepository._(subdir: subdir);
+  factory AudioRepository.production({String? subdir}) =>
+      AudioRepository._(subdir: subdir);
 
   /// Test factory: bypasses `path_provider` by pinning the root directory.
-  factory SongAudioRepository.testWith({
+  factory AudioRepository.testWith({
     required Directory rootDirectory,
     String? subdir,
-  }) => SongAudioRepository._(root: rootDirectory, subdir: subdir);
+  }) => AudioRepository._(root: rootDirectory, subdir: subdir);
 
   Future<Directory> _root() async {
     final override = _rootOverride;
@@ -216,15 +215,8 @@ class SongAudioRepository {
   }
 }
 
-final songAudioRepositoryProvider = Provider<SongAudioRepository>((ref) {
-  if (kIsWeb) {
-    return SongAudioRepository.production();
-  }
-  return SongAudioRepository.production();
-});
-
-/// Repository for Songwriter audio, isolated in its own `songwriter_audio/`
-/// subfolder so its orphan reconcile never touches the Song feature's files.
-final songwriterAudioRepositoryProvider = Provider<SongAudioRepository>((ref) {
-  return SongAudioRepository.production(subdir: 'songwriter_audio');
+/// Repository for Writer audio, isolated in its own `songwriter_audio/`
+/// subfolder so its orphan reconcile never touches other audio files.
+final songwriterAudioRepositoryProvider = Provider<AudioRepository>((ref) {
+  return AudioRepository.production(subdir: 'songwriter_audio');
 });

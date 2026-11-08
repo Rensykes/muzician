@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/models/song_project.dart';
-import 'package:muzician/store/song_audio_player_sink.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/models/arrangement_content.dart';
+import 'package:muzician/store/audio_player_sink.dart';
+import 'package:muzician/store/audio_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +16,7 @@ void main() {
     addTearDown(() => tempDirectory.delete(recursive: true));
     final rootFile = File('${tempDirectory.path}/not_a_directory');
     await rootFile.writeAsString('fixture');
-    final failingRepository = SongAudioRepository.testWith(
+    final failingRepository = AudioRepository.testWith(
       rootDirectory: Directory(rootFile.path),
     );
     final calls = <String>[];

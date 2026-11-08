@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../theme/studio_theme.dart';
 
 typedef MelodyPreviewNote = ({int startTick, int endTick, int midiNote});

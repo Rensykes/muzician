@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/store/drum_pattern_playback_store.dart';
 import 'package:muzician/store/playback_voice_prepare_sink.dart';
 import 'package:muzician/utils/playback_voice_spec.dart';

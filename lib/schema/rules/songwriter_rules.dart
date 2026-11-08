@@ -3,7 +3,7 @@
 library;
 
 import '../../models/save_system.dart';
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../models/songwriter.dart';
 import '../../models/harmony_lane_instrument.dart';
 import '../../models/fretboard.dart';

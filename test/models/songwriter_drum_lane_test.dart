@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/schema/rules/songwriter_rules.dart';
 
 void main() {
@@ -10,9 +10,7 @@ void main() {
       kind: SongLaneKind.drum,
       label: 'Beat',
       order: 0,
-      blocks: [
-        SongBlock(id: 'b1', startBar: 0, spanBars: 4, patternId: 'p1'),
-      ],
+      blocks: [SongBlock(id: 'b1', startBar: 0, spanBars: 4, patternId: 'p1')],
     );
     final back = SongLane.fromJson(lane.toJson());
     expect(back.kind, SongLaneKind.drum);
@@ -41,11 +39,7 @@ void main() {
     );
     const snapshot = SongwriterProjectSnapshot(
       name: 'demo',
-      config: SongwriterConfig(
-        tempo: 120,
-        beatsPerBar: 4,
-        beatUnit: 4,
-      ),
+      config: SongwriterConfig(tempo: 120, beatsPerBar: 4, beatUnit: 4),
       drumPatterns: [pattern],
     );
     final back = SongwriterProjectSnapshot.fromJson(snapshot.toJson());
@@ -86,11 +80,7 @@ void main() {
   });
 
   test('makeDrumBlock fills required fields', () {
-    final block = makeDrumBlock(
-      patternId: 'p1',
-      startBar: 4,
-      spanBars: 8,
-    );
+    final block = makeDrumBlock(patternId: 'p1', startBar: 4, spanBars: 8);
     expect(block.patternId, 'p1');
     expect(block.startBar, 4);
     expect(block.spanBars, 8);

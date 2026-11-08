@@ -4,7 +4,7 @@ library;
 import 'piano_roll.dart' show ticksPerBeatForUnit;
 import 'harmony_lane_instrument.dart';
 import 'save_system.dart';
-import 'song_project.dart';
+import 'arrangement_content.dart';
 
 enum SongLaneKind { harmony, save, drum, audio, melody, guitarStrum }
 
@@ -560,7 +560,7 @@ class SongLane {
 ///
 /// Bar placement and subsequent lyric edits belong to the block placement.
 /// [defaultLyrics] is only the initial lyric seed copied when the save is used
-/// to create a new placement. Audio source bytes stay in SongAudioRepository;
+/// to create a new placement. Audio source bytes stay in AudioRepository;
 /// this snapshot keeps the complete clip and asset metadata needed to restore
 /// the reference.
 class WriterBlockSnapshot extends InstrumentSnapshot {

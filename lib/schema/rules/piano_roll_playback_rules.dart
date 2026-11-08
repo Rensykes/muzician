@@ -6,7 +6,7 @@ library;
 
 import '../../models/piano_roll.dart';
 import '../../models/piano_roll_playback.dart';
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import 'piano_roll_rules.dart' as pr;
 
 /// Returns the tick where playback should start.

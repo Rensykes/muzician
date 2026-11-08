@@ -8,7 +8,7 @@ library;
 import 'package:flutter/foundation.dart';
 
 import '../models/guitar_sound.dart';
-import '../models/song_project.dart' show DrumLaneId;
+import '../models/arrangement_content.dart' show DrumLaneId;
 import 'guitar_synth.dart';
 
 enum PlaybackVoiceKind {

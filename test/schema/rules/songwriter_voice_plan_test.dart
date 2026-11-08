@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/guitar_sound.dart' show GuitarTone;
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/schema/rules/songwriter_playback_rules.dart';
 import 'package:muzician/utils/guitar_synth.dart';
 import 'package:muzician/utils/playback_voice_spec.dart';

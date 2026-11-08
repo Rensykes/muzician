@@ -11,7 +11,7 @@ import 'dart:math' as math;
 import '../../models/save_system.dart';
 import '../../models/guitar_sound.dart' show GuitarTone;
 import '../../models/harmony_lane_instrument.dart';
-import '../../models/song_project.dart';
+import '../../models/arrangement_content.dart';
 import '../../models/songwriter.dart';
 import '../../utils/guitar_synth.dart' show GuitarStrokeString, GuitarSynth;
 import '../../utils/note_utils.dart';

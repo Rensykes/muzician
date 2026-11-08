@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/features/_mockup_shell.dart';
 import 'package:muzician/features/songwriter/drum_machine_editor.dart';
 import 'package:muzician/models/app_theme_variant.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/theme/studio_theme.dart';
 
 final _pattern = DrumPattern(

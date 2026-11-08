@@ -3,10 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/song_project.dart' show AudioAsset;
+import '../../models/arrangement_content.dart' show AudioAsset;
 import '../../store/settings_store.dart';
-import '../../store/song_audio_recorder_store.dart'
-    show SongAudioRecorderStatus;
+import '../../store/audio_recorder_core.dart' show AudioRecorderStatus;
 import '../../store/songwriter_audio_recorder_store.dart';
 import '../../theme/studio_theme.dart';
 
@@ -113,14 +112,14 @@ class _SongwriterAudioRecorderSheetState
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<SongAudioRecorderStatus>(
+    ref.listen<AudioRecorderStatus>(
       songwriterAudioRecorderProvider.select((s) => s.status),
       (prev, next) {
-        if (next == SongAudioRecorderStatus.recording &&
-            prev != SongAudioRecorderStatus.recording) {
+        if (next == AudioRecorderStatus.recording &&
+            prev != AudioRecorderStatus.recording) {
           _startTimer();
-        } else if (prev == SongAudioRecorderStatus.recording &&
-            next != SongAudioRecorderStatus.recording) {
+        } else if (prev == AudioRecorderStatus.recording &&
+            next != AudioRecorderStatus.recording) {
           _stopTimer();
         }
       },
@@ -130,7 +129,7 @@ class _SongwriterAudioRecorderSheetState
       prev,
       next,
     ) {
-      if (next.status == SongAudioRecorderStatus.ready &&
+      if (next.status == AudioRecorderStatus.ready &&
           next.pendingAsset != null) {
         final asset = ref
             .read(songwriterAudioRecorderProvider.notifier)
@@ -144,7 +143,7 @@ class _SongwriterAudioRecorderSheetState
     final state = ref.watch(songwriterAudioRecorderProvider);
     final n = ref.read(songwriterAudioRecorderProvider.notifier);
 
-    if (state.status == SongAudioRecorderStatus.ready &&
+    if (state.status == AudioRecorderStatus.ready &&
         state.pendingAsset != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final asset = ref
@@ -157,21 +156,21 @@ class _SongwriterAudioRecorderSheetState
     }
 
     final label = switch (state.status) {
-      SongAudioRecorderStatus.idle => 'Ready',
-      SongAudioRecorderStatus.countIn => 'Count-in…',
-      SongAudioRecorderStatus.recording => 'Recording…',
-      SongAudioRecorderStatus.finalising => 'Finalising…',
-      SongAudioRecorderStatus.ready => 'Done',
-      SongAudioRecorderStatus.error => state.errorMessage ?? 'Error',
+      AudioRecorderStatus.idle => 'Ready',
+      AudioRecorderStatus.countIn => 'Count-in…',
+      AudioRecorderStatus.recording => 'Recording…',
+      AudioRecorderStatus.finalising => 'Finalising…',
+      AudioRecorderStatus.ready => 'Done',
+      AudioRecorderStatus.error => state.errorMessage ?? 'Error',
     };
-    final isRec = state.status == SongAudioRecorderStatus.recording;
+    final isRec = state.status == AudioRecorderStatus.recording;
     final busy =
-        state.status == SongAudioRecorderStatus.finalising ||
-        state.status == SongAudioRecorderStatus.ready;
-    final isCountIn = state.status == SongAudioRecorderStatus.countIn;
+        state.status == AudioRecorderStatus.finalising ||
+        state.status == AudioRecorderStatus.ready;
+    final isCountIn = state.status == AudioRecorderStatus.countIn;
     final preRecord =
-        state.status == SongAudioRecorderStatus.idle ||
-        state.status == SongAudioRecorderStatus.error;
+        state.status == AudioRecorderStatus.idle ||
+        state.status == AudioRecorderStatus.error;
 
     return PopScope(
       canPop: false,

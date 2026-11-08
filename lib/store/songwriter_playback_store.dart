@@ -7,7 +7,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/guitar_sound.dart';
-import '../models/song_project.dart' show AudioAsset;
+import '../models/arrangement_content.dart' show AudioAsset;
 import '../schema/rules/piano_roll_playback_rules.dart' as pr_rules;
 import '../schema/rules/songwriter_audio_rules.dart';
 import '../schema/rules/songwriter_playback_rules.dart';

@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/schema/rules/song_audio_rules.dart';
+import 'package:muzician/schema/rules/audio_rules.dart';
 
 void main() {
   group('computePeaksFromInt16', () {

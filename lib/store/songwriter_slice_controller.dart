@@ -6,9 +6,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../schema/rules/song_audio_rules.dart' show downmixToMono;
+import '../schema/rules/audio_rules.dart' show downmixToMono;
 import '../schema/rules/songwriter_slice_rules.dart';
-import 'song_audio_repository.dart';
+import 'audio_repository.dart';
 import 'songwriter_store.dart';
 
 /// Detected onsets for the clip currently under inspection, plus an in-flight

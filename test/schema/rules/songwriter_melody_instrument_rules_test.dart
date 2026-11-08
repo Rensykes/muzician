@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/fretboard.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/piano.dart';
-import 'package:muzician/models/song_project.dart';
+import 'package:muzician/models/arrangement_content.dart';
 import 'package:muzician/models/songwriter.dart';
 import 'package:muzician/schema/rules/songwriter_melody_instrument_rules.dart';
 

@@ -2,17 +2,17 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muzician/store/song_audio_repository.dart';
+import 'package:muzician/store/audio_repository.dart';
 import 'package:muzician/utils/wav_writer.dart';
 
 void main() {
-  group('SongAudioRepository (file backend)', () {
+  group('AudioRepository (file backend)', () {
     late Directory tmp;
-    late SongAudioRepository repo;
+    late AudioRepository repo;
 
     setUp(() async {
-      tmp = await Directory.systemTemp.createTemp('song_audio_test_');
-      repo = SongAudioRepository.testWith(rootDirectory: tmp);
+      tmp = await Directory.systemTemp.createTemp('writer_audio_test_');
+      repo = AudioRepository.testWith(rootDirectory: tmp);
     });
 
     tearDown(() async {
