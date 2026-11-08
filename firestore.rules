@@ -18,7 +18,7 @@ service cloud.firestore {
         && request.resource.data.category in ['bug','idea','confusing','other']
         && request.resource.data.contact is string
         && request.resource.data.contact.size() <= 800
-        && request.resource.data.platform in ['web','android']
+        && request.resource.data.platform in ['web','android','ios','macos','windows']
         && request.resource.data.appVersion is string
         && request.resource.data.appVersion.size() <= 120
         && request.resource.data.osVersion is string

@@ -78,7 +78,26 @@ String? _describeOperatingSystem(String? userAgent) {
 
 /// Whether the platform can open a feedback composer.
 bool get isFeedbackAvailable =>
-    kIsWeb || defaultTargetPlatform == TargetPlatform.android;
+    kIsWeb ||
+    const {
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+    }.contains(defaultTargetPlatform);
+
+/// The platform name accepted by the feedback rules: always lowercase.
+String platformWireName() {
+  if (kIsWeb) return 'web';
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.android => 'android',
+    TargetPlatform.iOS => 'ios',
+    TargetPlatform.macOS => 'macos',
+    TargetPlatform.windows => 'windows',
+    // Kept for completeness; neither is reachable from the feedback UI.
+    _ => 'linux',
+  };
+}
 
 /// Captures the diagnostics attached to feedback sent from [screen].
 Future<FeedbackDiagnostics> captureDiagnostics({required String screen}) async {
@@ -91,7 +110,7 @@ Future<FeedbackDiagnostics> captureDiagnostics({required String screen}) async {
   }
   return FeedbackDiagnostics(
     appVersion: appVersion,
-    platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
+    platform: platformWireName(),
     osVersion: kIsWeb
         ? describeUserAgent(currentUserAgent())
         : nativeOperatingSystemVersion(),

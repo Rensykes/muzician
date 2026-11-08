@@ -23,20 +23,11 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -65,5 +56,32 @@ class DefaultFirebaseOptions {
     messagingSenderId: '249096781239',
     projectId: 'muzician-b0953',
     storageBucket: 'muzician-b0953.firebasestorage.app',
+  );
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyCqhCCld5xHT4mVzXn0MLqcTtV7gxWdlnk',
+    appId: '1:249096781239:ios:8c322530b93d2028713c32',
+    messagingSenderId: '249096781239',
+    projectId: 'muzician-b0953',
+    storageBucket: 'muzician-b0953.firebasestorage.app',
+    iosBundleId: 'io.bytebakehouse.muzician',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyCqhCCld5xHT4mVzXn0MLqcTtV7gxWdlnk',
+    appId: '1:249096781239:ios:33d477f62b600d1e713c32',
+    messagingSenderId: '249096781239',
+    projectId: 'muzician-b0953',
+    storageBucket: 'muzician-b0953.firebasestorage.app',
+    iosBundleId: 'io.francescolacriola.muzician',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyAAshxSq2mWit6pFXt5SKCdEqWILHIwcJs',
+    appId: '1:249096781239:web:f9d9713fa2f22309713c32',
+    messagingSenderId: '249096781239',
+    projectId: 'muzician-b0953',
+    authDomain: 'muzician-b0953.firebaseapp.com',
+    storageBucket: 'muzician-b0953.firebasestorage.app',
+    measurementId: 'G-DTBPG2EXXH',
   );
 }

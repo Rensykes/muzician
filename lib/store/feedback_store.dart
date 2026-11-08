@@ -4,7 +4,6 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -135,11 +134,12 @@ class FeedbackState {
 
 /// Fields every entry needs when the diagnostics capture fails.
 ///
-/// The platform must stay one the rules accept (`web` or the platform name),
-/// even when everything else falls back, or the write would be rejected.
+/// The platform must stay one the rules accept (a value from
+/// [platformWireName]), even when everything else falls back, or the write
+/// would be rejected.
 FeedbackDiagnostics _fallbackDiagnostics(String screen) => FeedbackDiagnostics(
   appVersion: 'unknown',
-  platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
+  platform: platformWireName(),
   osVersion: 'unknown',
   screen: screen,
   locale: 'unknown',

@@ -44,11 +44,24 @@ void main() {
     );
   });
 
-  test('availability is on for web and android only', () {
+  test('feedback is available on web, android, ios, macos and windows', () {
+    for (final platform in [
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+    ]) {
+      debugDefaultTargetPlatformOverride = platform;
+      expect(isFeedbackAvailable, isTrue, reason: '$platform');
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    expect(isFeedbackAvailable, isFalse);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  test('platform names are lowercase and stable for the rules', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    expect(isFeedbackAvailable, isFalse);
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    expect(isFeedbackAvailable, isTrue);
+    expect(platformWireName(), 'ios');
   });
 }
