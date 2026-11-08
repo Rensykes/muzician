@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/song_playback.dart';
 import 'package:muzician/models/piano_roll.dart' show TimeSignature;
 import 'package:muzician/schema/rules/song_rules.dart' as song_rules;
+import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/settings_store.dart';
 import 'package:muzician/store/song_playback_store.dart';
 import 'package:muzician/store/song_project_store.dart';
@@ -13,7 +14,7 @@ import 'package:muzician/store/song_audio_repository.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-ProviderContainer _container({SongAudioClipSink? audioSink}) {
+ProviderContainer _container({AudioClipSink? audioSink}) {
   final container = ProviderContainer(
     overrides: [
       songNotePlaybackSinkProvider.overrideWith((_) => (notes, vol) async {}),
@@ -658,7 +659,7 @@ class _AudioCall {
   const _AudioCall(this.assetId);
 }
 
-class _RecordingAudioSink implements SongAudioClipSink {
+class _RecordingAudioSink implements AudioClipSink {
   final List<_AudioCall> startCalls = [];
   final List<_AudioCall> stopCalls = [];
   final List<String> preparedAssetIds = [];

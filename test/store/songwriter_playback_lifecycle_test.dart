@@ -6,9 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/harmony_lane_instrument.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
+import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/playback_voice_prepare_sink.dart';
 import 'package:muzician/store/settings_store.dart';
-import 'package:muzician/store/song_playback_store.dart';
 import 'package:muzician/utils/playback_voice_spec.dart';
 import 'package:muzician/store/songwriter_audio_sink.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
@@ -247,7 +247,7 @@ void main() {
   });
 }
 
-class _PreparingSink implements SongAudioClipSink {
+class _PreparingSink implements AudioClipSink {
   final prepared = Completer<void>();
   var prepareCalls = 0;
   var stopCalls = 0;

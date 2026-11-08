@@ -2,13 +2,13 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muzician/models/song_project.dart';
-import 'package:muzician/store/song_playback_store.dart' show SongAudioClipSink;
+import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/songwriter_audio_audition_store.dart';
 import 'package:muzician/store/songwriter_audio_sink.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
 import 'package:muzician/store/drum_pattern_playback_store.dart';
 
-class _FakeSink implements SongAudioClipSink {
+class _FakeSink implements AudioClipSink {
   int startCount = 0;
   int stopAllCount = 0;
   bool? lastLoop;

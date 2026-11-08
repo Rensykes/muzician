@@ -3,12 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muzician/models/song_project.dart';
 import 'package:muzician/models/songwriter.dart';
-import 'package:muzician/store/song_playback_store.dart' show SongAudioClipSink;
+import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/songwriter_audio_sink.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
 import 'package:muzician/store/songwriter_store.dart';
 
-class _RecordingSink implements SongAudioClipSink {
+class _RecordingSink implements AudioClipSink {
   final started = <(String, bool)>[];
   final stopped = <String>[];
   @override

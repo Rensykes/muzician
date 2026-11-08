@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/models/song_project.dart';
+import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/song_audio_recorder_store.dart';
 import 'package:muzician/store/song_audio_repository.dart';
 import 'package:muzician/store/song_playback_store.dart';
@@ -46,7 +47,7 @@ class _DeferredStopRecorderDriver extends _FakeRecorderDriver {
   }
 }
 
-class _FakeClipSink extends NoopSongAudioClipSink {
+class _FakeClipSink extends NoopAudioClipSink {
   int starts = 0;
   int stops = 0;
 

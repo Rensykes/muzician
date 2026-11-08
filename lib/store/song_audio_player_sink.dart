@@ -1,4 +1,4 @@
-/// Production [SongAudioClipSink] backed by one `AudioPlayer` per asset.
+/// Production [AudioClipSink] backed by one `AudioPlayer` per asset.
 ///
 /// Sets a global iOS audio session that allows multiple internal
 /// `AVAudioPlayer` instances to coexist (mixes within the app) and pre-loads
@@ -15,9 +15,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song_project.dart';
 import '../utils/playback_profiling.dart';
 import 'song_audio_repository.dart';
-import 'song_playback_store.dart';
+import 'audio_clip_sink.dart';
 
-class AudioPlayersClipSink implements SongAudioClipSink {
+class AudioPlayersClipSink implements AudioClipSink {
   AudioPlayersClipSink(this.repository) {
     // Run once per sink lifetime: configure the global audio session so
     // concurrent in-app playback does not interrupt itself.  Without
@@ -298,6 +298,6 @@ class AudioPlayersClipSink implements SongAudioClipSink {
 /// Override in `main.dart` to swap the no-op sink in [songAudioClipSinkProvider]
 /// for the real one.  Tests keep using the no-op default unless they override
 /// the same provider explicitly.
-final productionSongAudioClipSinkProvider = Provider<SongAudioClipSink>((ref) {
+final productionAudioClipSinkProvider = Provider<AudioClipSink>((ref) {
   return AudioPlayersClipSink(ref.read(songAudioRepositoryProvider));
 });

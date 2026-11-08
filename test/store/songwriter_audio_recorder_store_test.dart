@@ -13,7 +13,7 @@ import 'package:muzician/store/song_audio_recorder_store.dart'
         SongAudioRecorderStatus,
         songAudioRecorderDriverProvider;
 import 'package:muzician/store/song_audio_repository.dart';
-import 'package:muzician/store/song_playback_store.dart' show SongAudioClipSink;
+import 'package:muzician/store/audio_clip_sink.dart';
 import 'package:muzician/store/songwriter_audio_recorder_store.dart';
 import 'package:muzician/store/songwriter_audio_sink.dart';
 import 'package:muzician/store/songwriter_playback_store.dart';
@@ -39,7 +39,7 @@ class _FakeDriver implements SongAudioRecorderDriver {
   Future<void> dispose() async {}
 }
 
-class _FakeClipSink implements SongAudioClipSink {
+class _FakeClipSink implements AudioClipSink {
   int startCount = 0;
   int stopAllCount = 0;
   final startVolumes = <double>[];

@@ -120,7 +120,8 @@ class SongwriterAudioAuditionNotifier
       final notes = bed.notesByTick[tick];
       if (notes != null && notes.isNotEmpty) noteSink(notes, 1.0, 0.0);
       final drums = bed.drumByTick[tick];
-      if (drums != null && drums.isNotEmpty) unawaited(drumSink(drums, 0.8, 0.0));
+      if (drums != null && drums.isNotEmpty)
+        unawaited(drumSink(drums, 0.8, 0.0));
       await pacer.awaitBoundary(++elapsedTicks);
       if (_version != version) return;
       tick = (tick + 1) % loopTicks;
@@ -130,7 +131,7 @@ class SongwriterAudioAuditionNotifier
   /// Loops the recording over `[offsetMs, offsetMs + regionMs)` by re-seeking to
   /// the head every [regionMs]. Used when the clip has a real end-trim (the sink
   /// can only loop the whole asset, not an interior region). Cancels with
-  /// [_version]. A re-arm re-issues [SongAudioClipSink.startClip], which seeks +
+  /// [_version]. A re-arm re-issues [AudioClipSink.startClip], which seeks +
   /// resumes, so it never plays past the trimmed end (modulo scheduling jitter).
   Future<void> _loopRegion(
     int version,

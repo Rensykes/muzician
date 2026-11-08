@@ -7,12 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'song_audio_player_sink.dart';
 import 'song_audio_repository.dart';
-import 'song_playback_store.dart' show SongAudioClipSink, NoopSongAudioClipSink;
+import 'audio_clip_sink.dart';
 
-final songwriterAudioClipSinkProvider = Provider<SongAudioClipSink>(
-  (ref) => const NoopSongAudioClipSink(),
+final songwriterAudioClipSinkProvider = Provider<AudioClipSink>(
+  (ref) => const NoopAudioClipSink(),
 );
 
-final productionSongwriterAudioClipSinkProvider = Provider<SongAudioClipSink>(
+final productionSongwriterAudioClipSinkProvider = Provider<AudioClipSink>(
   (ref) => AudioPlayersClipSink(ref.read(songwriterAudioRepositoryProvider)),
 );

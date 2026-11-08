@@ -17,6 +17,7 @@ import '../schema/rules/song_playback_rules.dart' as pb_rules;
 import '../schema/rules/song_rules.dart' as song_rules;
 import '../utils/note_player.dart';
 import '../utils/tick_pacer.dart';
+import 'audio_clip_sink.dart';
 import 'settings_store.dart';
 import 'song_project_store.dart';
 
@@ -76,44 +77,6 @@ final songDrumPlaybackSinkProvider = Provider<SongDrumPlaybackSink>((ref) {
   };
 });
 
-/// Sink for audio clips on audio tracks.  The default implementation is a
-/// no-op so unit tests do not need to touch real audio playback; production
-/// code overrides this with [AudioPlayersClipSink].
-abstract class SongAudioClipSink {
-  /// Pre-warm internal players so the tick loop's [startClip] calls can fire
-  /// in parallel without racing on platform-channel source preparation.  The
-  /// production implementation pre-loads one `AudioPlayer` per asset; the
-  /// no-op default returns immediately.
-  Future<void> prepare(Iterable<AudioAsset> assets);
-  Future<void> startClip({
-    required AudioAsset asset,
-    required int offsetMs,
-    double volume = 1.0,
-    double balance = 0.0,
-    bool loop = false,
-  });
-  Future<void> stopClip({required AudioAsset asset});
-  Future<void> stopAll();
-}
-
-class NoopSongAudioClipSink implements SongAudioClipSink {
-  const NoopSongAudioClipSink();
-  @override
-  Future<void> prepare(Iterable<AudioAsset> assets) async {}
-  @override
-  Future<void> startClip({
-    required AudioAsset asset,
-    required int offsetMs,
-    double volume = 1.0,
-    double balance = 0.0,
-    bool loop = false,
-  }) async {}
-  @override
-  Future<void> stopClip({required AudioAsset asset}) async {}
-  @override
-  Future<void> stopAll() async {}
-}
-
 /// Metronome click sink for the Song transport. Override in tests.
 typedef SongMetronomeSink = Future<void> Function({required bool accent});
 
@@ -123,8 +86,8 @@ final songMetronomeSinkProvider = Provider<SongMetronomeSink>((ref) {
   };
 });
 
-final songAudioClipSinkProvider = Provider<SongAudioClipSink>(
-  (ref) => const NoopSongAudioClipSink(),
+final songAudioClipSinkProvider = Provider<AudioClipSink>(
+  (ref) => const NoopAudioClipSink(),
 );
 
 class _PendingAudioStop {
