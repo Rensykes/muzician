@@ -57,7 +57,7 @@ can never create a duplicate.
 | `contact` | `name@example.com` | Optional; `''` when omitted; 0–200 runes |
 | `appVersion` | `2.0.0+2` | From `package_info_plus`; `unknown` on failure |
 | `platform` | `web`, `android`, `ios`, `macos`, `windows` | Lowercase platform name; rules accept only this set |
-| `osVersion` | `Chrome / macOS` | Coarse user agent on web; trimmed `Platform.operatingSystemVersion` on Android (`Android 14`); `unknown` when unclassifiable |
+| `osVersion` | `Chrome / macOS` | Coarse user agent on web; the native version labelled with its OS off web — `Android 14`, `iOS 27.0.1`, `macOS 15.2`, `Windows 11`; `unknown` when unclassifiable |
 | `screen` | `fretboard`, `roll`, `settings` | Current tab (`fretboard`, `piano`, `roll`, `writer`) or `settings` |
 | `locale` | `en`, `it` | Device language code |
 | `createdAt` | server timestamp | Set by Firestore; rules require `request.time` |

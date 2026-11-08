@@ -4,13 +4,13 @@ library;
 
 import 'dart:io';
 
+import 'feedback_os_label.dart';
+
 /// Native builds have no browser user agent.
 String? currentUserAgent() => null;
 
-/// `Platform.operatingSystemVersion` trimmed to its first two tokens, so
-/// `Android 14 (API 34)` becomes `Android 14`.
-String nativeOperatingSystemVersion() {
-  final tokens = Platform.operatingSystemVersion.trim().split(RegExp(r'\s+'));
-  if (tokens.first.isEmpty) return 'unknown';
-  return tokens.take(2).join(' ');
-}
+/// `Platform.operatingSystemVersion` labelled with its operating system, so
+/// `Android 14 (API 34)` becomes `Android 14` and `Version 27.0.1 (Build …)`
+/// becomes `iOS 27.0.1`.
+String nativeOperatingSystemVersion() =>
+    describeNativeOs(Platform.operatingSystemVersion, Platform.operatingSystem);

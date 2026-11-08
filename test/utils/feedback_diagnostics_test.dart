@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muzician/utils/feedback_diagnostics.dart';
+import 'package:muzician/utils/feedback_os_label.dart';
 
 void main() {
   test('describes common user agents coarsely', () {
@@ -71,5 +72,22 @@ void main() {
       debugDefaultTargetPlatformOverride = entry.key;
       expect(platformWireName(), entry.value, reason: '${entry.key}');
     }
+  });
+
+  test('native OS labels name the system before the version', () {
+    expect(
+      describeNativeOs('Version 27.0.1 (Build 24A335)', 'ios'),
+      'iOS 27.0.1',
+    );
+    expect(
+      describeNativeOs('Version 15.2 (Build 24C101)', 'macos'),
+      'macOS 15.2',
+    );
+    expect(describeNativeOs('Android 14 (API 34)', 'android'), 'Android 14');
+    expect(describeNativeOs('', 'ios'), 'unknown');
+    expect(
+      describeNativeOs('Windows 11 Pro 10.0.22631', 'windows'),
+      'Windows 11',
+    );
   });
 }
