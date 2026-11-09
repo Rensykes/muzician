@@ -4,6 +4,15 @@ A Flutter songwriting workspace for exploring harmony on guitar and piano, captu
 
 Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md).
 
+**[Try it in the browser](https://muzician.bytebakehouseinc.xyz)** — free, nothing to install. No account, no cloud sync, no analytics: projects, lyrics and audio stay on the device. A Play closed test covers Android; iOS is not distributed yet.
+
+<p align="center">
+  <img src="docs/studio-redesign/evidence/02-fretboard-studio-portrait.png" width="49%" alt="Fretboard with chord detection" />
+  <img src="docs/studio-redesign/evidence/04-piano-studio-portrait.png" width="49%" alt="Piano with scale highlight" />
+  <img src="docs/studio-redesign/evidence/05-roll-studio-portrait.png" width="49%" alt="Piano roll with hum-to-notes recorder" />
+  <img src="docs/studio-redesign/evidence/01-writer-studio-portrait.png" width="49%" alt="Writer with sections, chords, melody and lyrics" />
+</p>
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -106,6 +115,10 @@ flutter run -d <device-id>
 # Specific device
 flutter devices
 flutter run -d <id>
+
+# Tests and static analysis
+flutter test
+dart analyze
 ```
 
 For a physical iPhone, connect and unlock the device, trust this Mac, enable iOS Developer Mode, and sign in to an Apple development account in Xcode so automatic signing can create a provisioning profile. The Codex environment's **Deploy to iPhone** action builds a signed Release app, installs it, and launches it directly without attaching the Flutter debugger; you can disconnect the phone after it opens. If more than one physical iPhone is connected, set `MUZICIAN_IOS_DEVICE_ID` to the intended device ID before running the script. The action uses the newest full Xcode installed in `/Applications`, so it can deploy to devices running newer iOS versions even when an older Xcode remains selected globally.
@@ -116,3 +129,7 @@ For a physical iPhone, connect and unlock the device, trust this Mac, enable iOS
 - The piano roll uses a raw `Listener` (not `GestureDetector`) for pointer events to bypass Flutter's gesture arena — necessary for reliable resize and pitch-drag on iOS touch.
 - Pinch-to-zoom on the piano roll is tracked via a `Map<int, Offset>` keyed by pointer ID, updating `_cellW` / `_rowH` in `setState` on every move.
 - State is never mutated — all store methods return a new `copyWith` state.
+
+## License
+
+MIT — see [LICENSE](LICENSE). The licence covers the code; the Muzician name and logo are not licensed with it.
