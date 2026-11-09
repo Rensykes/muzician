@@ -54,3 +54,16 @@ firebase-debug.log
 
 # Local agent screenshots and scratch state
 .openchamber/
+
+# Agent tooling and local design studies: kept on disk, not published
+.agents/
+.claude/
+.codex/
+.opencode/
+AGENTS.md
+skills-lock.json
+.github/agents
+.github/instructions/
+.github/skills/
+.github/AGENTS.md
+docs/design-exploration/

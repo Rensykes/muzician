@@ -14,7 +14,7 @@ Current instrument UX V2 implementation and runtime evidence: [delivery record](
 
 ## Scene and visual intent
 
-A guitarist or pianist writes during rehearsal in moderate/dim light, holding an instrument and reaching for a phone or tablet. Use a graphite workbench, a large musical surface, restrained emphasis and explicit controls. Avoid a full DAW console, decorative glow, default glass effects, card-within-card layouts and gradients in text. The original Studio triptych and Roll concept are visual references in `docs/design-exploration/2026-10-16/mockups/02-studio.png` and `06-studio-piano-roll.png`. Correct diagrams come from existing renderers, never from image pixels.
+A guitarist or pianist writes during rehearsal in moderate/dim light, holding an instrument and reaching for a phone or tablet. Use a graphite workbench, a large musical surface, restrained emphasis and explicit controls. Avoid a full DAW console, decorative glow, default glass effects, card-within-card layouts and gradients in text. The original Studio triptych and Roll concept were visual references during the October 2026 exploration; those mockups are kept outside this repository. Correct diagrams come from existing renderers, never from image pixels.
 
 ## Themes and semantic roles
 
