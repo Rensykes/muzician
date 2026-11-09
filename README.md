@@ -2,7 +2,7 @@
 
 A Flutter songwriting workspace for exploring harmony on guitar and piano, capturing ideas, and developing them into song arrangements and demos.
 
-Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md).
+Product direction and design guidance live in [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md); release history lives in [CHANGELOG.md](CHANGELOG.md).
 
 **[Try it in the browser](https://muzician.bytebakehouseinc.xyz)** — free, nothing to install. No account, no cloud sync, no analytics: projects, lyrics and audio stay on the device. A Play closed test covers Android; iOS is not distributed yet.
 
