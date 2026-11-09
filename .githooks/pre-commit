@@ -1,0 +1,20 @@
+#!/bin/sh
+# Blocks a commit that changes user-visible code without a CHANGELOG.md entry.
+# Bypass with `git commit --no-verify` when the change genuinely has no entry.
+#
+# Enable once per clone: git config core.hooksPath .githooks
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if ! printf '%s\n' "$staged" | grep -qE '^(lib|assets)/'; then
+  exit 0
+fi
+
+if printf '%s\n' "$staged" | grep -qx 'CHANGELOG.md'; then
+  exit 0
+fi
+
+echo "Commit blocked: lib/ or assets/ changed, but CHANGELOG.md is not staged."
+echo "Add a line under '## [Unreleased]' in CHANGELOG.md."
+echo "No entry is needed when the change is invisible to users; use --no-verify in that case."
+exit 1
