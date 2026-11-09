@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - 'main'
+    # Only upload when the Android build can actually change. A docs-, test- or
+    # CI-only commit would rebuild and re-upload the same version code, which
+    # Play rejects. (The workflow file itself is intentionally NOT here —
+    # editing CI must not push a build of unchanged code.)
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
 
 jobs:
   build_and_deploy:
