@@ -1,0 +1,60 @@
+name: Changelog required
+
+# Fails when user-visible code changes without a CHANGELOG.md entry in the same
+# change. Invisible work (tests, docs, CI, refactors inside no-op files) needs no
+# entry, so the check keys on lib/ and assets/ only.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a changelog entry for user-visible changes
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="$PR_BASE"
+            HEAD_SHA="$PR_HEAD"
+          else
+            BASE="$PUSH_BEFORE"
+            HEAD_SHA="$PUSH_AFTER"
+          fi
+
+          if [ -z "${BASE:-}" ] || [ -z "${HEAD_SHA:-}" ]; then
+            echo "No commit range for this event; nothing to check."
+            exit 0
+          fi
+          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "Base commit ${BASE} is not available (new branch or force-push); nothing to compare."
+            exit 0
+          fi
+
+          FILES=$(git diff --name-only "$BASE" "$HEAD_SHA")
+
+          if echo "$FILES" | grep -qE '^(lib|assets)/'; then
+            if ! echo "$FILES" | grep -qx 'CHANGELOG.md'; then
+              echo "::error::This change touches lib/ or assets/ but not CHANGELOG.md. Add a line under ## [Unreleased]."
+              echo "Changed files:"
+              echo "$FILES"
+              exit 1
+            fi
+            echo "User-visible code changed and CHANGELOG.md was updated."
+          else
+            echo "No user-visible paths changed; no changelog entry required."
+          fi
